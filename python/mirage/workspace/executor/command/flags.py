@@ -12,6 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+from collections import defaultdict, deque
 from collections.abc import Mapping
 
 from mirage.commands.spec import (CommandSpec, flag_kwarg_name, parse_command,
@@ -149,25 +150,26 @@ def parse_flags(
                 elif isinstance(value, str) and value in scope_map:
                     flag_kwargs[key] = scope_map[value]
 
-        # Classify positional args. An operand is paired with the word
-        # it came from by argv slot, never by value alone: two operands
-        # can spell one path (`ls -d dir/ link/` with link -> dir), and a
-        # lookup keyed by the resolved path handed both rows the second
-        # spelling. The word is taken only when it names the parsed
-        # value; a word the parser normalized (a followed link whose
-        # target climbs through `..`) is synthesized as before, since a
-        # keyed backend cannot read `b/../a`. The map serves a word the
-        # classifier left as text.
+        # Classify positional args. The parser hands positionals back in
+        # argv order, the guarantee argparse gives too, so an operand
+        # takes the next word that spells its path: two operands can
+        # spell one path (`ls -d dir/ link/` with link -> dir), and a
+        # lookup keyed by the path alone handed both rows the second
+        # spelling. A word the parser normalized (a followed link whose
+        # target climbs through `..`) has no word to take and is
+        # synthesized as before, since a keyed backend cannot read
+        # `b/../a`; the map still serves a word the classifier left as
+        # text.
+        spellings: dict[str, deque[PathSpec]] = defaultdict(deque)
+        for item in parts:
+            if isinstance(item, PathSpec):
+                spellings[item.virtual.rstrip("/") or "/"].append(item)
         paths: list[PathSpec] = []
         texts: list[str] = []
-        for slot, (value, kind) in enumerate(parsed.args):
+        for value, kind in parsed.args:
             if kind == "path":
-                position = (parsed.arg_indices[slot]
-                            if slot < len(parsed.arg_indices) else -1)
-                word = parts[position] if 0 <= position < len(parts) else None
-                scope = (word if isinstance(word, PathSpec)
-                         and word.virtual.rstrip("/") == value.rstrip("/") else
-                         scope_map.get(value))
+                queue = spellings.get(value.rstrip("/") or "/")
+                scope = queue.popleft() if queue else scope_map.get(value)
                 paths.append(scope if scope is not None else
                              synthesize_path_spec(value))
             else:

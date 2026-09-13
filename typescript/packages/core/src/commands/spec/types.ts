@@ -378,7 +378,6 @@ export interface ParsedArgsInit {
   cachePaths?: string[]
   pathFlagValues?: string[]
   rawOperands?: [string, ValueType][]
-  argIndices?: number[]
   textFlagValues?: string[]
   warnings?: string[]
   wordKinds?: (ValueType | null)[]
@@ -413,10 +412,6 @@ export class ParsedArgs {
   readonly cachePaths: string[]
   readonly pathFlagValues: string[]
   readonly rawOperands: [string, ValueType][]
-  // The argv slot each entry of `args` came from, so a caller pairs an
-  // operand with the word it was by position rather than by value: two
-  // operands can spell one path (`ls -d dir/ link/`).
-  readonly argIndices: number[]
   readonly textFlagValues: string[]
   readonly warnings: string[]
   readonly wordKinds: (ValueType | null)[]
@@ -462,7 +457,6 @@ export class ParsedArgs {
     this.cachePaths = init.cachePaths ?? []
     this.pathFlagValues = init.pathFlagValues ?? []
     this.rawOperands = init.rawOperands ?? []
-    this.argIndices = init.argIndices ?? []
     this.textFlagValues = init.textFlagValues ?? []
     this.warnings = init.warnings ?? []
     this.wordKinds = init.wordKinds ?? []

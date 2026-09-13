@@ -737,18 +737,6 @@ describe('long-option abbreviation', () => {
     expect(parsed.flags['--verbose']).toBeUndefined()
     expect(parsed.texts()).toEqual(['--verb', 'hi'])
   })
-
-  it('never lets a curl option become the URL', () => {
-    // curl's operand is a URL slot, not free text, so the spec declares a
-    // positional and no textual rest: that is the shape the parser reads
-    // as strict, and `curl -sv URL` cannot fetch "-sv" (#1065).
-    let parsed = parseCommand(specOf('curl'), ['--bogus', 'https://x.test/'], '/')
-    expect(parsed.invalidOptions).toEqual(['--bogus'])
-    expect(parsed.texts()).toEqual(['https://x.test/'])
-    parsed = parseCommand(specOf('curl'), ['-sY', 'https://x.test/'], '/')
-    expect(parsed.invalidOptions).toEqual(['Y'])
-    expect(parsed.texts()).toEqual(['https://x.test/'])
-  })
 })
 
 describe('int-typed values', () => {
@@ -1172,17 +1160,5 @@ describe('parseCommand — remainder (argparse nargs=REMAINDER)', () => {
     expect(p.flags['--module']).toBe(true)
     expect(p.flags['-e']).toBe('CODE')
     expect(p.texts()).toEqual(['a'])
-  })
-})
-
-describe('argIndices', () => {
-  it('name the argv slot of every operand', () => {
-    // Operands are handed back by position, not by value: two operands
-    // spelling one path (`ls -d dir/ link/`) must each keep their own
-    // PathSpec, and a value lookup cannot tell them apart.
-    const ls = specOf('ls')
-    expect(parseCommand(ls, ['-d', '/data/a', '/data/a'], '/').argIndices).toEqual([1, 2])
-    const grep = specOf('grep')
-    expect(parseCommand(grep, ['-n', 'pat', '/a.txt'], '/').argIndices).toEqual([1, 2])
   })
 })

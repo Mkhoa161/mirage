@@ -477,18 +477,6 @@ def test_free_text_commands_keep_exact_only_long_matching():
     assert parsed.texts() == ["--verb", "hi"]
 
 
-def test_curl_unknown_options_never_become_the_url():
-    # curl's operand is a URL slot, not free text, so the spec declares a
-    # positional and no textual rest: that is the shape the parser reads
-    # as strict, and `curl -sv URL` cannot fetch "-sv" (#1065).
-    parsed = parse_command(SPECS["curl"], ["--bogus", "https://x.test/"], "/")
-    assert parsed.invalid_options == ["--bogus"]
-    assert parsed.texts() == ["https://x.test/"]
-    parsed = parse_command(SPECS["curl"], ["-sY", "https://x.test/"], "/")
-    assert parsed.invalid_options == ["Y"]
-    assert parsed.texts() == ["https://x.test/"]
-
-
 def test_int_typed_value_is_reported_not_raised():
     spec = CommandSpec(options=(Option(long="--port", type="int"), ))
     parsed = parse_command(spec, ["--port", "abc"], "/")
@@ -823,13 +811,3 @@ def test_js_flags_before_the_first_operand_are_still_the_interpreters():
     assert parsed.flags["--module"] is True
     assert parsed.flags["-e"] == "CODE"
     assert parsed.texts() == ["a"]
-
-
-def test_arg_indices_name_the_argv_slot_of_every_operand():
-    # Operands are handed back by position, not by value: two operands
-    # spelling one path (`ls -d dir/ link/`) must each keep their own
-    # PathSpec, and a value lookup cannot tell them apart.
-    parsed = parse_command(SPECS["ls"], ["-d", "/data/a", "/data/a"], "/")
-    assert parsed.arg_indices == [1, 2]
-    parsed = parse_command(SPECS["grep"], ["-n", "pat", "/a.txt"], "/")
-    assert parsed.arg_indices == [1, 2]

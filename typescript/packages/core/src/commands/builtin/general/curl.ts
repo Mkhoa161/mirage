@@ -35,7 +35,8 @@ const ENC = new TextEncoder()
 // Exit codes real curl uses for the failures mirage can hit. An HTTP error
 // status is deliberately absent: curl treats 4xx/5xx as a successful transfer
 // and prints the body, and only -f/--fail turns it into EXIT_HTTP_ERROR.
-const EXIT_NO_URL = 2
+// 2 is any line curl refuses before a transfer.
+const EXIT_USAGE = 2
 const EXIT_CONNECT = 7
 const EXIT_HTTP_ERROR = 22
 const EXIT_WRITE = 23
@@ -43,6 +44,15 @@ const EXIT_TIMEOUT = 28
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const CRLF = '\r\n'
+const HELP_HINT = "curl: try 'curl --help' or 'curl --manual' for more information"
+// curl 8.7.1's wording, wrapped where it wraps it (the trailing space is the
+// wrap point).
+const HEAD_DATA_WARNING =
+  'Warning: You can only select one HTTP request method! You asked for both POST \n' +
+  'Warning: (-d, --data) and HEAD (-I, --head).\n'
+const HEAD_FORM_WARNING =
+  'Warning: You can only select one HTTP request method! You asked for both \n' +
+  'Warning: multipart formpost (-F, --form) and HEAD (-I, --head).\n'
 // curl's own Content-Type for a -d body, sent unless the line names one:
 // httpx's `content=` and fetch's body carry no type of their own.
 const BODY_CONTENT_TYPE = 'application/x-www-form-urlencoded'
@@ -167,12 +177,26 @@ async function curlCommand(
   if (userAgent !== null) {
     headers['User-Agent'] = userAgent
   }
+  // curl refuses these lines before any transfer (curl 8.7.1, exit 2). A
+  // negative --max-time is not a number curl takes; curl names the spelling
+  // typed, which the handler cannot see, so the long one.
+  if (maxTime !== undefined && maxTime < 0) {
+    throw new UsageError(
+      `curl: option --max-time: expected a positive numerical parameter\n${HELP_HINT}`,
+      EXIT_USAGE,
+    )
+  }
+  // -I beside a body option asks two methods of one request: curl warns and
+  // refuses. -s mutes the warning and -S does not bring it back; the option
+  // error -F adds is never muted.
+  if (head && (data !== null || form !== null)) {
+    let err = fl.asBool('silent') ? '' : data !== null ? HEAD_DATA_WARNING : HEAD_FORM_WARNING
+    if (data === null) err += `curl: option -F: is badly used here\n${HELP_HINT}\n`
+    return [null, new IOResult({ exitCode: EXIT_USAGE, stderr: ENC.encode(err) })]
+  }
   const url = texts[0]
   if (url === undefined) {
-    throw new UsageError(
-      "curl: (2) no URL specified\ncurl: try 'curl --help' or 'curl --manual' for more information",
-      EXIT_NO_URL,
-    )
+    throw new UsageError(`curl: (2) no URL specified\n${HELP_HINT}`, EXIT_USAGE)
   }
   // A zero --max-time is curl's "no limit", not a deadline of zero.
   const timeoutMs =

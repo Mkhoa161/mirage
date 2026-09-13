@@ -241,7 +241,7 @@ def test_exit_code_constants_match_curl():
     # submodule of the same name, so the module namespace is reached through
     # the unwrapped function (see CLAUDE.md).
     g = curl.__wrapped__.__globals__
-    assert (g["EXIT_NO_URL"], g["EXIT_CONNECT"], g["EXIT_HTTP_ERROR"],
+    assert (g["EXIT_USAGE"], g["EXIT_CONNECT"], g["EXIT_HTTP_ERROR"],
             g["EXIT_WRITE"]) == (2, 7, 22, 23)
 
 
@@ -273,6 +273,52 @@ def test_max_time_reaches_the_request_in_seconds(monkeypatch):
     calls = _stub(monkeypatch)
     _run("http://x.test/f", max_time=2.5)
     assert calls[0]["timeout"] == 2.5
+
+
+def test_negative_max_time_is_refused_before_any_transfer(monkeypatch):
+    # curl 8.7.1: `option -m: expected a positive numerical parameter`,
+    # exit 2, and -s does not mute an option error.
+    calls = _stub(monkeypatch)
+    with pytest.raises(UsageError) as excinfo:
+        _run("http://x.test/f", max_time=-1, silent=True)
+    assert excinfo.value.exit_code == 2
+    assert str(excinfo.value).startswith(
+        "curl: option --max-time: expected a positive numerical parameter\n")
+    assert calls == []
+
+
+def test_head_with_data_is_refused_with_curls_warning(monkeypatch):
+    # curl 8.7.1 warns about two methods for one request and exits 2
+    # before any transfer.
+    calls = _stub(monkeypatch)
+    body, io = _run("http://x.test/f", head=True, data="x")
+    assert calls == []
+    assert body == b""
+    assert io.exit_code == 2
+    assert io.stderr.decode() == (
+        "Warning: You can only select one HTTP request method! "
+        "You asked for both POST \n"
+        "Warning: (-d, --data) and HEAD (-I, --head).\n")
+
+
+def test_silent_mutes_the_head_with_data_warning_but_keeps_exit_2(monkeypatch):
+    # -s mutes a warning and -S does not bring one back (curl 8.7.1).
+    _stub(monkeypatch)
+    _body, io = _run("http://x.test/f",
+                     head=True,
+                     data="x",
+                     silent=True,
+                     show_error=True)
+    assert io.exit_code == 2
+    assert io.stderr == b""
+
+
+def test_head_with_form_adds_an_option_error_silent_never_mutes(monkeypatch):
+    _stub(monkeypatch)
+    _body, io = _run("http://x.test/f", head=True, form="a=b", silent=True)
+    assert io.exit_code == 2
+    assert io.stderr.decode() == ("curl: option -F: is badly used here\n" +
+                                  HINT)
 
 
 def test_max_time_zero_disables_the_deadline(monkeypatch):

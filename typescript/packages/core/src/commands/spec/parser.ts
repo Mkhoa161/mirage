@@ -511,11 +511,9 @@ export function parseCommand(
 
   const classified: [string, ValueType][] = []
   const rawOperands: [string, ValueType][] = []
-  const argIndices: number[] = []
   for (let j = 0; j < rawArgs.length; j++) {
     const arg = rawArgs[j]
     if (arg === undefined) continue
-    argIndices.push(rawIndices[j] ?? -1)
     let kind: ValueType
     if (j < positional.length) {
       kind = positional[j] ?? 'str'
@@ -578,7 +576,6 @@ export function parseCommand(
     cachePaths,
     pathFlagValues,
     rawOperands,
-    argIndices,
     textFlagValues,
     warnings,
     invalidOptions,

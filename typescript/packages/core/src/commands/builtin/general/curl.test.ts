@@ -266,6 +266,57 @@ describe('curl option surface (#1065)', () => {
     expect(r.err).toBe('')
   })
 
+  // curl 8.7.1: `option -m: expected a positive numerical parameter`, exit
+  // 2, and -s does not mute an option error.
+  it('a negative --max-time is refused before any transfer', async () => {
+    const calls = mockFetch('ok')
+    await expect(
+      runCurl(['http://x.test/f'], { max_time: -1, silent: true }),
+    ).rejects.toMatchObject({
+      exitCode: 2,
+      message: expect.stringMatching(
+        /^curl: option --max-time: expected a positive numerical parameter\n/,
+      ) as string,
+    })
+    expect(calls).toHaveLength(0)
+  })
+
+  // curl 8.7.1 warns about two methods for one request and exits 2 before
+  // any transfer; -s mutes the warning and -S does not bring it back, while
+  // the option error -F adds is never muted.
+  it("-I with -d is refused with curl's warning", async () => {
+    const calls = mockFetch('ok')
+    const r = await runCurl(['http://x.test/f'], { head: true, data: 'x' })
+    expect(calls).toHaveLength(0)
+    expect(r.out).toBe('')
+    expect(r.exitCode).toBe(2)
+    expect(r.err).toBe(
+      'Warning: You can only select one HTTP request method! You asked for both POST \n' +
+        'Warning: (-d, --data) and HEAD (-I, --head).\n',
+    )
+  })
+
+  it('-s mutes the -I with -d warning but keeps exit 2', async () => {
+    mockFetch('ok')
+    const r = await runCurl(['http://x.test/f'], {
+      head: true,
+      data: 'x',
+      silent: true,
+      show_error: true,
+    })
+    expect(r.exitCode).toBe(2)
+    expect(r.err).toBe('')
+  })
+
+  it('-I with -F adds an option error that -s never mutes', async () => {
+    mockFetch('ok')
+    const r = await runCurl(['http://x.test/f'], { head: true, form: 'a=b', silent: true })
+    expect(r.exitCode).toBe(2)
+    expect(r.err).toBe(
+      "curl: option -F: is badly used here\ncurl: try 'curl --help' or 'curl --manual' for more information\n",
+    )
+  })
+
   // curl reads zero as "no limit" (curl 8.7.1: `-m 0` completes a transfer
   // that `-m .1` fails with 28), so no deadline reaches the client.
   it('--max-time 0 disables the deadline', async () => {

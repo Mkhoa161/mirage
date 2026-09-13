@@ -87,28 +87,33 @@ export function parseFlags(
       }
     }
 
-    // An operand is paired with the word it came from by argv slot,
-    // never by value alone: two operands can spell one path (`ls -d dir/
-    // link/` with link -> dir), and a lookup keyed by the resolved path
-    // handed both rows the second spelling. The word is taken only when
-    // it names the parsed value; a word the parser normalized (a followed
-    // link whose target climbs through `..`) is synthesized as before,
-    // since a keyed backend cannot read `b/../a`. The map serves a word
-    // the classifier left as text.
+    // The parser hands positionals back in argv order, the guarantee
+    // argparse gives too, so an operand takes the next word that spells
+    // its path: two operands can spell one path (`ls -d dir/ link/` with
+    // link -> dir), and a lookup keyed by the path alone handed both rows
+    // the second spelling. A word the parser normalized (a followed link
+    // whose target climbs through `..`) has no word to take and is
+    // synthesized as before, since a keyed backend cannot read `b/../a`;
+    // the map still serves a word the classifier left as text.
+    const spellings = new Map<string, PathSpec[]>()
+    for (const item of parts) {
+      if (item instanceof PathSpec) {
+        const key = rstripSlash(item.virtual) || '/'
+        const queue = spellings.get(key)
+        if (queue === undefined) spellings.set(key, [item])
+        else queue.push(item)
+      }
+    }
     const paths: PathSpec[] = []
     const texts: string[] = []
-    parsed.args.forEach(([value, kind], slot) => {
+    for (const [value, kind] of parsed.args) {
       if (kind === 'path') {
-        const word = parts[parsed.argIndices[slot] ?? -1]
-        const existing =
-          word instanceof PathSpec && rstripSlash(word.virtual) === rstripSlash(value)
-            ? word
-            : scopeMap.get(value)
+        const existing = spellings.get(rstripSlash(value) || '/')?.shift() ?? scopeMap.get(value)
         paths.push(existing ?? synthesizePathSpec(value))
       } else {
         texts.push(value)
       }
-    })
+    }
     return {
       paths,
       texts,

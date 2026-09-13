@@ -181,6 +181,45 @@
         "stdout": "> Content-Type: application/json\r\n> Content-Length: 2\r\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "curl_negative_max_time_is_refused_with_s",
+      "seq": 330054,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s -m -1 {http}/hello",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "curl: option --max-time: expected a positive numerical parameter\ncurl: try 'curl --help' or 'curl --manual' for more information\n"
+      }
+    },
+    {
+      "id": "curl_head_with_data_is_refused",
+      "seq": 330055,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -I -d x {http}/hello",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "Warning: You can only select one HTTP request method! You asked for both POST \nWarning: (-d, --data) and HEAD (-I, --head).\n"
+      }
+    },
+    {
+      "id": "curl_silent_mutes_the_head_with_data_warning",
+      "seq": 330056,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sS -I -d x {http}/hello",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": ""
+      }
     }
   ]
 }
