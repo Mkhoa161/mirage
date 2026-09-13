@@ -293,6 +293,145 @@ async function main(): Promise<void> {
       'Unknown route: POST /v1/documents/a:b:batchUpdate',
     )
 
+    // ---- an event time is validated at the door, never stored as typed
+    const rv = `${at}/_run/rv`
+    check('run rv seeds', (await reset(rv, seed)) === 200)
+    const events = `${rv}/calendar/v3/calendars/primary/events`
+    const timed = (summary: string, start: JsonValue, end: JsonValue): JsonValue => ({
+      summary,
+      start,
+      end,
+    })
+    const zulu = await post(
+      events,
+      't1',
+      timed('zulu', { dateTime: '2026-02-03T10:00:00Z' }, { dateTime: '2026-02-03T11:00:00Z' }),
+    )
+    check('an RFC3339 time with Z is accepted', zulu.status === 200, JSON.stringify(zulu.body))
+    const offset = await post(
+      events,
+      't1',
+      timed(
+        'offset',
+        { dateTime: '2026-02-03T18:30:00+08:00' },
+        { dateTime: '2026-02-03T06:00:00-05:00' },
+      ),
+    )
+    check('numeric offsets are accepted', offset.status === 200, JSON.stringify(offset.body))
+    const zoned = await post(
+      events,
+      't1',
+      timed(
+        'zoned',
+        { dateTime: '2026-02-03T09:00:00', timeZone: 'Europe/Paris' },
+        { dateTime: '2026-02-03T09:30:00', timeZone: 'Europe/Paris' },
+      ),
+    )
+    check(
+      'an offset-free time naming an IANA zone is accepted',
+      zoned.status === 200,
+      JSON.stringify(zoned.body),
+    )
+    const listed = async (): Promise<number> =>
+      arr(obj((await api(events, 't1')).body).items).length
+    const before = await listed()
+    const refused = async (
+      name: string,
+      start: JsonValue,
+      end: JsonValue,
+      message: string,
+    ): Promise<void> => {
+      const r = await post(events, 't1', timed('refused', start, end))
+      const err = obj(obj(r.body).error)
+      check(
+        name,
+        r.status === 400 &&
+          err.status === 'INVALID_ARGUMENT' &&
+          String(err.message).includes(message),
+        `${String(r.status)} ${JSON.stringify(r.body)}`,
+      )
+    }
+    await refused(
+      'a string that is not a date is a 400',
+      { dateTime: 'not-a-date' },
+      { dateTime: 'not-a-date' },
+      'Invalid format: "not-a-date"',
+    )
+    await refused(
+      'a day February does not have is a 400',
+      { dateTime: '2026-02-30T10:00:00Z' },
+      { dateTime: '2026-02-30T11:00:00Z' },
+      'Invalid format',
+    )
+    await refused(
+      'an offset-free time with no zone is a 400',
+      { dateTime: '2026-02-03T10:00:00' },
+      { dateTime: '2026-02-03T11:00:00' },
+      'Invalid format',
+    )
+    await refused(
+      'a zone IANA does not know is a 400',
+      { dateTime: '2026-02-03T10:00:00', timeZone: 'Mars/Olympus' },
+      { dateTime: '2026-02-03T11:00:00', timeZone: 'Mars/Olympus' },
+      'Invalid time zone definition for start time.',
+    )
+    await refused(
+      'an all-day date not spelled yyyy-mm-dd is a 400',
+      { date: '2026-2-3' },
+      { date: '2026-02-04' },
+      'Invalid format',
+    )
+    await refused(
+      'an all-day date the calendar does not have is a 400',
+      { date: '2026-02-30' },
+      { date: '2026-03-01' },
+      'Invalid format',
+    )
+    await refused(
+      'a slot naming both date and dateTime is a 400',
+      { date: '2026-02-03', dateTime: '2026-02-03T10:00:00Z' },
+      { dateTime: '2026-02-03T11:00:00Z' },
+      'Invalid start time.',
+    )
+    eq('a refused create left nothing behind', await listed(), before)
+
+    const id = String(obj(zulu.body).id)
+    const patched = await api(`${events}/${id}`, 't1', {
+      method: 'PATCH',
+      body: JSON.stringify({ start: { dateTime: 'not-a-date' } }),
+    })
+    check('a patch to a malformed time is a 400', patched.status === 400, String(patched.status))
+    const kept = await api(`${events}/${id}`, 't1')
+    eq('and the stored event is unchanged', obj(kept.body).start ?? null, {
+      dateTime: '2026-02-03T10:00:00Z',
+    })
+
+    const window = await api(
+      `${events}?timeMin=2026-02-03T00:00:00Z&timeMax=2026-02-04T00:00:00Z&orderBy=startTime`,
+      't1',
+    )
+    eq(
+      'a bounded, sorted list orders the three by instant',
+      field(obj(window.body).items, 'summary'),
+      ['zoned', 'zulu', 'offset'],
+    )
+    const fb = await post(`${rv}/calendar/v3/freeBusy`, 't1', {
+      timeMin: '2026-02-03T00:00:00Z',
+      timeMax: '2026-02-04T00:00:00Z',
+      items: [{ id: 'primary' }],
+    })
+    eq(
+      'and free/busy reports each as a finite block',
+      arr(obj(obj(obj(fb.body).calendars).primary).busy).map(
+        (b) => `${String(obj(b).start)}/${String(obj(b).end)}`,
+      ),
+      [
+        '2026-02-03T08:00:00.000Z/2026-02-03T08:30:00.000Z',
+        '2026-02-03T10:00:00.000Z/2026-02-03T11:00:00.000Z',
+        '2026-02-03T10:30:00.000Z/2026-02-03T11:00:00.000Z',
+      ],
+    )
+
     // ---- a read route must never be the only place a counter moved
     check(
       'no read route dropped a clock or counter advance',

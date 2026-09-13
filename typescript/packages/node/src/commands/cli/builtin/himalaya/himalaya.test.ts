@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import type * as ClientModule from '../../../../core/email/client.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cliSpecFor } from '@struktoai/mirage-core/commands/cli/specs'
 import type { CLIDoors } from '@struktoai/mirage-core/commands/cli/types'
@@ -47,7 +48,10 @@ const appendMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./smtp.ts', () => ({ sendRaw: sendRawMock }))
 
-vi.mock('../../../../core/email/client.ts', () => ({
+// The real `quoteString` rides along: the query compiler spells its
+// patterns through it, and a stub would have to re-implement RFC 3501.
+vi.mock('../../../../core/email/client.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof ClientModule>()),
   listFolderEntries: listFolderEntriesMock,
   fetchRawMessage: vi.fn(() => Promise.resolve(new TextEncoder().encode('From: a@x\r\n\r\nbody'))),
   fetchMessage: vi.fn(() => Promise.resolve(ORIGINAL)),
@@ -749,8 +753,13 @@ describe('himalaya verbs', () => {
     const rows = JSON.parse(decode(await materialize(out))) as Record<string, unknown>[]
     expect(rows.map((r) => r.uid)).toEqual(['2', '1'])
     // INTERNALDATE only picks the date directory; it is not an envelope
-    // field, and every envelope renders through the mount's renderer.
+    // field.
     expect(rows.every((r) => !('internalDate' in r))).toBe(true)
+    // Nor is the body: a listing is header-only, and `message read` and the
+    // mounted .email.json are where the body lives (#1067).
+    expect(rows.every((r) => !('body_text' in r) && !('body_html' in r))).toBe(true)
+    expect(rows.every((r) => !('snippet' in r))).toBe(true)
+    expect(rows.map((r) => r.subject)).toEqual(['alpha', 'beta'])
     expect(closeSpy).toHaveBeenCalledTimes(1)
     closeSpy.mockRestore()
   })
@@ -766,8 +775,9 @@ describe('himalaya verbs', () => {
       stdin: null,
       env: {},
     })) as [Uint8Array, IOResult]
-    const rows = JSON.parse(decode(await materialize(out))) as { uid: string }[]
+    const rows = JSON.parse(decode(await materialize(out))) as Record<string, unknown>[]
     expect(rows.map((r) => r.uid)).toEqual(['2', '1'])
+    expect(rows.every((r) => !('body_text' in r) && !('body_html' in r))).toBe(true)
     closeSpy.mockRestore()
   })
 })
