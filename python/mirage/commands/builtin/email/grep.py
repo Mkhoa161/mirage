@@ -22,6 +22,7 @@ from mirage.commands.builtin.generic.grep import grep as generic_grep
 from mirage.commands.builtin.generic_bind.adapter import bound_op
 from mirage.commands.builtin.grep_pattern import compile_pattern, pattern_arg
 from mirage.commands.builtin.grep_pushdown import (pushdown_operand,
+                                                   search_query,
                                                    text_search_results)
 from mirage.commands.builtin.grep_scan import grep_lines
 from mirage.commands.builtin.utils.output import format_records
@@ -77,13 +78,20 @@ async def grep(accessor: EmailAccessor, paths: list[PathSpec],
     # gate's. A scope that names no folder falls through to the generic scan
     # rather than answering, which is what the mount root does.
     operand = pushdown_operand(paths, opts.flags, pattern, SEARCH_HONORED)
-    if (pattern is not None and operand is not None
+    # IMAP TEXT is a case-insensitive substring search, not a regex engine,
+    # so the server is asked for the literal every match must contain and
+    # the real pattern runs over each candidate. A pattern with no such
+    # literal (an alternation, a class with nothing required around it)
+    # takes the generic scan rather than a search for the regex's spelling.
+    query = search_query(pattern, fl.as_bool("F")) if pattern else None
+    if (pattern is not None and query is not None and operand is not None
             and (fl.as_bool("r") or fl.as_bool("R"))):
         match = detect_scope(operand)
         if match.kind in NATIVE_KINDS:
             result = await _grep_server_side(accessor,
                                              match.slots["folder"],
                                              pattern,
+                                             query,
                                              operand,
                                              i=fl.as_bool("i"),
                                              n=fl.as_bool("n"),
@@ -113,6 +121,7 @@ async def _grep_server_side(
     accessor: EmailAccessor,
     folder: str,
     pattern: str,
+    query: str,
     operand: PathSpec,
     i: bool = False,
     n: bool = False,
@@ -126,7 +135,7 @@ async def _grep_server_side(
     pairs = await search_and_format(
         accessor,
         folder,
-        pattern,
+        query,
         file_prefix,
         max_results=accessor.config.max_messages,
     )

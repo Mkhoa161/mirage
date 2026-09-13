@@ -85,6 +85,18 @@ describe('searchQuery', () => {
   it('returns null when no literal can be proven', () => {
     expect(searchQuery('foo|bar', false)).toBeNull()
   })
+  it('reads a dot as the regex it is', () => {
+    // `worker.3` matches `worker-3`, which a substring search for
+    // `worker.3` never returns; only the run before the dot is required.
+    expect(searchQuery('worker.3', false)).toBe('worker')
+    expect(searchQuery('worker.3', true)).toBe('worker.3')
+  })
+  it('never answers for a pattern list', () => {
+    // A newline-joined -e list is a set of alternatives; no one literal
+    // is required by all of them.
+    expect(searchQuery('foo\nbar', true)).toBeNull()
+    expect(searchQuery('foo\nbar', false)).toBeNull()
+  })
 })
 
 describe('isLiteralPattern', () => {

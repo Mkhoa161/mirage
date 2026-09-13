@@ -125,17 +125,26 @@ def is_literal_pattern(pattern: str, fixed_string: bool) -> bool:
 
 
 def search_query(pattern: str, fixed_string: bool) -> str | None:
-    """Literal to push down to a code-search API for a grep/rg pattern.
+    """Literal to push down to a substring or code-search API for a pattern.
+
+    A SIMPLE pattern holding a dot is a regex here, not a literal:
+    ``worker.3`` matches ``worker-3``, which a substring search for
+    ``worker.3`` never returns, so only the run before the dot is required.
+    ``is_literal_pattern`` already draws that line for the whole-word case.
 
     Args:
         pattern (str): the search pattern.
         fixed_string (bool): True if -F is set.
 
     Returns:
-        str | None: the pattern itself when it is literal, a required literal
-            extracted from a regex, or None when no literal can be searched.
+        str | None: the pattern itself when it is literal, the longest
+            literal every match of a regex must contain, or None when no
+            literal can be searched: a newline-joined pattern list is a set
+            of alternatives no one literal is required by.
     """
-    if classify_pattern(pattern, fixed_string) != PatternType.REGEX:
+    if "\n" in pattern:
+        return None
+    if is_literal_pattern(pattern, fixed_string):
         return pattern
     return extract_required_literal(pattern)
 

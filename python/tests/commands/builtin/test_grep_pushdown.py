@@ -56,6 +56,20 @@ def test_search_query_regex_no_literal_is_none():
     assert grep_pushdown.search_query("foo|bar", False) is None
 
 
+def test_search_query_reads_a_dot_as_the_regex_it_is():
+    # `worker.3` matches `worker-3`, which a substring search for
+    # `worker.3` never returns; only the run before the dot is required.
+    assert grep_pushdown.search_query("worker.3", False) == "worker"
+    assert grep_pushdown.search_query("worker.3", True) == "worker.3"
+
+
+def test_search_query_never_answers_for_a_pattern_list():
+    # A newline-joined -e list is a set of alternatives; no one literal
+    # is required by all of them.
+    assert grep_pushdown.search_query("foo\nbar", True) is None
+    assert grep_pushdown.search_query("foo\nbar", False) is None
+
+
 @pytest.mark.parametrize("pattern,fixed,expected", [
     ("abc", False, True),
     ("a-b_c.d", False, False),

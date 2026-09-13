@@ -75,11 +75,17 @@ export function extractRequiredLiteral(pattern: string): string | null {
   return best.length >= MIN_SEARCH_LITERAL ? best : null
 }
 
-// Literal to push down to a code-search API for a grep/rg pattern: the
-// pattern itself when literal, a required literal extracted from a regex, or
-// null when no literal can be searched.
+// Literal to push down to a substring or code-search API for a grep/rg
+// pattern: the pattern itself when literal, the longest literal every match
+// of a regex must contain, or null when no literal can be searched (a
+// newline-joined pattern list is a set of alternatives no one literal is
+// required by). A SIMPLE pattern holding a dot is a regex here, not a
+// literal: `worker.3` matches `worker-3`, which a substring search for
+// `worker.3` never returns, so only the run before the dot is required.
+// `isLiteralPattern` already draws that line for the whole-word case.
 export function searchQuery(pattern: string, fixedString: boolean): string | null {
-  if (classifyPattern(pattern, fixedString) !== PatternType.REGEX) return pattern
+  if (pattern.includes('\n')) return null
+  if (isLiteralPattern(pattern, fixedString)) return pattern
   return extractRequiredLiteral(pattern)
 }
 
