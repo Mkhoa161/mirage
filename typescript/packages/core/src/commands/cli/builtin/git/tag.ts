@@ -41,7 +41,7 @@ import { short } from './format.ts'
 import { blockingRef, deleteRef, loadRefs, TAG_PREFIX, validRefName, writeRef } from './refs.ts'
 import { opened, repoArgs, type Repo } from './repo.ts'
 import { resolveObject } from './revparse.ts'
-import { checkOperands, escaped, fatal } from './util.ts'
+import { checkOperands, escaped, fatal, switches } from './util.ts'
 import { fnmatch } from '../../../../utils/fnmatch.ts'
 import { compareCodePoints } from '../../../../utils/sort.ts'
 
@@ -230,7 +230,7 @@ export async function tag(inv: CLIInvocation): Promise<CommandFnResult> {
   try {
     const dispatch = doors.dispatch
     if (dispatch === undefined) throw new NoWorkspaceError()
-    checkOperands(texts, UnknownSwitchError, escaped(inv.argv))
+    checkOperands(texts, UnknownSwitchError, escaped(inv.argv), switches(inv))
     const flags = parseFlags(fl)
     if (flags.listing && flags.remove) throw new IncompatibleOptionsError('-l', '-d')
     // -a, -m and -f create a tag, so a line that lists or deletes instead has

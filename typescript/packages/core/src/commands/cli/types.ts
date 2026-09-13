@@ -108,6 +108,14 @@ export interface CLIInvocation<ConfigT = unknown> {
    * of a filesystem.
    */
   doors?: CLIDoors
+  /**
+   * The leaf the line resolved to, the grammar its argv was parsed
+   * against. A verb reads it to answer in its original's terms (git names
+   * the first switch letter parse-options would not know), so a refusal
+   * never restates the options declared one level up. Absent where no
+   * executor built the record.
+   */
+  spec?: CLISpec
 }
 
 /**

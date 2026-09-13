@@ -357,7 +357,8 @@ async def handle_cli(
                         flags=kw,
                         stdin=stdin,
                         env=env_snapshot(session),
-                        doors=doors)
+                        doors=doors,
+                        spec=leaf)
 
     # asyncio's timeout cancels the runtime task as well as the caller;
     # TypeScript forwards an explicit deadline and abort signal instead.

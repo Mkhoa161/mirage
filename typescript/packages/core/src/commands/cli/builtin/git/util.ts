@@ -17,6 +17,7 @@ import { HEAD } from './constants.ts'
 import type { FlagView } from '../../../spec/types.ts'
 import { IOResult } from '../../../../io/types.ts'
 import type { GitError } from './errors.ts'
+import type { CLIInvocation } from '../../types.ts'
 import { UnrecognizedArgumentError } from './errors.ts'
 
 const ROOT = '/'
@@ -100,15 +101,57 @@ export function escaped(argv: readonly string[]): Set<string> {
  * @param texts positional text operands, as typed
  * @param error the refusal this verb words it with
  * @param marked operands a `--` on the line escaped
+ * @param known the verb's one-letter switches, which narrow a refused cluster to
+ *   its first unknown letter the way parse-options does; absent refuses the
+ *   whole word
  */
 export function checkOperands(
   texts: readonly string[],
   error: new (argument: string) => GitError = UnrecognizedArgumentError,
   marked: ReadonlySet<string> = new Set(),
+  known?: ReadonlySet<string>,
 ): void {
   for (const text of texts) {
-    if (text.startsWith('-') && !marked.has(text)) throw new error(text)
+    if (text.startsWith('-') && !marked.has(text)) throw new error(offendingSwitch(text, known))
   }
+}
+
+/**
+ * The one-letter switches the leaf declares, without their dash.
+ *
+ * Read off the spec the line was parsed against, so the set is the verb's
+ * own and never a copy of it; empty where no executor built the record.
+ *
+ * @param inv the invocation, carrying its leaf
+ */
+export function switches(inv: CLIInvocation): ReadonlySet<string> {
+  const letters = new Set<string>()
+  for (const option of inv.spec?.options ?? []) {
+    if (option.short !== null && option.short.length === 2) letters.add(option.short.slice(1))
+  }
+  return letters
+}
+
+/**
+ * The part of a dash word parse-options would refuse.
+ *
+ * git reads a short cluster letter by letter, consumes the ones the verb
+ * declares and stops at the first it does not, so `git mv -nx` says `x' and
+ * `git mv -draft` says `d' (git 2.50.1); a verb that declares no switch at
+ * all (`reset`) still names the first letter. A long option is refused as
+ * typed, and so is a cluster for a verb that hands over no set: log, show
+ * and diff word the whole argument.
+ *
+ * @param text the dash word as the user spelled it
+ * @param known the verb's one-letter switches, absent for a verb that
+ *   refuses the word whole
+ */
+export function offendingSwitch(text: string, known: ReadonlySet<string> | undefined): string {
+  if (known === undefined || text.startsWith('--')) return text
+  for (const letter of text.slice(1)) {
+    if (!known.has(letter)) return `-${letter}`
+  }
+  return text
 }
 
 /**

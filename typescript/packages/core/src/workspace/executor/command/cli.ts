@@ -293,6 +293,7 @@ export async function handleCli(
     stdin,
     env: envSnapshot(session),
     ...(Object.keys(doors).length > 0 ? { doors } : {}),
+    spec: leaf,
   }
 
   // The outer timer bounds the whole invocation; the runtime deadline

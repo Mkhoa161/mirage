@@ -25,7 +25,7 @@ from mirage.commands.cli.builtin.git.pathspec import repo_relative, under
 from mirage.commands.cli.builtin.git.session import opened
 from mirage.commands.cli.builtin.git.types import IndexState, RepoLocation
 from mirage.commands.cli.builtin.git.util import (  # yapf: disable
-    check_operands, escaped, fatal, links_of, mounts_of, start_point)
+    check_operands, escaped, fatal, links_of, mounts_of, start_point, switches)
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.spec.types import FlagView
 from mirage.io.stream import yield_bytes
@@ -421,7 +421,8 @@ async def mv(inv: CLIInvocation[None]) -> tuple[ByteSource | None, IOResult]:
     try:
         if dispatch is None or stat_path is None:
             raise NoWorkspaceError()
-        check_operands(texts, UnknownSwitchError, escaped(inv.argv))
+        check_operands(texts, UnknownSwitchError, escaped(inv.argv),
+                       switches(inv))
         flags = parse_flags(fl)
         if len(texts) < 2:
             raise MoveUsageError()

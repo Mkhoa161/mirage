@@ -62,7 +62,7 @@ import { commitEntries, type TreeEntry } from './tree.ts'
 import type { LinkView, MountView, StatPath } from '../../../../ops/types.ts'
 import { FileType } from '../../../../types.ts'
 import type { Dispatch, HeadMove, HeadRef, IndexEntry } from './types.ts'
-import { checkOperands, escaped, fatal } from './util.ts'
+import { checkOperands, escaped, fatal, switches } from './util.ts'
 import { scan, UNTRACKED_ALL } from './worktree.ts'
 import { compareCodePoints } from '../../../../utils/sort.ts'
 
@@ -530,7 +530,7 @@ export async function checkout(inv: CLIInvocation): Promise<CommandFnResult> {
     if (statPath === undefined || dispatch === undefined) {
       throw new NoWorkspaceError()
     }
-    checkOperands(texts, UnknownSwitchError, escaped(inv.argv))
+    checkOperands(texts, UnknownSwitchError, escaped(inv.argv), switches(inv))
     const target = texts[0]
     if (target === undefined) throw new UnknownPathspecError('')
     const repo = await opened(fl, doors)

@@ -35,7 +35,7 @@ import { basename } from './path.ts'
 import { repoRelative, under as inside } from './pathspec.ts'
 import { opened } from './repo.ts'
 import type { Dispatch, IndexEntry, RepoLocation } from './types.ts'
-import { checkOperands, escaped, fatal, startPoint } from './util.ts'
+import { checkOperands, escaped, fatal, startPoint, switches } from './util.ts'
 import { compareCodePoints } from '../../../../utils/sort.ts'
 
 const ENC = new TextEncoder()
@@ -374,7 +374,7 @@ export async function mv(inv: CLIInvocation): Promise<CommandFnResult> {
     if (statPath === undefined || dispatch === undefined) {
       throw new NoWorkspaceError()
     }
-    checkOperands(texts, UnknownSwitchError, escaped(inv.argv))
+    checkOperands(texts, UnknownSwitchError, escaped(inv.argv), switches(inv))
     const flags = parseFlags(fl)
     if (texts.length < 2) throw new MoveUsageError()
     const repo = await opened(fl, doors)

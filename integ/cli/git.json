@@ -2209,7 +2209,7 @@
       "expect": {
         "exit": 129,
         "stdout": "",
-        "stderr": "error: unknown switch `draft'\n"
+        "stderr": "error: unknown switch `d'\n"
       }
     },
     {
@@ -2840,6 +2840,48 @@
         "exit": 0,
         "stdout": "written\nexit=128\n",
         "stderr": "fatal: Failed to resolve 'HEAD^{tree}~1' as a valid ref.\n"
+      }
+    },
+    {
+      "id": "git_unknown_switch_is_the_first_letter_the_verb_lacks",
+      "seq": 568362,
+      "targets": [
+        "git-disk",
+        "git-ram"
+      ],
+      "command": "git -C /repo mv -nx a.txt b.txt",
+      "expect": {
+        "exit": 129,
+        "stdout": "",
+        "stderr": "error: unknown switch `x'\n"
+      }
+    },
+    {
+      "id": "git_unknown_switch_in_a_dashed_pathspec_is_its_first_letter",
+      "seq": 568363,
+      "targets": [
+        "git-disk",
+        "git-ram"
+      ],
+      "command": "git -C /repo add -draft",
+      "expect": {
+        "exit": 129,
+        "stdout": "",
+        "stderr": "error: unknown switch `d'\n"
+      }
+    },
+    {
+      "id": "git_verb_without_switches_still_names_the_first_letter",
+      "seq": 568364,
+      "targets": [
+        "git-disk",
+        "git-ram"
+      ],
+      "command": "git -C /repo reset -Zq",
+      "expect": {
+        "exit": 129,
+        "stdout": "",
+        "stderr": "error: unknown switch `Z'\n"
       }
     }
   ]

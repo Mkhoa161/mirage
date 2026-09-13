@@ -46,7 +46,11 @@ import {
 } from '../../../types.ts'
 import { eacces, eisdir, enoent, erofsReadOnly, isMissError } from '../../../utils/errors.ts'
 import type { ChildMounts } from '../../../ops/types.ts'
-import { DEFAULT_MAX_GLOB_MATCHES, resolveGlobWith } from '../../../utils/glob_walk.ts'
+import {
+  DEFAULT_MAX_GLOB_MATCHES,
+  resolveGlobWith,
+  type TargetStat,
+} from '../../../utils/glob_walk.ts'
 import { norm, parent } from '../../../utils/path.ts'
 import { stripSlash } from '../../../utils/slash.ts'
 import type { DuEntries } from '../generic/du.ts'
@@ -124,9 +128,11 @@ export function makeResolveGlob<A extends Accessor = Accessor>(
   readdir: ReaddirOp<A>,
   maxGlobMatches: number = DEFAULT_MAX_GLOB_MATCHES,
   children?: ChildMounts,
+  stat?: StatOp<A>,
+  targetStat?: TargetStat,
 ): ResolveGlobOp<A> {
   return async (accessor, paths, index) =>
-    resolveGlobWith(readdir, accessor, paths, index, maxGlobMatches, children)
+    resolveGlobWith(readdir, accessor, paths, index, maxGlobMatches, children, stat, targetStat)
 }
 
 // A backend's native du, both halves at once. The generic derives its
@@ -182,10 +188,21 @@ export interface CommandIO<A extends Accessor = Accessor> {
   // factory, because it is session-scoped state while the adapter itself
   // is built once per backend.
   globChildren?: ChildMounts
+  // What an owed name points at, the namespace's own stat resolved
+  // through the workspace. Stamped beside globChildren from opts.ns.links,
+  // so a trailing-slash glob follows a link the way bash does instead of
+  // keeping every link it cannot see through.
+  globTargetStat?: TargetStat
 }
 
 export function resolveGlobOf<A extends Accessor = Accessor>(ops: CommandIO<A>): ResolveGlobOp<A> {
-  return makeResolveGlob(ops.readdir, ops.maxGlobMatches, ops.globChildren)
+  return makeResolveGlob(
+    ops.readdir,
+    ops.maxGlobMatches,
+    ops.globChildren,
+    ops.stat,
+    ops.globTargetStat,
+  )
 }
 
 /** Refuse a hidden path the way nonexistence would: ENOENT for anything

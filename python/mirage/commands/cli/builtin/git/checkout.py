@@ -50,7 +50,7 @@ from mirage.commands.cli.builtin.git.session import opened
 from mirage.commands.cli.builtin.git.types import (HeadMove, HeadRef,
                                                    RepoLocation)
 from mirage.commands.cli.builtin.git.util import (  # yapf: disable
-    check_operands, escaped, fatal, links_of, mounts_of)
+    check_operands, escaped, fatal, links_of, mounts_of, switches)
 from mirage.commands.cli.builtin.git.worktree import UNTRACKED_ALL, scan
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.spec.types import FlagView
@@ -616,7 +616,8 @@ async def checkout(
     try:
         if dispatch is None or stat_path is None:
             raise NoWorkspaceError()
-        check_operands(texts, UnknownSwitchError, escaped(inv.argv))
+        check_operands(texts, UnknownSwitchError, escaped(inv.argv),
+                       switches(inv))
         if not texts:
             raise UnknownPathspecError("")
         target = texts[0]
