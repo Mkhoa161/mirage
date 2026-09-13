@@ -47,6 +47,7 @@ const TREE: Record<string, string[]> = {
   '/notion/pages/Roadmap__uuid2': ['/notion/pages/Roadmap__uuid2/page.json'],
   '/': ['/alpha', '/beta.txt'],
   '/alpha': ['/alpha/b.txt'],
+  '/box': ['/box/sub/', '/box/f.txt'],
 }
 
 let calls: string[] = []
@@ -192,6 +193,15 @@ describe('expandPattern', () => {
     const spec = globSpec('/*/b.txt', '')
     const matched = await expandPattern(fakeReaddir, null, spec)
     expect(matched.map((m) => m.virtual)).toEqual(['/alpha/b.txt'])
+  })
+
+  // box, gdrive and dropbox mark a folder with a trailing slash on a cold
+  // listing; the marker is not part of the name a match spells.
+  it("drops a cold listing's directory marker from a match", async () => {
+    const spec = globSpec('/box/*', '/box')
+    const matched = await expandPattern(fakeReaddir, null, spec)
+    expect(matched.map((m) => m.virtual)).toEqual(['/box/f.txt', '/box/sub'])
+    expect(matched.map((m) => m.resourcePath)).toEqual(['f.txt', 'sub'])
   })
 
   it('expands a glob at a root mount', async () => {

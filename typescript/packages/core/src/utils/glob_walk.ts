@@ -516,9 +516,11 @@ export async function expandPattern<A, I>(
         if (!isMissingDir(err)) throw err
         entries = []
       }
+      // A cold listing marks a folder with a trailing slash (box, gdrive,
+      // dropbox); the marker is not part of the name.
       for (const e of entries) {
-        const name = rstripSlash(e).split('/').pop() ?? ''
-        if (globNameMatches(name, matcher)) nextLevel.push(e)
+        const entry = rstripSlash(e)
+        if (globNameMatches(entry.split('/').pop() ?? '', matcher)) nextLevel.push(entry)
       }
       if (children !== undefined) {
         // A nested mount root or a link is a real child of this parent

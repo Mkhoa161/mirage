@@ -431,8 +431,12 @@ async def expand_pattern(
             except (FileNotFoundError, NotADirectoryError):
                 entries = []
             pattern = glob_pattern(seg)
-            next_level.extend(e for e in entries if glob_name_matches(
-                e.rstrip("/").rsplit("/", 1)[-1], pattern))
+            # A cold listing marks a folder with a trailing slash (box,
+            # gdrive, dropbox); the marker is not part of the name.
+            for e in entries:
+                entry = e.rstrip("/")
+                if glob_name_matches(entry.rsplit("/", 1)[-1], pattern):
+                    next_level.append(entry)
             if children is not None:
                 # A nested mount root or a link is a real child of this
                 # parent whether or not the backend could list it.

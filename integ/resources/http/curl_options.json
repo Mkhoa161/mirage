@@ -103,6 +103,84 @@
         "stdout": "method=PUT\nheader=yes\nbody=\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "curl_max_time_zero_disables_the_deadline",
+      "seq": 330048,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s -m 0 {http}/hello",
+      "expect": {
+        "exit": 0,
+        "stdout": "hello from http\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_head_with_explicit_get_drops_the_body",
+      "seq": 330049,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sI -X GET {http}/echo | grep -c '^method='",
+      "expect": {
+        "exit": 1,
+        "stdout": "0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_data_sends_the_form_content_type",
+      "seq": 330050,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s -d 'a=1' {http}/type",
+      "expect": {
+        "exit": 0,
+        "stdout": "type=application/x-www-form-urlencoded\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_header_content_type_replaces_the_default",
+      "seq": 330051,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s -H 'Content-Type: application/json' -d '{}' {http}/type",
+      "expect": {
+        "exit": 0,
+        "stdout": "type=application/json\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_verbose_shows_the_body_headers_curl_sends",
+      "seq": 330052,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sv -d 'a=1' {http}/type 2>&1 | grep '^> Content-'",
+      "expect": {
+        "exit": 0,
+        "stdout": "> Content-Length: 3\r\n> Content-Type: application/x-www-form-urlencoded\r\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_verbose_shows_a_custom_content_type_in_its_slot",
+      "seq": 330053,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sv -H 'Content-Type: application/json' -d '{}' {http}/type 2>&1 | grep '^> Content-'",
+      "expect": {
+        "exit": 0,
+        "stdout": "> Content-Type: application/json\r\n> Content-Length: 2\r\n",
+        "stderr": ""
+      }
     }
   ]
 }

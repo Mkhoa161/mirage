@@ -27,7 +27,7 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "shopt -u failglob nullglob dotglob && mkdir -p /data/gts/2026-09-10 /data/gts/2026-09-11 && cd /data/gts && printf 'sample\\n' | tee 2026-09-10/sample.txt > /dev/null && printf 'plain\\n' | tee plain.txt > /dev/null && ln -s 2026-09-10 lnk && ln -s nowhere broken",
+      "command": "shopt -u failglob nullglob dotglob && mkdir -p /data/gts/2026-09-10 /data/gts/2026-09-11 && printf 'sample\\n' | tee /data/gts/2026-09-10/sample.txt > /dev/null && printf 'x\\n' | tee /data/gts/2026-09-11/.keep > /dev/null && printf 'plain\\n' | tee /data/gts/plain.txt > /dev/null && cd /data/gts && ln -s 2026-09-10 lnk && ln -s nowhere broken",
       "expect": {
         "exit": 0,
         "stdout": "",

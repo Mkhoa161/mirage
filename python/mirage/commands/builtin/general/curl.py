@@ -42,8 +42,8 @@ EXIT_TIMEOUT = 28
 
 DEFAULT_TIMEOUT = 30.0
 CRLF = "\r\n"
-# What both hosts send for -d: httpx's `content=` and fetch's body carry no
-# type of their own, so this is the one curl would add for -d as well.
+# curl's own Content-Type for a -d body, sent unless the line names one:
+# httpx's `content=` and fetch's body carry no type of their own.
 BODY_CONTENT_TYPE = "application/x-www-form-urlencoded"
 
 
@@ -64,8 +64,17 @@ def resolve_target(o: str | PathSpec, cwd: PathSpec | str | None) -> PathSpec:
                     resolved=True)
 
 
+def names_content_type(headers: Mapping[str, str]) -> bool:
+    """Whether the line's headers already carry a Content-Type.
+
+    Args:
+        headers (Mapping[str, str]): the headers the line added.
+    """
+    return any(k.lower() == "content-type" for k in headers)
+
+
 def request_lines(url: str, method: str, headers: Mapping[str, str],
-                  body_len: int | None) -> list[str]:
+                  body_len: int | None, body_type: str | None) -> list[str]:
     """The request curl -v shows, as far as mirage can see it.
 
     Only what leaves mirage is dumped: the request line, Host, the
@@ -78,10 +87,12 @@ def request_lines(url: str, method: str, headers: Mapping[str, str],
     Args:
         url (str): the request URL.
         method (str): the HTTP method sent.
-        headers (Mapping[str, str]): the headers handed to the client,
+        headers (Mapping[str, str]): the headers the line added,
             User-Agent included.
         body_len (int | None): the -d body's byte length, None without
             one.
+        body_type (str | None): the Content-Type curl added for the body
+            itself, None when the line named one or there is no body.
     """
     parts = urlsplit(url)
     target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
@@ -97,7 +108,8 @@ def request_lines(url: str, method: str, headers: Mapping[str, str],
     lines.extend(f"{k}: {v}" for k, v in headers.items() if k != "User-Agent")
     if body_len is not None:
         lines.append(f"Content-Length: {body_len}")
-        lines.append(f"Content-Type: {BODY_CONTENT_TYPE}")
+    if body_type is not None:
+        lines.append(f"Content-Type: {body_type}")
     return lines
 
 
@@ -158,8 +170,12 @@ async def curl(
     url = texts[0]
     # -s silences the message, -S puts it back. Neither changes the exit code.
     quiet = fl.as_bool("silent") and not fl.as_bool("show_error")
-    timeout = max_time if max_time is not None else DEFAULT_TIMEOUT
+    # A zero --max-time is curl's "no limit", not a deadline of zero.
+    timeout: float | None = DEFAULT_TIMEOUT
+    if max_time is not None:
+        timeout = None if max_time == 0 else max_time
     body_len: int | None = None
+    body_type: str | None = None
     try:
         if form:
             method = request or "POST"
@@ -175,9 +191,16 @@ async def curl(
                                  ("POST" if data else "GET"))
             body = data.encode() if data else None
             body_len = len(body) if body is not None else None
+            # -v shows what is sent, so curl's default for the body goes
+            # on the request, not on the trace alone.
+            if body is not None and not names_content_type(headers):
+                body_type = BODY_CONTENT_TYPE
+            sent = ({
+                **headers, "Content-Type": body_type
+            } if body_type is not None else headers)
             resp = http_request(url,
                                 method=method,
-                                headers=headers,
+                                headers=sent,
                                 data=body,
                                 timeout=timeout,
                                 follow_redirects=location)
@@ -194,8 +217,9 @@ async def curl(
             f"{exc.port}: Could not connect to server\n").encode()
         return None, IOResult(exit_code=EXIT_CONNECT, stderr=err)
     # -v is not a message, so -s leaves it alone.
-    trace = (_dump(request_lines(url, method, headers, body_len), "> ") +
-             _dump(response_lines(resp), "< ")).encode() if verbose else b""
+    trace = (
+        _dump(request_lines(url, method, headers, body_len, body_type), "> ") +
+        _dump(response_lines(resp), "< ")).encode() if verbose else b""
     # Only -f makes an error status an error, and then nothing is written.
     if fl.as_bool("fail") and resp.is_error:
         err = b"" if quiet else (
@@ -203,7 +227,10 @@ async def curl(
             f"{resp.status}\n").encode()
         return None, IOResult(exit_code=EXIT_HTTP_ERROR, stderr=trace + err)
     result = resp.body
-    if include or head:
+    if head:
+        # -I prints the headers alone, whatever method -X made it send.
+        result = _dump(response_lines(resp)).encode()
+    elif include:
         result = _dump(response_lines(resp)).encode() + result
     if isinstance(output, (PathSpec, str)):
         o_str = output.virtual if isinstance(output, PathSpec) else output

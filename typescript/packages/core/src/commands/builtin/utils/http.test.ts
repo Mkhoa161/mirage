@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HttpConnectError } from '../errors.ts'
+import { HttpConnectError, HttpTimeoutError } from '../errors.ts'
 import { httpFormRequest, httpRequest, isHttpError, setHttpProxyBase } from './http.ts'
 
 const ENC = new TextEncoder()
@@ -154,5 +154,54 @@ describe('http proxy routing', () => {
       host: '127.0.0.1',
       port: 1,
     })
+  })
+})
+
+describe('http deadlines', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  // The deadline can fire while the body is still arriving: the abort then
+  // surfaces from the body read, and it is the same timeout.
+  it('reports an abort during the body read as HttpTimeoutError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers(),
+          arrayBuffer: () => Promise.reject(new DOMException('aborted', 'AbortError')),
+        } as unknown as Response),
+      ),
+    )
+    await expect(httpRequest('http://127.0.0.1:1/x', { timeoutMs: 50 })).rejects.toThrow(
+      HttpTimeoutError,
+    )
+  })
+
+  // A null deadline is curl's `--max-time 0`: nothing ever aborts.
+  it('never aborts when the deadline is null', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('aborted', 'AbortError'))
+            })
+            setTimeout(() => {
+              resolve(new Response('late', { status: 200, statusText: 'OK' }))
+            }, 120_000)
+          }),
+      ),
+    )
+    const pending = httpRequest('http://127.0.0.1:1/x', { timeoutMs: null })
+    await vi.advanceTimersByTimeAsync(120_000)
+    const resp = await pending
+    expect(new TextDecoder().decode(resp.body)).toBe('late')
   })
 })

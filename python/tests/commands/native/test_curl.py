@@ -275,6 +275,15 @@ def test_max_time_reaches_the_request_in_seconds(monkeypatch):
     assert calls[0]["timeout"] == 2.5
 
 
+def test_max_time_zero_disables_the_deadline(monkeypatch):
+    # curl reads zero as "no limit" (curl 8.7.1: `-m 0` completes a
+    # transfer that `-m .1` fails with 28), so no deadline reaches the
+    # client.
+    calls = _stub(monkeypatch)
+    _run("http://x.test/f", max_time=0)
+    assert calls[0]["timeout"] is None
+
+
 def test_timeout_is_exit_28(monkeypatch):
     _stub(monkeypatch, exc=HttpTimeoutError("x.test", 80, 2001))
     body, io = _run("http://x.test/f", max_time=2)
@@ -331,6 +340,42 @@ def test_head_prints_the_headers_and_sends_head(monkeypatch):
     assert calls[0]["method"] == "HEAD"
     assert body.decode() == RESPONSE_DUMP
     assert io.exit_code == 0
+
+
+def test_head_with_explicit_get_drops_the_body(monkeypatch):
+    # curl -I with -X GET still prints the headers alone (curl 8.7.1): the
+    # body a GET carries is discarded, not appended.
+    calls = _stub(monkeypatch)
+    body, _io = _run("http://x.test/f", head=True, request="GET")
+    assert calls[0]["method"] == "GET"
+    assert body.decode() == RESPONSE_DUMP
+
+
+def test_data_sends_the_form_content_type_unless_a_header_names_one(
+        monkeypatch):
+    # -d adds curl's own Content-Type to the request, and -v shows the one
+    # that is sent: a -H Content-Type takes its place in the custom slot
+    # and no default follows (curl 8.7.1).
+    calls = _stub(monkeypatch)
+    _run("http://x.test/f", data="a=1")
+    assert calls[0]["headers"] == {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    calls = _stub(monkeypatch)
+    _body, io = _run("http://x.test/f",
+                     data="{}",
+                     header="Content-Type: application/json",
+                     verbose=True,
+                     silent=True)
+    assert calls[0]["headers"] == {"Content-Type": "application/json"}
+    assert io.stderr.decode().split("< ")[0] == (
+        "> POST /f HTTP/1.1\r\n"
+        "> Host: x.test\r\n"
+        "> User-Agent: Mozilla/5.0 (compatible; mirage/1.0)\r\n"
+        "> Accept: */*\r\n"
+        "> Content-Type: application/json\r\n"
+        "> Content-Length: 2\r\n"
+        "> \r\n")
 
 
 def test_include_prints_the_headers_before_the_body(monkeypatch):

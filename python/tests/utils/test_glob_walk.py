@@ -46,6 +46,7 @@ TREE = {
     ],
     "/": ["/alpha", "/beta.txt"],
     "/alpha": ["/alpha/b.txt"],
+    "/box": ["/box/sub/", "/box/f.txt"],
 }
 
 CALLS: list[str] = []
@@ -206,6 +207,16 @@ async def test_directory_shaped_spec():
     )
     matched = await expand_pattern(fake_readdir, NOOPAccessor(), spec, None)
     assert [m.virtual for m in matched] == ["/notion/pages/Demo_page__uuid1"]
+
+
+@pytest.mark.asyncio
+async def test_cold_listing_directory_marker_is_not_part_of_the_name():
+    # box, gdrive and dropbox mark a folder with a trailing slash on a cold
+    # listing; the marker is not part of the name a match spells.
+    spec = glob_spec("/box/*", "/box")
+    matched = await expand_pattern(fake_readdir, NOOPAccessor(), spec, None)
+    assert [m.virtual for m in matched] == ["/box/f.txt", "/box/sub"]
+    assert [m.resource_path for m in matched] == ["f.txt", "sub"]
 
 
 @pytest.mark.asyncio

@@ -88,9 +88,11 @@ def http_request(
     method: str = "GET",
     headers: dict[str, str] | None = None,
     data: bytes | None = None,
-    timeout: float = 30,
+    timeout: float | None = 30,
     follow_redirects: bool = False,
 ) -> HttpResponse:
+    # A None timeout is no deadline at all (curl's `--max-time 0`), which
+    # is what httpx spells it as too.
     if httpx is None:
         raise ImportError(MISSING_HTTPX)
     started = time.monotonic()
@@ -116,7 +118,7 @@ def http_form_request(
     method: str = "POST",
     form_data: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
-    timeout: float = 30,
+    timeout: float | None = 30,
     follow_redirects: bool = False,
 ) -> HttpResponse:
     if httpx is None:

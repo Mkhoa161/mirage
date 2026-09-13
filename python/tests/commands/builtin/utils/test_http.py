@@ -161,6 +161,14 @@ def test_timeout_becomes_http_timeout_error_with_elapsed_ms(monkeypatch):
     assert fake.client_kwargs["timeout"] == 0.5
 
 
+def test_none_timeout_reaches_the_client(monkeypatch):
+    # curl's `--max-time 0` disables the deadline; httpx spells that None.
+    fake = _FakeHttpx(resp=_FakeResponse(200, "OK", b"x"))
+    monkeypatch.setattr(http_mod, "httpx", fake)
+    http_request("http://x.test/f", timeout=None)
+    assert fake.client_kwargs["timeout"] is None
+
+
 def test_response_headers_are_captured_in_order(monkeypatch):
     fake = _FakeHttpx(resp=_FakeResponse(200, "OK", b"x", [(
         "Content-Type", "text/plain"), ("Set-Cookie", "a"), ("Set-Cookie",

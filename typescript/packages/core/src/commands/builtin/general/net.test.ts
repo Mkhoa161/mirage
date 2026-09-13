@@ -91,7 +91,9 @@ describe.concurrent('net (live network, port of test_net.py)', () => {
       request: 'POST',
       data: 'hello=world',
     })
+    // -d carries curl's form Content-Type, so the echo parses the body as
+    // a form the way it does for real curl.
     const body = DEC.decode(out)
-    expect(body).toContain('hello=world')
+    expect(body).toContain('"form":{"hello":"world"}')
   }, 30_000)
 })

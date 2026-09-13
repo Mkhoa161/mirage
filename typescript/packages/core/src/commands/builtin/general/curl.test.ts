@@ -266,6 +266,38 @@ describe('curl option surface (#1065)', () => {
     expect(r.err).toBe('')
   })
 
+  // curl reads zero as "no limit" (curl 8.7.1: `-m 0` completes a transfer
+  // that `-m .1` fails with 28), so no deadline reaches the client.
+  it('--max-time 0 disables the deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      globalThis.fetch = vi.fn(
+        (_url: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('aborted', 'AbortError'))
+            })
+            setTimeout(() => {
+              resolve({
+                ok: true,
+                status: 200,
+                statusText: 'OK',
+                arrayBuffer: () => Promise.resolve(ENC.encode('late').buffer),
+                headers: new Headers(RESPONSE_HEADERS),
+              } as unknown as Response)
+            }, 60_000)
+          }),
+      ) as typeof fetch
+      const pending = runCurl(['http://x.test/f'], { max_time: 0 })
+      await vi.advanceTimersByTimeAsync(60_000)
+      const r = await pending
+      expect(r.exitCode).toBe(0)
+      expect(r.out).toBe('late')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('-v dumps the request and response headers on stderr', async () => {
     mockFetch('hello body')
     const r = await runCurl(['http://x.test/f?q=1'], { verbose: true })
@@ -310,6 +342,47 @@ describe('curl option surface (#1065)', () => {
     expect(calls[0]?.init?.method).toBe('HEAD')
     expect(r.out).toBe(RESPONSE_DUMP)
     expect(r.exitCode).toBe(0)
+  })
+
+  // curl -I with an explicit -X GET still prints the headers alone (curl
+  // 8.7.1): the body a GET carries is discarded, not appended.
+  it('-I with -X GET sends GET and drops the body', async () => {
+    const calls = mockFetch('hello body')
+    const r = await runCurl(['http://x.test/f'], { head: true, request: 'GET' })
+    expect(calls[0]?.init?.method).toBe('GET')
+    expect(r.out).toBe(RESPONSE_DUMP)
+  })
+
+  // -d adds curl's own Content-Type to the request, and -v shows the one
+  // that is sent: a -H Content-Type takes its place in the custom slot and
+  // no default follows (curl 8.7.1).
+  it('-d sends the form content type unless -H names one', async () => {
+    const calls = mockFetch('ok')
+    await runCurl(['http://x.test/f'], { data: 'a=1' })
+    expect(calls[0]?.init?.headers).toEqual({
+      'User-Agent': 'Mozilla/5.0 (compatible; mirage/1.0)',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    })
+    const custom = mockFetch('ok')
+    const r = await runCurl(['http://x.test/f'], {
+      data: '{}',
+      header: 'Content-Type: application/json',
+      verbose: true,
+      silent: true,
+    })
+    expect(custom[0]?.init?.headers).toEqual({
+      'User-Agent': 'Mozilla/5.0 (compatible; mirage/1.0)',
+      'Content-Type': 'application/json',
+    })
+    expect(r.err.split('< ')[0]).toBe(
+      '> POST /f HTTP/1.1\r\n' +
+        '> Host: x.test\r\n' +
+        '> User-Agent: Mozilla/5.0 (compatible; mirage/1.0)\r\n' +
+        '> Accept: */*\r\n' +
+        '> Content-Type: application/json\r\n' +
+        '> Content-Length: 2\r\n' +
+        '> \r\n',
+    )
   })
 
   it('-i prints the headers before the body', async () => {

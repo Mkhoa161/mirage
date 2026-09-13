@@ -64,18 +64,23 @@ export interface HttpRequestOptions {
   method?: string
   headers?: Record<string, string>
   body?: Uint8Array
-  timeoutMs?: number
+  // Milliseconds before the request is abandoned; null is no deadline at
+  // all (curl's `--max-time 0`).
+  timeoutMs?: number | null
   followRedirects?: boolean
 }
 
 async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpResponse> {
   const method = options.method ?? 'GET'
-  const timeoutMs = options.timeoutMs ?? 30_000
+  const timeoutMs = options.timeoutMs === undefined ? 30_000 : options.timeoutMs
   const started = Date.now()
   const controller = new AbortController()
-  const timer = setTimeout(() => {
-    controller.abort()
-  }, timeoutMs)
+  const timer =
+    timeoutMs === null
+      ? null
+      : setTimeout(() => {
+          controller.abort()
+        }, timeoutMs)
   try {
     const headers: Record<string, string> = {
       'User-Agent': DEFAULT_USER_AGENT,
@@ -91,8 +96,13 @@ async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpRe
       init.body = options.body as BodyInit
     }
     let resp: Response
+    let buf: ArrayBuffer
     try {
       resp = await fetch(applyProxy(url), init)
+      // The deadline can fire while the body is still arriving, so the
+      // body is read inside the same catch, as httpx reads it inside the
+      // request the python twin wraps.
+      buf = await resp.arrayBuffer()
     } catch (err) {
       // A transport failure carries no status. The only abort here is the
       // deadline above, which curl answers with its own code (28), so it
@@ -103,7 +113,6 @@ async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpRe
       }
       throw new HttpConnectError(host, port)
     }
-    const buf = await resp.arrayBuffer()
     return {
       status: resp.status,
       reason: resp.statusText,
@@ -112,7 +121,7 @@ async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpRe
       headers: [...resp.headers.entries()],
     }
   } finally {
-    clearTimeout(timer)
+    if (timer !== null) clearTimeout(timer)
   }
 }
 
@@ -127,7 +136,7 @@ export function httpFormRequest(
     method?: string
     formData?: Record<string, string>
     headers?: Record<string, string>
-    timeoutMs?: number
+    timeoutMs?: number | null
     followRedirects?: boolean
   } = {},
 ): Promise<HttpResponse> {

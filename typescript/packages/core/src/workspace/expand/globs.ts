@@ -378,11 +378,14 @@ async function walkGlobstar(
 // Whether a match is a directory, the way a trailing slash asks. bash keeps
 // a directory or a symlink to one and drops a regular file or a broken link
 // (bash 5.2, `*/`). A nested mount root is a directory by construction;
-// anything else is asked of the resource that owns the link-resolved path,
-// one stat per match, through the same direct door expandGlob uses for its
-// listings (python reaches the mount's op table instead; TypeScript keeps
-// ops on the workspace registry). A resource with no stat of its own
-// cannot tell, so its match is kept.
+// anything else is asked of the mount that owns the link-resolved path, one
+// stat per match. That mount is readied first, as levelMatches readies one
+// before listing it, because a link can point into a mount nothing has
+// touched yet. python's twin then reaches the mount's op table; a TypeScript
+// mount entry keeps no op table of its own (ops live on the workspace
+// registry), so the resource is asked through the same direct door the
+// listings use. A resource with no stat of its own cannot tell, so its
+// match is kept.
 async function isDirectory(
   registry: MountRegistry,
   mount: MountEntry,
@@ -401,6 +404,7 @@ async function isDirectory(
   const owner = mountOf(registry, real, mount)
   const prefix = rstripSlash(owner.prefix)
   if (rstripSlash(real) === prefix) return true
+  await owner.ensureReady()
   let row: FileStat | undefined
   try {
     row = await owner.resource.stat?.(PathSpec.fromStrPath(real, mountKey(real, prefix)))

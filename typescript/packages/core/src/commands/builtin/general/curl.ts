@@ -43,8 +43,8 @@ const EXIT_TIMEOUT = 28
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const CRLF = '\r\n'
-// What both hosts send for -d: httpx's `content=` and fetch's body carry no
-// type of their own, so this is the one curl would add for -d as well.
+// curl's own Content-Type for a -d body, sent unless the line names one:
+// httpx's `content=` and fetch's body carry no type of their own.
 const BODY_CONTENT_TYPE = 'application/x-www-form-urlencoded'
 
 export function resolveTarget(o: string, cwd: string): PathSpec {
@@ -58,6 +58,11 @@ export function resolveTarget(o: string, cwd: string): PathSpec {
   return new PathSpec({ resourcePath: stripSlash(path), virtual: path, directory, resolved: true })
 }
 
+/** Whether the line's headers already carry a Content-Type. */
+function namesContentType(headers: Record<string, string>): boolean {
+  return Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')
+}
+
 /**
  * The request curl -v shows, as far as mirage can see it.
  *
@@ -66,12 +71,15 @@ export function resolveTarget(o: string, cwd: string): PathSpec {
  * -d body adds. curl's `*` transport lines (resolving, connecting, TLS)
  * have no source here and are omitted, as are the headers the HTTP stack
  * appends on its own and a -F body's encoding, which the client builds.
+ * `bodyType` is the Content-Type curl added for the body itself, null when
+ * the line named one or there is no body.
  */
 export function requestLines(
   url: string,
   method: string,
   headers: Record<string, string>,
   bodyLen: number | null,
+  bodyType: string | null,
 ): string[] {
   let target = url
   let host = ''
@@ -91,10 +99,8 @@ export function requestLines(
   for (const [k, v] of Object.entries(headers)) {
     if (k !== 'User-Agent') lines.push(`${k}: ${v}`)
   }
-  if (bodyLen !== null) {
-    lines.push(`Content-Length: ${String(bodyLen)}`)
-    lines.push(`Content-Type: ${BODY_CONTENT_TYPE}`)
-  }
+  if (bodyLen !== null) lines.push(`Content-Length: ${String(bodyLen)}`)
+  if (bodyType !== null) lines.push(`Content-Type: ${bodyType}`)
   return lines
 }
 
@@ -168,9 +174,12 @@ async function curlCommand(
       EXIT_NO_URL,
     )
   }
-  const timeoutMs = maxTime !== undefined ? maxTime * 1000 : DEFAULT_TIMEOUT_MS
+  // A zero --max-time is curl's "no limit", not a deadline of zero.
+  const timeoutMs =
+    maxTime === undefined ? DEFAULT_TIMEOUT_MS : maxTime === 0 ? null : maxTime * 1000
   let method: string
   let bodyLen: number | null = null
+  let bodyType: string | null = null
   let resp: HttpResponse
   try {
     if (form !== null) {
@@ -189,9 +198,13 @@ async function curlCommand(
       method = request ?? (head ? 'HEAD' : data !== null ? 'POST' : 'GET')
       const body = data !== null ? ENC.encode(data) : undefined
       bodyLen = body !== undefined ? body.length : null
+      // -v shows what is sent, so curl's default for the body goes on the
+      // request, not on the trace alone.
+      if (body !== undefined && !namesContentType(headers)) bodyType = BODY_CONTENT_TYPE
+      const sent = bodyType !== null ? { ...headers, 'Content-Type': bodyType } : headers
       resp = await httpRequest(url, {
         method,
-        headers,
+        headers: sent,
         ...(body !== undefined ? { body } : {}),
         timeoutMs,
         followRedirects: location,
@@ -223,7 +236,8 @@ async function curlCommand(
   // -v is not a message, so -s leaves it alone.
   const trace = verbose
     ? ENC.encode(
-        dump(requestLines(url, method, headers, bodyLen), '> ') + dump(responseLines(resp), '< '),
+        dump(requestLines(url, method, headers, bodyLen, bodyType), '> ') +
+          dump(responseLines(resp), '< '),
       )
     : new Uint8Array()
   // Only -f makes an error status an error, and then nothing is written.
@@ -238,7 +252,10 @@ async function curlCommand(
     ]
   }
   let result = resp.body
-  if (include || head) {
+  if (head) {
+    // -I prints the headers alone, whatever method -X made it send.
+    result = ENC.encode(dump(responseLines(resp)))
+  } else if (include) {
     result = concat(ENC.encode(dump(responseLines(resp))), result)
   }
   if (output !== null) {
