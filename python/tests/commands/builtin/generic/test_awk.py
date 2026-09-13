@@ -583,6 +583,26 @@ async def test_awk_tilde_matches_a_field_against_a_regex():
 
 
 @pytest.mark.asyncio
+async def test_awk_boolean_operator_inside_a_regex_is_regex_text():
+    # awk 20200816 and mawk 1.3.4 both print the line: the `&&` belongs
+    # to the regex, it is not a conjunction.
+    out = await _run_stdin("$0 ~ /A&&B/ {print}", b"xA&&By\nAB\n")
+    assert out == "xA&&By\n"
+
+
+@pytest.mark.asyncio
+async def test_awk_boolean_operator_inside_a_string_is_string_text():
+    out = await _run_stdin('$1 == "a||b" {print $2}', b"a||b q\nz 1\n")
+    assert out == "q\n"
+
+
+@pytest.mark.asyncio
+async def test_awk_bare_regex_pattern_holding_an_operator_matches():
+    out = await _run_stdin("/A&&B/", b"xA&&By\nAB\n")
+    assert out == "xA&&By\n"
+
+
+@pytest.mark.asyncio
 async def test_awk_not_tilde_negates_the_match():
     out = await _run_stdin("$3 !~ /^d/ {print $1}", FIELDS)
     assert out == "alice\ncarol\n"

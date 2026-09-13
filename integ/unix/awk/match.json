@@ -237,6 +237,74 @@
         "stdout": "",
         "stderr": "awk: syntax error in regular expression (a at source line 1\n"
       }
+    },
+    {
+      "id": "awk_match_regex_holding_a_boolean_operator",
+      "seq": 962357,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'xA&&By\\nAB\\n' | awk '$0 ~ /A&&B/ {print}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "xA&&By\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_string_holding_a_boolean_operator",
+      "seq": 962358,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a||b q\\nz 1\\n' | awk '$1 == \"a||b\" {print $2}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "q\n",
+        "stderr": ""
+      }
     }
   ]
 }

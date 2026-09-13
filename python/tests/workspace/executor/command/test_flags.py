@@ -104,6 +104,32 @@ def test_two_spellings_of_one_path_keep_their_own_spelling():
     assert parsed.paths[1] is second
 
 
+def test_an_operand_after_a_chdir_option_keeps_its_own_spelling():
+    # `tar -cf out.tar -C dir .`: the option's value and the operand
+    # resolve to one path, and the operand's spelling names the members
+    # (GNU tar 1.35 stores `./f.txt`, not `dir/f.txt`).
+    out = replace(synthesize_path_spec("/data/out.tar"), raw_path="out.tar")
+    base = replace(synthesize_path_spec("/data/dir"), raw_path="dir")
+    dot = replace(synthesize_path_spec("/data/dir"), raw_path=".")
+    parsed = parse_flags(["-cf", out, "-C", base, dot], SPECS["tar"], "tar",
+                         "/data")
+    assert parsed.paths[0] is dot
+    assert parsed.flag_kwargs["C"][0] is base
+
+
+def test_the_string_flag_view_takes_the_option_word_off_the_queue_too():
+    # Cross-mount dispatch keeps flag paths as strings, and the operand
+    # still has to get its own word.
+    base = replace(synthesize_path_spec("/data/dir"), raw_path="dir")
+    dot = replace(synthesize_path_spec("/data/dir"), raw_path=".")
+    parsed = parse_flags(["-c", "-C", base, dot],
+                         SPECS["tar"],
+                         "tar",
+                         "/data",
+                         str_flag_paths=True)
+    assert parsed.paths[0] is dot
+
+
 def test_a_word_the_parser_normalized_is_synthesized_not_paired():
     # A followed link whose target climbs through `..` reaches the parse
     # as `/data/b/../a/f.txt`; the parser resolves that to `/data/a/f.txt`

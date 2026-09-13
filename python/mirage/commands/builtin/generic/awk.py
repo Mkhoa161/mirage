@@ -77,6 +77,52 @@ def _is_regex_literal(tok: str) -> bool:
     return tok.startswith(_REGEX_DELIM) and _is_literal(tok)
 
 
+# Where a `/` opens a regex rather than dividing: at the start of a
+# condition and after an operator that wants an operand.
+_REGEX_OPENERS = frozenset("~!&|(,")
+
+
+def _opens_regex(text: str, at: int) -> bool:
+    before = text[:at].rstrip()
+    return not before or before[-1] in _REGEX_OPENERS
+
+
+def _split_bool(condition: str, op: str) -> list[str]:
+    """Split a condition at ``op`` outside its literals.
+
+    A ``"string"`` or a ``/regex/`` can hold the operator's characters
+    (`$0 ~ /A&&B/`, `$1 == "a||b"`), so the split walks the text and
+    steps over each literal whole; a ``/`` opens a regex only where awk
+    expects an operand, so the slash of a bare word is not one.
+    Validator and evaluator both split through here, so they cannot
+    disagree about where a term ends. A literal that never closes ends
+    the scan, and the validator refuses what is left.
+
+    Args:
+        condition (str): the pattern's source text.
+        op (str): the boolean operator, ``&&`` or ``||``.
+    """
+    parts: list[str] = []
+    start = 0
+    i = 0
+    while i < len(condition):
+        ch = condition[i]
+        if ch == _STRING_QUOTE or (ch == _REGEX_DELIM
+                                   and _opens_regex(condition, i)):
+            end = _literal_end(condition, i)
+            if end is None:
+                break
+            i = end
+        elif condition.startswith(op, i):
+            parts.append(condition[start:i])
+            i += len(op)
+            start = i
+        else:
+            i += 1
+    parts.append(condition[start:])
+    return parts
+
+
 def _action_start(program: str) -> int:
     """Index of the ``{`` that opens the action, or -1 without one.
 
@@ -326,14 +372,12 @@ def _validate_condition(condition: str) -> None:
     condition = condition.strip()
     if not condition or condition in (AwkBlock.BEGIN, AwkBlock.END):
         return
-    if AwkBoolOp.OR in condition:
-        for part in condition.split(AwkBoolOp.OR):
-            _validate_condition(part)
-        return
-    if AwkBoolOp.AND in condition:
-        for part in condition.split(AwkBoolOp.AND):
-            _validate_condition(part)
-        return
+    for op in (AwkBoolOp.OR, AwkBoolOp.AND):
+        parts = _split_bool(condition, op)
+        if len(parts) > 1:
+            for part in parts:
+                _validate_condition(part)
+            return
     _validate_simple(condition)
 
 
@@ -411,14 +455,12 @@ def _eval_condition(condition: str, field_map: Mapping[str, str]) -> bool:
     condition = condition.strip()
     if condition == AwkBlock.BEGIN or condition == AwkBlock.END:
         return False
-    if AwkBoolOp.OR in condition:
-        return any(
-            _eval_condition(p, field_map)
-            for p in condition.split(AwkBoolOp.OR))
-    if AwkBoolOp.AND in condition:
-        return all(
-            _eval_condition(p, field_map)
-            for p in condition.split(AwkBoolOp.AND))
+    parts = _split_bool(condition, AwkBoolOp.OR)
+    if len(parts) > 1:
+        return any(_eval_condition(p, field_map) for p in parts)
+    parts = _split_bool(condition, AwkBoolOp.AND)
+    if len(parts) > 1:
+        return all(_eval_condition(p, field_map) for p in parts)
     return _eval_simple(condition, field_map)
 
 

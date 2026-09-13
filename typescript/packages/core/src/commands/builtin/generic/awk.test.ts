@@ -333,6 +333,20 @@ describe('awk regex match', () => {
     expect(out).toBe('a|b|c|Application\n')
   })
 
+  it('reads a boolean operator inside a regex as regex text', async () => {
+    // awk 20200816 and mawk 1.3.4 both print the line: the `&&` belongs to
+    // the regex, it is not a conjunction.
+    expect(await runStdin('$0 ~ /A&&B/ {print}', 'xA&&By\nAB\n')).toBe('xA&&By\n')
+  })
+
+  it('reads a boolean operator inside a string as string text', async () => {
+    expect(await runStdin('$1 == "a||b" {print $2}', 'a||b q\nz 1\n')).toBe('q\n')
+  })
+
+  it('matches a bare regex pattern holding an operator', async () => {
+    expect(await runStdin('/A&&B/', 'xA&&By\nAB\n')).toBe('xA&&By\n')
+  })
+
   it('negates the match with !~', async () => {
     expect(await runStdin('$3 !~ /^d/ {print $1}', FIELDS)).toBe('alice\ncarol\n')
   })

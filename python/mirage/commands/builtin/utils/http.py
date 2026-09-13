@@ -20,7 +20,7 @@
 # onto stderr.
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -46,9 +46,16 @@ class HttpResponse:
     status: int
     reason: str
     body: bytes
+    # The URL this hop was asked for and the method the client sent for
+    # it: a redirect can move both (a POST becomes a GET on 301, 302 and
+    # 303, in httpx as in curl).
     url: str
     # Wire order, names as the server spelled them, repeats kept.
     headers: tuple[tuple[str, str], ...] = ()
+    method: str = "GET"
+    # The redirect responses followed on the way here, in order; empty
+    # when none was followed. curl -i and -v show every hop.
+    history: tuple["HttpResponse", ...] = ()
 
     @property
     def is_error(self) -> bool:
@@ -69,12 +76,17 @@ def _endpoint(url: str) -> tuple[str, int]:
     return host, port
 
 
-def _response(resp: Any, url: str) -> HttpResponse:
+def _hop(resp: Any) -> HttpResponse:
     return HttpResponse(status=resp.status_code,
                         reason=resp.reason_phrase,
                         body=resp.content,
-                        url=url,
-                        headers=tuple(resp.headers.multi_items()))
+                        url=str(resp.url),
+                        headers=tuple(resp.headers.multi_items()),
+                        method=resp.request.method)
+
+
+def _response(resp: Any) -> HttpResponse:
+    return replace(_hop(resp), history=tuple(_hop(r) for r in resp.history))
 
 
 def _timeout(url: str, started: float) -> HttpTimeoutError:
@@ -110,7 +122,7 @@ def http_request(
         except httpx.TransportError as exc:
             host, port = _endpoint(url)
             raise HttpConnectError(host, port) from exc
-        return _response(resp, url)
+        return _response(resp)
 
 
 def http_form_request(
@@ -136,7 +148,7 @@ def http_form_request(
         except httpx.TransportError as exc:
             host, port = _endpoint(url)
             raise HttpConnectError(host, port) from exc
-        return _response(resp, url)
+        return _response(resp)
 
 
 def http_get(

@@ -47,6 +47,30 @@ function mockFetch(respBody: string, status = 200): FetchCall[] {
   return calls
 }
 
+// A 302 to /f and then the final response, as the redirecting server
+// hands them to the client one hop at a time.
+function mockRedirect(): FetchCall[] {
+  const calls: FetchCall[] = []
+  const hops = [
+    { status: 302, statusText: 'Found', body: '302: Found', headers: [['Location', '/f']] },
+    { status: 200, statusText: 'OK', body: 'hello body', headers: RESPONSE_HEADERS },
+  ] as const
+  globalThis.fetch = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+    const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url
+    calls.push({ url: urlStr, ...(init !== undefined ? { init } : {}) })
+    const hop = calls.length > 1 ? hops[1] : hops[0]
+    return Promise.resolve({
+      ok: hop.status === 200,
+      status: hop.status,
+      statusText: hop.statusText,
+      arrayBuffer: () => Promise.resolve(ENC.encode(hop.body).buffer),
+      text: () => Promise.resolve(hop.body),
+      headers: new Headers(hop.headers as [string, string][]),
+    } as unknown as Response)
+  }) as typeof fetch
+  return calls
+}
+
 // A server that never answers: the fetch settles only when the caller's
 // signal aborts it, the way a real stalled connection would.
 function mockStall(): void {
@@ -217,12 +241,14 @@ describe('curl', () => {
   })
 
   it('only follows redirects when -L is given', async () => {
-    const calls = mockFetch('ok')
-    await runCurl(['https://x.test/r'])
-    expect(calls[0]?.init?.redirect).toBe('manual')
-    const withL = mockFetch('ok')
-    await runCurl(['https://x.test/r'], { location: true })
-    expect(withL[0]?.init?.redirect).toBe('follow')
+    const calls = mockRedirect()
+    const r = await runCurl(['http://x.test/r'])
+    expect(calls.map((c) => c.url)).toEqual(['http://x.test/r'])
+    expect(r.out).toBe('302: Found')
+    const withL = mockRedirect()
+    const followed = await runCurl(['http://x.test/r'], { location: true })
+    expect(withL.map((c) => c.url)).toEqual(['http://x.test/r', 'http://x.test/f'])
+    expect(followed.out).toBe('hello body')
   })
 })
 
@@ -231,6 +257,7 @@ describe('curl', () => {
 // both hosts because fetch never exposes the wire casing, and the status
 // line always says HTTP/1.1 because fetch cannot observe the version.
 const RESPONSE_DUMP = 'HTTP/1.1 200 OK\r\ncontent-length: 10\r\ncontent-type: text/plain\r\n\r\n'
+const HOP_DUMP = 'HTTP/1.1 302 Found\r\nlocation: /f\r\n\r\n'
 
 describe('curl option surface (#1065)', () => {
   const original = globalThis.fetch
@@ -440,6 +467,47 @@ describe('curl option surface (#1065)', () => {
     mockFetch('hello body')
     const r = await runCurl(['http://x.test/f'], { include: true })
     expect(r.out).toBe(`${RESPONSE_DUMP}hello body`)
+  })
+
+  it("-i with -L prints every hop's headers before the final body", async () => {
+    // curl 8.7.1 `-iL`: each hop's header block, then the final body alone;
+    // the redirect's own body is never written.
+    mockRedirect()
+    const r = await runCurl(['http://x.test/r'], { location: true, include: true })
+    expect(r.out).toBe(HOP_DUMP + RESPONSE_DUMP + 'hello body')
+  })
+
+  it("-I with -L prints every hop's headers and no body", async () => {
+    mockRedirect()
+    const r = await runCurl(['http://x.test/r'], { location: true, head: true })
+    expect(r.out).toBe(HOP_DUMP + RESPONSE_DUMP)
+  })
+
+  it('-v with -L traces each request', async () => {
+    mockRedirect()
+    const r = await runCurl(['http://x.test/r'], { location: true, verbose: true })
+    const lines = r.err
+      .split('\r\n')
+      .filter((l) => l.startsWith('> GET') || l.startsWith('< HTTP/'))
+    expect(lines).toEqual([
+      '> GET /r HTTP/1.1',
+      '< HTTP/1.1 302 Found',
+      '> GET /f HTTP/1.1',
+      '< HTTP/1.1 200 OK',
+    ])
+  })
+
+  it('-v with -L drops the body headers after a method switch', async () => {
+    // The body rode the POST; the GET a 302 turns it into carries none, so
+    // its request block shows no Content-Length or Content-Type.
+    const calls = mockRedirect()
+    const r = await runCurl(['http://x.test/r'], { location: true, verbose: true, data: 'a=1' })
+    expect(calls.map((c) => c.init?.method)).toEqual(['POST', 'GET'])
+    const [first, second] = r.err.split('< HTTP/1.1')
+    expect(first).toContain('> POST /r HTTP/1.1')
+    expect(first).toContain('> Content-Length: 3')
+    expect(second).toContain('> GET /f HTTP/1.1')
+    expect(second?.split('> \r\n')[0]).not.toContain('Content-')
   })
 
   it('-i with -o writes headers and body to the file', async () => {

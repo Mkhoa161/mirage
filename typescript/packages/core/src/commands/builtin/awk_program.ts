@@ -72,6 +72,44 @@ function isRegexLiteral(tok: string): boolean {
   return tok.startsWith(REGEX_DELIM) && isLiteral(tok)
 }
 
+// Where a `/` opens a regex rather than dividing: at the start of a
+// condition and after an operator that wants an operand.
+const REGEX_OPENERS = new Set(['~', '!', '&', '|', '(', ','])
+
+function opensRegex(text: string, at: number): boolean {
+  const before = text.slice(0, at).trimEnd()
+  return before === '' || REGEX_OPENERS.has(before.charAt(before.length - 1))
+}
+
+// Split a condition at `op` outside its literals. A `"string"` or a
+// `/regex/` can hold the operator's characters (`$0 ~ /A&&B/`,
+// `$1 == "a||b"`), so the split walks the text and steps over each literal
+// whole; a `/` opens a regex only where awk expects an operand, so the
+// slash of a bare word is not one. Validator and evaluator both split
+// through here, so they cannot disagree about where a term ends. A literal
+// that never closes ends the scan, and the validator refuses what is left.
+function splitBool(condition: string, op: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  let i = 0
+  while (i < condition.length) {
+    const ch = condition.charAt(i)
+    if (ch === STRING_QUOTE || (ch === REGEX_DELIM && opensRegex(condition, i))) {
+      const end = literalEnd(condition, i)
+      if (end === null) break
+      i = end
+    } else if (condition.startsWith(op, i)) {
+      parts.push(condition.slice(start, i))
+      i += op.length
+      start = i
+    } else {
+      i += 1
+    }
+  }
+  parts.push(condition.slice(start))
+  return parts
+}
+
 // Index of the `{` that opens the action, or -1 without one. Literals are
 // skipped whole, so the brace in a pattern's `/a{2}/` is not mistaken for
 // the action's.
@@ -292,13 +330,12 @@ function validateSimple(rawExpr: string): void {
 function validateCondition(condition: string): void {
   const cond = condition.trim()
   if (cond === '' || cond === AwkBlock.BEGIN || cond === AwkBlock.END) return
-  if (cond.includes(AwkBoolOp.OR)) {
-    for (const part of cond.split(AwkBoolOp.OR)) validateCondition(part)
-    return
-  }
-  if (cond.includes(AwkBoolOp.AND)) {
-    for (const part of cond.split(AwkBoolOp.AND)) validateCondition(part)
-    return
+  for (const op of [AwkBoolOp.OR, AwkBoolOp.AND]) {
+    const parts = splitBool(cond, op)
+    if (parts.length > 1) {
+      for (const part of parts) validateCondition(part)
+      return
+    }
   }
   validateSimple(cond)
 }
@@ -372,12 +409,10 @@ function evalSimple(rawExpr: string, fieldMap: Record<string, string>): boolean 
 function evalCondition(condition: string, fieldMap: Record<string, string>): boolean {
   const cond = condition.trim()
   if (cond === AwkBlock.BEGIN || cond === AwkBlock.END) return false
-  if (cond.includes(AwkBoolOp.OR)) {
-    return cond.split(AwkBoolOp.OR).some((p) => evalCondition(p, fieldMap))
-  }
-  if (cond.includes(AwkBoolOp.AND)) {
-    return cond.split(AwkBoolOp.AND).every((p) => evalCondition(p, fieldMap))
-  }
+  const ors = splitBool(cond, AwkBoolOp.OR)
+  if (ors.length > 1) return ors.some((p) => evalCondition(p, fieldMap))
+  const ands = splitBool(cond, AwkBoolOp.AND)
+  if (ands.length > 1) return ands.every((p) => evalCondition(p, fieldMap))
   return evalSimple(cond, fieldMap)
 }
 

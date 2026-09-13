@@ -17,6 +17,7 @@
 # successful transfer to curl, and only -f/--fail turns it into a failure.
 
 import asyncio
+from dataclasses import replace
 
 import pytest
 
@@ -428,6 +429,62 @@ def test_include_prints_the_headers_before_the_body(monkeypatch):
     _stub(monkeypatch)
     body, _io = _run("http://x.test/f", include=True)
     assert body.decode() == RESPONSE_DUMP + "hello body"
+
+
+HOP_DUMP = "HTTP/1.1 302 Found\r\nlocation: /f\r\n\r\n"
+
+
+def _redirected(method: str = "GET") -> HttpResponse:
+    hop = HttpResponse(status=302,
+                       reason="Found",
+                       body=b"302: Found",
+                       url="http://x.test/r",
+                       headers=(("Location", "/f"), ),
+                       method=method)
+    return replace(_ok(), history=(hop, ))
+
+
+def test_include_with_location_prints_every_hops_headers(monkeypatch):
+    # curl 8.7.1 `-iL`: each hop's header block, then the final body
+    # alone; the redirect's own body is never written.
+    _stub(monkeypatch, resp=_redirected())
+    body, _io = _run("http://x.test/r", location=True, include=True)
+    assert body.decode() == HOP_DUMP + RESPONSE_DUMP + "hello body"
+
+
+def test_head_with_location_prints_every_hops_headers(monkeypatch):
+    _stub(monkeypatch, resp=_redirected())
+    body, _io = _run("http://x.test/r", location=True, head=True)
+    assert body.decode() == HOP_DUMP + RESPONSE_DUMP
+
+
+def test_verbose_with_location_traces_each_request(monkeypatch):
+    _stub(monkeypatch, resp=_redirected())
+    _body, io = _run("http://x.test/r", location=True, verbose=True)
+    lines = io.stderr.decode().split("\r\n")
+    assert [
+        line for line in lines
+        if line.startswith("> GET") or line.startswith("< HTTP/")
+    ] == [
+        "> GET /r HTTP/1.1", "< HTTP/1.1 302 Found", "> GET /f HTTP/1.1",
+        "< HTTP/1.1 200 OK"
+    ]
+
+
+def test_verbose_with_location_drops_the_body_headers_after_a_switch(
+        monkeypatch):
+    # The body rode the POST; the GET a 302 turns it into carries none,
+    # so its request block shows no Content-Length or Content-Type.
+    _stub(monkeypatch, resp=_redirected(method="POST"))
+    _body, io = _run("http://x.test/r",
+                     location=True,
+                     verbose=True,
+                     data="a=1")
+    first, second = io.stderr.decode().split("< HTTP/1.1")[:2]
+    assert "> POST /r HTTP/1.1" in first
+    assert "> Content-Length: 3" in first
+    assert "> GET /f HTTP/1.1" in second
+    assert "Content-" not in second.split("> \r\n")[0]
 
 
 def test_include_with_output_writes_headers_and_body(monkeypatch):

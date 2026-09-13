@@ -220,6 +220,45 @@
         "stdout": "",
         "stderr": ""
       }
+    },
+    {
+      "id": "curl_include_with_location_shows_every_hop",
+      "seq": 330057,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -siL {http}/redirect | grep 'HTTP/\\|Found\\|hello'",
+      "expect": {
+        "exit": 0,
+        "stdout": "HTTP/1.1 302 Found\r\nlocation: /hello\r\nHTTP/1.1 200 OK\r\nhello from http\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_head_with_location_shows_every_hop",
+      "seq": 330058,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sIL {http}/redirect | grep 'HTTP/\\|Found\\|hello'",
+      "expect": {
+        "exit": 0,
+        "stdout": "HTTP/1.1 302 Found\r\nlocation: /hello\r\nHTTP/1.1 200 OK\r\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_verbose_with_location_traces_each_request",
+      "seq": 330059,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -svL {http}/redirect 2>&1 | grep '^> GET\\|^< HTTP/'",
+      "expect": {
+        "exit": 0,
+        "stdout": "> GET /redirect HTTP/1.1\r\n< HTTP/1.1 302 Found\r\n> GET /hello HTTP/1.1\r\n< HTTP/1.1 200 OK\r\n",
+        "stderr": ""
+      }
     }
   ]
 }

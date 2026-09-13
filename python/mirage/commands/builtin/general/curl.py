@@ -242,10 +242,25 @@ async def curl(
             f"curl: ({EXIT_CONNECT}) Failed to connect to {exc.host} port "
             f"{exc.port}: Could not connect to server\n").encode()
         return None, IOResult(exit_code=EXIT_CONNECT, stderr=err)
-    # -v is not a message, so -s leaves it alone.
-    trace = (
-        _dump(request_lines(url, method, headers, body_len, body_type), "> ") +
-        _dump(response_lines(resp), "< ")).encode() if verbose else b""
+    hops = [*resp.history, resp]
+    # The first request is the one this handler built; each redirect's is
+    # the one the client reports, at the URL the server named.
+    requests = [(url, method), *((hop.url, hop.method) for hop in hops[1:])]
+    # -v is not a message, so -s leaves it alone. A followed redirect is
+    # a request of its own, traced in turn; the body rides only the hops
+    # that kept the method (a 302 turns a POST into a GET without one).
+    trace = b""
+    if verbose:
+        dumped: list[str] = []
+        for (target, sent_as), hop in zip(requests, hops):
+            carries = sent_as == method
+            dumped.append(
+                _dump(
+                    request_lines(target, sent_as, headers,
+                                  body_len if carries else None,
+                                  body_type if carries else None), "> "))
+            dumped.append(_dump(response_lines(hop), "< "))
+        trace = "".join(dumped).encode()
     # Only -f makes an error status an error, and then nothing is written.
     if fl.as_bool("fail") and resp.is_error:
         err = b"" if quiet else (
@@ -253,11 +268,14 @@ async def curl(
             f"{resp.status}\n").encode()
         return None, IOResult(exit_code=EXIT_HTTP_ERROR, stderr=trace + err)
     result = resp.body
+    # -i and -I print every hop's header block (curl 8.7.1); the body a
+    # redirect carried is never written, only the final one.
+    blocks = "".join(_dump(response_lines(hop)) for hop in hops).encode()
     if head:
         # -I prints the headers alone, whatever method -X made it send.
-        result = _dump(response_lines(resp)).encode()
+        result = blocks
     elif include:
-        result = _dump(response_lines(resp)).encode() + result
+        result = blocks + result
     if isinstance(output, (PathSpec, str)):
         o_str = output.virtual if isinstance(output, PathSpec) else output
         if opts.dispatch is not None:

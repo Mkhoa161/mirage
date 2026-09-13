@@ -257,11 +257,36 @@ async function curlCommand(
       }),
     ]
   }
-  // -v is not a message, so -s leaves it alone.
+  const hops = [...resp.history, resp]
+  // The first request is the one this handler built; each redirect's is
+  // the one the client reports, at the URL the server named.
+  const requests: [string, string][] = [
+    [url, method],
+    ...hops.slice(1).map((hop): [string, string] => [hop.url, hop.method]),
+  ]
+  // -v is not a message, so -s leaves it alone. A followed redirect is a
+  // request of its own, traced in turn; the body rides only the hops that
+  // kept the method (a 302 turns a POST into a GET without one).
   const trace = verbose
     ? ENC.encode(
-        dump(requestLines(url, method, headers, bodyLen, bodyType), '> ') +
-          dump(responseLines(resp), '< '),
+        hops
+          .map((hop, index) => {
+            const [target, sentAs] = requests[index] ?? [hop.url, hop.method]
+            const carries = sentAs === method
+            return (
+              dump(
+                requestLines(
+                  target,
+                  sentAs,
+                  headers,
+                  carries ? bodyLen : null,
+                  carries ? bodyType : null,
+                ),
+                '> ',
+              ) + dump(responseLines(hop), '< ')
+            )
+          })
+          .join(''),
       )
     : new Uint8Array()
   // Only -f makes an error status an error, and then nothing is written.
@@ -276,11 +301,14 @@ async function curlCommand(
     ]
   }
   let result = resp.body
+  // -i and -I print every hop's header block (curl 8.7.1); the body a
+  // redirect carried is never written, only the final one.
+  const blocks = ENC.encode(hops.map((hop) => dump(responseLines(hop))).join(''))
   if (head) {
     // -I prints the headers alone, whatever method -X made it send.
-    result = ENC.encode(dump(responseLines(resp)))
+    result = blocks
   } else if (include) {
-    result = concat(ENC.encode(dump(responseLines(resp))), result)
+    result = concat(blocks, result)
   }
   if (output !== null) {
     if (opts.dispatch !== undefined) {

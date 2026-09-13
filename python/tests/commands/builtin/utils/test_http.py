@@ -30,17 +30,29 @@ class _FakeHeaders:
         return list(self._items)
 
 
+class _FakeRequest:
+
+    def __init__(self, method: str) -> None:
+        self.method = method
+
+
 class _FakeResponse:
 
     def __init__(self,
                  status: int,
                  reason: str,
                  content: bytes,
-                 headers: list[tuple[str, str]] | None = None) -> None:
+                 headers: list[tuple[str, str]] | None = None,
+                 url: str = "http://x.test/f",
+                 method: str = "GET",
+                 history: list["_FakeResponse"] | None = None) -> None:
         self.status_code = status
         self.reason_phrase = reason
         self.content = content
         self.headers = _FakeHeaders(headers or [])
+        self.url = url
+        self.request = _FakeRequest(method)
+        self.history = list(history or [])
 
 
 class _FakeClient:
@@ -142,6 +154,38 @@ def test_redirects_are_not_followed_by_default(monkeypatch):
     assert fake.client_kwargs["follow_redirects"] is False
     http_request("http://x.test/r", follow_redirects=True)
     assert fake.client_kwargs["follow_redirects"] is True
+
+
+def test_followed_redirects_are_kept_as_history_in_order(monkeypatch):
+    hop = _FakeResponse(302,
+                        "Found",
+                        b"302: Found", [("Location", "/f")],
+                        url="http://x.test/r")
+    fake = _FakeHttpx(resp=_FakeResponse(200, "OK", b"ok", history=[hop]))
+    monkeypatch.setattr(http_mod, "httpx", fake)
+    resp = http_request("http://x.test/r", follow_redirects=True)
+    assert [(h.status, h.url)
+            for h in resp.history] == [(302, "http://x.test/r")]
+    assert resp.history[0].headers == (("Location", "/f"), )
+    assert resp.history[0].body == b"302: Found"
+    assert (resp.status, resp.url) == (200, "http://x.test/f")
+
+
+def test_each_hop_reports_the_method_the_client_sent(monkeypatch):
+    # A 302 turns a POST into a GET, in httpx as in curl.
+    hop = _FakeResponse(302,
+                        "Found",
+                        b"",
+                        url="http://x.test/r",
+                        method="POST")
+    fake = _FakeHttpx(resp=_FakeResponse(200, "OK", b"ok", history=[hop]))
+    monkeypatch.setattr(http_mod, "httpx", fake)
+    resp = http_request("http://x.test/r",
+                        method="POST",
+                        data=b"a=1",
+                        follow_redirects=True)
+    assert resp.history[0].method == "POST"
+    assert resp.method == "GET"
 
 
 def test_missing_httpx_raises_with_the_extra_hint(monkeypatch):

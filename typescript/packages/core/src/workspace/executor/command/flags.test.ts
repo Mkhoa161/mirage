@@ -61,6 +61,35 @@ describe('parseFlags', () => {
     expect(parsed.paths[1]).toBe(second)
   })
 
+  it('keeps an operand after a chdir option on its own spelling', () => {
+    // `tar -cf out.tar -C dir .`: the option's value and the operand resolve
+    // to one path, and the operand's spelling names the members (GNU tar
+    // 1.35 stores `./f.txt`, not `dir/f.txt`).
+    const out = new PathSpec({
+      virtual: '/data/out.tar',
+      directory: '/data/',
+      resourcePath: '',
+      resolved: true,
+      rawPath: 'out.tar',
+    })
+    const base = new PathSpec({
+      virtual: '/data/dir',
+      directory: '/data/',
+      resourcePath: '',
+      resolved: true,
+      rawPath: 'dir',
+    })
+    const dot = new PathSpec({
+      virtual: '/data/dir',
+      directory: '/data/',
+      resourcePath: '',
+      resolved: true,
+      rawPath: '.',
+    })
+    const parsed = parseFlags(['-cf', out, '-C', base, dot], SPECS.tar ?? null, 'tar', '/data')
+    expect(parsed.paths[0]).toBe(dot)
+  })
+
   it('synthesizes a word the parser normalized instead of pairing it', () => {
     // A followed link whose target climbs through `..` reaches the parse
     // as `/data/b/../a/f.txt`; the parser resolves that to `/data/a/f.txt`
