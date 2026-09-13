@@ -15,7 +15,7 @@
 from mirage.commands.cli.builtin.git.constants import HEAD
 from mirage.commands.cli.builtin.git.errors import (GitError,
                                                     UnrecognizedArgumentError)
-from mirage.commands.cli.types import CLIDoors
+from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.spec.types import FlagView
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource, IOResult
@@ -108,10 +108,50 @@ def escaped(argv: tuple[str, ...]) -> frozenset[str]:
     return frozenset(argv[argv.index(MARKER) + 1:])
 
 
+def switches(inv: CLIInvocation[None]) -> frozenset[str]:
+    """The one-letter switches the leaf declares, without their dash.
+
+    Read off the spec the line was parsed against, so the set is the
+    verb's own and never a copy of it; empty where no executor built
+    the record.
+
+    Args:
+        inv (CLIInvocation): the invocation, carrying its leaf.
+    """
+    if inv.spec is None:
+        return frozenset()
+    return frozenset(option.short[1:] for option in inv.spec.options
+                     if option.short is not None and len(option.short) == 2)
+
+
+def offending_switch(text: str, known: frozenset[str] | None) -> str:
+    """The part of a dash word parse-options would refuse.
+
+    git reads a short cluster letter by letter, consumes the ones the
+    verb declares and stops at the first it does not, so ``git mv -nx``
+    says `x' and ``git mv -draft`` says `d' (git 2.50.1); a verb that
+    declares no switch at all (``reset``) still names the first letter.
+    A long option is refused as typed, and so is a cluster for a verb
+    that hands over no set: log, show and diff word the whole argument.
+
+    Args:
+        text (str): the dash word as the user spelled it.
+        known (frozenset[str] | None): the verb's one-letter switches,
+            None for a verb that refuses the word whole.
+    """
+    if known is None or text.startswith("--"):
+        return text
+    for letter in text[1:]:
+        if letter not in known:
+            return f"-{letter}"
+    return text
+
+
 def check_operands(
     texts: tuple[str, ...],
     error: type[GitError] = UnrecognizedArgumentError,
-    marked: frozenset[str] = frozenset()
+    marked: frozenset[str] = frozenset(),
+    known: frozenset[str] | None = None,
 ) -> None:
     """Refuse an operand that is really an option this build lacks.
 
@@ -142,10 +182,13 @@ def check_operands(
         texts (tuple[str, ...]): positional text operands, as typed.
         error (type[GitError]): the refusal this verb words it with.
         marked (frozenset[str]): operands a ``--`` on the line escaped.
+        known (frozenset[str] | None): the verb's one-letter switches,
+            which narrow a refused cluster to its first unknown letter
+            the way parse-options does; None refuses the whole word.
     """
     for text in texts:
         if text.startswith("-") and text not in marked:
-            raise error(text)
+            raise error(offending_switch(text, known))
 
 
 def fatal(exc: GitError) -> tuple[ByteSource | None, IOResult]:

@@ -14,19 +14,33 @@
 
 import pytest
 
-from mirage.commands.builtin.errors import HttpConnectError
+from mirage.commands.builtin.errors import HttpConnectError, HttpTimeoutError
 from mirage.commands.builtin.utils import http as http_mod
 from mirage.commands.builtin.utils.http import (DEFAULT_USER_AGENT,
                                                 HttpResponse, _endpoint,
                                                 _with_default_ua, http_request)
 
 
+class _FakeHeaders:
+
+    def __init__(self, items: list[tuple[str, str]]) -> None:
+        self._items = items
+
+    def multi_items(self) -> list[tuple[str, str]]:
+        return list(self._items)
+
+
 class _FakeResponse:
 
-    def __init__(self, status: int, reason: str, content: bytes) -> None:
+    def __init__(self,
+                 status: int,
+                 reason: str,
+                 content: bytes,
+                 headers: list[tuple[str, str]] | None = None) -> None:
         self.status_code = status
         self.reason_phrase = reason
         self.content = content
+        self.headers = _FakeHeaders(headers or [])
 
 
 class _FakeClient:
@@ -59,9 +73,14 @@ class _FakeTransportError(Exception):
     pass
 
 
+class _FakeTimeoutException(_FakeTransportError):
+    pass
+
+
 class _FakeHttpx:
 
     TransportError = _FakeTransportError
+    TimeoutException = _FakeTimeoutException
 
     def __init__(self, resp=None, exc=None) -> None:
         self.resp = resp
@@ -129,3 +148,24 @@ def test_missing_httpx_raises_with_the_extra_hint(monkeypatch):
     monkeypatch.setattr(http_mod, "httpx", None)
     with pytest.raises(ImportError, match=r"mirage\[http\]"):
         http_request("http://x.test/x")
+
+
+def test_timeout_becomes_http_timeout_error_with_elapsed_ms(monkeypatch):
+    fake = _FakeHttpx(exc=_FakeTimeoutException("read timed out"))
+    monkeypatch.setattr(http_mod, "httpx", fake)
+    with pytest.raises(HttpTimeoutError) as excinfo:
+        http_request("http://127.0.0.1:1/f", timeout=0.5)
+    assert isinstance(excinfo.value, HttpConnectError)
+    assert (excinfo.value.host, excinfo.value.port) == ("127.0.0.1", 1)
+    assert excinfo.value.elapsed_ms >= 0
+    assert fake.client_kwargs["timeout"] == 0.5
+
+
+def test_response_headers_are_captured_in_order(monkeypatch):
+    fake = _FakeHttpx(resp=_FakeResponse(200, "OK", b"x", [(
+        "Content-Type", "text/plain"), ("Set-Cookie", "a"), ("Set-Cookie",
+                                                             "b")]))
+    monkeypatch.setattr(http_mod, "httpx", fake)
+    resp = http_request("http://x.test/f")
+    assert resp.headers == (("Content-Type", "text/plain"),
+                            ("Set-Cookie", "a"), ("Set-Cookie", "b"))

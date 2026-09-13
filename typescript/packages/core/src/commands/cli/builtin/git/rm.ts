@@ -33,7 +33,7 @@ import { matched, repoRelative } from './pathspec.ts'
 import { opened, type Repo } from './repo.ts'
 import type { TreeEntry } from './tree.ts'
 import type { Dispatch, IndexEntry, RepoLocation, WorkTree } from './types.ts'
-import { checkOperands, escaped, fatal, startPoint } from './util.ts'
+import { checkOperands, escaped, fatal, startPoint, switches } from './util.ts'
 import { scan, UNTRACKED_NO } from './worktree.ts'
 import type { LinkView, MountView, StatPath } from '../../../../ops/types.ts'
 import { FileType } from '../../../../types.ts'
@@ -252,7 +252,7 @@ export async function rm(inv: CLIInvocation): Promise<CommandFnResult> {
     if (statPath === undefined || dispatch === undefined) {
       throw new NoWorkspaceError()
     }
-    checkOperands(texts, UnknownSwitchError, escaped(inv.argv))
+    checkOperands(texts, UnknownSwitchError, escaped(inv.argv), switches(inv))
     flags = parseFlags(fl)
     if (texts.length === 0) throw new NoPathspecRemoveError()
     const repo = await opened(fl, doors)

@@ -149,15 +149,27 @@ def parse_flags(
                 elif isinstance(value, str) and value in scope_map:
                     flag_kwargs[key] = scope_map[value]
 
-        # Classify positional args
+        # Classify positional args. An operand is paired with the word
+        # it came from by argv slot, never by value alone: two operands
+        # can spell one path (`ls -d dir/ link/` with link -> dir), and a
+        # lookup keyed by the resolved path handed both rows the second
+        # spelling. The word is taken only when it names the parsed
+        # value; a word the parser normalized (a followed link whose
+        # target climbs through `..`) is synthesized as before, since a
+        # keyed backend cannot read `b/../a`. The map serves a word the
+        # classifier left as text.
         paths: list[PathSpec] = []
         texts: list[str] = []
-        for value, kind in parsed.args:
+        for slot, (value, kind) in enumerate(parsed.args):
             if kind == "path":
-                scope = scope_map.get(value)
-                if scope is None:
-                    scope = synthesize_path_spec(value)
-                paths.append(scope)
+                position = (parsed.arg_indices[slot]
+                            if slot < len(parsed.arg_indices) else -1)
+                word = parts[position] if 0 <= position < len(parts) else None
+                scope = (word if isinstance(word, PathSpec)
+                         and word.virtual.rstrip("/") == value.rstrip("/") else
+                         scope_map.get(value))
+                paths.append(scope if scope is not None else
+                             synthesize_path_spec(value))
             else:
                 texts.append(value)
         return ParsedCommand(

@@ -1642,10 +1642,19 @@ describe('a pathspec that begins with a dash', () => {
   })
 
   it('is still an unknown switch unescaped', async () => {
+    // Named the way parse-options does: the first letter rm does not
+    // know, `d', not the whole word (git 2.50.1).
     const h = await harness()
     const [code, , err] = await h.run('rm -draft')
     expect(code).toBe(129)
-    expect(err).toBe("error: unknown switch `draft'\n")
+    expect(err).toBe("error: unknown switch `d'\n")
+  })
+
+  it('names the first letter past the switches the verb knows', async () => {
+    const h = await harness()
+    const [code, , err] = await h.run('mv -nx letters.txt other.txt')
+    expect(code).toBe(129)
+    expect(err).toBe("error: unknown switch `x'\n")
   })
 })
 

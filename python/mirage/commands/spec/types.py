@@ -406,6 +406,10 @@ class ParsedArgs:
     cache_paths: list[str] = field(default_factory=list)
     path_flag_values: list[str] = field(default_factory=list)
     raw_operands: list[tuple[str, ValueType]] = field(default_factory=list)
+    # The argv slot each entry of ``args`` came from, so a caller pairs
+    # an operand with the word it was by position rather than by value:
+    # two operands can spell one path (`ls -d dir/ link/`).
+    arg_indices: list[int] = field(default_factory=list)
     text_flag_values: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     word_kinds: list[ValueType | None] = field(default_factory=list)

@@ -17,8 +17,14 @@ import { IOResult } from '../../../io/types.ts'
 import { PathSpec } from '../../../types.ts'
 import { command, type CommandFnResult, type CommandOpts } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { HttpConnectError } from '../errors.ts'
-import { type HttpResponse, httpFormRequest, httpRequest, isHttpError } from '../utils/http.ts'
+import { HttpConnectError, HttpTimeoutError } from '../errors.ts'
+import {
+  DEFAULT_USER_AGENT,
+  type HttpResponse,
+  httpFormRequest,
+  httpRequest,
+  isHttpError,
+} from '../utils/http.ts'
 import { UsageError } from '../../errors.ts'
 import { gnuStrerror, isFsError } from '../../../utils/errors.ts'
 import { rstripSlash, stripSlash } from '../../../utils/slash.ts'
@@ -33,6 +39,13 @@ const EXIT_NO_URL = 2
 const EXIT_CONNECT = 7
 const EXIT_HTTP_ERROR = 22
 const EXIT_WRITE = 23
+const EXIT_TIMEOUT = 28
+
+const DEFAULT_TIMEOUT_MS = 30_000
+const CRLF = '\r\n'
+// What both hosts send for -d: httpx's `content=` and fetch's body carry no
+// type of their own, so this is the one curl would add for -d as well.
+const BODY_CONTENT_TYPE = 'application/x-www-form-urlencoded'
 
 export function resolveTarget(o: string, cwd: string): PathSpec {
   let path = o
@@ -45,6 +58,77 @@ export function resolveTarget(o: string, cwd: string): PathSpec {
   return new PathSpec({ resourcePath: stripSlash(path), virtual: path, directory, resolved: true })
 }
 
+/**
+ * The request curl -v shows, as far as mirage can see it.
+ *
+ * Only what leaves mirage is dumped: the request line, Host, the
+ * User-Agent, curl's own Accept, the headers the line added, and the two a
+ * -d body adds. curl's `*` transport lines (resolving, connecting, TLS)
+ * have no source here and are omitted, as are the headers the HTTP stack
+ * appends on its own and a -F body's encoding, which the client builds.
+ */
+export function requestLines(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  bodyLen: number | null,
+): string[] {
+  let target = url
+  let host = ''
+  try {
+    const parsed = new URL(url)
+    target = `${parsed.pathname}${parsed.search}`
+    host = parsed.port !== '' ? `${parsed.hostname}:${parsed.port}` : parsed.hostname
+  } catch {
+    // Not a URL fetch could parse either; the request line shows the word.
+  }
+  const lines = [
+    `${method} ${target} HTTP/1.1`,
+    `Host: ${host}`,
+    `User-Agent: ${headers['User-Agent'] ?? DEFAULT_USER_AGENT}`,
+    'Accept: */*',
+  ]
+  for (const [k, v] of Object.entries(headers)) {
+    if (k !== 'User-Agent') lines.push(`${k}: ${v}`)
+  }
+  if (bodyLen !== null) {
+    lines.push(`Content-Length: ${String(bodyLen)}`)
+    lines.push(`Content-Type: ${BODY_CONTENT_TYPE}`)
+  }
+  return lines
+}
+
+/**
+ * The status line and headers -i, -I and -v print.
+ *
+ * Three deliberate divergences from curl, which prints the bytes as
+ * received: names render lowercase, because fetch never exposes the wire
+ * casing; they come sorted by name, because the Headers class iterates
+ * that way and wire order is gone by then; and the version always reads
+ * HTTP/1.1, because fetch cannot observe it. Both hosts therefore print
+ * one shape.
+ */
+export function responseLines(resp: HttpResponse): string[] {
+  const lines = [`HTTP/1.1 ${String(resp.status)} ${resp.reason}`]
+  const sorted = resp.headers.map(([k, v]): [string, string] => [k.toLowerCase(), v])
+  sorted.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  for (const [k, v] of sorted) lines.push(`${k}: ${v}`)
+  return lines
+}
+
+function dump(lines: string[], prefix = ''): string {
+  return [...lines, ''].map((line) => `${prefix}${line}${CRLF}`).join('')
+}
+
+function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+  if (a.length === 0) return b
+  if (b.length === 0) return a
+  const out = new Uint8Array(a.length + b.length)
+  out.set(a, 0)
+  out.set(b, a.length)
+  return out
+}
+
 async function curlCommand(
   _accessor: Accessor,
   paths: PathSpec[],
@@ -52,26 +136,30 @@ async function curlCommand(
   opts: CommandOpts,
 ): Promise<CommandFnResult> {
   const fl = new FlagView(opts.flags, specOf('curl'))
-  const H = fl.asStr('H') ?? null
-  const A = fl.asStr('A') ?? null
-  const X = fl.asStr('X') ?? null
-  const d = fl.asStr('d') ?? null
-  const F = fl.asStr('F') ?? null
-  const o = fl.asStr('o') ?? null
-  const L = fl.asBool('L')
+  const header = fl.asStr('header') ?? null
+  const userAgent = fl.asStr('user_agent') ?? null
+  const request = fl.asStr('request') ?? null
+  const data = fl.asStr('data') ?? null
+  const form = fl.asStr('form') ?? null
+  const output = fl.asStr('output') ?? null
+  const location = fl.asBool('location')
   const failOnError = fl.asBool('fail')
+  const verbose = fl.asBool('verbose')
+  const include = fl.asBool('include')
+  const head = fl.asBool('head')
+  const maxTime = fl.asFloat('max_time')
   // -s silences the message, -S puts it back. Neither changes the exit code.
-  const quiet = fl.asBool('s') && !fl.asBool('S')
+  const quiet = fl.asBool('silent') && !fl.asBool('show_error')
 
   const headers: Record<string, string> = {}
-  if (H !== null) {
-    const idx = H.indexOf(':')
+  if (header !== null) {
+    const idx = header.indexOf(':')
     if (idx > 0) {
-      headers[H.slice(0, idx).trim()] = H.slice(idx + 1).trim()
+      headers[header.slice(0, idx).trim()] = header.slice(idx + 1).trim()
     }
   }
-  if (A !== null) {
-    headers['User-Agent'] = A
+  if (userAgent !== null) {
+    headers['User-Agent'] = userAgent
   }
   const url = texts[0]
   if (url === undefined) {
@@ -80,30 +168,48 @@ async function curlCommand(
       EXIT_NO_URL,
     )
   }
+  const timeoutMs = maxTime !== undefined ? maxTime * 1000 : DEFAULT_TIMEOUT_MS
+  let method: string
+  let bodyLen: number | null = null
   let resp: HttpResponse
   try {
-    if (F !== null) {
-      const method = X ?? 'POST'
-      const eq = F.indexOf('=')
-      const key = eq >= 0 ? F.slice(0, eq) : F
-      const value = eq >= 0 ? F.slice(eq + 1) : ''
+    if (form !== null) {
+      method = request ?? 'POST'
+      const eq = form.indexOf('=')
+      const key = eq >= 0 ? form.slice(0, eq) : form
+      const value = eq >= 0 ? form.slice(eq + 1) : ''
       resp = await httpFormRequest(url, {
         method,
         formData: { [key]: value },
         headers,
-        followRedirects: L,
+        timeoutMs,
+        followRedirects: location,
       })
     } else {
-      const method = X ?? (d !== null ? 'POST' : 'GET')
-      const body = d !== null ? ENC.encode(d) : undefined
+      method = request ?? (head ? 'HEAD' : data !== null ? 'POST' : 'GET')
+      const body = data !== null ? ENC.encode(data) : undefined
+      bodyLen = body !== undefined ? body.length : null
       resp = await httpRequest(url, {
         method,
         headers,
         ...(body !== undefined ? { body } : {}),
-        followRedirects: L,
+        timeoutMs,
+        followRedirects: location,
       })
     }
   } catch (err) {
+    if (err instanceof HttpTimeoutError) {
+      // Nothing was received: the body is read whole, so a deadline that
+      // hits mid-transfer still counts as zero bytes here.
+      const line = `curl: (${String(EXIT_TIMEOUT)}) Operation timed out after ${String(err.elapsedMs)} milliseconds with 0 bytes received\n`
+      return [
+        null,
+        new IOResult({
+          exitCode: EXIT_TIMEOUT,
+          stderr: quiet ? new Uint8Array() : ENC.encode(line),
+        }),
+      ]
+    }
     if (!(err instanceof HttpConnectError)) throw err
     const line = `curl: (${String(EXIT_CONNECT)}) Failed to connect to ${err.host} port ${String(err.port)}: Could not connect to server\n`
     return [
@@ -114,6 +220,12 @@ async function curlCommand(
       }),
     ]
   }
+  // -v is not a message, so -s leaves it alone.
+  const trace = verbose
+    ? ENC.encode(
+        dump(requestLines(url, method, headers, bodyLen), '> ') + dump(responseLines(resp), '< '),
+      )
+    : new Uint8Array()
   // Only -f makes an error status an error, and then nothing is written.
   if (failOnError && isHttpError(resp)) {
     const line = `curl: (${String(EXIT_HTTP_ERROR)}) The requested URL returned error: ${String(resp.status)}\n`
@@ -121,14 +233,17 @@ async function curlCommand(
       null,
       new IOResult({
         exitCode: EXIT_HTTP_ERROR,
-        stderr: quiet ? new Uint8Array() : ENC.encode(line),
+        stderr: concat(trace, quiet ? new Uint8Array() : ENC.encode(line)),
       }),
     ]
   }
-  const result = resp.body
-  if (o !== null) {
+  let result = resp.body
+  if (include || head) {
+    result = concat(ENC.encode(dump(responseLines(resp))), result)
+  }
+  if (output !== null) {
     if (opts.dispatch !== undefined) {
-      const scope = resolveTarget(o, opts.cwd)
+      const scope = resolveTarget(output, opts.cwd)
       try {
         await opts.dispatch('write', scope, [result])
       } catch (err) {
@@ -145,20 +260,20 @@ async function curlCommand(
         const raw = code === 'EACCES' || code === 'ENOTSUP' || !isFsError(err)
         const detail =
           !raw && strerror !== null ? strerror : err instanceof Error ? err.message : String(err)
-        const line = `curl: (${String(EXIT_WRITE)}) ${o}: ${detail}\n`
+        const line = `curl: (${String(EXIT_WRITE)}) ${output}: ${detail}\n`
         return [
           null,
           new IOResult({
             exitCode: EXIT_WRITE,
-            stderr: quiet ? new Uint8Array() : ENC.encode(line),
+            stderr: concat(trace, quiet ? new Uint8Array() : ENC.encode(line)),
           }),
         ]
       }
     }
     // Real curl writes the body to the file and prints nothing on stdout.
-    return [null, new IOResult({ writes: { [o]: result } })]
+    return [null, new IOResult({ writes: { [output]: result }, stderr: trace })]
   }
-  return [result, new IOResult()]
+  return [result, new IOResult({ stderr: trace })]
 }
 
 export const GENERAL_CURL = command({

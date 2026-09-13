@@ -18,9 +18,9 @@
 // earlier version threw on !resp.ok here, which made both tools fail on any
 // 4xx and leaked 'fetch failed' onto stderr for a refused connection.
 
-import { HttpConnectError } from '../errors.ts'
+import { HttpConnectError, HttpTimeoutError } from '../errors.ts'
 
-const DEFAULT_USER_AGENT = 'Mozilla/5.0 (compatible; mirage/1.0)'
+export const DEFAULT_USER_AGENT = 'Mozilla/5.0 (compatible; mirage/1.0)'
 const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 }
 
 export interface HttpResponse {
@@ -28,6 +28,9 @@ export interface HttpResponse {
   reason: string
   body: Uint8Array
   url: string
+  // Wire order, repeats kept; names arrive lowercased, which is all the
+  // Headers class ever exposes.
+  headers: [string, string][]
 }
 
 export function isHttpError(resp: HttpResponse): boolean {
@@ -68,6 +71,7 @@ export interface HttpRequestOptions {
 async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpResponse> {
   const method = options.method ?? 'GET'
   const timeoutMs = options.timeoutMs ?? 30_000
+  const started = Date.now()
   const controller = new AbortController()
   const timer = setTimeout(() => {
     controller.abort()
@@ -90,10 +94,13 @@ async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpRe
     try {
       resp = await fetch(applyProxy(url), init)
     } catch (err) {
-      // A transport failure carries no status. Abort (the timeout) has to
-      // propagate as itself so the limit layer can report it.
-      if (err instanceof DOMException && err.name === 'AbortError') throw err
+      // A transport failure carries no status. The only abort here is the
+      // deadline above, which curl answers with its own code (28), so it
+      // is told apart from a connection that never opened.
       const { host, port } = endpoint(url)
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new HttpTimeoutError(host, port, Date.now() - started)
+      }
       throw new HttpConnectError(host, port)
     }
     const buf = await resp.arrayBuffer()
@@ -102,6 +109,7 @@ async function doFetch(url: string, options: HttpRequestOptions): Promise<HttpRe
       reason: resp.statusText,
       body: new Uint8Array(buf),
       url,
+      headers: [...resp.headers.entries()],
     }
   } finally {
     clearTimeout(timer)

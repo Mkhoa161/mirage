@@ -19,6 +19,7 @@ import { cacheAwareReadBytes, cacheAwareReadStream } from '../../../cache/read_t
 import type { IndexCacheStore } from '../../../cache/index/store.ts'
 import { type FileStat, FileType, type PathSpec } from '../../../types.ts'
 import { enotdir, isMissingPath } from '../../../utils/errors.ts'
+import type { ChildMounts, LinkView } from '../../../ops/types.ts'
 import { type CommandFn, type ProvisionFn, type RegisteredCommand, command } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
 import {
@@ -143,6 +144,22 @@ export interface MakeGenericCommandsOptions<A extends Accessor = Accessor> {
   opsOverrides?: Record<string, CommandIO<A>>
 }
 
+// The namespace facts a glob resolver reads, stamped on the adapter per
+// invocation: the child names the namespace owes a directory, and the
+// stat of what such a name points at, so a trailing slash follows a link
+// the way bash does. Conditional spreads, not `undefined` values, because
+// exactOptionalPropertyTypes refuses an explicit undefined on an optional
+// field; Python's fields are `| None` and take the uniform path.
+function stampNamespace(raw: CommandIO, children?: ChildMounts, links?: LinkView): CommandIO {
+  return {
+    ...raw,
+    ...(children === undefined ? {} : { globChildren: children }),
+    ...(links === undefined
+      ? {}
+      : { globTargetStat: (virtual: string) => links.targetStat(virtual) }),
+  }
+}
+
 export function makeGenericCommands<A extends Accessor = Accessor>(
   resource: string,
   ops: CommandIO<A>,
@@ -195,13 +212,7 @@ export function makeGenericCommands<A extends Accessor = Accessor>(
       const guarded = withAbortGuard(
         withDirGuard(
           withPolicyGuard(
-            finish(
-              withPathGuards(
-                opts.ns?.childMounts === undefined
-                  ? raw
-                  : { ...raw, globChildren: opts.ns.childMounts },
-              ),
-            ),
+            finish(withPathGuards(stampNamespace(raw, opts.ns?.childMounts, opts.ns?.links))),
             opts.mountPrefix,
           ),
         ),

@@ -521,6 +521,7 @@ def parse_command(
 
     classified: list[tuple[str, ValueType]] = []
     raw_operands: list[tuple[str, ValueType]] = []
+    arg_indices: list[int] = []
     for j, arg in enumerate(raw_args):
         kind: ValueType
         if arg in spec.ignore_tokens:
@@ -546,6 +547,7 @@ def parse_command(
         else:
             classified.append((arg, kind))
             raw_operands.append((arg, kind))
+        arg_indices.append(raw_indices[j])
         word_kinds[raw_indices[j]] = kind
 
     path_flag_values: list[str] = []
@@ -586,6 +588,7 @@ def parse_command(
         cache_paths=cache_paths,
         path_flag_values=path_flag_values,
         raw_operands=raw_operands,
+        arg_indices=arg_indices,
         text_flag_values=text_flag_values,
         warnings=warnings,
         word_kinds=word_kinds,

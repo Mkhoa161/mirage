@@ -12,6 +12,8 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+from dataclasses import replace
+
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.types import CommandSpec, Option
 from mirage.workspace.executor.command.flags import (option_error, parse_flags,
@@ -89,3 +91,24 @@ def test_old_style_cluster_with_its_argument_is_no_refusal():
     assert option_error("tar", parsed) is None
     assert parsed.flag_kwargs["x"] is True
     assert parsed.flag_kwargs["z"] is True
+
+
+def test_two_spellings_of_one_path_keep_their_own_spelling():
+    # `ls -d 2026/ lnk/` with lnk -> 2026: both operands resolve to one
+    # virtual path, and a lookup keyed by that path handed the second
+    # spelling to both rows.
+    first = replace(synthesize_path_spec("/data/2026"), raw_path="2026/")
+    second = replace(synthesize_path_spec("/data/2026"), raw_path="lnk/")
+    parsed = parse_flags(["-d", first, second], SPECS["ls"], "ls", "/data")
+    assert parsed.paths[0] is first
+    assert parsed.paths[1] is second
+
+
+def test_a_word_the_parser_normalized_is_synthesized_not_paired():
+    # A followed link whose target climbs through `..` reaches the parse
+    # as `/data/b/../a/f.txt`; the parser resolves that to `/data/a/f.txt`
+    # and a keyed backend can only read the resolved spelling.
+    climbing = replace(synthesize_path_spec("/data/b/../a/f.txt"),
+                       raw_path="/data/b/link")
+    parsed = parse_flags([climbing], SPECS["cat"], "cat", "/data")
+    assert parsed.paths[0].virtual == "/data/a/f.txt"

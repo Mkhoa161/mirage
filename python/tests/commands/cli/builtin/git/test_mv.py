@@ -375,9 +375,18 @@ async def test_a_dashed_pathspec_moves_when_the_line_escapes_it(
 
 @pytest.mark.asyncio
 async def test_a_dashed_operand_is_still_a_switch_unescaped(git_rw):
+    # Named the way parse-options does: the first letter mv does not
+    # know, `d', not the whole word (git 2.50.1).
     code, _out, err = await run(git_rw, "mv -draft kept.txt")
     assert code == 129
-    assert err == b"error: unknown switch `draft'\n"
+    assert err == b"error: unknown switch `d'\n"
+
+
+@pytest.mark.asyncio
+async def test_a_cluster_is_refused_past_the_switches_mv_knows(git_rw):
+    code, _out, err = await run(git_rw, "mv -nx kept.txt other.txt")
+    assert code == 129
+    assert err == b"error: unknown switch `x'\n"
 
 
 @pytest.mark.asyncio

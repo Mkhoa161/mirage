@@ -1,0 +1,108 @@
+{
+  "cases": [
+    {
+      "id": "curl_max_time_keeps_the_url",
+      "seq": 330040,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s --max-time 5 {http}/hello",
+      "expect": {
+        "exit": 0,
+        "stdout": "hello from http\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_verbose_keeps_the_url",
+      "seq": 330041,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sv {http}/hello 2>/dev/null",
+      "expect": {
+        "exit": 0,
+        "stdout": "hello from http\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_unknown_option_exit_2",
+      "seq": 330042,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s --bogus {http}/hello",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "curl: option --bogus: is unknown\ncurl: try 'curl --help' or 'curl --manual' for more information\n"
+      }
+    },
+    {
+      "id": "curl_unknown_letter_exit_2",
+      "seq": 330043,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sW {http}/hello",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "curl: option -W: is unknown\ncurl: try 'curl --help' or 'curl --manual' for more information\n"
+      }
+    },
+    {
+      "id": "curl_max_time_needs_a_number",
+      "seq": 330044,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s --max-time abc {http}/hello",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "curl: option --max-time: expected a proper numerical parameter\ncurl: try 'curl --help' or 'curl --manual' for more information\n"
+      }
+    },
+    {
+      "id": "curl_head_status_line",
+      "seq": 330045,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -sI {http}/hello | head -n 1",
+      "expect": {
+        "exit": 0,
+        "stdout": "HTTP/1.1 200 OK\r\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_include_body_last",
+      "seq": 330046,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -si {http}/hello | tail -n 1",
+      "expect": {
+        "exit": 0,
+        "stdout": "hello from http\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "curl_long_spellings",
+      "seq": 330047,
+      "targets": [
+        "http-ram"
+      ],
+      "command": "curl -s --request PUT --header 'X-Mirage-Test: yes' {http}/echo",
+      "expect": {
+        "exit": 0,
+        "stdout": "method=PUT\nheader=yes\nbody=\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

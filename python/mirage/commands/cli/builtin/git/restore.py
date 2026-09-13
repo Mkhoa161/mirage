@@ -41,7 +41,7 @@ from mirage.commands.cli.builtin.git.revparse import (TREE, resolve_object,
                                                       unwrapped)
 from mirage.commands.cli.builtin.git.session import opened
 from mirage.commands.cli.builtin.git.util import (  # yapf: disable
-    check_operands, escaped, fatal, links_of, mounts_of, start_point)
+    check_operands, escaped, fatal, links_of, mounts_of, start_point, switches)
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.spec.types import FlagView
 from mirage.io.types import ByteSource, IOResult
@@ -157,7 +157,8 @@ async def restore(
     try:
         if dispatch is None or stat_path is None:
             raise NoWorkspaceError()
-        check_operands(texts, UnknownSwitchError, escaped(inv.argv))
+        check_operands(texts, UnknownSwitchError, escaped(inv.argv),
+                       switches(inv))
         if not texts:
             raise NoRestorePathsError()
         flags = parse_flags(fl)

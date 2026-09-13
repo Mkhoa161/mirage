@@ -25,6 +25,11 @@ interface FetchCall {
   init?: RequestInit
 }
 
+const RESPONSE_HEADERS: [string, string][] = [
+  ['Content-Type', 'text/plain'],
+  ['Content-Length', '10'],
+]
+
 function mockFetch(respBody: string, status = 200): FetchCall[] {
   const calls: FetchCall[] = []
   globalThis.fetch = vi.fn((url: string | URL | Request, init?: RequestInit) => {
@@ -36,10 +41,23 @@ function mockFetch(respBody: string, status = 200): FetchCall[] {
       statusText: 'OK',
       arrayBuffer: () => Promise.resolve(ENC.encode(respBody).buffer),
       text: () => Promise.resolve(respBody),
-      headers: new Headers(),
+      headers: new Headers(RESPONSE_HEADERS),
     } as unknown as Response)
   }) as typeof fetch
   return calls
+}
+
+// A server that never answers: the fetch settles only when the caller's
+// signal aborts it, the way a real stalled connection would.
+function mockStall(): void {
+  globalThis.fetch = vi.fn(
+    (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'))
+        })
+      }),
+  ) as typeof fetch
 }
 
 async function runCurl(
@@ -94,7 +112,7 @@ describe('curl', () => {
   // Real curl prints nothing on stdout with -o: the body goes to the file and
   // the only stdout-adjacent output is the progress meter, which is on stderr.
   it('-o writes to file and prints nothing on stdout', async () => {
-    const r = await runCurl(['https://x.test/file'], { o: '/tmp/out.txt' })
+    const r = await runCurl(['https://x.test/file'], { output: '/tmp/out.txt' })
     const written = r.writes['/tmp/out.txt']
     expect(written).toBeInstanceOf(Uint8Array)
     if (written instanceof Uint8Array) {
@@ -104,13 +122,13 @@ describe('curl', () => {
   })
 
   it('-s with -o silences stdout', async () => {
-    const r = await runCurl(['https://x.test/x'], { o: '/tmp/o', s: true })
+    const r = await runCurl(['https://x.test/x'], { output: '/tmp/o', silent: true })
     expect(r.out).toBe('')
   })
 
   it('-X POST -d sends body', async () => {
     const calls = mockFetch('ok')
-    const r = await runCurl(['https://x.test/p'], { X: 'POST', d: 'payload' })
+    const r = await runCurl(['https://x.test/p'], { request: 'POST', data: 'payload' })
     expect(r.exitCode).toBe(0)
     expect(calls[0]?.init?.method).toBe('POST')
     expect(new TextDecoder().decode(calls[0]?.init?.body as ArrayBuffer)).toBe('payload')
@@ -118,7 +136,7 @@ describe('curl', () => {
 
   it('-H adds headers', async () => {
     const calls = mockFetch('ok')
-    await runCurl(['https://x.test/p'], { H: 'X-Auth: token' })
+    await runCurl(['https://x.test/p'], { header: 'X-Auth: token' })
     const headers = calls[0]?.init?.headers as Record<string, string>
     expect(headers['X-Auth']).toBe('token')
   })
@@ -132,14 +150,14 @@ describe('curl', () => {
 
   it('-A overrides default User-Agent', async () => {
     const calls = mockFetch('ok')
-    await runCurl(['https://x.test/p'], { A: 'my-agent/9' })
+    await runCurl(['https://x.test/p'], { user_agent: 'my-agent/9' })
     const headers = calls[0]?.init?.headers as Record<string, string>
     expect(headers['User-Agent']).toBe('my-agent/9')
   })
 
   it('-H User-Agent overrides default', async () => {
     const calls = mockFetch('ok')
-    await runCurl(['https://x.test/p'], { H: 'User-Agent: from-H/1' })
+    await runCurl(['https://x.test/p'], { header: 'User-Agent: from-H/1' })
     const headers = calls[0]?.init?.headers as Record<string, string>
     expect(headers['User-Agent']).toBe('from-H/1')
   })
@@ -159,7 +177,7 @@ describe('curl', () => {
 
   it('writes the error body to -o and exits 0 on a 404 without -f', async () => {
     mockFetch('not found', 404)
-    const r = await runCurl(['https://x.test/missing'], { o: '/tmp/e.txt' })
+    const r = await runCurl(['https://x.test/missing'], { output: '/tmp/e.txt' })
     expect(r.exitCode).toBe(0)
     const written = r.writes['/tmp/e.txt']
     if (written instanceof Uint8Array) expect(DEC.decode(written)).toBe('not found')
@@ -167,7 +185,7 @@ describe('curl', () => {
 
   it('-f turns a 404 into exit 22 and writes nothing', async () => {
     mockFetch('not found', 404)
-    const r = await runCurl(['https://x.test/missing'], { fail: true, o: '/tmp/e.txt' })
+    const r = await runCurl(['https://x.test/missing'], { fail: true, output: '/tmp/e.txt' })
     expect(r.exitCode).toBe(22)
     expect(r.err).toContain('curl: (22) The requested URL returned error: 404')
     expect(Object.keys(r.writes)).toHaveLength(0)
@@ -175,14 +193,18 @@ describe('curl', () => {
 
   it('-sf keeps exit 22 but silences the message', async () => {
     mockFetch('not found', 404)
-    const r = await runCurl(['https://x.test/missing'], { fail: true, s: true })
+    const r = await runCurl(['https://x.test/missing'], { fail: true, silent: true })
     expect(r.exitCode).toBe(22)
     expect(r.err).toBe('')
   })
 
   it('-sSf restores the message', async () => {
     mockFetch('not found', 404)
-    const r = await runCurl(['https://x.test/missing'], { fail: true, s: true, S: true })
+    const r = await runCurl(['https://x.test/missing'], {
+      fail: true,
+      silent: true,
+      show_error: true,
+    })
     expect(r.exitCode).toBe(22)
     expect(r.err).toContain('curl: (22)')
   })
@@ -199,7 +221,107 @@ describe('curl', () => {
     await runCurl(['https://x.test/r'])
     expect(calls[0]?.init?.redirect).toBe('manual')
     const withL = mockFetch('ok')
-    await runCurl(['https://x.test/r'], { L: true })
+    await runCurl(['https://x.test/r'], { location: true })
     expect(withL[0]?.init?.redirect).toBe('follow')
+  })
+})
+
+// Pinned against curl 8.7.1 / 8.14.1 (byte shapes captured with `cat -ve`
+// against a local python http.server). Header names render lowercase in
+// both hosts because fetch never exposes the wire casing, and the status
+// line always says HTTP/1.1 because fetch cannot observe the version.
+const RESPONSE_DUMP = 'HTTP/1.1 200 OK\r\ncontent-length: 10\r\ncontent-type: text/plain\r\n\r\n'
+
+describe('curl option surface (#1065)', () => {
+  const original = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = original
+  })
+
+  it('long spellings reach the request', async () => {
+    const calls = mockFetch('ok')
+    await runCurl(['http://x.test/echo'], {
+      request: 'PUT',
+      header: 'X-Mirage-Test: yes',
+      user_agent: 'agent/1',
+    })
+    expect(calls[0]?.init?.method).toBe('PUT')
+    expect(calls[0]?.init?.headers).toEqual({ 'X-Mirage-Test': 'yes', 'User-Agent': 'agent/1' })
+  })
+
+  it('--max-time turns a stalled transfer into exit 28', async () => {
+    mockStall()
+    const r = await runCurl(['http://x.test/f'], { max_time: 0.05 })
+    expect(r.exitCode).toBe(28)
+    expect(r.out).toBe('')
+    expect(r.err).toMatch(
+      /^curl: \(28\) Operation timed out after \d+ milliseconds with 0 bytes received\n$/,
+    )
+  })
+
+  it('-s silences the timeout message but keeps exit 28', async () => {
+    mockStall()
+    const r = await runCurl(['http://x.test/f'], { max_time: 0.05, silent: true })
+    expect(r.exitCode).toBe(28)
+    expect(r.err).toBe('')
+  })
+
+  it('-v dumps the request and response headers on stderr', async () => {
+    mockFetch('hello body')
+    const r = await runCurl(['http://x.test/f?q=1'], { verbose: true })
+    expect(r.out).toBe('hello body')
+    expect(r.exitCode).toBe(0)
+    const responseLines = RESPONSE_DUMP.split('\r\n').slice(0, -1)
+    expect(r.err).toBe(
+      '> GET /f?q=1 HTTP/1.1\r\n' +
+        '> Host: x.test\r\n' +
+        '> User-Agent: Mozilla/5.0 (compatible; mirage/1.0)\r\n' +
+        '> Accept: */*\r\n' +
+        '> \r\n' +
+        responseLines.map((line) => `< ${line}\r\n`).join(''),
+    )
+  })
+
+  it('-v shows custom headers and the body headers', async () => {
+    mockFetch('ok')
+    const r = await runCurl(['http://x.test:8080/f'], {
+      verbose: true,
+      silent: true,
+      request: 'POST',
+      header: 'X-Test: 1',
+      user_agent: 'agent/1',
+      data: 'a=1',
+    })
+    expect(r.err.split('< ')[0]).toBe(
+      '> POST /f HTTP/1.1\r\n' +
+        '> Host: x.test:8080\r\n' +
+        '> User-Agent: agent/1\r\n' +
+        '> Accept: */*\r\n' +
+        '> X-Test: 1\r\n' +
+        '> Content-Length: 3\r\n' +
+        '> Content-Type: application/x-www-form-urlencoded\r\n' +
+        '> \r\n',
+    )
+  })
+
+  it('-I prints the headers and sends HEAD', async () => {
+    const calls = mockFetch('')
+    const r = await runCurl(['http://x.test/f'], { head: true })
+    expect(calls[0]?.init?.method).toBe('HEAD')
+    expect(r.out).toBe(RESPONSE_DUMP)
+    expect(r.exitCode).toBe(0)
+  })
+
+  it('-i prints the headers before the body', async () => {
+    mockFetch('hello body')
+    const r = await runCurl(['http://x.test/f'], { include: true })
+    expect(r.out).toBe(`${RESPONSE_DUMP}hello body`)
+  })
+
+  it('-i with -o writes headers and body to the file', async () => {
+    mockFetch('hello body')
+    const r = await runCurl(['http://x.test/f'], { include: true, output: '/tmp/out.txt' })
+    expect(r.out).toBe('')
+    expect(DEC.decode(r.writes['/tmp/out.txt'] as Uint8Array)).toBe(`${RESPONSE_DUMP}hello body`)
   })
 })

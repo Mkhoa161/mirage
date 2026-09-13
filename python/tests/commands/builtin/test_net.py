@@ -139,11 +139,17 @@ def captured_headers(monkeypatch):
     import httpx
     captured: dict[str, dict[str, str]] = {}
 
+    class _Headers:
+
+        def multi_items(self) -> list[tuple[str, str]]:
+            return []
+
     class _Resp:
 
         content = b""
         status_code = 200
         reason_phrase = "OK"
+        headers = _Headers()
 
     def _fake_request(self, method, url, headers=None, **_kw):
         captured["headers"] = dict(headers or {})

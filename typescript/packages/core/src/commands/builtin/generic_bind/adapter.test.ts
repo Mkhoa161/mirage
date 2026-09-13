@@ -22,6 +22,7 @@ import {
   dirAwareStat,
   dirAwareStream,
   makeResolveGlob,
+  resolveGlobOf,
   withDirGuard,
   withHiddenGuard,
   withAbortGuard,
@@ -61,6 +62,38 @@ function glob(dir: string, pattern: string): PathSpec {
     resolved: false,
   })
 }
+
+describe('resolveGlobOf', () => {
+  it('lets a trailing slash ask the namespace about an owed name', async () => {
+    // The factory stamps the invocation's link target stat beside the
+    // owed child names; the resolver drops a link to nothing the way
+    // bash does and keeps a link to a directory.
+    const readdir = () => Promise.resolve(['/d/alpha'])
+    const stat = () => Promise.resolve(new FileStat({ name: 'alpha', type: FileType.DIRECTORY }))
+    const ops: CommandIO = {
+      readdir,
+      readBytes: () => Promise.resolve(new Uint8Array()),
+      readStream: () => oneChunkStream(new Uint8Array()),
+      stat,
+      isMounted: () => true,
+      globChildren: (parent) => (parent === '/d/' ? ['broken', 'lnk'] : []),
+      globTargetStat: (virtual) =>
+        Promise.resolve(
+          virtual === '/d/lnk' ? new FileStat({ name: 'lnk', type: FileType.DIRECTORY }) : null,
+        ),
+    }
+    const word = new PathSpec({
+      virtual: '/d/*',
+      directory: '/d/',
+      resourcePath: '*',
+      pattern: '*',
+      resolved: false,
+      rawPath: '/d/*/',
+    })
+    const out = await resolveGlobOf(ops)(accessor, [word])
+    expect(out.map((p) => p.rawPath)).toEqual(['/d/alpha/', '/d/lnk/'])
+  })
+})
 
 describe('makeResolveGlob', () => {
   it('expands a glob pattern against readdir', async () => {

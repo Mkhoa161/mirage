@@ -33,7 +33,7 @@ from mirage.commands.cli.builtin.git.revparse import resolve_commit
 from mirage.commands.cli.builtin.git.session import opened
 from mirage.commands.cli.builtin.git.types import HeadRef, RepoLocation
 from mirage.commands.cli.builtin.git.util import (  # yapf: disable
-    check_operands, escaped, fatal)
+    check_operands, escaped, fatal, switches)
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.spec.types import FlagView
 from mirage.io.stream import yield_bytes
@@ -204,7 +204,8 @@ async def branch(
     try:
         if dispatch is None:
             raise NoWorkspaceError()
-        check_operands(texts, UnknownSwitchError, escaped(inv.argv))
+        check_operands(texts, UnknownSwitchError, escaped(inv.argv),
+                       switches(inv))
         repo, location = await opened(fl, doors)
         head = await read_head(dispatch, location.gitdir)
         force = fl.as_bool("D")

@@ -15,7 +15,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { runWithSession } from '../context/session_context.ts'
-import { PathSpec } from '../types.ts'
+import { FileStat, FileType, PathSpec } from '../types.ts'
 import { Session } from '../workspace/session/session.ts'
 import { enoent } from './errors.ts'
 import {
@@ -363,5 +363,118 @@ describe('globStemPrefix', () => {
 
   it('has no prefix for a missing pattern', () => {
     expect(globStemPrefix(null, ['.md'])).toBe('')
+  })
+})
+
+function fakeStat(_accessor: null, path: PathSpec): Promise<FileStat> {
+  const key = rstripSlash(path.virtual) || '/'
+  const name = key.slice(key.lastIndexOf('/') + 1)
+  if (key in TREE) return Promise.resolve(new FileStat({ name, type: FileType.DIRECTORY }))
+  const parent = key.slice(0, key.lastIndexOf('/')) || '/'
+  if ((TREE[parent] ?? []).includes(key)) {
+    return Promise.resolve(new FileStat({ name, type: FileType.FILE }))
+  }
+  return Promise.reject(enoent(path))
+}
+
+function typedSpec(virtual: string, raw: string): PathSpec {
+  const base = globSpec(virtual, '')
+  return new PathSpec({
+    virtual: base.virtual,
+    directory: base.directory,
+    resourcePath: base.resourcePath,
+    pattern: base.pattern,
+    resolved: base.resolved,
+    rawPath: raw,
+  })
+}
+
+// The command tier's own resolver honours a trailing slash the way the
+// shell tier does (#1065): directories only, and one slash kept.
+describe('resolveGlobWith trailing slash', () => {
+  it('keeps directories only and the slash', async () => {
+    const out = await resolveGlobWith(
+      fakeReaddir,
+      null,
+      [typedSpec('/*', '*/')],
+      undefined,
+      undefined,
+      undefined,
+      fakeStat,
+    )
+    expect(out.map((m) => [m.virtual, m.rawPath])).toEqual([['/alpha', 'alpha/']])
+  })
+
+  it('spells an absolute word', async () => {
+    const out = await resolveGlobWith(
+      fakeReaddir,
+      null,
+      [typedSpec('/notion/p*', '/notion/p*/')],
+      undefined,
+      undefined,
+      undefined,
+      fakeStat,
+    )
+    expect(out.map((m) => m.rawPath)).toEqual(['/notion/pages/'])
+  })
+
+  // The namespace's own answer for the names it owes: a link to a
+  // directory, a nested mount root, a link to a file, a link to nothing.
+  function fakeTargetStat(virtual: string): Promise<FileStat | null> {
+    const name = virtual.slice(virtual.lastIndexOf('/') + 1)
+    if (virtual === '/lnk' || virtual === '/inner') {
+      return Promise.resolve(new FileStat({ name, type: FileType.DIRECTORY }))
+    }
+    if (virtual === '/flink') return Promise.resolve(new FileStat({ name, type: FileType.FILE }))
+    return Promise.resolve(null)
+  }
+  const owed = (parent: string): string[] =>
+    parent === '/' ? ['broken', 'flink', 'inner', 'lnk'] : []
+
+  it('asks the namespace about an owed name', async () => {
+    // bash follows a link for `*/` and keeps it only when the target is
+    // a directory; a dangling one is dropped like any file.
+    const out = await resolveGlobWith(
+      fakeReaddir,
+      null,
+      [typedSpec('/*', '*/')],
+      undefined,
+      undefined,
+      owed,
+      fakeStat,
+      fakeTargetStat,
+    )
+    expect(out.map((m) => m.rawPath)).toEqual(['alpha/', 'inner/', 'lnk/'])
+  })
+
+  it('keeps an owed name it cannot ask about', async () => {
+    const out = await resolveGlobWith(
+      fakeReaddir,
+      null,
+      [typedSpec('/*', '*/')],
+      undefined,
+      undefined,
+      owed,
+      fakeStat,
+    )
+    expect(out.map((m) => m.rawPath)).toEqual(['alpha/', 'broken/', 'flink/', 'inner/', 'lnk/'])
+  })
+
+  it('keeps every match without a stat door', async () => {
+    const out = await resolveGlobWith(fakeReaddir, null, [typedSpec('/*', '*/')], undefined)
+    expect(out.map((m) => m.rawPath)).toEqual(['alpha/', 'beta.txt/'])
+  })
+
+  it('keeps the typed word on zero matches', async () => {
+    const out = await resolveGlobWith(
+      fakeReaddir,
+      null,
+      [typedSpec('/zz*', 'zz*/')],
+      undefined,
+      undefined,
+      undefined,
+      fakeStat,
+    )
+    expect(out.map((m) => [m.rawPath, m.pattern])).toEqual([['zz*/', null]])
   })
 })

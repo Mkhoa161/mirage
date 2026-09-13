@@ -87,16 +87,28 @@ export function parseFlags(
       }
     }
 
+    // An operand is paired with the word it came from by argv slot,
+    // never by value alone: two operands can spell one path (`ls -d dir/
+    // link/` with link -> dir), and a lookup keyed by the resolved path
+    // handed both rows the second spelling. The word is taken only when
+    // it names the parsed value; a word the parser normalized (a followed
+    // link whose target climbs through `..`) is synthesized as before,
+    // since a keyed backend cannot read `b/../a`. The map serves a word
+    // the classifier left as text.
     const paths: PathSpec[] = []
     const texts: string[] = []
-    for (const [value, kind] of parsed.args) {
+    parsed.args.forEach(([value, kind], slot) => {
       if (kind === 'path') {
-        const existing = scopeMap.get(value)
+        const word = parts[parsed.argIndices[slot] ?? -1]
+        const existing =
+          word instanceof PathSpec && rstripSlash(word.virtual) === rstripSlash(value)
+            ? word
+            : scopeMap.get(value)
         paths.push(existing ?? synthesizePathSpec(value))
       } else {
         texts.push(value)
       }
-    }
+    })
     return {
       paths,
       texts,

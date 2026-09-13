@@ -49,7 +49,7 @@ import { restored } from './reset.ts'
 import { COMMIT, TREE, resolveObject, unwrapped } from './revparse.ts'
 import { commitEntries, treeEntries, type TreeEntry } from './tree.ts'
 import type { GitObject, IndexEntry } from './types.ts'
-import { checkOperands, escaped, fatal, startPoint } from './util.ts'
+import { checkOperands, escaped, fatal, startPoint, switches } from './util.ts'
 import { compareCodePoints } from '../../../../utils/sort.ts'
 
 /** The parsed shape of a `git restore` invocation. */
@@ -131,7 +131,7 @@ export async function restore(inv: CLIInvocation): Promise<CommandFnResult> {
     if (statPath === undefined || dispatch === undefined) {
       throw new NoWorkspaceError()
     }
-    checkOperands(texts, UnknownSwitchError, escaped(inv.argv))
+    checkOperands(texts, UnknownSwitchError, escaped(inv.argv), switches(inv))
     if (texts.length === 0) throw new NoRestorePathsError()
     const flags = parseFlags(fl)
     const repo = await opened(fl, doors)

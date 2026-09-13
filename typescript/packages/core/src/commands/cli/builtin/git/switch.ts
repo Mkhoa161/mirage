@@ -46,7 +46,7 @@ import {
 } from './refs.ts'
 import { opened, repoArgs } from './repo.ts'
 import { resolveCommit } from './revparse.ts'
-import { checkOperands, escaped, fatal } from './util.ts'
+import { checkOperands, escaped, fatal, switches } from './util.ts'
 import { compareCodePoints } from '../../../../utils/sort.ts'
 
 const ENC = new TextEncoder()
@@ -101,7 +101,7 @@ export async function switchBranch(inv: CLIInvocation): Promise<CommandFnResult>
     if (statPath === undefined || dispatch === undefined) {
       throw new NoWorkspaceError()
     }
-    checkOperands(texts, UnknownSwitchError, escaped(inv.argv))
+    checkOperands(texts, UnknownSwitchError, escaped(inv.argv), switches(inv))
     const flags = parseFlags(fl)
     const creating = flags.create !== undefined
     if (creating && flags.detach) throw new DetachWithCreateError()

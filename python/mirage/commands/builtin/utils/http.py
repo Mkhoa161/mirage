@@ -19,11 +19,12 @@
 # any 4xx and leaked httpx's exception text (complete with a documentation URL)
 # onto stderr.
 
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from mirage.commands.builtin.errors import HttpConnectError
+from mirage.commands.builtin.errors import HttpConnectError, HttpTimeoutError
 
 # httpx is the [http] extra, so it stays optional: top-level import guarded the
 # same way the databricks accessor guards its SDK.
@@ -46,6 +47,8 @@ class HttpResponse:
     reason: str
     body: bytes
     url: str
+    # Wire order, names as the server spelled them, repeats kept.
+    headers: tuple[tuple[str, str], ...] = ()
 
     @property
     def is_error(self) -> bool:
@@ -70,7 +73,14 @@ def _response(resp: Any, url: str) -> HttpResponse:
     return HttpResponse(status=resp.status_code,
                         reason=resp.reason_phrase,
                         body=resp.content,
-                        url=url)
+                        url=url,
+                        headers=tuple(resp.headers.multi_items()))
+
+
+def _timeout(url: str, started: float) -> HttpTimeoutError:
+    host, port = _endpoint(url)
+    return HttpTimeoutError(host, port, int(
+        (time.monotonic() - started) * 1000))
 
 
 def http_request(
@@ -78,11 +88,12 @@ def http_request(
     method: str = "GET",
     headers: dict[str, str] | None = None,
     data: bytes | None = None,
-    timeout: int = 30,
+    timeout: float = 30,
     follow_redirects: bool = False,
 ) -> HttpResponse:
     if httpx is None:
         raise ImportError(MISSING_HTTPX)
+    started = time.monotonic()
     with httpx.Client(timeout=timeout,
                       follow_redirects=follow_redirects) as client:
         try:
@@ -90,6 +101,10 @@ def http_request(
                                   url,
                                   headers=_with_default_ua(headers),
                                   content=data)
+        # A timeout is a transport error too, so it is told apart first:
+        # curl answers it with its own code (28), not the connect one.
+        except httpx.TimeoutException as exc:
+            raise _timeout(url, started) from exc
         except httpx.TransportError as exc:
             host, port = _endpoint(url)
             raise HttpConnectError(host, port) from exc
@@ -101,11 +116,12 @@ def http_form_request(
     method: str = "POST",
     form_data: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
-    timeout: int = 30,
+    timeout: float = 30,
     follow_redirects: bool = False,
 ) -> HttpResponse:
     if httpx is None:
         raise ImportError(MISSING_HTTPX)
+    started = time.monotonic()
     with httpx.Client(timeout=timeout,
                       follow_redirects=follow_redirects) as client:
         try:
@@ -113,6 +129,8 @@ def http_form_request(
                                   url,
                                   data=form_data or {},
                                   headers=_with_default_ua(headers))
+        except httpx.TimeoutException as exc:
+            raise _timeout(url, started) from exc
         except httpx.TransportError as exc:
             host, port = _endpoint(url)
             raise HttpConnectError(host, port) from exc
@@ -122,7 +140,7 @@ def http_form_request(
 def http_get(
     url: str,
     headers: dict[str, str] | None = None,
-    timeout: int = 30,
+    timeout: float = 30,
     follow_redirects: bool = True,
 ) -> HttpResponse:
     return http_request(url,
