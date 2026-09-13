@@ -89,4 +89,29 @@ describe('email grep push-down', () => {
     expect(search.mock.calls[0]?.[2]).toBe('say "hi"')
     expect(io.exitCode).toBe(1)
   })
+
+  it('narrows an optional group on the run it requires', async () => {
+    // `(forecast)?percent` matches a line holding only `percent`, so the
+    // optional group's longer run is not the one the server is asked for.
+    search.mockResolvedValue([['/email/INBOX/a.email.json', 'disk usage at 91 percent']])
+    const [out, io] = (await run(['(forecast)?percent'], { r: true, E: true })) as [
+      Uint8Array,
+      IOResult,
+    ]
+    expect(search.mock.calls[0]?.[2]).toBe('percent')
+    expect(DEC.decode(out)).toBe('/email/INBOX/a.email.json:disk usage at 91 percent\n')
+    expect(io.exitCode).toBe(0)
+  })
+
+  it('reads a basic expression before narrowing', async () => {
+    // Without -E the pattern is a basic expression: `\(...\)\?` is the
+    // optional group there, so its run is skipped and `parser` is required.
+    search.mockResolvedValue([['/email/INBOX/a.email.json', 'yesterday shipped the parser']])
+    const [out, io] = (await run(['the \\(brand-new tokenizer or \\)\\?parser'], {
+      r: true,
+    })) as [Uint8Array, IOResult]
+    expect(search.mock.calls[0]?.[2]).toBe('parser')
+    expect(DEC.decode(out)).toBe('/email/INBOX/a.email.json:yesterday shipped the parser\n')
+    expect(io.exitCode).toBe(0)
+  })
 })

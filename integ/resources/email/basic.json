@@ -759,6 +759,32 @@
         "stdout": "/mail/INBOX/2026-01-05/Standup_notes__2.email.json\n/mail/INBOX/2026-01-07/Server_alert_worker-3__3.email.json\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "em_grep_optional_group_keeps_the_match_without_it",
+      "seq": 540217,
+      "targets": [
+        "email"
+      ],
+      "command": "grep -rlE '(forecast)?percent' /mail/INBOX",
+      "expect": {
+        "exit": 0,
+        "stdout": "/mail/INBOX/2026-01-07/Server_alert_worker-3__3.email.json\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "em_grep_basic_expression_narrows_in_its_own_dialect",
+      "seq": 540218,
+      "targets": [
+        "email"
+      ],
+      "command": "grep -rl 'the \\(brand-new tokenizer or \\)\\?parser' /mail/INBOX",
+      "expect": {
+        "exit": 0,
+        "stdout": "/mail/INBOX/2026-01-05/Standup_notes__2.email.json\n",
+        "stderr": ""
+      }
     }
   ]
 }

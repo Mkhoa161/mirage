@@ -92,7 +92,10 @@ async function grepCommand(
   // the real pattern runs over each candidate. A pattern with no such
   // literal (an alternation, a class with nothing required around it)
   // takes the generic scan rather than a search for the regex's spelling.
-  const query = pattern !== null ? searchQuery(pattern, fl.asBool('F')) : null
+  // grep reads a basic expression unless -E says otherwise, and the
+  // literal has to be read off the same dialect the matcher will use.
+  const basic = !fl.asBool('E')
+  const query = pattern !== null ? searchQuery(pattern, fl.asBool('F'), basic) : null
   if (
     pattern !== null &&
     query !== null &&
@@ -110,7 +113,9 @@ async function grepCommand(
         accessor.config.maxMessages,
       )
       if (textSearchResults(pairs.map(([, text]) => text))) {
-        const pat = compilePattern(pattern, fl.asBool('i'), fl.asBool('F'), fl.asBool('w'))
+        // The same dialect the literal was read off: a basic expression
+        // compiled as an extended one matches a different language.
+        const pat = compilePattern(pattern, fl.asBool('i'), fl.asBool('F'), fl.asBool('w'), basic)
         const lineOpts: GrepLinesOptions = {
           invert: false,
           lineNumbers: fl.asBool('n'),

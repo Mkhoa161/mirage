@@ -19,7 +19,7 @@ import type { C } from '../store/client.ts'
 import type { GwsState } from '../store/state.ts'
 import type { CalendarEntry, CalendarEvent } from '../store/types.ts'
 import { asObj, asObjArr, asStr } from '../wire/json.ts'
-import { NOT_FOUND, googleError, noContent, ok } from '../wire/reply.ts'
+import { NOT_FOUND, googleError, isReply, noContent, ok } from '../wire/reply.ts'
 import {
   calendarOr404,
   eventsOf,
@@ -33,7 +33,6 @@ import { eventEndMs, eventStartMs } from './zone.ts'
 type GwsCtx = Ctx<GwsState>
 
 const NEED_WRITER = 'You need to have writer access.'
-const MISSING_END = 'Missing end time.'
 
 function writable(cal: CalendarEntry): boolean {
   return cal.accessRole === 'owner' || cal.accessRole === 'writer'
@@ -43,8 +42,10 @@ function createEvent(ctx: GwsCtx): Reply {
   const cal = calendarOr404(ctx.db, ctx.params.calendarId ?? '')
   if (cal === null) return NOT_FOUND
   if (!writable(cal)) return googleError(403, NEED_WRITER, 'PERMISSION_DENIED')
-  const ev = makeEvent(ctx.db, asObj(ctx.json()))
-  if (ev === null) return googleError(400, MISSING_END, 'INVALID_ARGUMENT')
+  const body = asObj(ctx.json())
+  const times = readEventTimes(body)
+  if (isReply(times)) return times
+  const ev = makeEvent(ctx.db, body, times)
   eventsOf(ctx.db, cal.id).set(ev.id, ev)
   return ok(fmtEvent(cal, ev))
 }
@@ -60,17 +61,13 @@ function withEvent(
   return { cal, ev, bucket }
 }
 
-function isReply(v: { cal: CalendarEntry } | Reply): v is Reply {
-  return 'status' in v
-}
-
 function patchEvent(ctx: GwsCtx): Reply {
   const found = withEvent(ctx)
   if (isReply(found)) return found
   if (!writable(found.cal)) return googleError(403, NEED_WRITER, 'PERMISSION_DENIED')
   const body = asObj(ctx.json())
   const times = readEventTimes(body, found.ev)
-  if (times === null) return googleError(400, MISSING_END, 'INVALID_ARGUMENT')
+  if (isReply(times)) return times
   const next: CalendarEvent = {
     ...found.ev,
     start: times.start,
