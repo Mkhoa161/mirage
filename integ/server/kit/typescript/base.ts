@@ -53,6 +53,23 @@ export interface Fake<C extends MinimalClient> {
     fixtureRoot: string,
     epoch: string | undefined,
   ) => Promise<void>
+  // What a fake has to FORGET when a /reset has replaced a tenant's rows
+  // underneath it. Only a fake that keeps its own view of those rows between
+  // requests needs one, which today is gws and its cached tenant world.
+  //
+  // It is a KIT hook rather than a gws one because there is no other door:
+  // /reset is answered inside `answer()` before the router ever matches, so a
+  // route cannot see one however it is declared.
+  //
+  // It is handed the run's CLIENT rather than the run's name because that is
+  // what such a cache is keyed by -- a world belongs to one SQLite file, and
+  // two Runtimes in one process that happen to name the same run must not be
+  // able to reach each other's.
+  //
+  // Called for every reset, successful or not: a reset that threw half way
+  // through has already cleared rows, so a view built before it is stale
+  // either way, and forgetting one that was still good costs a reload.
+  afterReset?: (db: C, tenants: readonly string[]) => void
   defaultTenants?: string[]
   // How this fake refuses a tenant it was never seeded with, and by being
   // present, THAT it refuses one at all. Declaring it is opt-in for the same

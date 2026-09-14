@@ -18,7 +18,9 @@ import { dirname, join, resolve } from 'node:path'
 import type { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { ANNOUNCE_RE } from '../kit/typescript/announce.ts'
+import { start } from '../kit/typescript/serve.ts'
 import type { JsonValue } from '../kit/typescript/types.ts'
+import { gwsFake } from './fake.ts'
 
 // The corpus exercises the SURFACES of this fake heavily -- seven vendor APIs
 // across the gdrive, gdocs, gsheets, gslides, gmail and gcal targets -- so this
@@ -431,6 +433,69 @@ async function main(): Promise<void> {
         '2026-02-03T10:30:00.000Z/2026-02-03T11:00:00.000Z',
       ],
     )
+
+    // ---- the cached tenant world, and the three ways it can go stale
+    //
+    // Every check above already rides the cache: `stateful` loads the rows
+    // once per (client, tenant) and every later request reads the object it
+    // kept. What those checks cannot see is the cache going WRONG, which is
+    // three specific things, one per invalidation door.
+    const rw = `${at}/_run/rw`
+    check('run rw seeds', (await reset(rw, seed)) === 200)
+    await post(`${rw}/v1/documents`, 't1', { title: 'before-reset' })
+    eq('a write is in the cached world', await fileNames(rw, 't1'), [
+      'Recall Survey',
+      'before-reset',
+    ])
+    // Door one: /reset replaces the rows with no route involved, so a cache
+    // that did not hear about it would keep serving the pre-reset world
+    // forever. This is what `Fake.afterReset` exists for.
+    check('resetting run rw again', (await reset(rw, seed)) === 200)
+    eq('a scoped reset drops the cached world', await fileNames(rw, 't1'), ['Recall Survey'])
+    // Door two: a write handler that THROWS has mutated the world in place and
+    // flushed nothing. Uncached that half-applied world died with the request;
+    // cached it would be served as real. `multipart/mixed` with no boundary=
+    // is the reachable case -- parseRfc822 refuses it, which the kit answers
+    // as a 500. insertGmailMessage happens to parse before it mints an id, so
+    // today nothing is mutated before the throw; this check is what fails the
+    // day those two lines swap over.
+    const before500 = await api(`${rw}/gmail/v1/users/me/messages`, 't1')
+    const headless = Buffer.from(
+      'From: a@example.com\r\nTo: b@example.com\r\nSubject: boom\r\n' +
+        'Content-Type: multipart/mixed\r\n\r\nbody\r\n',
+      'utf8',
+    )
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    const boom = await post(`${rw}/gmail/v1/users/me/messages/send`, 't1', { raw: headless })
+    check('a write route that throws is a 500', boom.status === 500, String(boom.status))
+    const after500 = await api(`${rw}/gmail/v1/users/me/messages`, 't1')
+    eq(
+      'and leaves no half-applied world behind it',
+      field(obj(after500.body).messages, 'id'),
+      field(obj(before500.body).messages, 'id'),
+    )
+    // Door three: the cache is keyed by the run's CLIENT, not by its name, so
+    // two servers in ONE process cannot reach each other's worlds even when
+    // every name matches. A module-level map keyed by `run|tenant` passes
+    // every check above and fails this one.
+    const a = await start(gwsFake, 0)
+    const b = await start(gwsFake, 0)
+    try {
+      check('two in-process fakes seed the same run name', (await reset(a.endpoint, seed)) === 200)
+      check('both of them', (await reset(b.endpoint, seed)) === 200)
+      await post(`${a.endpoint}/v1/documents`, 't1', { title: 'only-in-a' })
+      eq('a world belongs to one runtime', await fileNames(b.endpoint, 't1'), ['Recall Survey'])
+      eq('and the other runtime kept its own', await fileNames(a.endpoint, 't1'), [
+        'Recall Survey',
+        'only-in-a',
+      ])
+    } finally {
+      await a.close()
+      await b.close()
+    }
 
     // ---- a read route must never be the only place a counter moved
     check(

@@ -189,6 +189,13 @@ async function twoPhaseCard(ctx: Ctx<C>): Promise<Reply> {
   return { status: 201, body: cardJson(row) }
 }
 
+// What `afterReset` was handed, newest last, so a check can assert the hook
+// fired and with which tenants. A fake that caches rows between requests keys
+// that cache by the CLIENT, so the record keeps the client too and proves the
+// hook is handed the run's own, not some other run's.
+const RESETS: { tenants: string[]; sameClient: boolean }[] = []
+const CLIENTS = new Map<string, C>()
+
 export const selftestFake: Fake<C> = {
   config,
   client: PrismaClient,
@@ -246,7 +253,16 @@ export const selftestFake: Fake<C> = {
           },
         }),
       }),
+  // Recorded rather than acted on: the kit only promises that this fires for
+  // every reset, successful or not, and with the run's own client. gws is the
+  // caller that does something with it (it drops the tenant's cached world).
+  afterReset: (db: C, tenants: readonly string[]): void => {
+    const first = CLIENTS.get(tenants.join(',')) ?? db
+    CLIENTS.set(tenants.join(','), first)
+    RESETS.push({ tenants: [...tenants], sameClient: first === db })
+  },
   routes: (): KitRoute<C>[] => [
+    route('GET', '/_selftest/resets', () => ({ status: 200, body: RESETS })),
     // Echoes what a HANDLER sees, which is not what the router matched on: the
     // run prefix has to be gone from ctx.url too, because handlers render this
     // pathname into responses and one fake looks rows up by it.

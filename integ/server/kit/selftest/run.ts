@@ -978,6 +978,47 @@ async function main(): Promise<void> {
       advertised,
     )
 
+    process.stdout.write('\n22. afterReset fires for every reset, successful or not\n')
+    // The hook exists because /reset is answered before the router matches, so
+    // a fake that keeps its own view of a tenant's rows has no other way to
+    // hear that they were replaced. Two properties are promised and both are
+    // easy to lose: it fires on the FAILING path too (a reset that threw has
+    // already cleared rows, so a view built before it is stale either way),
+    // and it is handed the run's OWN client, which is what a cache keyed by
+    // the client depends on.
+    const hooked = await launch()
+    try {
+      await call(hooked, '/reset', { method: 'POST', runInPath: 'z1', body: { tenants: ['a1'] } })
+      await call(hooked, '/reset', { method: 'POST', runInPath: 'z1', body: { tenants: ['a1'] } })
+      const failing = await call(hooked, '/reset', {
+        method: 'POST',
+        runInPath: 'z1',
+        body: { tenants: ['boom'] },
+      })
+      check('the failing reset is a 500', failing.status === 500, String(failing.status))
+      const seen = await call(hooked, '/_selftest/resets', { runInPath: 'z1', tenant: 'a1' })
+      const rows = Array.isArray(seen.json) ? seen.json : []
+      const named = rows.map((r) =>
+        typeof r === 'object' && r !== null && !Array.isArray(r) ? String(r.tenants) : '',
+      )
+      // `default` leads because `start()` seeds the default run before it
+      // listens, and that startup seed IS a reset -- a fake that cached rows
+      // during it would be holding a pre-seed world.
+      eq('it fired once per reset, in order, with the tenants each named', named, [
+        'default',
+        'a1',
+        'a1',
+        'boom',
+      ])
+      check('including the one whose seed threw', named.includes('boom'), JSON.stringify(named))
+      const sameClients = rows.every((r) =>
+        typeof r === 'object' && r !== null && !Array.isArray(r) ? r.sameClient === true : false,
+      )
+      check('and every call was handed one run one client', sameClients, JSON.stringify(rows))
+    } finally {
+      hooked.child.kill('SIGTERM')
+    }
+
     process.stdout.write(`\nselftest: ${String(checks)} checks passed\n`)
   } finally {
     fake.child.kill('SIGTERM')

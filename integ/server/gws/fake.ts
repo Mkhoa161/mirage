@@ -23,6 +23,7 @@ import { gmailRoutes } from './gmail/routes.ts'
 import { sheetsRoutes } from './sheets/routes.ts'
 import { slidesRoutes } from './slides/routes.ts'
 import { applyExtras } from './seed.ts'
+import { dropTenants } from './store/cache.ts'
 import { PrismaClient } from './store/client.ts'
 import type { C } from './store/client.ts'
 import { loadState } from './store/load.ts'
@@ -163,5 +164,14 @@ export const gwsFake: Fake<C> = {
     const st = await loadState(db, tenant, epoch === undefined ? undefined : Date.parse(epoch))
     applyExtras(st, extras)
     await saveState(db, gwsFake.dmmf, tenant, st)
+  },
+  // A /reset is the one thing that changes a tenant's rows without a route
+  // having served the request, so it is the one thing the cached world cannot
+  // find out about on its own. Note that this runs BESIDE `afterSeed` rather
+  // than instead of it: afterSeed reaches the rows through `loadState` and
+  // `saveState` directly, which is what keeps the seed reading the file it
+  // just wrote rather than the world this drops.
+  afterReset: (db, tenants) => {
+    dropTenants(db, tenants)
   },
 }

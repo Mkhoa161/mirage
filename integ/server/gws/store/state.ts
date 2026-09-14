@@ -39,10 +39,19 @@ export const EVENT_ID_WIDTH = 23
 // ONE TENANT'S WORLD, in the shapes the handlers and renderers read.
 //
 // This is a working copy, not the store: `loadState` fills it from the tenant's
-// rows at the top of a request and `saveState` writes it back at the bottom of
-// a write. SQLite is the authority between requests, which is what buys the
-// per-run persistence, the scoped /reset and the seeded-template copy that the
-// in-memory version could not have.
+// rows and `saveState` writes it back at the bottom of a write. SQLite is the
+// authority for everything that is not a request -- the seed, the scoped
+// /reset, the seeded-template copy a fresh run is served from, a process that
+// starts against a file already on disk -- which is what buys all three of
+// those over the in-memory version this replaced.
+//
+// BETWEEN two requests on one run the authority is the working copy itself,
+// which `store/cache.ts` holds so that the next request does not rebuild from
+// 25 tables what the last one already had. That is sound only because nothing
+// but a request and a /reset can change the rows, and /reset says so through
+// the kit's `afterReset`. The cache is the ROUTE boundary's, never this
+// module's: everything below stays a pure function of the rows, so the seed
+// path reads the file.
 //
 // Whole-world load and whole-world flush, rather than per-entity queries in
 // each handler, for two reasons. The Router serializes writes per run and makes

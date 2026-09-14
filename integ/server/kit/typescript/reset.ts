@@ -131,7 +131,7 @@ export async function applyReset<C extends MinimalClient>(
   }
   if (scoped && fresh) {
     const template = await pool.seededTemplate(templateKey(req), seedInto)
-    pool.clientFromSeeded(req.run, template)
+    const made = pool.clientFromSeeded(req.run, template)
     const st = state(req.run)
     // Marked right after the copy, because the copy IS the seed here. Reached
     // only once seededTemplate has resolved, so a template build that threw
@@ -140,6 +140,13 @@ export async function applyReset<C extends MinimalClient>(
       st.reset(tenant, req.epoch)
       st.markSeeded(tenant)
     }
+    // There is provably nothing to forget here -- `fresh` means no client
+    // existed, so `made` is a new object and a cache keyed by the client
+    // cannot already hold a world under it. The hook fires anyway, so a fake
+    // that keys its cache some other way is not left stale by this branch
+    // alone. A template build that THREW never reaches this line, which is
+    // also right: it created no client and wrote no rows.
+    fake.afterReset?.(made, req.tenants)
     return {
       ok: true,
       run: req.run,
@@ -150,21 +157,28 @@ export async function applyReset<C extends MinimalClient>(
     }
   }
   const db = scoped ? pool.client(req.run) : await pool.recreate(req.run)
-  if (scoped) await clearTenants(db, fake.dmmf, req.tenants)
-  const st = state(req.run)
-  for (const tenant of req.tenants) st.reset(tenant, req.epoch)
-  // Marked per tenant as each one finishes, not after the loop: a later tenant
-  // throwing must not unmark the ones already seeded.
-  const seeded = await seedInto(db, (tenant) => {
-    st.markSeeded(tenant)
-  })
-  return {
-    ok: true,
-    run: req.run,
-    epoch: req.epoch ?? null,
-    scoped,
-    tenants: req.tenants,
-    seeded,
+  try {
+    if (scoped) await clearTenants(db, fake.dmmf, req.tenants)
+    const st = state(req.run)
+    for (const tenant of req.tenants) st.reset(tenant, req.epoch)
+    // Marked per tenant as each one finishes, not after the loop: a later
+    // tenant throwing must not unmark the ones already seeded.
+    const seeded = await seedInto(db, (tenant) => {
+      st.markSeeded(tenant)
+    })
+    return {
+      ok: true,
+      run: req.run,
+      epoch: req.epoch ?? null,
+      scoped,
+      tenants: req.tenants,
+      seeded,
+    }
+  } finally {
+    // In a `finally`, because a reseed that throws half way through has
+    // ALREADY cleared the rows: the tenant's world is gone either way, and a
+    // cache still holding the pre-reset one would serve it as real.
+    fake.afterReset?.(db, req.tenants)
   }
 }
 
