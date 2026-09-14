@@ -24,5 +24,11 @@ export {
   relayout,
   wordBreaks,
 } from './relayout.ts'
-export { firstContentLine, heredocOperators, protectedSource, sameShape } from './shield.ts'
+export {
+  firstContentLine,
+  heredocOperators,
+  protectedSource,
+  sameShape,
+  terminatorLookalikes,
+} from './shield.ts'
 export type { HeredocOperator, Terminator } from './types.ts'

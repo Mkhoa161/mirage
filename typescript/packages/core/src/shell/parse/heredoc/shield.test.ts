@@ -16,7 +16,13 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { Language, type Node, Parser } from 'web-tree-sitter'
-import { firstContentLine, heredocOperators, protectedSource, sameShape } from './shield.ts'
+import {
+  firstContentLine,
+  heredocOperators,
+  protectedSource,
+  sameShape,
+  terminatorLookalikes,
+} from './shield.ts'
 
 const require = createRequire(import.meta.url)
 const engineWasm = readFileSync(require.resolve('web-tree-sitter/web-tree-sitter.wasm'))
@@ -77,6 +83,27 @@ describe('firstContentLine', () => {
 
   it('is null for empty lines only', () => {
     expect(firstContentLine('\n\n', 0, 2)).toBeNull()
+  })
+})
+
+describe('terminatorLookalikes', () => {
+  it('names one character per such line', () => {
+    const text = 'EOFX\nhi\n EOF\n\tEOF;\nEOF EOF\n'
+    expect(terminatorLookalikes(text, [0, text.length], 'EOF')).toEqual([
+      0,
+      text.indexOf(' EOF') + 1,
+      text.indexOf('\tEOF;') + 1,
+      text.indexOf('EOF EOF'),
+    ])
+  })
+
+  it('passes over expansion characters', () => {
+    expect(terminatorLookalikes('$X;\nhi\n', [0, 7], '$X')).toEqual([1])
+    expect(terminatorLookalikes('$$\n', [0, 3], '$')).toEqual([])
+  })
+
+  it('stays inside the span', () => {
+    expect(terminatorLookalikes('hi\nEOF\n', [0, 3], 'EOF')).toEqual([])
   })
 })
 
@@ -172,6 +199,41 @@ describe('protectedSource', () => {
     const cmd = 'cat <<EOF\n\\first\nsecond\n'
     const out = protectedSource(cmd, root(cmd))
     expect(diff(cmd, out ?? '')).toEqual([[cmd.indexOf('\\first'), 'x']])
+  })
+
+  it('masks a line that only opens with the delimiter', () => {
+    // The scanner compares a line's first characters with the delimiter
+    // and stops there, so each of these would end a body bash reads on.
+    const cmd = 'cat <<EOF\nhi\nEOFX\nEOF;\n EOF\nEOF\n'
+    const out = protectedSource(cmd, root(cmd))
+    expect(diff(cmd, out ?? '')).toEqual([
+      [cmd.indexOf('EOFX'), 'x'],
+      [cmd.indexOf('EOF;'), 'x'],
+      [cmd.indexOf(' EOF') + 1, 'x'],
+    ])
+  })
+
+  it('masks a lookalike under <<-', () => {
+    // The first line's tab is masked as before; the lookalikes join it.
+    const cmd = 'cat <<-EOF\n\thi\n\tEOFX\n  EOF\n\tEOF\n'
+    const out = protectedSource(cmd, root(cmd))
+    expect(diff(cmd, out ?? '')).toEqual([
+      [cmd.indexOf('\thi'), 'x'],
+      [cmd.indexOf('\tEOFX') + 1, 'x'],
+      [cmd.indexOf('  EOF') + 2, 'x'],
+    ])
+  })
+
+  it('keeps an expansion opening a lookalike', () => {
+    const cmd = 'cat <<$X\n$X;\nhi\n$X\n'
+    const out = protectedSource(cmd, root(cmd))
+    expect(diff(cmd, out ?? '')).toEqual([[cmd.indexOf('$X;') + 1, 'x']])
+  })
+
+  it('writes the alternate letter over the filler', () => {
+    const cmd = 'cat <<xyz\nxyz1\nxyz\n'
+    const out = protectedSource(cmd, root(cmd))
+    expect(diff(cmd, out ?? '')).toEqual([[cmd.indexOf('xyz1'), 'y']])
   })
 })
 

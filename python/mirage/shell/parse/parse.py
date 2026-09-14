@@ -127,15 +127,18 @@ def _repair_heredoc_lines(root: tree_sitter.Node,
     unquoted delimiter at a blank, so ``cat <<EOF; echo x`` waits for a
     line reading ``EOF;``: a blank is put where bash ends the word
     (``EOF ;``) and the line reparsed, which alone settles ``<<EOF>out``
-    and ``<<EOF|wc``. The grammar then keeps everything after the
-    operator, up to the body, inside the redirect, so a terminator on
-    the operator line or a second heredoc's body in source order still
-    fails; relayout moves the bytes to where the grammar reads them as
-    bash did. Each retry is kept only when it parses cleanly; otherwise
-    the tree and source as typed are handed back.
+    and ``<<EOF|wc``. That token is wrong whether or not the tree has an
+    error: when a body line does read ``EOF;`` the tree is clean and the
+    body short, so the word is checked on every tree. The grammar then
+    keeps everything after the operator, up to the body, inside the
+    redirect, so a terminator on the operator line or a second heredoc's
+    body in source order still fails; relayout moves the bytes to where
+    the grammar reads them as bash did. Each retry is kept only when it
+    parses cleanly; otherwise the tree and source as typed are handed
+    back.
 
     Args:
-        root (tree_sitter.Node): tree parsed from ``data``, with an error.
+        root (tree_sitter.Node): tree parsed from ``data``.
         data (bytes): the source ``root`` was parsed from.
     """
     typed = (root, data)
@@ -144,8 +147,8 @@ def _repair_heredoc_lines(root: tree_sitter.Node,
         for offset in sorted(offsets, reverse=True):
             data = data[:offset] + b" " + data[offset:]
         root = _parse_bytes(data)
-        if not root.has_error:
-            return root, data
+    if not root.has_error:
+        return root, data
     relaid = relayout(root, data)
     if relaid is None:
         return typed
@@ -289,8 +292,9 @@ def parse(command: str) -> tree_sitter.Node:
     the line reparsed, so the returned tree can spell ``$id`` as
     ``${id}``.
 
-    A heredoc whose operator line the grammar cannot hold (a ``;`` after
-    the operator, two heredocs on one line) is re-laid so the same bytes
+    A heredoc whose delimiter token ran past its word (``<<EOF;``), or
+    whose operator line the grammar cannot hold (a ``;`` after the
+    operator, two heredocs on one line), is re-laid so the same bytes
     reach the same commands (see _repair_heredoc_lines), so the returned
     tree's text can put a statement typed on the operator line on the
     line after the body.
@@ -326,7 +330,7 @@ def parse(command: str) -> tree_sitter.Node:
             if not retried.has_error:
                 root = retried
                 data = retried_data
-    if root.has_error and b"<<" in data:
+    if b"<<" in data:
         root, data = _repair_heredoc_lines(root, data)
     if b"$" in data:
         root = _repair_orphaned_dollars(root, data)

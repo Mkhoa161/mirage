@@ -14,6 +14,7 @@
 
 import tree_sitter
 
+from mirage.shell.bytes import encode_text
 from mirage.shell.parse.heredoc.body import heredoc_bodies
 from mirage.shell.parse.heredoc.constants import (ALTERNATE_FILLER, BACKSLASH,
                                                   DASH_ARROW, ESCAPE_PARTNERS,
@@ -74,8 +75,47 @@ def first_content_line(data: bytes, body_start: int,
     return None
 
 
+def terminator_lookalikes(data: bytes, span: tuple[int, int],
+                          delimiter: bytes) -> list[int]:
+    """One byte per body line the scanner would close the body at.
+
+    tree-sitter-bash compares a line's first ``len(delimiter)`` bytes,
+    after any leading blanks, with the delimiter and stops there, so
+    ``EOFX``, ``EOF;`` and `` EOF`` all end a body that bash reads on
+    through: bash wants the whole line to be the delimiter, leading tabs
+    aside under ``<<-``. Writing a letter over one byte of that prefix
+    keeps the scanner in the body. A ``$``, backtick or backslash is
+    passed over, so an expansion opening the line keeps its shape in the
+    masked copy.
+
+    Args:
+        data (bytes): the shell source.
+        span (tuple[int, int]): the body's ``(start, end)``.
+        delimiter (bytes): the cleaned delimiter.
+
+    Returns:
+        list[int]: the offset to mask on each such line, in source order.
+    """
+    offsets: list[int] = []
+    position = span[0]
+    while position < span[1]:
+        newline = data.find(b"\n", position, span[1])
+        line_end = span[1] if newline < 0 else newline
+        start = position
+        while start < line_end and data[start] in LINE_BLANKS:
+            start += 1
+        if data.startswith(delimiter, start, line_end):
+            masked = next((offset
+                           for offset in range(start, start + len(delimiter))
+                           if data[offset] not in ESCAPE_PARTNERS), None)
+            if masked is not None:
+                offsets.append(masked)
+        position = line_end + 1
+    return offsets
+
+
 def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
-    """``data`` with every heredoc body's first line made lexable.
+    """``data`` with every heredoc body made lexable as bash reads it.
 
     tree-sitter-bash decides where a heredoc body starts from the byte
     that follows the operator line, and gets it wrong for two shapes bash
@@ -89,8 +129,11 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     does, without moving a single offset; the caller then reads the body
     back out of the untouched source. An empty line before the first
     kept one has no byte to mask without moving a row, so those are left
-    to body_prefix. Bodies are read innermost-first per line, the order
-    the parser's source keeps them in (see relayout).
+    to body_prefix. It also ends a body one line early, at any line that
+    merely opens with the delimiter (see terminator_lookalikes); one
+    byte of each such line is masked the same way. Bodies are read
+    innermost-first per line, the order the parser's source keeps them
+    in (see relayout).
 
     Args:
         data (bytes): the shell source.
@@ -107,6 +150,11 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     for operator, span in zip(operators, spans):
         if span is None:
             continue
+        for offset in terminator_lookalikes(data, span,
+                                            encode_text(operator.delimiter)):
+            out[offset] = (ALTERNATE_FILLER
+                           if data[offset] == FILLER else FILLER)
+            changed = True
         line = first_content_line(data, *span)
         if line is None:
             continue

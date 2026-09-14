@@ -464,6 +464,8 @@ def _heredoc_bodies_by_delimiter(command: str) -> dict[str, str]:
     ("cat <<EOF|wc -l\nhi\nEOF\n", "cat <<EOF |wc -l\nhi\nEOF\n"),
     ("cat <<EOF&&echo x\nhi\nEOF\n", "cat <<EOF &&echo x\nhi\nEOF\n"),
     ("cat <<'EOF'; echo x\nhi\nEOF\n", "cat <<'EOF'\nhi\nEOF\n echo x\n"),
+    ("cat <<EOF;\nhi\nEOF;\nEOF\n", "cat <<EOF \nhi\nEOF;\nEOF\n\n"),
+    ("(cat <<EOF)\nhi\nEOF)\nEOF\n", "(cat <<EOF \nhi\nEOF)\nEOF\n)\n"),
     ("cat <<A && cat <<B\na\nA\nb\nB\n", "cat <<A && cat <<B\nb\nB\na\nA\n"),
     ("cat <<A; cat <<B\na\nA\nb\nB\n", "cat <<A \na\nA\n cat <<B\nb\nB\n"),
     ("(cat <<EOF)\nhi\nEOF\n", "(cat <<EOF \nhi\nEOF\n)\n"),
@@ -502,6 +504,39 @@ def test_heredoc_metacharacter_inside_a_quoted_delimiter_is_the_delimiter():
     assert _heredoc_bodies_by_delimiter("cat <<'EOF;'\nhi\nEOF;\n") == {
         "'EOF;'": "hi\n",
     }
+
+
+def test_heredoc_delimiter_word_is_checked_on_a_clean_tree():
+    # `EOF;` is tree-sitter's token and a body line at once, so the typed
+    # source parses clean with a body one line short; bash's word is EOF.
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<EOF; echo x\nhi\nEOF;\nEOF\n") == {
+            "EOF": "hi\nEOF;\n",
+        }
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<EOF|tr a-z A-Z\nhi\nEOF|tr a-z A-Z\nEOF\n") == {
+            "EOF": "hi\nEOF|tr a-z A-Z\n",
+        }
+
+
+def test_heredoc_body_keeps_a_line_that_only_opens_with_the_delimiter():
+    # tree-sitter-bash's scanner compares a line's first bytes with the
+    # delimiter and stops there; bash wants the whole line.
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<EOF\nEOFX\nEOF;\n EOF\nEOF\n") == {
+            "EOF": "EOFX\nEOF;\n EOF\n",
+        }
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<-EOF\n\thi\n\tEOFX\n  EOF\n\tEOF\n") == {
+            "EOF": "\thi\n\tEOFX\n  EOF\n\t",
+        }
+
+
+def test_heredoc_lookalike_line_keeps_its_expansion():
+    body = _heredoc_body("cat <<EOF\nEOF$v\nEOF\n")
+    assert get_text(body) == "EOF$v\n"
+    assert [c.type for c in body.children
+            ] == [NT.SIMPLE_EXPANSION, NT.HEREDOC_CONTENT]
 
 
 def test_heredoc_unterminated_body_is_left_as_typed():

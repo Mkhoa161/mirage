@@ -1611,6 +1611,316 @@
         "stdout": "1\n1\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "heredoc_delimiter_word_is_read_on_a_clean_parse",
+      "seq": 501332,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<EOF;\nhi\nEOF;\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi\nEOF;\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_tail_runs_after_a_body_line_opening_with_the_delimiter",
+      "seq": 501333,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<EOF; echo x\nhi\nEOF;\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi\nEOF;\nx\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_subshell_body_keeps_a_line_opening_with_the_delimiter",
+      "seq": 501334,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "(cat <<EOF)\nhi\nEOF)\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi\nEOF)\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_pipe_body_keeps_a_line_opening_with_the_delimiter",
+      "seq": 501335,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<EOF|tr a-z A-Z\nhi\nEOF|tr a-z A-Z\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "HI\nEOF|TR A-Z A-Z\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_body_line_opening_with_the_delimiter_is_body",
+      "seq": 501336,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<EOF\nEOFX\nhi\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "EOFX\nhi\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_body_indented_delimiter_is_body",
+      "seq": 501337,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<EOF\nhi\n EOF\nbye\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi\n EOF\nbye\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_dash_body_space_indented_delimiter_is_body",
+      "seq": 501338,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<-EOF\n\thi\n  EOF\n\tbye\n\tEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi\n  EOF\nbye\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_dash_body_keeps_a_line_opening_with_the_delimiter",
+      "seq": 501339,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<-EOF\n\thi\n\tEOFX\n\tEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi\nEOFX\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_body_line_opening_with_the_delimiter_expands",
+      "seq": 501340,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "v=9; cat <<EOF\nEOF$v\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "EOF9\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "heredoc_quoted_delimiter_tail_keeps_lookalike_lines",
+      "seq": 501341,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "command": "cat <<'EOF'; echo x\n$v EOF;\nEOF;\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "$v EOF;\nEOF;\nx\n",
+        "stderr": ""
+      }
     }
   ]
 }

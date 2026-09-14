@@ -111,12 +111,15 @@ function parseProtected(parser: Parser, text: string): Node {
  * Two shapes, in the order they have to be fixed. The lexer ends an
  * unquoted delimiter at a blank, so `cat <<EOF; echo x` waits for a line
  * reading `EOF;`: a blank is put where bash ends the word (`EOF ;`) and
- * the line reparsed, which alone settles `<<EOF>out` and `<<EOF|wc`. The
- * grammar then keeps everything after the operator, up to the body,
- * inside the redirect, so a terminator on the operator line or a second
- * heredoc's body in source order still fails; relayout moves the text to
- * where the grammar reads it as bash did. Each retry is kept only when it
- * parses cleanly; otherwise the tree and source as typed are handed back.
+ * the line reparsed, which alone settles `<<EOF>out` and `<<EOF|wc`. That
+ * token is wrong whether or not the tree has an error: when a body line
+ * does read `EOF;` the tree is clean and the body short, so the word is
+ * checked on every tree. The grammar then keeps everything after the
+ * operator, up to the body, inside the redirect, so a terminator on the
+ * operator line or a second heredoc's body in source order still fails;
+ * relayout moves the text to where the grammar reads it as bash did. Each
+ * retry is kept only when it parses cleanly; otherwise the tree and
+ * source as typed are handed back.
  */
 function repairHeredocLines(parser: Parser, root: Node, text: string): [Node, string] {
   const typed: [Node, string] = [root, text]
@@ -126,8 +129,8 @@ function repairHeredocLines(parser: Parser, root: Node, text: string): [Node, st
       text = `${text.slice(0, offset)} ${text.slice(offset)}`
     }
     root = parseProtected(parser, text)
-    if (!root.hasError) return [root, text]
   }
+  if (!root.hasError) return [root, text]
   const relaid = relayout(root, text)
   if (relaid === null) return typed
   const retried = parseProtected(parser, relaid)
@@ -277,9 +280,10 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
      * the line reparsed, so the returned tree can spell `$id` as
      * `${id}`.
      *
-     * A heredoc whose operator line the grammar cannot hold (a `;` after
-     * the operator, two heredocs on one line) is re-laid so the same
-     * text reaches the same commands (see repairHeredocLines), so the
+     * A heredoc whose delimiter token ran past its word (`<<EOF;`), or
+     * whose operator line the grammar cannot hold (a `;` after the
+     * operator, two heredocs on one line), is re-laid so the same text
+     * reaches the same commands (see repairHeredocLines), so the
      * returned tree's text can put a statement typed on the operator
      * line on the line after the body.
      */
@@ -309,7 +313,7 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
           }
         }
       }
-      if (root.hasError && text.includes('<<')) {
+      if (text.includes('<<')) {
         const repaired = repairHeredocLines(parser, root, text)
         root = repaired[0]
         text = repaired[1]

@@ -297,6 +297,12 @@ describe('heredoc reparse: body lines the lexer would swallow', () => {
     expect(getText(heredocBody('cat <<"E\\$F"\n\\first\nE$F'))).toBe('\\first\n')
   })
 
+  it('keeps the expansion on a line that opens with the delimiter', () => {
+    const body = heredocBody('cat <<EOF\nEOF$v\nEOF\n')
+    expect(getText(body)).toBe('EOF$v\n')
+    expect(body.children.map((c) => c.type)).toEqual([NT.SIMPLE_EXPANSION, NT.HEREDOC_CONTENT])
+  })
+
   it('hands out the typed source as node text', () => {
     const command = "cat <<'EOF'\n\\first\nEOF"
     expect(getText(parser.parse(command) as TSNodeLike)).toBe(command)
@@ -333,6 +339,8 @@ describe('heredoc reparse: operator lines the grammar cannot hold', () => {
     ['cat <<EOF|wc -l\nhi\nEOF\n', 'cat <<EOF |wc -l\nhi\nEOF\n'],
     ['cat <<EOF&&echo x\nhi\nEOF\n', 'cat <<EOF &&echo x\nhi\nEOF\n'],
     ["cat <<'EOF'; echo x\nhi\nEOF\n", "cat <<'EOF'\nhi\nEOF\n echo x\n"],
+    ['cat <<EOF;\nhi\nEOF;\nEOF\n', 'cat <<EOF \nhi\nEOF;\nEOF\n\n'],
+    ['(cat <<EOF)\nhi\nEOF)\nEOF\n', '(cat <<EOF \nhi\nEOF)\nEOF\n)\n'],
     ['cat <<A && cat <<B\na\nA\nb\nB\n', 'cat <<A && cat <<B\nb\nB\na\nA\n'],
     ['cat <<A; cat <<B\na\nA\nb\nB\n', 'cat <<A \na\nA\n cat <<B\nb\nB\n'],
     ['(cat <<EOF)\nhi\nEOF\n', '(cat <<EOF \nhi\nEOF\n)\n'],
@@ -359,6 +367,26 @@ describe('heredoc reparse: operator lines the grammar cannot hold', () => {
 
   it('reads a metacharacter inside a quoted delimiter as the delimiter', () => {
     expect(bodiesByDelimiter("cat <<'EOF;'\nhi\nEOF;\n")).toEqual({ "'EOF;'": 'hi\n' })
+  })
+
+  it('checks the delimiter word on a clean tree', () => {
+    // `EOF;` is tree-sitter's token and a body line at once, so the typed
+    // source parses clean with a body one line short; bash's word is EOF.
+    expect(bodiesByDelimiter('cat <<EOF; echo x\nhi\nEOF;\nEOF\n')).toEqual({ EOF: 'hi\nEOF;\n' })
+    expect(bodiesByDelimiter('cat <<EOF|tr a-z A-Z\nhi\nEOF|tr a-z A-Z\nEOF\n')).toEqual({
+      EOF: 'hi\nEOF|tr a-z A-Z\n',
+    })
+  })
+
+  it('keeps a body line that only opens with the delimiter', () => {
+    // tree-sitter-bash's scanner compares a line's first characters with
+    // the delimiter and stops there; bash wants the whole line.
+    expect(bodiesByDelimiter('cat <<EOF\nEOFX\nEOF;\n EOF\nEOF\n')).toEqual({
+      EOF: 'EOFX\nEOF;\n EOF\n',
+    })
+    expect(bodiesByDelimiter('cat <<-EOF\n\thi\n\tEOFX\n  EOF\n\tEOF\n')).toEqual({
+      EOF: '\thi\n\tEOFX\n  EOF\n\t',
+    })
   })
 
   it('leaves an unterminated body as typed', () => {
