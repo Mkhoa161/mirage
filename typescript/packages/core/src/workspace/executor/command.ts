@@ -54,9 +54,9 @@ import type { ExecuteNodeFn, JobHandlerResult } from './jobs.ts'
 import { handleDisown, handleFg, handleJobs, handleKill, handlePs, handleWait } from './jobs.ts'
 import { versionRequest } from '../../commands/config.ts'
 
-import { handleCli } from './command/cli.ts'
+import { dropsMountCaches, handleCli } from './command/cli.ts'
 import { pathStat } from './builtins/links/index.ts'
-import { dropServiceCaches, namespaceViewOf } from './command/run.ts'
+import { dropMountCaches, namespaceViewOf } from './command/run.ts'
 import type { NamespaceView, SessionView, StatPath } from '../../ops/types.ts'
 import { applyFindActions } from './find_action_dispatch.ts'
 import { sessionView } from '../session/state.ts'
@@ -226,7 +226,7 @@ export async function handleCommand(
           ns: namespaceViewOf(registry, namespace ?? null, dispatch),
           sessionView: sessionView(session, registry.policies),
         },
-        () => dropServiceCaches(registry, cliInstall.spec.serves),
+        dropsMountCaches(cliInstall.spec) ? () => dropMountCaches(registry) : null,
       ),
       mergeSignals(signal, session.abortSignal),
     )

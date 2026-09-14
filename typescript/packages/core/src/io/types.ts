@@ -70,7 +70,6 @@ export interface IOResultInit {
   writes?: Record<string, ByteSource>
   cache?: string[]
   producer?: Producer | null
-  mutated?: boolean | null
   matchedRuns?: PathSpec[][] | null
   refusal?: Refusal | null
 }
@@ -94,12 +93,6 @@ export class IOResult {
   // input; the decision a chain hands down rides beside them as
   // `refusal`, written after the last hook has spoken.
   producer: Producer | null
-  // Whether this run changed service state, when only the handler can
-  // tell. A CLI leaf declares `write` statically because for almost every
-  // verb it is static, but `gh api` carries its method on the line, so a
-  // plain `gh api /user` is a read through a leaf that is declared
-  // writable. null leaves the spec's answer standing.
-  mutated: boolean | null
   // Why the line did not run, when a policy or an unanswered ask
   // refused it; null on every ordinary run. stderr stays in bash's
   // voice, this carries the reason. merge keeps the rightmost record,
@@ -116,7 +109,6 @@ export class IOResult {
     this.writes = init.writes ?? {}
     this.cache = init.cache ?? []
     this.producer = init.producer ?? null
-    this.mutated = init.mutated ?? null
     this.refusal = init.refusal ?? null
     this.streamSource = null
   }
