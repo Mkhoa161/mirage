@@ -1266,12 +1266,25 @@ jobs:
           LEG: ${{ matrix.leg }}
         run: |
           set -euo pipefail
-          # A suite name reaches three `run:` lines unquoted, so refuse
-          # anything that is not a bare name rather than word-splitting it
-          # there. `select` also turns a json with no .suite into a loud
-          # failure instead of the string "null".
-          all=$(jq -r 'select(.suite != null) | .suite' integ/runtime/*.json \
-                | sort -u)
+          # A json with no .suite must fail here, not be filtered out: its
+          # name would reach neither leg, so all three drivers would skip
+          # the file and CI would pass without running any of its cases.
+          # Validating instead of dropping does not catch it either --
+          # `jq -r` renders a missing key as the string "null", which is a
+          # legal suite name shape.
+          # The name check is separate: a suite name reaches three `run:`
+          # lines unquoted, so refuse anything that is not a bare name.
+          names=""
+          for f in integ/runtime/*.json; do
+            n=$(jq -r '.suite // empty' "$f")
+            if [ -z "$n" ]; then
+              echo "$f declares no .suite" >&2
+              exit 1
+            fi
+            names="$names$n
+          "
+          done
+          all=$(printf '%s' "$names" | tr -d ' ' | grep -v '^$' | sort -u)
           if printf '%s\n' "$all" | grep -qvx '[a-z0-9_]\+'; then
             echo "suite names must match [a-z0-9_]+: $all" >&2
             exit 1
