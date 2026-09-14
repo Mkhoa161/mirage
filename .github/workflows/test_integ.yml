@@ -1206,7 +1206,7 @@ jobs:
     needs: [changes, typescript-build]
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -1255,7 +1255,8 @@ jobs:
       # picked off measured per-suite wall clock to halve BOTH hosts (python
       # 50/50, typescript 48/52), so the balance holds whichever one binds on
       # a given runner. Re-read the `suite <host>/<name> <n>s` lines cli.sh
-      # prints before moving a suite across.
+      # prints before moving a suite across; that step is 89% of the job's
+      # test time, and it is the only one timed per suite.
       LEG_A_SUITES: "defaults guestops limits lines policy quickjs registry script_cli"
     steps:
       - uses: actions/checkout@v7
@@ -1265,8 +1266,17 @@ jobs:
           LEG: ${{ matrix.leg }}
         run: |
           set -euo pipefail
-          all=$(jq -r '.suite' integ/runtime/*.json | sort -u)
-          a=$(printf '%s\n' $LEG_A_SUITES | sort -u)
+          # A suite name reaches three `run:` lines unquoted, so refuse
+          # anything that is not a bare name rather than word-splitting it
+          # there. `select` also turns a json with no .suite into a loud
+          # failure instead of the string "null".
+          all=$(jq -r 'select(.suite != null) | .suite' integ/runtime/*.json \
+                | sort -u)
+          if printf '%s\n' "$all" | grep -qvx '[a-z0-9_]\+'; then
+            echo "suite names must match [a-z0-9_]+: $all" >&2
+            exit 1
+          fi
+          a=$(printf '%s' "$LEG_A_SUITES" | tr ' ' '\n' | grep -v '^$' | sort -u)
           unknown=$(comm -13 <(printf '%s\n' "$all") <(printf '%s\n' "$a"))
           if [ -n "$unknown" ]; then
             echo "LEG_A_SUITES names suites with no json: $unknown" >&2
@@ -1277,8 +1287,25 @@ jobs:
             echo "a leg is empty: every suite would run twice or not at all" >&2
             exit 1
           fi
-          if [ "$LEG" = a ]; then suites="$a"; else suites="$b"; fi
+          # Exhaustive on purpose: a third matrix leg falling into an
+          # `else` would silently re-run leg B's suites and still exit 0.
+          case "$LEG" in
+            a) suites="$a" ;;
+            b) suites="$b" ;;
+            *) echo "no suite list for leg '$LEG'" >&2; exit 1 ;;
+          esac
           echo "SUITES=$(printf '%s' "$suites" | tr '\n' ' ')" >> "$GITHUB_ENV"
+          # Provision only what this leg's suites ask for, keyed on the
+          # resolved list rather than the leg letter, so moving a suite
+          # across moves its service with it.
+          in_leg() { grep -qx "$1" <<<"$suites"; }
+          if in_leg wasi; then echo "NEEDS_WASI=1" >> "$GITHUB_ENV"; fi
+          if in_leg bridge; then echo "NEEDS_MINIO=1" >> "$GITHUB_ENV"; fi
+          if in_leg docker; then echo "NEEDS_DOCKER=1" >> "$GITHUB_ENV"; fi
+          if in_leg ssh; then echo "NEEDS_SSH=1" >> "$GITHUB_ENV"; fi
+          if in_leg docker || in_leg ssh; then
+            echo "NEEDS_SANDBOX_IMAGE=1" >> "$GITHUB_ENV"
+          fi
           printf 'leg %s runs:\n%s\n' "$LEG" "$suites"
 
       - name: Set up Python
@@ -1328,6 +1355,7 @@ jobs:
             -p qjs-wasi.wasm -O /tmp/quickjs/qjs-wasi.wasm
 
       - name: Cache the CPython WASI build
+        if: env.NEEDS_WASI == '1'
         id: wasi-cache
         uses: actions/cache@v6
         with:
@@ -1335,7 +1363,7 @@ jobs:
           key: cpython-wasi-${{ env.WASI_BUILD }}
 
       - name: Download the CPython WASI build
-        if: steps.wasi-cache.outputs.cache-hit != 'true'
+        if: env.NEEDS_WASI == '1' && steps.wasi-cache.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1345,6 +1373,7 @@ jobs:
           unzip -q /tmp/wasi-build.zip -d /tmp/cpython-wasi
 
       - name: Start MinIO
+        if: env.NEEDS_MINIO == '1'
         run: |
           for i in $(seq 1 5); do
             docker pull quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z && break
@@ -1359,6 +1388,7 @@ jobs:
           done
 
       - name: Pull the sandbox image
+        if: env.NEEDS_SANDBOX_IMAGE == '1'
         run: |
           for i in $(seq 1 5); do
             docker pull debian:trixie-slim && break
@@ -1366,9 +1396,11 @@ jobs:
           done
 
       - name: Start the docker sandbox container (user-provisioned)
+        if: env.NEEDS_DOCKER == '1'
         run: docker run -d --name "$MIRAGE_INTEG_DOCKER_CONTAINER" debian:trixie-slim sleep infinity
 
       - name: Start the ssh sandbox host (user-provisioned)
+        if: env.NEEDS_SSH == '1'
         run: |
           ssh-keygen -t ed25519 -N '' -f "$MIRAGE_INTEG_SSH_KEY"
           docker run -d --name mirage-integ-ssh-box -p 2222:22 debian:trixie-slim sleep infinity

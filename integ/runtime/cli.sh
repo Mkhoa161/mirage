@@ -277,10 +277,8 @@ run_host() {
       fi
       continue
     fi
-    # Every result line is written to a per-host log and printed only after
-    # both hosts finish, so the step is opaque while it runs and a suite's
-    # cost cannot be read back off the CI log. Record it per suite instead:
-    # this is what says whether the CI leg split is still balanced.
+    # The per-host logs print only after both hosts finish, so a suite's
+    # cost is not otherwise recoverable from the run.
     local suite_t0=$SECONDS
     local case_json
     while IFS= read -r case_json; do
