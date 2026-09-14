@@ -359,6 +359,15 @@ function parseFileRedirect(child: TSNodeLike, claimed: number | null = null): Re
     }
   }
 
+  if (child.heredoc !== undefined) {
+    return new Redirect({
+      fd: fd ?? 0,
+      target: child.heredoc.body,
+      targetNode,
+      kind: RedirectKind.HEREDOC,
+      expandVars: !child.heredoc.quoted,
+    })
+  }
   // `>&word` with a word rather than a number is bash's other spelling
   // of `&>word`, bare or on descriptor 1 (`1>&word` sends both streams
   // too, pinned on bash 5.2). On any other explicit descriptor bash

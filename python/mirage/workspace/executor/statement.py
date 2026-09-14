@@ -14,13 +14,12 @@
 
 from dataclasses import dataclass
 
-import tree_sitter
-
 from mirage.commands.spec.usage import read_fail_exit
 from mirage.io import IOResult
 from mirage.io.types import ByteSource, materialize
 from mirage.shell.barrier import BarrierPolicy, apply_barrier
 from mirage.shell.node_kind import pipeline_transparent
+from mirage.shell.types import TSNodeLike
 from mirage.utils.errors import format_fs_error
 from mirage.workspace.abort import StatusWriter, line_status_writer
 from mirage.workspace.session import Session
@@ -149,7 +148,7 @@ async def finish_statement(
     stdout: ByteSource | None,
     io: IOResult,
     session: Session,
-    node: tree_sitter.Node | None = None,
+    node: TSNodeLike | None = None,
     exec_node: ExecutionNode | None = None,
 ) -> ByteSource | None:
     """Finalize a completed statement and seed $? for the next one.
@@ -172,7 +171,7 @@ async def finish_statement(
         io (IOResult): the statement's result; exit_code may still be
             provisional until the barrier runs.
         session (Session): shell session receiving the status.
-        node (tree_sitter.Node | None): the statement that finished,
+        node (TSNodeLike | None): the statement that finished,
             which decides whether it stamps ``PIPESTATUS`` itself; None
             (a caller without the node) stamps.
         exec_node (ExecutionNode | None): the statement's record, whose

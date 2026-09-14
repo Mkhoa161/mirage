@@ -14,26 +14,25 @@
 
 from dataclasses import replace
 
-import tree_sitter
-
 from mirage.shell.parse.heredoc.body import heredoc_bodies
 from mirage.shell.parse.heredoc.constants import (HEREDOC_BODY, HEREDOC_START,
                                                   SKIPPED_BLANKS)
 from mirage.shell.parse.heredoc.shield import heredoc_operators
+from mirage.shell.types import TSNodeLike
 
 
-def tree_root(node: tree_sitter.Node) -> tree_sitter.Node:
+def tree_root(node: TSNodeLike) -> TSNodeLike:
     """The root of the tree ``node`` belongs to.
 
     Args:
-        node (tree_sitter.Node): any node of the tree.
+        node (TSNodeLike): any node of the tree.
     """
     while node.parent is not None:
         node = node.parent
     return node
 
 
-def body_prefix(redirect_node: tree_sitter.Node) -> str:
+def body_prefix(redirect_node: TSNodeLike) -> str:
     """The opening bytes of a body that tree-sitter left out of its node.
 
     The scanner starts heredoc_body at the first byte it keeps, dropping
@@ -51,7 +50,7 @@ def body_prefix(redirect_node: tree_sitter.Node) -> str:
     are taken from there.
 
     Args:
-        redirect_node (tree_sitter.Node): a heredoc_redirect node.
+        redirect_node (TSNodeLike): a heredoc_redirect node.
 
     Returns:
         str: the dropped prefix, empty when the node starts where bash

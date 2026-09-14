@@ -30,9 +30,8 @@ import type { HeredocOperator } from './types.ts'
  * Every heredoc operator under `root`, in source order.
  *
  * ERROR subtrees are walked too: a body the lexer mangled badly enough
- * leaves no heredoc_redirect behind, but its start token survives. A
- * token whose delimiter is empty once unquoted names no line and is left
- * out.
+ * leaves no heredoc_redirect behind, but its start token survives.
+ * These are hints; the source reader validates delimiter word bounds.
  */
 export function heredocOperators(root: TSNodeLike): HeredocOperator[] {
   const found: HeredocOperator[] = []
@@ -44,7 +43,6 @@ export function heredocOperators(root: TSNodeLike): HeredocOperator[] {
     if (node.type !== HEREDOC_START) continue
     if (node.startIndex === undefined || node.endIndex === undefined) continue
     const delimiter = cleanDelimiter(node.text)
-    if (delimiter === '') continue
     found.push({
       wordStart: node.startIndex,
       wordEnd: node.endIndex,

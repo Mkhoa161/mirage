@@ -14,11 +14,10 @@
 
 from collections.abc import Iterator
 
-import tree_sitter
-
 from mirage.io import IOResult
 from mirage.shell.parse.constants import (BASH_KEYWORDS, CASE_TERMINATORS,
                                           SEPARATOR_TOKENS, STRUCTURAL_TOKENS)
+from mirage.shell.types import TSNodeLike
 
 
 def find_unterminated_backtick(command: str) -> str | None:
@@ -75,7 +74,7 @@ def find_unterminated_backtick(command: str) -> str | None:
     return command[opened:] if opened is not None else None
 
 
-def _is_structural_error(node: tree_sitter.Node) -> bool:
+def _is_structural_error(node: TSNodeLike) -> bool:
     """True if an ERROR node represents a real syntactic problem.
 
     A real syntax error contains a bash keyword, a bracket / quote
@@ -97,7 +96,7 @@ def _is_structural_error(node: tree_sitter.Node) -> bool:
     return False
 
 
-def _stray_case_terminator(node: tree_sitter.Node) -> str | None:
+def _stray_case_terminator(node: TSNodeLike) -> str | None:
     """The text of a ``;;`` / ``;&`` / ``;;&`` token outside a case item.
 
     The grammar takes them as ordinary statement separators, so
@@ -105,7 +104,7 @@ def _stray_case_terminator(node: tree_sitter.Node) -> str | None:
     line at the token.
 
     Args:
-        node (tree_sitter.Node): root node from parse().
+        node (TSNodeLike): root node from parse().
     """
     stack = [node]
     while stack:
@@ -118,14 +117,14 @@ def _stray_case_terminator(node: tree_sitter.Node) -> str | None:
     return None
 
 
-def _walk_named(node: tree_sitter.Node) -> Iterator[tree_sitter.Node]:
+def _walk_named(node: TSNodeLike) -> Iterator[TSNodeLike]:
     yield node
     for child in node.named_children:
         yield from _walk_named(child)
 
 
-def _is_recovered_quoted_heredoc_end(previous: tree_sitter.Node | None,
-                                     error: tree_sitter.Node) -> bool:
+def _is_recovered_quoted_heredoc_end(previous: TSNodeLike | None,
+                                     error: TSNodeLike) -> bool:
     if previous is None:
         return False
     error_text = (error.text or b"").decode().strip()
@@ -147,11 +146,11 @@ def _is_recovered_quoted_heredoc_end(previous: tree_sitter.Node | None,
     return False
 
 
-def find_syntax_error(node: tree_sitter.Node) -> str | None:
+def find_syntax_error(node: TSNodeLike) -> str | None:
     """Locate a top-level structural syntax error in a parsed AST.
 
     Args:
-        node (tree_sitter.Node): root node from parse().
+        node (TSNodeLike): root node from parse().
 
     Returns:
         str | None: text of the offending region, or None if the AST is clean.

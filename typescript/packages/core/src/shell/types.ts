@@ -24,6 +24,8 @@
  * assignments included, so `i=2, a[i]` reads the new `i`; `read` answers
  * the element's stored text, null when unset.
  */
+import type { Heredoc } from './parse/heredoc/types.ts'
+
 export interface ElementOps {
   resolve(name: string, subscript: string, env: Readonly<Record<string, string>>): string
   read(name: string, key: string): string | null
@@ -401,6 +403,10 @@ export type BuiltinGroup = (typeof BuiltinGroup)[keyof typeof BuiltinGroup]
  * Python side reading nodes through shell.types.
  */
 export interface TSNodeLike {
+  readonly heredoc?: Heredoc | undefined
+  readonly warnings?: string
+  readonly sourceText?: string
+  readonly hasError?: boolean
   type: string
   text: string
   children: TSNodeLike[]
@@ -439,4 +445,13 @@ export interface BacktickSegment {
   readonly command: boolean
   readonly start: number
   readonly end: number
+}
+
+export interface ShellNode extends TSNodeLike {
+  readonly hasError: boolean
+  readonly childCount: number
+  readonly children: ShellNode[]
+  readonly namedChildren: ShellNode[]
+  child(index: number): ShellNode | null
+  childForFieldName(name: string): ShellNode | null
 }

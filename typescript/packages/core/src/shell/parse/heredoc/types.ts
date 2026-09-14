@@ -24,6 +24,35 @@ export interface HeredocOperator {
   allowsIndent: boolean
 }
 
+export interface Heredoc {
+  operatorStart: number
+  wordEnd: number
+  delimiter: string
+  quoted: boolean
+  bodyStart: number
+  end: number
+  body: string
+  offsets: number[]
+  terminated: boolean
+  line: number
+  eofLine: number
+}
+
+export interface HeredocSource {
+  original: string
+  source: string
+  offsets: number[]
+  documents: [number, Heredoc][]
+}
+
+export interface BodyRead {
+  body: string
+  offsets: number[]
+  end: number
+  terminated: boolean
+  eofLine: number
+}
+
 /** One statement terminator on a heredoc's operator line. */
 export interface Terminator {
   /** Offset of the token. */

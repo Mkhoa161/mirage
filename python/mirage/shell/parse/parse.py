@@ -17,8 +17,12 @@ import tree_sitter_bash
 
 from mirage.shell.parse.constants import (ARITH_OPEN_TOKEN, DIGITS, NAME_CONT,
                                           QUOTES)
-from mirage.shell.parse.heredoc import (protected_source, relayout, same_shape,
-                                        word_breaks)
+from mirage.shell.parse.heredoc import (heredoc_operators, protected_source,
+                                        same_shape)
+from mirage.shell.parse.heredoc.lower import lower_heredocs, rebase_source
+from mirage.shell.parse.heredoc.node import HeredocNode
+from mirage.shell.parse.heredoc.reader import discover_heredocs
+from mirage.shell.types import TSNodeLike
 
 BASH_LANGUAGE = tree_sitter.Language(tree_sitter_bash.language())
 TS_PARSER = tree_sitter.Parser(BASH_LANGUAGE)
@@ -117,45 +121,6 @@ def _parse_bytes(data: bytes) -> tree_sitter.Node:
     if not same_shape(shielded.root_node, reused.root_node):
         return tree.root_node
     return reused.root_node
-
-
-def _repair_heredoc_lines(root: tree_sitter.Node,
-                          data: bytes) -> tuple[tree_sitter.Node, bytes]:
-    """Reparse heredoc lines tree-sitter-bash cannot read as bash does.
-
-    Two shapes, in the order they have to be fixed. The lexer ends an
-    unquoted delimiter at a blank, so ``cat <<EOF; echo x`` waits for a
-    line reading ``EOF;``: a blank is put where bash ends the word
-    (``EOF ;``) and the line reparsed, which alone settles ``<<EOF>out``
-    and ``<<EOF|wc``. That token is wrong whether or not the tree has an
-    error: when a body line does read ``EOF;`` the tree is clean and the
-    body short, so the word is checked on every tree. The grammar then
-    keeps everything after the operator, up to the body, inside the
-    redirect, so a terminator on the operator line or a second heredoc's
-    body in source order still fails; relayout moves the bytes to where
-    the grammar reads them as bash did. Each retry is kept only when it
-    parses cleanly; otherwise the tree and source as typed are handed
-    back.
-
-    Args:
-        root (tree_sitter.Node): tree parsed from ``data``.
-        data (bytes): the source ``root`` was parsed from.
-    """
-    typed = (root, data)
-    offsets = word_breaks(root)
-    if offsets:
-        for offset in sorted(offsets, reverse=True):
-            data = data[:offset] + b" " + data[offset:]
-        root = _parse_bytes(data)
-    if not root.has_error:
-        return root, data
-    relaid = relayout(root, data)
-    if relaid is None:
-        return typed
-    retried = _parse_bytes(relaid)
-    if retried.has_error:
-        return typed
-    return retried, relaid
 
 
 def _failed_arith_openers(root: tree_sitter.Node) -> list[int]:
@@ -274,8 +239,12 @@ def _repair_orphaned_dollars(root: tree_sitter.Node,
     return root
 
 
-def parse(command: str) -> tree_sitter.Node:
-    """Parse a shell command string into a tree-sitter AST.
+def parse(command: str) -> TSNodeLike:
+    """Parse shell structure after the source reader gathers heredocs.
+
+    Bodies become inline expansion words with reader-owned input metadata.
+    The resulting nodes retain their original source for nested evaluation;
+    neither delimiter recognition nor expansion depends on heredoc tokens.
 
     A leading ``((`` is lexed as the arithmetic opener and the lexer
     cannot back out, so a subshell that immediately opens another
@@ -292,21 +261,22 @@ def parse(command: str) -> tree_sitter.Node:
     the line reparsed, so the returned tree can spell ``$id`` as
     ``${id}``.
 
-    A heredoc whose delimiter token ran past its word (``<<EOF;``), or
-    whose operator line the grammar cannot hold (a ``;`` after the
-    operator, two heredocs on one line), is re-laid so the same bytes
-    reach the same commands (see _repair_heredoc_lines), so the returned
-    tree's text can put a statement typed on the operator line on the
-    line after the body.
-
     Args:
         command (str): shell source to parse.
 
     Returns:
-        tree_sitter.Node: root node, or the original errored root when no
+        TSNodeLike: root node, or the original errored root when no
         reparse helps.
     """
-    data = strip_line_continuation(command).encode()
+    original = command.encode()
+    source = None
+    if b"<<" in original:
+        hints = heredoc_operators(TS_PARSER.parse(original).root_node)
+        documents = discover_heredocs(original, hints)
+        if documents:
+            source = lower_heredocs(original, documents)
+    data = source.source if source is not None else strip_line_continuation(
+        command).encode()
     root = _parse_bytes(data)
     if root.has_error:
         # Sitting inside an ERROR is not evidence that an opener is
@@ -330,8 +300,9 @@ def parse(command: str) -> tree_sitter.Node:
             if not retried.has_error:
                 root = retried
                 data = retried_data
-    if b"<<" in data:
-        root, data = _repair_heredoc_lines(root, data)
     if b"$" in data:
         root = _repair_orphaned_dollars(root, data)
-    return root
+    if source is None:
+        return root
+    repaired = source.source[:root.start_byte] + (root.text or b"")
+    return HeredocNode(root, rebase_source(source, repaired))

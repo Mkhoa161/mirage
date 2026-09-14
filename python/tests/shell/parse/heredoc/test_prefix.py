@@ -16,9 +16,8 @@ from typing import cast
 
 import tree_sitter
 
-from mirage.shell.parse import parse
 from mirage.shell.parse.heredoc import body_prefix, tree_root
-from mirage.shell.parse.parse import TS_PARSER
+from mirage.shell.parse.parse import TS_PARSER, _parse_bytes
 
 HEREDOC_REDIRECT = "heredoc_redirect"
 
@@ -37,7 +36,7 @@ def _redirects(root: tree_sitter.Node) -> list[tree_sitter.Node]:
 
 
 def _prefix(command: str) -> str:
-    return body_prefix(_redirects(parse(command))[0])
+    return body_prefix(_redirects(_parse_bytes(command.encode()))[0])
 
 
 class _Node:
@@ -137,7 +136,8 @@ def test_body_prefix_of_an_unterminated_body():
 
 
 def test_body_prefix_of_a_heredoc_inside_a_command_substitution():
-    outer, inner = _redirects(parse("cat <<A $(cat <<B\n\nb\nB\n)\na\nA\n"))
+    outer, inner = _redirects(
+        _parse_bytes(b"cat <<A $(cat <<B\n\nb\nB\n)\na\nA\n"))
     assert body_prefix(outer) == ""
     assert body_prefix(inner) == "\n"
 

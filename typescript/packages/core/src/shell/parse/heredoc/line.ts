@@ -28,8 +28,9 @@ const NO_NESTED_QUOTES: ReadonlySet<string> = new Set()
 /**
  * The character closing the construct that opens at `index`.
  *
- * `${` runs to its balancing brace, and `$(`, `<(` and `>(` to their
- * balancing paren. A lone `(` opens one only inside another paren
+ * `${` runs to its balancing brace, `$[` to its bracket, and `$(`,
+ * `<(` and `>(` to their balancing paren. A lone `(` opens one only
+ * inside another paren
  * construct, where it is a subshell or a parenthesized case pattern;
  * anywhere else it is ordinary text, as `cat <<EOF (` is. Returns null
  * when nothing opens here.
@@ -38,6 +39,7 @@ export function constructCloser(text: string, index: number, bare: boolean): str
   const char = text[index] ?? ''
   const following = text[index + 1]
   if (char === '$' && following === '{') return '}'
+  if (char === '$' && following === '[') return ']'
   if (SUBSTITUTION_OPENERS.has(char) && following === '(') return ')'
   if (bare && char === '(') return ')'
   return null
@@ -112,16 +114,17 @@ export function quoteEnd(text: string, start: number): number | null {
  * (`${x:- #y}` expands to ` #y`). A `)` that ends a case pattern closes
  * no construct, so an open `case` is counted and the paren passed over
  * while one is: `$(case x in<newline>x)` runs to its `esac`, and a
- * parenthesized pattern balances itself. Returns null when the construct
+ * parenthesized pattern balances itself. Brackets inside `$[...]` balance
+ * too, including array subscripts. Returns null when the construct
  * never closes.
  */
 export function constructEnd(text: string, start: number, closer: string): number | null {
   const paren = closer === ')'
-  let index = start + (text[start] === '(' ? 1 : 2)
+  let index = start + (text[start] === '(' || text[start] === '[' ? 1 : 2)
   let cases = 0
   while (index < text.length) {
     const char = text[index] ?? ''
-    const nested = constructCloser(text, index, paren)
+    const nested = closer === ']' && char === '[' ? ']' : constructCloser(text, index, paren)
     if (char === '\\') {
       index += 2
     } else if (QUOTE_OPENERS.has(char)) {

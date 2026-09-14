@@ -364,73 +364,46 @@ def test_literal_dollar_words_stay_untouched(command, words):
     assert [get_text(p) for p in get_parts(cmd)] == words
 
 
-# ── heredoc bodies ───────────────────────────────────────────────────────
+@pytest.mark.parametrize("command, body", [
+    ("cat <<'EOF'\n\\first\nsecond\nEOF", "\\first\nsecond\n"),
+    ("cat <<'EOF'\n\\first\n\\second\nthird\nEOF",
+     "\\first\n\\second\nthird\n"),
+    ("cat <<'EOF'\n  first\nsecond\nEOF", "  first\nsecond\n"),
+    ("cat <<'EOF'\n\\begin{table}\n  \\begin{center}\nEOF",
+     "\\begin{table}\n  \\begin{center}\n"),
+    ("cat <<'EOF'\n\\item Don't\nsecond\nEOF", "\\item Don't\nsecond\n"),
+    ('cat <<"E\\$F"\n\\first\nE$F', "\\first\n"),
+])
+def test_heredoc_reader_preserves_body_and_source(command, body):
+    root = parse(command)
+    assert not root.has_error
+    assert root.source_text.decode() == command
+    redirect = root.named_children[0].named_children[-1]
+    assert redirect.heredoc.body.decode() == body
 
 
-def _heredoc_redirect(command: str) -> tree_sitter.Node:
-    statement = parse(command).children[0]
-    return next(c for c in statement.children if c.type == NT.HEREDOC_REDIRECT)
+def test_heredoc_reader_exposes_expansions_as_ordinary_string_children():
+    root = parse("cat <<EOF\n\\a $v `echo body`\nEOF")
+    word = root.named_children[0].named_children[-1].named_children[-1]
+    assert NT.SIMPLE_EXPANSION in [child.type for child in word.named_children]
+    assert NT.COMMAND_SUBSTITUTION in [
+        child.type for child in word.named_children
+    ]
 
 
-def _heredoc_body(command: str) -> tree_sitter.Node:
-    redirect = _heredoc_redirect(command)
-    return next(c for c in redirect.children if c.type == NT.HEREDOC_BODY)
+def test_heredoc_reader_keeps_escaped_dollars_literal():
+    root = parse("cat <<EOF\n\\$v\nEOF")
+    word = root.named_children[0].named_children[-1].named_children[-1]
+    assert NT.SIMPLE_EXPANSION not in [
+        child.type for child in word.named_children
+    ]
 
 
-def test_heredoc_body_keeps_a_leading_backslash_line():
-    body = _heredoc_body("cat <<'EOF'\n\\first\nsecond\nEOF")
-    assert get_text(body) == "\\first\nsecond\n"
-
-
-def test_heredoc_body_keeps_every_leading_backslash_line():
-    body = _heredoc_body("cat <<'EOF'\n\\first\n\\second\nthird\nEOF")
-    assert get_text(body) == "\\first\n\\second\nthird\n"
-
-
-def test_heredoc_body_keeps_leading_indentation():
-    body = _heredoc_body("cat <<'EOF'\n  first\nsecond\nEOF")
-    assert get_text(body) == "  first\nsecond\n"
-
-
-def test_heredoc_body_keeps_indentation_after_a_backslash_line():
-    body = _heredoc_body("cat <<'EOF'\n\\begin{table}\n  \\begin{center}\nEOF")
-    assert get_text(body) == "\\begin{table}\n  \\begin{center}\n"
-
-
-def test_heredoc_pipeline_is_not_fed_the_first_body_line():
-    redirect = _heredoc_redirect(
-        "cat <<'EOF' | tr a-z A-Z\n\\first\nsecond\nEOF")
-    pipeline = next(c for c in redirect.children if c.type == NT.PIPELINE)
-    assert get_text(pipeline) == "| tr a-z A-Z"
-
-
-def test_heredoc_apostrophe_on_a_backslash_line_is_not_a_syntax_error():
-    command = "cat <<'EOF'\n\\item Don't\nsecond\nEOF"
-    assert not parse(command).has_error
-    assert get_text(_heredoc_body(command)) == "\\item Don't\nsecond\n"
-
-
-def test_heredoc_unquoted_backslash_line_keeps_its_expansion():
-    body = _heredoc_body("cat <<EOF\n\\a $v\nsecond\nEOF")
-    assert [c.type for c in body.named_children
-            ] == [NT.SIMPLE_EXPANSION, NT.HEREDOC_CONTENT]
-    assert get_text(body) == "\\a $v\nsecond\n"
-
-
-def test_heredoc_escaped_dollar_on_a_backslash_line_stays_literal():
-    body = _heredoc_body("cat <<EOF\n\\$v\nsecond\nEOF")
-    assert NT.SIMPLE_EXPANSION not in [c.type for c in body.named_children]
-    assert get_text(body) == "\\$v\nsecond\n"
-
-
-def test_heredoc_tree_text_is_the_typed_source():
-    command = "cat <<'EOF'\n\\first\nEOF"
-    assert get_text(parse(command)) == command
-
-
-def test_heredoc_body_keeps_a_backslash_line_under_an_escaped_delimiter():
-    body = _heredoc_body('cat <<"E\\$F"\n\\first\nE$F')
-    assert get_text(body) == "\\first\n"
+def test_heredoc_reader_keeps_pipeline_outside_body():
+    root = parse("cat <<'EOF' | tr a-z A-Z\n\\first\nEOF")
+    pipeline = root.named_children[0]
+    assert pipeline.type == NT.PIPELINE
+    assert get_text(pipeline.named_children[-1]) == "tr a-z A-Z"
 
 
 # ── heredoc operator lines the grammar cannot hold ───────────────────────
@@ -444,39 +417,27 @@ def _heredoc_bodies_by_delimiter(command: str) -> dict[str, str]:
     while stack:
         node = stack.pop()
         stack.extend(node.children)
-        if node.type != NT.HEREDOC_REDIRECT:
-            continue
-        start = next(c for c in node.children if c.type == NT.HEREDOC_START)
-        body = next(c for c in node.children if c.type == NT.HEREDOC_BODY)
-        found[get_text(start)] = get_text(body)
+        document = getattr(node, "heredoc", None)
+        if document is not None:
+            found[document.delimiter] = document.body.decode()
     return found
 
 
-# tree-sitter-bash reads an unquoted delimiter up to a blank and keeps
-# everything after the operator, up to the body, inside the redirect, so
-# a `;` on the operator line and two heredocs on one line in bash's body
-# order both failed to parse. parse() puts a blank where bash ends the
-# word and re-lays the line so the grammar reads it as bash did.
-@pytest.mark.parametrize("command,text", [
-    ("cat <<EOF; echo x\nhi\nEOF\n", "cat <<EOF \nhi\nEOF\n echo x\n"),
-    ("cat <<EOF;echo x\nhi\nEOF\n", "cat <<EOF \nhi\nEOF\necho x\n"),
-    ("cat <<EOF>out\nhi\nEOF\n", "cat <<EOF >out\nhi\nEOF\n"),
-    ("cat <<EOF|wc -l\nhi\nEOF\n", "cat <<EOF |wc -l\nhi\nEOF\n"),
-    ("cat <<EOF&&echo x\nhi\nEOF\n", "cat <<EOF &&echo x\nhi\nEOF\n"),
-    ("cat <<'EOF'; echo x\nhi\nEOF\n", "cat <<'EOF'\nhi\nEOF\n echo x\n"),
-    ("cat <<EOF;\nhi\nEOF;\nEOF\n", "cat <<EOF \nhi\nEOF;\nEOF\n\n"),
-    ("(cat <<EOF)\nhi\nEOF)\nEOF\n", "(cat <<EOF \nhi\nEOF)\nEOF\n)\n"),
-    ("cat <<A && cat <<B\na\nA\nb\nB\n", "cat <<A && cat <<B\nb\nB\na\nA\n"),
-    ("cat <<A; cat <<B\na\nA\nb\nB\n", "cat <<A \na\nA\n cat <<B\nb\nB\n"),
-    ("(cat <<EOF)\nhi\nEOF\n", "(cat <<EOF \nhi\nEOF\n)\n"),
-    ("case x in x) cat <<EOF;; esac\nhi\nEOF\n",
-     "case x in x) cat <<EOF \nhi\nEOF\n;; esac\n"),
-    ("{ cat <<EOF; }\nhi\nEOF\n", "{ cat <<EOF \nhi\nEOF\n }\n"),
+# Keep the operator-line regressions from #1071. The source reader now
+# preserves their typed source while lowering bodies before grammar parsing.
+@pytest.mark.parametrize("command", [
+    'cat <<EOF; echo x\nhi\nEOF\n', 'cat <<EOF;echo x\nhi\nEOF\n',
+    'cat <<EOF>out\nhi\nEOF\n', 'cat <<EOF|wc -l\nhi\nEOF\n',
+    'cat <<EOF&&echo x\nhi\nEOF\n', "cat <<'EOF'; echo x\nhi\nEOF\n",
+    'cat <<EOF;\nhi\nEOF;\nEOF\n', '(cat <<EOF)\nhi\nEOF)\nEOF\n',
+    'cat <<A && cat <<B\na\nA\nb\nB\n', 'cat <<A; cat <<B\na\nA\nb\nB\n',
+    '(cat <<EOF)\nhi\nEOF\n', 'case x in x) cat <<EOF;; esac\nhi\nEOF\n',
+    '{ cat <<EOF; }\nhi\nEOF\n'
 ])
-def test_heredoc_operator_line_is_relaid_for_the_grammar(command, text):
+def test_heredoc_operator_line_preserves_original_source(command):
     root = parse(command)
     assert not root.has_error
-    assert get_text(root) == text
+    assert root.source_text.decode() == command
 
 
 def test_two_heredocs_on_one_line_keep_their_own_bodies():
@@ -502,7 +463,7 @@ def test_heredoc_semicolon_tail_keeps_the_bodys_indentation():
 
 def test_heredoc_metacharacter_inside_a_quoted_delimiter_is_the_delimiter():
     assert _heredoc_bodies_by_delimiter("cat <<'EOF;'\nhi\nEOF;\n") == {
-        "'EOF;'": "hi\n",
+        "EOF;": "hi\n",
     }
 
 
@@ -528,18 +489,20 @@ def test_heredoc_body_keeps_a_line_that_only_opens_with_the_delimiter():
         }
     assert _heredoc_bodies_by_delimiter(
         "cat <<-EOF\n\thi\n\tEOFX\n  EOF\n\tEOF\n") == {
-            "EOF": "\thi\n\tEOFX\n  EOF\n\t",
+            "EOF": "hi\nEOFX\n  EOF\n",
         }
 
 
 def test_heredoc_lookalike_line_keeps_its_expansion():
-    body = _heredoc_body("cat <<EOF\nEOF$v\nEOF\n")
-    assert get_text(body) == "EOF$v\n"
-    assert [c.type for c in body.children
-            ] == [NT.SIMPLE_EXPANSION, NT.HEREDOC_CONTENT]
+    root = parse("cat <<EOF\nEOF$v\nEOF\n")
+    redirect = root.named_children[0].named_children[-1]
+    assert redirect.heredoc.body == b"EOF$v\n"
+    word = redirect.named_children[-1]
+    assert NT.SIMPLE_EXPANSION in [c.type for c in word.named_children]
 
 
 def test_heredoc_unterminated_body_is_left_as_typed():
     root = parse("cat <<EOF; echo x\nhi\n")
-    assert root.has_error
-    assert get_text(root) == "cat <<EOF; echo x\nhi\n"
+    assert not root.has_error
+    assert root.source_text.decode() == "cat <<EOF; echo x\nhi\n"
+    assert root.warnings
