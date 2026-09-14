@@ -385,7 +385,13 @@ export async function handleCli(
       if (leaf.write && dropCaches !== null) {
         await dropCaches()
         const settle = (): Promise<void> => dropCaches()
-        void body.then(settle, settle)
+        void body.then(settle, settle).catch((dropErr: unknown) => {
+          // The command already returned, so a drop that fails here (a
+          // workspace torn down under it) has no stream to land on; it
+          // is reported rather than left as an unhandled rejection.
+          const reason = dropErr instanceof Error ? dropErr.message : String(dropErr)
+          console.warn(`${prog}: cache drop after timeout failed: ${reason}`)
+        })
       }
       throw err
     }
