@@ -419,7 +419,11 @@ async def handle_cli(
                                              stderr=usage_stderr)
     except CommandTimeoutError:
         # A limit timeout is answered by the workspace-level handler
-        # (exit 124), not here.
+        # (exit 124), not here. The cancelled leaf may already have sent
+        # its request, and a service that accepted it will not roll it
+        # back, so the mounts stop trusting their caches now.
+        if leaf.write and drop_caches is not None:
+            await drop_caches()
         raise
     except Exception as exc:
         # Any other thrown leaf error (an API RuntimeError, a ValueError)

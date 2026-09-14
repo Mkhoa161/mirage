@@ -178,6 +178,42 @@ describe('handleCli', () => {
     ).rejects.toThrow(/prog run: timed out/)
   })
 
+  it('drops the caches when a write times out, and again when it settles', async () => {
+    // Racing a promise does not stop its work: the leaf keeps running past
+    // exit 124, and its request may land either side of the deadline.
+    let dropped = 0
+    const dropCaches = (): Promise<void> => {
+      dropped += 1
+      return Promise.resolve()
+    }
+    let settled = false
+    const slow: CLIVerbFn = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      settled = true
+      return [null, new IOResult()]
+    }
+    const spec = new CLISpec({
+      name: 'prog',
+      configModel: (input) => input,
+      subcommands: [
+        new CLISpec({
+          name: 'run',
+          fn: slow,
+          write: true,
+          limit: new Limit({ timeoutSeconds: 0.05 }),
+        }),
+      ],
+    })
+    const install: CLIInstall = { name: 'prog', spec, config: {} }
+    await expect(
+      handleCli(install, ['prog', 'run'], new Session({ sessionId: 't' }), null, {}, dropCaches),
+    ).rejects.toThrow(/timed out/)
+    expect(dropped).toBe(1)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(settled).toBe(true)
+    expect(dropped).toBe(2)
+  })
+
   it('carries stdin on the invocation record, never as a flag', async () => {
     calls.length = 0
     const install = makeInstall()

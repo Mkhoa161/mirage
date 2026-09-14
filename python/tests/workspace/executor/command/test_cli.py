@@ -210,6 +210,29 @@ async def test_leaf_limit_bounds_the_handler():
 
 
 @pytest.mark.asyncio
+async def test_a_timed_out_write_still_drops_the_caches():
+    # asyncio cancels the leaf, but a request it already sent may have
+    # been accepted, and the service will not roll it back.
+    dropped = []
+
+    async def drop():
+        dropped.append(True)
+
+    spec = CLISpec(name="prog",
+                   config_model=TokenConfig,
+                   subcommands=(CLISpec(name="run",
+                                        fn=slow_send,
+                                        write=True,
+                                        limit=Limit(timeout_seconds=0.05)), ))
+    install = CLIInstall(name="prog", spec=spec, config=TokenConfig(token="t"))
+    with pytest.raises(CommandTimeoutError):
+        await handle_cli(install, ["prog", "run"],
+                         Session("t"),
+                         drop_caches=drop)
+    assert dropped == [True]
+
+
+@pytest.mark.asyncio
 async def test_stdin_rides_the_invocation_record():
     # stdin is a field of the one CLIInvocation, never a synthetic
     # flag: a leaf declaring its own --stdin option can no longer be

@@ -378,6 +378,15 @@ export async function handleCli(
     // (exit 124), not here.
     if (err instanceof CommandTimeoutError) {
       abort.abort()
+      // Racing a promise does not stop its work: a typed fn that ignores
+      // the abort signal keeps running, and its request may land after
+      // exit 124. Drop now, for a write the service already accepted, and
+      // again when the body settles, for one still in flight.
+      if (leaf.write && dropCaches !== null) {
+        await dropCaches()
+        const settle = (): Promise<void> => dropCaches()
+        void body.then(settle, settle)
+      }
       throw err
     }
     // Any other thrown leaf error (an API error, a TypeError) becomes
