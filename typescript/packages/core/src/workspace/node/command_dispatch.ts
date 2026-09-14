@@ -143,7 +143,7 @@ export async function executeCommand(
     if (rewritten !== null) {
       const line = source.slice(0, (headNode.startIndex ?? 0) - base) + rewritten
       const ast = reparse(line)
-      const offending = findSyntaxError(ast as Parameters<typeof findSyntaxError>[0])
+      const offending = findSyntaxError(ast)
       if (offending !== null) {
         const snippet = offending.trim()
         const errBytes = new TextEncoder().encode(

@@ -23,3 +23,32 @@ export interface HeredocOperator {
   /** Whether the operator was `<<-`. */
   allowsIndent: boolean
 }
+
+export interface Heredoc {
+  operatorStart: number
+  wordEnd: number
+  delimiter: string
+  quoted: boolean
+  bodyStart: number
+  end: number
+  body: string
+  offsets: number[]
+  terminated: boolean
+  line: number
+  eofLine: number
+}
+
+export interface HeredocSource {
+  original: string
+  source: string
+  offsets: number[]
+  documents: [number, Heredoc][]
+}
+
+export interface BodyRead {
+  body: string
+  offsets: number[]
+  end: number
+  terminated: boolean
+  eofLine: number
+}

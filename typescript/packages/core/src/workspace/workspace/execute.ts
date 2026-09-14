@@ -262,7 +262,7 @@ async function runLine(
   const root = parser.parse(command)
   // tree-sitter accepts an unclosed backtick as a complete command, so
   // the region is scanned separately.
-  const offending = findSyntaxError(root) ?? findUnterminatedBacktick(command)
+  const offending = findSyntaxError(root) ?? findUnterminatedBacktick(root.text)
   if (offending !== null) {
     // The gate runs before the provision branch, mirroring Python: a
     // provision run of unparseable input reports the syntax error
@@ -753,6 +753,8 @@ async function runParsedLine(
   // The program loop stamped each statement; the line as a whole is a
   // wrapper around them, like a group.
   // A rejected invocation records its outcome without changing shell status.
+  if (rootNode.warnings)
+    io.stderr = new TextEncoder().encode(rootNode.warnings + (await io.stderrStr()))
   if (!callerError) recordStatus(targetSession, io.exitCode, true)
   let stdoutBytes: Uint8Array
   try {

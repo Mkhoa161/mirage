@@ -17,7 +17,8 @@ import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { Language, Parser } from 'web-tree-sitter'
 import type { TSNodeLike } from '../../types.ts'
-import { createShellParser, type ShellParser } from '../parse.ts'
+import { protectedSource } from './shield.ts'
+import type { Node } from 'web-tree-sitter'
 import { bodyPrefix, treeRoot } from './prefix.ts'
 
 const require = createRequire(import.meta.url)
@@ -26,15 +27,25 @@ const grammarWasm = readFileSync(require.resolve('tree-sitter-bash/tree-sitter-b
 
 const HEREDOC_REDIRECT = 'heredoc_redirect'
 
-let shielding: ShellParser
+let shielding: { parse(command: string): Node }
 let plain: Parser
 
 beforeAll(async () => {
-  shielding = await createShellParser({ engineWasm, grammarWasm })
   await Parser.init({ wasmBinary: engineWasm })
   const language = await Language.load(new Uint8Array(grammarWasm))
   plain = new Parser()
   plain.setLanguage(language)
+  shielding = {
+    parse(command) {
+      const raw = plain.parse(command)
+      if (raw === null) throw new Error('no tree')
+      const source = protectedSource(command, raw.rootNode)
+      if (source === null) return raw.rootNode
+      const shielded = plain.parse(source)
+      if (shielded === null || shielded.rootNode.hasError) return raw.rootNode
+      return plain.parse(command, shielded)?.rootNode ?? raw.rootNode
+    },
+  }
 })
 
 function redirects(root: TSNodeLike): TSNodeLike[] {

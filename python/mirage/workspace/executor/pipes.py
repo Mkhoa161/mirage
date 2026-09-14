@@ -14,8 +14,6 @@
 
 from typing import Any
 
-import tree_sitter
-
 from mirage.commands.builtin.utils.limit import run_with_timeout
 from mirage.io import IOResult
 from mirage.io.stream import (async_chain, close_quietly, discard_io,
@@ -31,6 +29,7 @@ from mirage.shell.errors import ExitSignal
 from mirage.shell.helpers import get_text
 from mirage.shell.job_table import JobTable
 from mirage.shell.types import NodeType as NT
+from mirage.shell.types import TSNodeLike
 from mirage.workspace.executor.builtins.exec import (divert_statement,
                                                      stdout_to_stderr)
 from mirage.workspace.executor.jobs import handle_background
@@ -43,7 +42,7 @@ from mirage.workspace.types import ExecutionNode
 
 async def handle_pipe(
     execute_node,
-    commands: list[tree_sitter.Node],
+    commands: list[TSNodeLike],
     stderr_flags: list[bool],
     session: Session,
     stdin: ByteSource | None = None,
@@ -164,9 +163,9 @@ async def _merge_left_into_exit(
 
 async def handle_connection(
     execute_node,
-    left: tree_sitter.Node,
+    left: TSNodeLike,
     op: str,
-    right: tree_sitter.Node,
+    right: TSNodeLike,
     session: Session,
     stdin: ByteSource | None = None,
     call_stack: CallStack | None = None,
@@ -241,7 +240,7 @@ async def handle_connection(
 
 async def handle_subshell(
     execute_node,
-    body: list[tree_sitter.Node],
+    body: list[TSNodeLike],
     session: Session,
     stdin: ByteSource | None = None,
     call_stack: CallStack | None = None,
@@ -256,7 +255,7 @@ async def handle_subshell(
     Args:
         execute_node (Callable): recursion bound to the subshell's own
             job table, so `wait`/`kill`/`jobs` inside see its jobs.
-        body (list[tree_sitter.Node]): ALL subshell children, including
+        body (list[TSNodeLike]): ALL subshell children, including
             the `&` tokens that mark background statements (named-only
             lists would run `a & b` synchronously and never set `$!`).
         session (Session): shell session; env/options snapshot-restored.

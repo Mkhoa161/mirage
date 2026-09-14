@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { makeIntegrationWS, run, runExit, runResult } from '../fixtures/integration_fixture.ts'
 
@@ -306,6 +307,30 @@ describe('later unbraced var in a redirect target', () => {
     const { ws } = await makeIntegrationWS()
     try {
       expect(await run(ws, 'c=aa; id=1; p=/api/$c/$id.json; echo $p')).toBe('/api/aa/1.json\n')
+    } finally {
+      await ws.close()
+    }
+  })
+})
+
+const readerCases = JSON.parse(
+  readFileSync(
+    new URL('../../../../../../integ/bash/heredoc/reader.json', import.meta.url),
+    'utf8',
+  ),
+) as {
+  cases: { id: string; command: string; expect: { exit: number; stdout: string; stderr: string } }[]
+}
+
+describe('heredoc reader integration (Bash 5.2 goldens)', () => {
+  it.each(readerCases.cases)('$id', async (testCase) => {
+    const { ws } = await makeIntegrationWS()
+    try {
+      expect(await runResult(ws, testCase.command)).toEqual([
+        testCase.expect.exit,
+        testCase.expect.stdout,
+        testCase.expect.stderr,
+      ])
     } finally {
       await ws.close()
     }

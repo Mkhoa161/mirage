@@ -30,3 +30,41 @@ class HeredocOperator:
     word_end: int
     delimiter: str
     allows_indent: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Heredoc:
+    """One source-owned body, its delimiter, and reader diagnostics."""
+
+    operator_start: int
+    word_end: int
+    delimiter: str
+    quoted: bool
+    body_start: int
+    end: int
+    body: bytes
+    offsets: tuple[int, ...]
+    terminated: bool
+    line: int
+    eof_line: int
+
+
+@dataclass(frozen=True, slots=True)
+class HeredocSource:
+    """Lowered source plus a map back to original byte locations."""
+
+    original: bytes
+    source: bytes
+    offsets: tuple[int, ...]
+    documents: tuple[tuple[int, Heredoc], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BodyRead:
+    """A completed read, including the shell reader line at EOF."""
+
+    body: bytes
+    offsets: tuple[int, ...]
+    end: int
+    terminated: bool
+    eof_line: int

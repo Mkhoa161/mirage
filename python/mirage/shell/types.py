@@ -12,14 +12,83 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, TypeAlias
+from typing import Any, Protocol, TypeAlias
 
-import tree_sitter
 
-FunctionBody: TypeAlias = list[tree_sitter.Node]
+class TSNodeLike(Protocol):
+
+    @property
+    def type(self) -> str:
+        ...
+
+    @property
+    def text(self) -> bytes | None:
+        ...
+
+    @property
+    def id(self) -> int:
+        ...
+
+    @property
+    def start_byte(self) -> int:
+        ...
+
+    @property
+    def end_byte(self) -> int:
+        ...
+
+    @property
+    def start_point(self) -> tuple[int, int]:
+        ...
+
+    @property
+    def end_point(self) -> tuple[int, int]:
+        ...
+
+    @property
+    def children(self) -> Sequence["TSNodeLike"]:
+        ...
+
+    @property
+    def named_children(self) -> Sequence["TSNodeLike"]:
+        ...
+
+    @property
+    def parent(self) -> "TSNodeLike | None":
+        ...
+
+    @property
+    def prev_sibling(self) -> "TSNodeLike | None":
+        ...
+
+    @property
+    def next_sibling(self) -> "TSNodeLike | None":
+        ...
+
+    @property
+    def child_count(self) -> int:
+        ...
+
+    @property
+    def is_named(self) -> bool:
+        ...
+
+    @property
+    def is_missing(self) -> bool:
+        ...
+
+    @property
+    def has_error(self) -> bool:
+        ...
+
+    def child_by_field_name(self, name: str) -> "TSNodeLike | None":
+        ...
+
+
+FunctionBody: TypeAlias = list[TSNodeLike]
 
 
 @dataclass(frozen=True, slots=True)

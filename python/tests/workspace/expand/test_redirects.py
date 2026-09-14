@@ -12,6 +12,9 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import json
+from pathlib import Path
+
 import pytest
 
 from mirage import MountMode, RAMResource, Workspace
@@ -485,3 +488,23 @@ async def test_heredoc_body_after_a_quote_inside_a_backtick():
             "\\first\nsecond\nEOF\n")
     await ws.execute(line)
     assert await _stdout(ws, "cat /data/HB9") == "\\first\nsecond\n"
+
+
+HEREDOC_CASES = json.loads(
+    (Path(__file__).resolve().parents[4] /
+     "integ/bash/heredoc/reader.json").read_text())["cases"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", HEREDOC_CASES, ids=lambda case: case["id"])
+async def test_heredoc_reader_integration(case):
+    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    try:
+        io = await ws.execute(case["command"])
+        assert {
+            "exit": io.exit_code,
+            "stdout": await io.stdout_str(),
+            "stderr": (await io.materialize_stderr()).decode()
+        } == case["expect"]
+    finally:
+        await ws.close()

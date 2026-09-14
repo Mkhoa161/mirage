@@ -19,8 +19,6 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-import tree_sitter
-
 from mirage.commands.builtin.utils.limit import run_with_timeout
 from mirage.commands.errors import CommandTimeoutError
 from mirage.io import IOResult
@@ -31,6 +29,7 @@ from mirage.provision import ProvisionResult
 from mirage.runtime.routing import RouteDecision, RouteDeny, RouteError
 from mirage.shell.parse import (find_syntax_error, find_unterminated_backtick,
                                 parse, syntax_error_result)
+from mirage.shell.types import TSNodeLike
 from mirage.types import Refusal
 from mirage.workspace.abort import (MirageAbortError, StatusWriter,
                                     set_line_writer)
@@ -302,7 +301,7 @@ async def execute_line(
         if offending is None:
             # tree-sitter accepts an unclosed backtick as a complete
             # command, so the region is scanned separately.
-            offending = find_unterminated_backtick(command)
+            offending = find_unterminated_backtick((ast.text or b"").decode())
         if offending is not None:
             io = syntax_error_result(offending)
             return io
@@ -430,8 +429,7 @@ async def execute_line(
                                     "pre_session",
                                     effective_session.session_id))
 
-                def plan_names(
-                        subset: Sequence[tree_sitter.Node]) -> frozenset[str]:
+                def plan_names(subset: Sequence[TSNodeLike]) -> frozenset[str]:
                     return fill_names(
                         effective_session,
                         subset,
@@ -512,6 +510,9 @@ async def execute_line(
                     effective_session.session_id, handed)
         # The program loop stamped each statement; the line as a whole
         # is a wrapper around them, like a group.
+        warnings = getattr(ast, "warnings", b"")
+        if warnings:
+            io.stderr = warnings + await io.materialize_stderr()
         record_status(session, io.exit_code, transparent=True)
         await ws.apply_io(io, records=scope.records, is_cacheable=cacheable)
         return io

@@ -12,8 +12,6 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import tree_sitter
-
 from mirage.shell.parse.heredoc.body import heredoc_bodies
 from mirage.shell.parse.heredoc.constants import (ALTERNATE_FILLER, BACKSLASH,
                                                   DASH_ARROW, ESCAPE_PARTNERS,
@@ -21,18 +19,18 @@ from mirage.shell.parse.heredoc.constants import (ALTERNATE_FILLER, BACKSLASH,
                                                   LINE_BLANKS)
 from mirage.shell.parse.heredoc.delimiter import clean_delimiter
 from mirage.shell.parse.heredoc.types import HeredocOperator
+from mirage.shell.types import TSNodeLike
 
 
-def heredoc_operators(root: tree_sitter.Node) -> list[HeredocOperator]:
+def heredoc_operators(root: TSNodeLike) -> list[HeredocOperator]:
     """Every heredoc operator under ``root``, in source order.
 
     ERROR subtrees are walked too: a body the lexer mangled badly enough
-    leaves no heredoc_redirect behind, but its start token survives. A
-    token whose delimiter is empty once unquoted names no line and is
-    left out.
+    leaves no heredoc_redirect behind, but its start token survives.
+    These are hints; the source reader validates delimiter word bounds.
 
     Args:
-        root (tree_sitter.Node): the parsed tree.
+        root (TSNodeLike): the parsed tree.
     """
     found: list[HeredocOperator] = []
     stack = [root]
@@ -42,8 +40,6 @@ def heredoc_operators(root: tree_sitter.Node) -> list[HeredocOperator]:
         if node.type != HEREDOC_START:
             continue
         delimiter = clean_delimiter((node.text or b"").decode())
-        if not delimiter:
-            continue
         previous = node.prev_sibling
         found.append(
             HeredocOperator(word_start=node.start_byte,
@@ -74,7 +70,7 @@ def first_content_line(data: bytes, body_start: int,
     return None
 
 
-def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
+def protected_source(data: bytes, root: TSNodeLike) -> bytes | None:
     """``data`` with every heredoc body's first line made lexable.
 
     tree-sitter-bash decides where a heredoc body starts from the byte
@@ -93,7 +89,7 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
 
     Args:
         data (bytes): the shell source.
-        root (tree_sitter.Node): the tree parsed from ``data``.
+        root (TSNodeLike): the tree parsed from ``data``.
 
     Returns:
         bytes | None: the protected source, or None when every body
@@ -121,12 +117,12 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     return bytes(out) if changed else None
 
 
-def same_shape(left: tree_sitter.Node, right: tree_sitter.Node) -> bool:
+def same_shape(left: TSNodeLike, right: TSNodeLike) -> bool:
     """Whether two trees agree on every node's type and byte span.
 
     Args:
-        left (tree_sitter.Node): one tree's root.
-        right (tree_sitter.Node): the other tree's root.
+        left (TSNodeLike): one tree's root.
+        right (TSNodeLike): the other tree's root.
     """
     stack = [(left, right)]
     while stack:
