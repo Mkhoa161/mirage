@@ -13,7 +13,6 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it, vi } from 'vitest'
-import { ResourceName } from '../../../../types.ts'
 import type * as UtilModule from './util.ts'
 import type { LinearTransport } from '../../../../core/linear/client.ts'
 import { cliSpecFor } from '../../specs.ts'
@@ -111,7 +110,6 @@ describe('linear tree', () => {
       expect(leaf('issue', verb).write).toBe(true)
     }
     expect(leaf('issue', 'get').write).toBe(false)
-    expect(LINEAR.serves).toEqual([ResourceName.LINEAR])
     expect(leaf('issue', 'get').rest).not.toBeNull()
     expect(leaf('issue', 'list').rest).toBeNull()
   })

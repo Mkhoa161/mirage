@@ -409,9 +409,8 @@ async def handle_cli(
         # (prog: message), so the rest of the line keeps running.
         # The write may already have landed when a leaf throws after its
         # request (a PUT whose --jq program fails filters a response the
-        # service already applied), and with no IOResult to consult the
-        # spec's static answer is the only one left; without the drop a
-        # github mount keeps serving its pre-write bytes.
+        # service already applied); without the drop a github mount keeps
+        # serving its pre-write bytes.
         if leaf.write and drop_caches is not None:
             await drop_caches()
         err_stderr = f"{prog}: {exc}\n".encode()
@@ -423,11 +422,10 @@ async def handle_cli(
         stdout, io = None, IOResult()
     else:
         stdout, io = out
-    # The spec's `write` is the static answer, which is the only one most
-    # verbs have; a handler that knows better says so on its result, so a
-    # read-only `gh api` does not expire every github mount.
-    mutated = leaf.write if io.mutated is None else io.mutated
-    if mutated and drop_caches is not None:
+    # The spec's `write` is the one answer: what policy calls a write,
+    # the cache does too, so a verb that can mutate (`gh api` under any
+    # method) costs the mounts a reload rather than a stale read.
+    if leaf.write and drop_caches is not None:
         await drop_caches()
     io.producer = Producer(command=prog, declared=leaf.limit)
 

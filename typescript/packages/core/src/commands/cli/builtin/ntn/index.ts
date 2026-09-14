@@ -12,7 +12,6 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { ResourceName } from '../../../../types.ts'
 import { NotionConfigSchema } from '../../../../core/notion/config.ts'
 import { CLISpec } from '../../types.ts'
 import { Operand, Option, UsageStyle } from '../../../spec/types.ts'
@@ -74,7 +73,6 @@ export const NTN = new CLISpec({
   name: 'ntn',
   description: 'Notion CLI (Beta)',
   configModel: NotionConfigSchema,
-  serves: [ResourceName.NOTION],
   // Upstream is a clap program, so this one answers in clap's voice: its help
   // layout and its refusal for a missing operand are pinned against the real
   // binary by integ/ntn_conformance.ts.

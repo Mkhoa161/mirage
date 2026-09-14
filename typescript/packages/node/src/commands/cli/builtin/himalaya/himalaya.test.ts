@@ -20,7 +20,6 @@ import {
 } from '../../../../core/email/client.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cliSpecFor } from '@struktoai/mirage-core/commands/cli/specs'
-import { ResourceName } from '@struktoai/mirage-core/types'
 import type { CLIDoors } from '@struktoai/mirage-core/commands/cli/types'
 import { materialize } from '@struktoai/mirage-core/io/types'
 import type { IOResult } from '@struktoai/mirage-core/io/types'
@@ -181,7 +180,6 @@ describe('himalaya tree', () => {
     for (const verb of ['compose', 'send', 'reply', 'forward']) {
       expect(leaf('message', verb).write).toBe(true)
     }
-    expect(HIMALAYA.serves).toEqual([ResourceName.EMAIL])
     expect(leaf('message', 'compose').options.every((o) => !o.required)).toBe(true)
   })
 
@@ -948,24 +946,6 @@ describe('himalaya writes and a mounted account', () => {
       expect(await out(ws, 'ls /mail/INBOX/2026-09-14')).toBe(
         'Copy__102.email.json\nOlder__101.email.json\n',
       )
-    } finally {
-      await ws.close()
-    }
-  })
-
-  it('MIME on stdout leaves the listing cached', async () => {
-    const ws = workspace()
-    try {
-      await out(ws, 'ls /mail/Sent')
-      const before = vi.mocked(listMessageUids).mock.calls.length
-      expect(
-        await out(
-          ws,
-          'himalaya message compose --to r@example.invalid --subject Draft --body Hello',
-        ),
-      ).toContain('Subject: Draft')
-      await out(ws, 'ls /mail/Sent')
-      expect(vi.mocked(listMessageUids).mock.calls.length).toBe(before)
     } finally {
       await ws.close()
     }

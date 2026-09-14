@@ -25,7 +25,6 @@ from mirage.commands.cli.builtin.himalaya import util as util_module
 from mirage.core.email.config import EmailConfig
 from mirage.io.types import materialize
 from mirage.resource.email.email import EmailResource
-from mirage.types import ResourceName
 
 CONFIG = {
     "imap_host": "h",
@@ -78,7 +77,6 @@ def test_write_classification_splits_reads_from_sends():
     assert not leaf("message", "read").write
     for verb in ("compose", "send", "reply", "forward"):
         assert leaf("message", verb).write
-    assert HIMALAYA.serves == (ResourceName.EMAIL, )
 
 
 @pytest.mark.asyncio
@@ -266,20 +264,5 @@ async def test_a_sent_copy_lands_in_a_listed_folder_that_already_had_mail(
             "--subject Copy --body Hello --send --save INBOX")
         assert await out(ws, "ls /mail/INBOX/2026-09-14") == (
             "Copy__102.email.json\nOlder__101.email.json\n")
-    finally:
-        await ws.close()
-
-
-@pytest.mark.asyncio
-async def test_mime_on_stdout_leaves_the_listing_cached(mailbox):
-    ws = mounted()
-    try:
-        await out(ws, "ls /mail/Sent")
-        before = len(mailbox)
-        assert "Subject: Draft" in await out(
-            ws, "himalaya message compose --to r@example.invalid "
-            "--subject Draft --body Hello")
-        await out(ws, "ls /mail/Sent")
-        assert len(mailbox) == before
     finally:
         await ws.close()

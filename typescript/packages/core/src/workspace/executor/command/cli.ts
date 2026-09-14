@@ -370,9 +370,8 @@ export async function handleCli(
     // the rest of the line keeps running.
     // The write may already have landed when a leaf throws after its
     // request (a PUT whose --jq program fails filters a response the
-    // service already applied), and with no IOResult to consult the
-    // spec's static answer is the only one left; without the drop a
-    // github mount keeps serving its pre-write bytes.
+    // service already applied); without the drop a github mount keeps
+    // serving its pre-write bytes.
     if (leaf.write && dropCaches !== null) await dropCaches()
     const message = err instanceof Error ? err.message : String(err)
     const stderr = new TextEncoder().encode(`${prog}: ${message}\n`)
@@ -382,18 +381,10 @@ export async function handleCli(
       new ExecutionNode({ command: cmdStr, exitCode: 1, stderr }),
     ]
   }
-  // An account CLI mutates its service by id, so no vfs path can be derived
-  // from the call and per-path invalidation has nothing to aim at: a newly
-  // created file has no cache entry to expire, which is the case that
-  // matters. Dropping the service's listings is what lets the agent's next
-  // `ls` see what it just made, and dropping its cached bodies is what lets
-  // the next `cat` see an edit rather than the pre-write content.
-  //
-  // The spec's `write` is the static answer, which is the only one most
-  // verbs have; a handler that knows better says so on its result, so a
-  // read-only `gh api` does not expire every github mount.
-  const mutated = io.mutated ?? leaf.write
-  if (mutated && dropCaches !== null) await dropCaches()
+  // The spec's `write` is the one answer: what policy calls a write, the
+  // cache does too, so a verb that can mutate (`gh api` under any method)
+  // costs the mounts a reload rather than a stale read.
+  if (leaf.write && dropCaches !== null) await dropCaches()
 
   io.producer = { command: prog, prefixes: [], declared: leaf.limit ?? null }
 

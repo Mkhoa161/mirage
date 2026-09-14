@@ -157,24 +157,3 @@ def test_unknown_key_lists_entry_points(clean_entry_points, monkeypatch):
                         lambda *, group: [ep])
     with pytest.raises(ValueError, match="epcli"):
         cli_spec_for("spectest6")
-
-
-def _write_leaves(spec: CLISpec) -> list[CLISpec]:
-    if spec.fn is not None:
-        return [spec] if spec.write else []
-    return [
-        leaf for child in spec.subcommands for leaf in _write_leaves(child)
-    ]
-
-
-def test_an_account_cli_with_write_verbs_names_the_mounts_it_serves():
-    # A write verb mutates its service by id, so `serves` is the only fact
-    # the workspace has about which mounts to expire afterwards. Five
-    # builtin CLIs shipped without it, and a message himalaya filed
-    # stayed invisible to the mounted account until the index TTL ran
-    # out.
-    for name in specs.BUILTIN_CLI_SPECS:
-        spec = cli_spec_for(name)
-        if spec.config_model is None or not _write_leaves(spec):
-            continue
-        assert spec.serves, f"cli {name!r} has write verbs but serves no mount"

@@ -64,7 +64,7 @@ from mirage.workspace.session.state import session_view
 from mirage.workspace.types import ExecuteLine, ExecutionNode
 
 from mirage.workspace.executor.command.run import (  # isort: skip
-    drop_service_caches, exec_node, find_start_points, namespace_view_of,
+    drop_mount_caches, exec_node, find_start_points, namespace_view_of,
     run_on_mount, scalar_find_flags)
 
 # One handler per JOB_BUILTINS member; lookup already narrowed the name.
@@ -207,8 +207,12 @@ async def handle_command(
                 ns=namespace_view_of(registry, namespace, dispatch),
                 session_view=session_view(session, registry.policies),
             ),
-            drop_caches=functools.partial(drop_service_caches, registry,
-                                          cli_install.spec.serves),
+            # An account CLI (one with a config model) writes to its
+            # service by id, past the dispatcher's per-path invalidation;
+            # a mount-tier CLI like git writes through the dispatcher,
+            # which invalidates as it goes, so it gets no drop.
+            drop_caches=(functools.partial(drop_mount_caches, registry) if
+                         cli_install.spec.config_model is not None else None),
         )
 
     if cmd_name in CWD_DEFAULT_RAW:

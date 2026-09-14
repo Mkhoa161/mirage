@@ -17,7 +17,6 @@ import pytest
 from mirage import Workspace
 from mirage.commands.cli.builtin.linear import LINEAR
 from mirage.core.linear.config import LinearConfig
-from mirage.types import ResourceName
 
 CONFIG = {"api_key": "lin_api_test"}
 
@@ -61,7 +60,6 @@ def test_tree_shape_keeps_the_mount_grammar():
 
 
 def test_write_classification():
-    assert LINEAR.serves == (ResourceName.LINEAR, )
     for noun, verb in (
         ("issue", "create"),
         ("issue", "update"),

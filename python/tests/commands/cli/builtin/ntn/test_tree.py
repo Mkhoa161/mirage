@@ -19,7 +19,6 @@ from mirage.commands.cli.builtin.ntn import NTN
 from mirage.commands.cli.builtin.ntn.pages import create as pages_create
 from mirage.core.notion.config import NotionConfig
 from mirage.io.types import materialize
-from mirage.types import ResourceName
 
 CONFIG = {"api_key": "secret"}
 
@@ -113,7 +112,6 @@ def test_notion_version_is_env_backed():
 
 
 def test_write_classification():
-    assert NTN.serves == (ResourceName.NOTION, )
     assert not leaf("pages", "get").write
     for verb in ("create", "edit", "trash"):
         assert leaf("pages", verb).write

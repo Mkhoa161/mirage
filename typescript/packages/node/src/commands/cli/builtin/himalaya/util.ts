@@ -110,9 +110,7 @@ export async function route(
   )
   const save = fl.asStr('save') ?? null
   if (!fl.asBool('send')) {
-    // MIME on stdout touches no mailbox, so the mounted account's
-    // listings stay warm: the spec's static `write` is overridden here.
-    if (save === null) return [raw as ByteSource, new IOResult({ mutated: false })]
+    if (save === null) return [raw as ByteSource, new IOResult()]
     // --save without --send files the message and sends nothing, so a
     // refused APPEND means nothing happened at all and may fail loudly:
     // there is no delivered message a retry could duplicate.

@@ -121,10 +121,7 @@ async def route(
     save = fl.as_str("save")
     if not fl.as_bool("send"):
         if save is None:
-            # MIME on stdout touches no mailbox, so the mounted account's
-            # listings stay warm: the spec's static ``write`` is
-            # overridden here.
-            return yield_bytes(raw), IOResult(mutated=False)
+            return yield_bytes(raw), IOResult()
         # --save without --send files the message and sends nothing, so
         # a refused APPEND means nothing happened at all and may fail
         # loudly: there is no delivered message a retry could duplicate.

@@ -20,7 +20,6 @@ from mirage import Workspace
 from mirage.commands.cli.builtin.discord import DISCORD, send
 from mirage.core.discord.config import DiscordConfig
 from mirage.io.types import materialize
-from mirage.types import ResourceName
 
 CONFIG = {"token": "bot-token"}
 
@@ -49,7 +48,6 @@ def test_tree_shape_matches_the_openclaw_vocabulary():
 
 
 def test_write_classification():
-    assert DISCORD.serves == (ResourceName.DISCORD, )
     writers = {v.name for v in DISCORD.subcommands if v.write}
     assert writers == {
         "send",

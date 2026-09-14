@@ -26,11 +26,6 @@ function noop(): [null, IOResult] {
 
 const BUNDLED = ['discord', 'gh', 'git', 'gws', 'linear', 'ntn', 'slack']
 
-function writeLeaves(spec: CLISpec): CLISpec[] {
-  if (spec.fn !== null) return spec.write ? [spec] : []
-  return spec.subcommands.flatMap(writeLeaves)
-}
-
 function tree(name: string): CLISpec {
   return new CLISpec({ name, subcommands: [new CLISpec({ name: 'run', fn: noop })] })
 }
@@ -75,19 +70,6 @@ describe('cli spec registry', () => {
   it('resolves the bundled CLIs without importing their modules', () => {
     for (const name of BUNDLED) {
       expect(cliSpecFor(name).name).toBe(name)
-    }
-  })
-
-  // A write verb mutates its service by id, so `serves` is the only fact the
-  // workspace has about which mounts to expire afterwards. Five bundled CLIs
-  // shipped without it, and a message himalaya filed stayed invisible to the
-  // mounted account until the index TTL ran out. Runtime packages assert
-  // theirs beside their own trees (himalaya, hf).
-  it('an account CLI with write verbs names the mounts it serves', () => {
-    for (const name of BUNDLED) {
-      const spec = cliSpecFor(name)
-      if (spec.configModel === null || writeLeaves(spec).length === 0) continue
-      expect(spec.serves, `cli '${name}' has write verbs but serves no mount`).not.toHaveLength(0)
     }
   })
 })

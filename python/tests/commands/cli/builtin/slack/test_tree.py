@@ -20,7 +20,6 @@ from mirage import Workspace
 from mirage.commands.cli.builtin.slack import SLACK, send_message
 from mirage.core.slack.config import SlackConfig
 from mirage.io.types import materialize
-from mirage.types import ResourceName
 
 CONFIG = {"token": "xoxb-test"}
 
@@ -50,7 +49,6 @@ def test_tree_shape_matches_the_openclaw_vocabulary():
 
 
 def test_write_classification():
-    assert SLACK.serves == (ResourceName.SLACK, )
     writers = {v.name for v in SLACK.subcommands if v.write}
     assert writers == {
         "send-message",

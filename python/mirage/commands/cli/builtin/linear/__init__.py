@@ -26,7 +26,6 @@ from mirage.commands.cli.builtin.linear.issue.update import update
 from mirage.commands.cli.types import CLISpec
 from mirage.commands.spec.types import Operand, Option
 from mirage.core.linear.config import LinearConfig
-from mirage.types import ResourceName
 
 TEAM_OPTION = Option(long="--team",
                      type="str",
@@ -44,7 +43,6 @@ LINEAR = CLISpec(
     name="linear",
     description="Linear GraphQL API client",
     config_model=LinearConfig,
-    serves=(ResourceName.LINEAR, ),
     subcommands=(
         CLISpec(
             name="team",
