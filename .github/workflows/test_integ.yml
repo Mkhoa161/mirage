@@ -14,6 +14,7 @@ permissions:
       - .github/workflows/test_integ.yml
       - .github/actions/setup-node-pnpm/action.yml
       - .github/actions/integ-battery-setup/action.yml
+      - .github/actions/nextcloud-tune/action.yml
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -59,6 +60,7 @@ jobs:
               - '.github/workflows/test_integ.yml'
               - '.github/actions/setup-node-pnpm/action.yml'
               - '.github/actions/integ-battery-setup/action.yml'
+              - '.github/actions/nextcloud-tune/action.yml'
             database:
               - 'integ/resources/mongodb/**'
               - 'integ/resources/postgres/**'
@@ -92,6 +94,7 @@ jobs:
               - '.github/workflows/test_integ.yml'
               - '.github/actions/setup-node-pnpm/action.yml'
               - '.github/actions/integ-battery-setup/action.yml'
+              - '.github/actions/nextcloud-tune/action.yml'
             observability:
               - 'integ/server/langfuse_compose.yml'
               - 'integ/server/langfuse_seed.py'
@@ -284,19 +287,16 @@ jobs:
           name: integ-typescript-dist
           path: typescript/packages
 
-      - name: Wait for Nextcloud install
-        shell: bash
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/status.php | grep -q '"installed":true'; then
-              echo "Nextcloud is installed"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Nextcloud did not finish installing in time" >&2
-          curl -s http://localhost:8080/status.php || true
-          exit 1
+      - name: Wait for Nextcloud and tune it for the battery
+        uses: ./.github/actions/nextcloud-tune
+        # A composite step cannot carry timeout-minutes, so the bound goes on
+        # the caller, where it covers the whole action.
+        timeout-minutes: 10
+        with:
+          container-id: ${{ job.services.nextcloud.id }}
+          # Read from the job env the battery itself authenticates with, so
+          # the reset and the battery cannot disagree about the password.
+          admin-password: ${{ env.NEXTCLOUD_PASSWORD }}
 
       - name: Run declarative battery on Nextcloud
         working-directory: integ
@@ -816,19 +816,16 @@ jobs:
           NOTION_ENABLED: "1"
         run: ./python/.venv/bin/python integ/runners/python/main.py --target notion --strict
 
-      - name: Wait for Nextcloud install
-        shell: bash
-        run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:8080/status.php | grep -q '"installed":true'; then
-              echo "Nextcloud is installed"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Nextcloud did not finish installing in time" >&2
-          curl -s http://localhost:8080/status.php || true
-          exit 1
+      - name: Wait for Nextcloud and tune it for the battery
+        uses: ./.github/actions/nextcloud-tune
+        # A composite step cannot carry timeout-minutes, so the bound goes on
+        # the caller, where it covers the whole action.
+        timeout-minutes: 10
+        with:
+          container-id: ${{ job.services.nextcloud.id }}
+          # Read from the job env the battery itself authenticates with, so
+          # the reset and the battery cannot disagree about the password.
+          admin-password: ${{ env.NEXTCLOUD_PASSWORD }}
 
       - name: Run declarative battery on nextcloud
         run: ./python/.venv/bin/python integ/runners/python/main.py --target nextcloud --strict
