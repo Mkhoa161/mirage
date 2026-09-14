@@ -185,6 +185,7 @@ export async function expandRedirects(
           clobber: r.clobber,
           pipeline: r.pipeline,
           expandVars: r.expandVars,
+          continuation: r.continuation,
         }),
       )
       continue
@@ -246,6 +247,7 @@ export async function expandRedirects(
         clobber: r.clobber,
         pipeline: r.pipeline,
         expandVars: r.expandVars,
+        continuation: r.continuation,
       }),
     )
   }

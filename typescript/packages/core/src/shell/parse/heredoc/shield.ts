@@ -68,7 +68,44 @@ export function firstContentLine(text: string, bodyStart: number, bodyEnd: numbe
 }
 
 /**
- * `text` with every heredoc body's first line made lexable.
+ * One character per body line the scanner would close the body at.
+ *
+ * tree-sitter-bash compares a line's first `delimiter.length` characters,
+ * after any leading blanks, with the delimiter and stops there, so
+ * `EOFX`, `EOF;` and ` EOF` all end a body that bash reads on through:
+ * bash wants the whole line to be the delimiter, leading tabs aside under
+ * `<<-`. Writing a letter over one character of that prefix keeps the
+ * scanner in the body. A `$`, backtick or backslash is passed over, so an
+ * expansion opening the line keeps its shape in the masked copy. Returns
+ * the offset to mask on each such line, in source order.
+ */
+export function terminatorLookalikes(
+  text: string,
+  span: readonly [number, number],
+  delimiter: string,
+): number[] {
+  const offsets: number[] = []
+  let position = span[0]
+  while (position < span[1]) {
+    const newline = text.indexOf('\n', position)
+    const lineEnd = newline < 0 || newline > span[1] ? span[1] : newline
+    let start = position
+    while (start < lineEnd && LINE_BLANKS.has(text[start] ?? '')) start += 1
+    if (start + delimiter.length <= lineEnd && text.startsWith(delimiter, start)) {
+      for (let offset = start; offset < start + delimiter.length; offset++) {
+        if (!ESCAPE_PARTNERS.has(text[offset] ?? '')) {
+          offsets.push(offset)
+          break
+        }
+      }
+    }
+    position = lineEnd + 1
+  }
+  return offsets
+}
+
+/**
+ * `text` with every heredoc body made lexable as bash reads it.
  *
  * tree-sitter-bash decides where a heredoc body starts from the character
  * that follows the operator line, and gets it wrong for two shapes bash
@@ -82,16 +119,23 @@ export function firstContentLine(text: string, bodyStart: number, bodyEnd: numbe
  * without moving a single offset; the caller then reads the body back
  * out of the untouched source. An empty line before the first kept one
  * has no character to mask without moving a row, so those are left to
- * bodyPrefix. Returns null when every body already lexes as bash reads
- * it.
+ * bodyPrefix. It also ends a body one line early, at any line that merely
+ * opens with the delimiter (see terminatorLookalikes); one character of
+ * each such line is masked the same way. Bodies are read innermost-first
+ * per line, the order the parser's source keeps them in (see relayout).
+ * Returns null when every body already lexes as bash reads it.
  */
 export function protectedSource(text: string, root: Node): string | null {
   let out = text
   const operators = heredocOperators(root)
-  const spans = heredocBodies(text, operators)
+  const spans = heredocBodies(text, operators, true)
   operators.forEach((operator, position) => {
     const span = spans[position]
     if (span === null || span === undefined) return
+    for (const offset of terminatorLookalikes(text, span, operator.delimiter)) {
+      const filler = text[offset] === FILLER ? ALTERNATE_FILLER : FILLER
+      out = out.slice(0, offset) + filler + out.slice(offset + 1)
+    }
     const line = firstContentLine(text, span[0], span[1])
     if (line === null) return
     const first = text[line] ?? ''

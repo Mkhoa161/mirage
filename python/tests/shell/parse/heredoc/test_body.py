@@ -26,9 +26,12 @@ def _operator(command: str, token: str, dash: bool = False) -> HeredocOperator:
                            allows_indent=dash)
 
 
-def _bodies(command: str, *tokens: str, dash: bool = False):
+def _bodies(command: str,
+            *tokens: str,
+            dash: bool = False,
+            nested: bool = False):
     operators = [_operator(command, token, dash) for token in tokens]
-    return heredoc_bodies(command.encode(), operators)
+    return heredoc_bodies(command.encode(), operators, nested=nested)
 
 
 def test_terminator_line_is_the_first_line_equal_to_the_delimiter():
@@ -156,3 +159,25 @@ def test_continued_delimiter_closes_its_own_body():
 def test_body_starts_after_a_multiline_parameter_expansion():
     cmd = "cat <<EOF >${x:-\n/out}\nbody\nEOF\n"
     assert _bodies(cmd, "EOF") == [(cmd.index("body"), cmd.index("EOF\n"))]
+
+
+# ── nested order: the layout the parser's source keeps ─────────────────
+
+
+def test_nested_reads_a_lines_bodies_innermost_first():
+    command = "cat <<A && cat <<B\nb\nB\na\nA\n"
+    b_start = command.index("\nb\n") + 1
+    a_start = command.index("\na\n") + 1
+    assert _bodies(command, "A", "B", nested=True) == [(a_start, a_start + 2),
+                                                       (b_start, b_start + 2)]
+
+
+def test_nested_and_bash_order_agree_on_a_single_heredoc_per_line():
+    command = "cat <<A\na\nA\ncat <<B\nb\nB\n"
+    assert _bodies(command, "A", "B",
+                   nested=True) == _bodies(command, "A", "B")
+
+
+def test_nested_still_treats_an_operator_inside_a_body_as_text():
+    command = "cat <<A\ncat <<B\nA\nB\n"
+    assert _bodies(command, "A", "B", nested=True) == [(8, 16), None]

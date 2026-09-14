@@ -66,9 +66,8 @@ def next_line(data: bytes, line_start: int) -> int | None:
     return None if newline < 0 else newline + 1
 
 
-def heredoc_bodies(
-        data: bytes,
-        operators: Sequence[HeredocOperator]) -> list[tuple[int, int] | None]:
+def heredoc_bodies(data: bytes, operators: Sequence[HeredocOperator], *,
+                   nested: bool) -> list[tuple[int, int] | None]:
     """The body span of every operator, read the way bash reads them.
 
     Bash gathers bodies at the newline that ends an operator's logical
@@ -86,6 +85,13 @@ def heredoc_bodies(
         data (bytes): the shell source.
         operators (Sequence[HeredocOperator]): the operators, in any
             order.
+        nested (bool): whether one line's bodies stand innermost-first,
+            the order tree-sitter-bash's grammar closes them in, rather
+            than in the order bash gathers them. The source the parser
+            reads is kept in that order (see relayout), so the shield
+            and body_prefix read it, while relayout reads the typed
+            source as bash does. A line with one operator reads the same
+            either way.
 
     Returns:
         list[tuple[int, int] | None]: ``(body_start, body_end)`` for
@@ -94,28 +100,27 @@ def heredoc_bodies(
     """
     spans: list[tuple[int, int] | None] = [None] * len(operators)
     bodies: list[tuple[int, int]] = []
-    previous_line_end: int | None = None
-    cursor: int | None = None
-    order = sorted(range(len(operators)),
-                   key=lambda index: operators[index].word_start)
-    for position in order:
-        operator = operators[position]
-        if any(begin <= operator.word_start < end for begin, end in bodies):
-            continue
-        line_end = operator_line_end(data, operator.word_end)
-        if line_end is None:
-            continue
-        body_start = cursor if line_end == previous_line_end else line_end + 1
-        previous_line_end = line_end
-        cursor = None
-        if body_start is None:
-            continue
-        body_end = terminator_line(data, body_start,
-                                   encode_text(operator.delimiter),
-                                   operator.allows_indent)
-        if body_end is None:
-            body_end = len(data)
-        spans[position] = (body_start, body_end)
-        bodies.append((body_start, body_end))
-        cursor = next_line(data, body_end)
+    lines: dict[int, list[int]] = {}
+    for index in sorted(range(len(operators)),
+                        key=lambda position: operators[position].word_start):
+        line_end = operator_line_end(data, operators[index].word_end)
+        if line_end is not None:
+            lines.setdefault(line_end, []).append(index)
+    for line_end, members in lines.items():
+        cursor: int | None = line_end + 1
+        for index in reversed(members) if nested else members:
+            operator = operators[index]
+            if any(begin <= operator.word_start < end
+                   for begin, end in bodies):
+                continue
+            if cursor is None:
+                continue
+            body_end = terminator_line(data, cursor,
+                                       encode_text(operator.delimiter),
+                                       operator.allows_indent)
+            if body_end is None:
+                body_end = len(data)
+            spans[index] = (cursor, body_end)
+            bodies.append((cursor, body_end))
+            cursor = next_line(data, body_end)
     return spans

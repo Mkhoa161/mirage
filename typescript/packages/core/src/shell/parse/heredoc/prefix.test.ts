@@ -56,7 +56,9 @@ function prefix(command: string): string {
   return bodyPrefix(first)
 }
 
-const TWO_ON_A_LINE = 'cat <<A <<B\na\nA\n\nb\nB\n'
+// Two heredocs on one line, laid out as the parser's source keeps them:
+// innermost-first (see relayout), so B's body precedes A's.
+const TWO_ON_A_LINE = 'cat <<A <<B\nb\nB\n\na\nA\n'
 
 // The slice of a web-tree-sitter Node that bodyPrefix reads, over
 // TWO_ON_A_LINE.
@@ -159,18 +161,19 @@ describe('bodyPrefix', () => {
     expect(bodyPrefix(inner)).toBe('\n')
   })
 
-  it('measures a later heredoc on the line from the line after the earlier body', () => {
-    // tree-sitter-bash has no tree for two heredocs on one line; were it
-    // to grow one, B's node would span A's body too, and B's blank line is
-    // measured from the line after A's terminator, not from the operator
-    // line's newline the two share.
-    const first = heredoc(4, 12)
-    const second = heredoc(8, 17)
+  it('measures an earlier heredoc on the line from the line after the later body', () => {
+    // tree-sitter-bash has no tree for two heredocs on one command; were
+    // it to grow one, the line's bodies would stand innermost-first as
+    // relayout writes them, so B's body follows the operator line and A's
+    // blank line is measured from the line after B's terminator, not from
+    // the operator line's newline the two share.
+    const first = heredoc(4, 17)
+    const second = heredoc(8, 12)
     const root = node('program', 0, TWO_ON_A_LINE.length, [
       node('redirected_statement', 0, 20, [node('command', 0, 3), first, second]),
     ])
     expect(treeRoot(second)).toBe(root)
-    expect(bodyPrefix(first)).toBe('')
-    expect(bodyPrefix(second)).toBe('\n')
+    expect(bodyPrefix(second)).toBe('')
+    expect(bodyPrefix(first)).toBe('\n')
   })
 })

@@ -60,38 +60,50 @@ export function nextLine(text: string, lineStart: number): number | null {
  * names the delimiter it wanted. That makes the span a property of the
  * source text, not of any token the parser produced. An operator that
  * lies inside an earlier body is text, not syntax, and one whose turn
- * comes once the source has run out has no body. Returns `[bodyStart,
- * bodyEnd]` per operator, in the order given; null when the body never
- * starts.
+ * comes once the source has run out has no body. `nested` says one line's
+ * bodies stand innermost-first, the order tree-sitter-bash's grammar
+ * closes them in, rather than in the order bash gathers them: the source
+ * the parser reads is kept in that order (see relayout), so the shield
+ * and bodyPrefix read it, while relayout reads the typed source as bash
+ * does; a line with one operator reads the same either way. Returns
+ * `[bodyStart, bodyEnd]` per operator, in the order given; null when the
+ * body never starts.
  */
 export function heredocBodies(
   text: string,
   operators: readonly HeredocOperator[],
+  nested: boolean,
 ): ([number, number] | null)[] {
   const spans: ([number, number] | null)[] = operators.map(() => null)
   const bodies: [number, number][] = []
-  let previousLineEnd: number | null = null
-  let cursor: number | null = null
+  const lines = new Map<number, number[]>()
   const order = [...operators.keys()].sort(
     (a, b) => (operators[a]?.wordStart ?? 0) - (operators[b]?.wordStart ?? 0),
   )
-  for (const position of order) {
-    const operator = operators[position]
+  for (const index of order) {
+    const operator = operators[index]
     if (operator === undefined) continue
-    if (bodies.some(([begin, end]) => begin <= operator.wordStart && operator.wordStart < end)) {
-      continue
-    }
     const lineEnd = operatorLineEnd(text, operator.wordEnd)
     if (lineEnd === null) continue
-    const bodyStart = lineEnd === previousLineEnd ? cursor : lineEnd + 1
-    previousLineEnd = lineEnd
-    cursor = null
-    if (bodyStart === null) continue
-    const bodyEnd =
-      terminatorLine(text, bodyStart, operator.delimiter, operator.allowsIndent) ?? text.length
-    spans[position] = [bodyStart, bodyEnd]
-    bodies.push([bodyStart, bodyEnd])
-    cursor = nextLine(text, bodyEnd)
+    const members = lines.get(lineEnd) ?? []
+    members.push(index)
+    lines.set(lineEnd, members)
+  }
+  for (const [lineEnd, members] of lines) {
+    let cursor: number | null = lineEnd + 1
+    for (const index of nested ? [...members].reverse() : members) {
+      const operator = operators[index]
+      if (operator === undefined) continue
+      if (bodies.some(([begin, end]) => begin <= operator.wordStart && operator.wordStart < end)) {
+        continue
+      }
+      if (cursor === null) continue
+      const bodyEnd =
+        terminatorLine(text, cursor, operator.delimiter, operator.allowsIndent) ?? text.length
+      spans[index] = [cursor, bodyEnd]
+      bodies.push([cursor, bodyEnd])
+      cursor = nextLine(text, bodyEnd)
+    }
   }
   return spans
 }
