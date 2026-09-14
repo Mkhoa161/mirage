@@ -457,6 +457,104 @@ def _parse_herestring_redirect(child: TSNodeLike) -> Redirect:
                     kind=RedirectKind.HERESTRING)
 
 
+def list_spine(
+        node: TSNodeLike
+) -> tuple[TSNodeLike, tuple[tuple[str, TSNodeLike], ...]]:
+    """The leftmost operand of a ``&&``/``||`` list and the steps after it.
+
+    tree-sitter nests a list to the left (``a || b && c`` is
+    ``list(list(a || b) && c)``), which is bash's own associativity, so
+    walking the left spine yields the first operand and then each
+    operator with its right operand in the order bash applies them.
+
+    Args:
+        node (TSNodeLike): a ``list`` node, or any operand.
+
+    Returns:
+        tuple[TSNodeLike, tuple[tuple[str, TSNodeLike], ...]]:
+        the leftmost operand and the ``(operator, right)`` steps.
+    """
+    steps: list[tuple[str, TSNodeLike]] = []
+    while node.type == NT.LIST:
+        left, op, right = get_list_parts(node)
+        steps.append((op, right))
+        node = left
+    steps.reverse()
+    return node, tuple(steps)
+
+
+def heredoc_tail(
+    redirect_node: TSNodeLike
+) -> tuple[TSNodeLike | None, tuple[tuple[str, TSNodeLike], ...]]:
+    """What the operator line carries past a heredoc's delimiter word.
+
+    Bash reads the body at the newline and then goes on with the line,
+    so ``cat <<EOF | tr a-z A-Z && echo done`` is the pipeline
+    ``cat | tr`` and then ``&& echo done``. tree-sitter-bash parses that
+    tail inside the heredoc_redirect node instead: a ``pipeline`` child
+    holding the stage the command feeds, and an ``&&`` or ``||`` token
+    followed by its right operand. The stage or operand it hands over
+    can itself be a ``list``, wrapping what bash would have bound to
+    the left (``false <<EOF || echo a && echo b`` is
+    ``(false || echo a) && echo b``, not ``false || (echo a && echo b)``),
+    so a list is unwound along its left spine: its first operand takes
+    the stage or operand slot, and the rest become further steps.
+
+    Args:
+        redirect_node (TSNodeLike): a ``heredoc_redirect`` node.
+
+    Returns:
+        tuple[TSNodeLike | None, tuple[tuple[str, Node], ...]]: the
+        node the command's stdout pipes into, or None, and the
+        ``(operator, right)`` steps applied to the statement after that,
+        in order.
+    """
+    pipe_node: TSNodeLike | None = None
+    steps: list[tuple[str, TSNodeLike]] = []
+    children = redirect_node.children
+    index = 0
+    while index < len(children):
+        child = children[index]
+        if child.type == NT.PIPELINE and pipe_node is None and not steps:
+            stages = child.named_children
+            if len(stages) == 1 and stages[0].type == NT.LIST:
+                pipe_node, spine = list_spine(stages[0])
+                steps.extend(spine)
+            else:
+                pipe_node = child
+        elif (child.type in (NT.AND, NT.OR) and index + 1 < len(children)
+              and children[index + 1].is_named):
+            right, spine = list_spine(children[index + 1])
+            steps.append((child.type, right))
+            steps.extend(spine)
+            index += 1
+        index += 1
+    return pipe_node, tuple(steps)
+
+
+def take_continuation(
+        redirects: list[Redirect]) -> tuple[tuple[str, TSNodeLike], ...]:
+    """Detach the ``&&``/``||`` steps a heredoc's operator line carried.
+
+    The steps apply to the whole redirected statement, so the executor
+    takes them off the redirects before running it and folds them in
+    around the result, the way a ``list`` node wraps its left operand.
+
+    Args:
+        redirects (list[Redirect]): the statement's redirects, whose
+            heredocs are left with no continuation.
+
+    Returns:
+        tuple[tuple[str, TSNodeLike], ...]: the steps, in order.
+    """
+    steps: list[tuple[str, TSNodeLike]] = []
+    for r in redirects:
+        if r.continuation:
+            steps.extend(r.continuation)
+            r.continuation = ()
+    return tuple(steps)
+
+
 def get_redirects(
         node: TSNodeLike,  # noqa: E125
 ) -> tuple[TSNodeLike | None, list[Redirect]]:
@@ -486,18 +584,15 @@ def get_redirects(
             continue
         if child.type == NT.HEREDOC_REDIRECT:
             body, _, quoted = get_heredoc_meta(child)
-            pipe_node = None
-            for hc in child.named_children:
-                if hc.type in (NT.PIPELINE, NT.COMMAND):
-                    pipe_node = hc
-                    break
+            pipe_node, continuation = heredoc_tail(child)
             redirects.append(
                 Redirect(fd=0,
                          target=body,
                          target_node=child,
                          kind=RedirectKind.HEREDOC,
                          pipeline=pipe_node,
-                         expand_vars=not quoted))
+                         expand_vars=not quoted,
+                         continuation=continuation))
             # A file redirect written before the heredoc body starts
             # (`cat <<END > out.txt`) parses INSIDE the
             # heredoc_redirect node; hoist it to a sibling.

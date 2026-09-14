@@ -73,6 +73,11 @@
     "list": "Encodes directory entries as QuickJS Emscripten handles. Python QuickJS uses the shared WASI host callbacks instead.",
     "stat": "Encodes stat results as QuickJS Emscripten handles. Python QuickJS uses the shared WASI host callbacks instead."
    }
+  },
+  "utils": {
+   "typescript_only": {
+    "tz_abbrevs": "The tzdata abbreviation table `date` renders %Z from, generated from zoneinfo by scripts/gen_tz_abbrevs.py. Python reads zoneinfo itself and has nothing to mirror; Intl offers no tzdata names, so typescript ships the data."
+   }
   }
  }
 }

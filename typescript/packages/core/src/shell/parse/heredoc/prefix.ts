@@ -33,7 +33,8 @@ export function treeRoot(node: TSNodeLike): TSNodeLike {
  * bash starts the body is what heredocBodies says over the whole tree, so
  * a later heredoc on the same operator line is measured from the line
  * after the earlier body's terminator rather than from the newline the
- * two operators share. What lies between that start and the body node is
+ * two operators share, innermost-first, which is the order the parser's
+ * source keeps a line's bodies in (see relayout). What lies between that start and the body node is
  * exactly the dropped run when it is blank, and is body text nowhere
  * else, so a gap holding anything but blanks and newlines yields nothing.
  * The tree's text begins at its root, which sits past any blanks before
@@ -60,7 +61,7 @@ export function bodyPrefix(redirectNode: TSNodeLike): string {
   }))
   const wordStart = start.startIndex - origin
   const index = operators.findIndex((operator) => operator.wordStart === wordStart)
-  const span = index < 0 ? null : heredocBodies(text, operators)[index]
+  const span = index < 0 ? null : heredocBodies(text, operators, true)[index]
   if (span === null || span === undefined) return ''
   const gap = text.slice(span[0], body.startIndex - origin)
   if (gap === '') return ''

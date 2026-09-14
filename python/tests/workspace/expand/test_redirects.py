@@ -508,3 +508,37 @@ async def test_heredoc_reader_integration(case):
         } == case["expect"]
     finally:
         await ws.close()
+
+
+NESTED_HEREDOC_CASES = json.loads(
+    (Path(__file__).resolve().parents[4] /
+     "integ/crossmount/nested/heredoc.json").read_text())["cases"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case",
+                         NESTED_HEREDOC_CASES,
+                         ids=lambda case: case["id"])
+async def test_heredoc_nested_mount_integration(case):
+    parent, child, ghost = RAMResource(), RAMResource(), RAMResource()
+    ws = Workspace(
+        {
+            "/data": parent,
+            "/data/inner": child,
+            "/ghost/deep": ghost
+        },
+        mode=MountMode.WRITE)
+    try:
+        io = await ws.execute(case["command"])
+        assert {
+            "exit": io.exit_code,
+            "stdout": await io.stdout_str(),
+            "stderr": (await io.materialize_stderr()).decode()
+        } == case["expect"]
+        # A longest-prefix routing bug can read back its own misplaced write;
+        # inspect ownership too, so a false round trip cannot pass.
+        assert not any(
+            key.startswith("/inner/") for key in parent._store.files)
+        assert child._store.files or ghost._store.files
+    finally:
+        await ws.close()

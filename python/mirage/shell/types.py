@@ -308,8 +308,17 @@ class Redirect:
         append (bool): whether the write appends rather than truncates.
         clobber (bool): whether the operator was `>|`, which overrides
             `set -C` for this one redirect and nothing else.
-        pipeline (Any): the process substitution feeding the target.
+        pipeline (Any): the node a heredoc's operator line pipes the
+            command into (`cat <<EOF | tr`), run on the command's
+            stdout.
         expand_vars (bool): whether the target undergoes expansion.
+        continuation (tuple[tuple[str, Any], ...]): the `&&`/`||`
+            steps a heredoc's operator line carries past the delimiter
+            word (`false <<EOF || echo x`), each an operator and its
+            right operand, in the order bash applies them to the
+            statement. tree-sitter parses that tail inside the
+            heredoc_redirect node, so it is detached here and applied
+            by the executor around the whole statement.
     """
     fd: int
     target: Any
@@ -319,6 +328,7 @@ class Redirect:
     clobber: bool = False
     pipeline: Any = None
     expand_vars: bool = True
+    continuation: tuple[tuple[str, Any], ...] = ()
 
 
 class ProcessSubDirection(StrEnum):

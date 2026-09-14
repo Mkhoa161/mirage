@@ -218,6 +218,10 @@ export interface RedirectInit {
   pipeline?: unknown
   // Whether the target undergoes expansion.
   expandVars?: boolean
+  // The `&&`/`||` steps a heredoc's operator line carries past the
+  // delimiter word (`false <<EOF || echo x`), each an operator and its
+  // right operand, in the order bash applies them to the statement.
+  continuation?: readonly (readonly [string, unknown])[]
 }
 
 export class Redirect {
@@ -227,8 +231,16 @@ export class Redirect {
   readonly kind: RedirectKind
   readonly append: boolean
   readonly clobber: boolean
+  // The node a heredoc's operator line pipes the command into
+  // (`cat <<EOF | tr`), run on the command's stdout.
   pipeline: unknown
   readonly expandVars: boolean
+  // The `&&`/`||` steps a heredoc's operator line carries past the
+  // delimiter word (`false <<EOF || echo x`), in the order bash applies
+  // them. tree-sitter parses that tail inside the heredoc_redirect node,
+  // so it is detached here and applied by the executor around the whole
+  // statement.
+  continuation: readonly (readonly [string, unknown])[]
 
   constructor(init: RedirectInit) {
     this.fd = init.fd
@@ -239,6 +251,7 @@ export class Redirect {
     this.clobber = init.clobber ?? false
     this.pipeline = init.pipeline ?? null
     this.expandVars = init.expandVars ?? true
+    this.continuation = init.continuation ?? []
   }
 }
 

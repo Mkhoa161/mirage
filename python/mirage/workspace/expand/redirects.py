@@ -76,7 +76,8 @@ async def expand_redirects(
                          append=r.append,
                          clobber=r.clobber,
                          pipeline=r.pipeline,
-                         expand_vars=r.expand_vars))
+                         expand_vars=r.expand_vars,
+                         continuation=r.continuation))
             continue
         if isinstance(r.target, int):
             expanded.append(r)

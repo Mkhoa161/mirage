@@ -404,3 +404,105 @@ def test_heredoc_reader_keeps_pipeline_outside_body():
     pipeline = root.named_children[0]
     assert pipeline.type == NT.PIPELINE
     assert get_text(pipeline.named_children[-1]) == "tr a-z A-Z"
+
+
+# ── heredoc operator lines the grammar cannot hold ───────────────────────
+
+
+def _heredoc_bodies_by_delimiter(command: str) -> dict[str, str]:
+    root = parse(command)
+    assert not root.has_error
+    found: dict[str, str] = {}
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        stack.extend(node.children)
+        document = getattr(node, "heredoc", None)
+        if document is not None:
+            found[document.delimiter] = document.body.decode()
+    return found
+
+
+# Keep the operator-line regressions from #1071. The source reader now
+# preserves their typed source while lowering bodies before grammar parsing.
+@pytest.mark.parametrize("command", [
+    'cat <<EOF; echo x\nhi\nEOF\n', 'cat <<EOF;echo x\nhi\nEOF\n',
+    'cat <<EOF>out\nhi\nEOF\n', 'cat <<EOF|wc -l\nhi\nEOF\n',
+    'cat <<EOF&&echo x\nhi\nEOF\n', "cat <<'EOF'; echo x\nhi\nEOF\n",
+    'cat <<EOF;\nhi\nEOF;\nEOF\n', '(cat <<EOF)\nhi\nEOF)\nEOF\n',
+    'cat <<A && cat <<B\na\nA\nb\nB\n', 'cat <<A; cat <<B\na\nA\nb\nB\n',
+    '(cat <<EOF)\nhi\nEOF\n', 'case x in x) cat <<EOF;; esac\nhi\nEOF\n',
+    '{ cat <<EOF; }\nhi\nEOF\n'
+])
+def test_heredoc_operator_line_preserves_original_source(command):
+    root = parse(command)
+    assert not root.has_error
+    assert root.source_text.decode() == command
+
+
+def test_two_heredocs_on_one_line_keep_their_own_bodies():
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<A && cat <<B\na\nA\nb\nB\n") == {
+            "A": "a\n",
+            "B": "b\n",
+        }
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<A | cat <<B; cat <<C\na\nA\nb\nB\nc\nC\n") == {
+            "A": "a\n",
+            "B": "b\n",
+            "C": "c\n",
+        }
+
+
+def test_heredoc_semicolon_tail_keeps_the_bodys_indentation():
+    # The shield runs on the relaid source too.
+    assert _heredoc_bodies_by_delimiter("cat <<EOF; echo x\n  hi\nEOF\n") == {
+        "EOF": "  hi\n",
+    }
+
+
+def test_heredoc_metacharacter_inside_a_quoted_delimiter_is_the_delimiter():
+    assert _heredoc_bodies_by_delimiter("cat <<'EOF;'\nhi\nEOF;\n") == {
+        "EOF;": "hi\n",
+    }
+
+
+def test_heredoc_delimiter_word_is_checked_on_a_clean_tree():
+    # `EOF;` is tree-sitter's token and a body line at once, so the typed
+    # source parses clean with a body one line short; bash's word is EOF.
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<EOF; echo x\nhi\nEOF;\nEOF\n") == {
+            "EOF": "hi\nEOF;\n",
+        }
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<EOF|tr a-z A-Z\nhi\nEOF|tr a-z A-Z\nEOF\n") == {
+            "EOF": "hi\nEOF|tr a-z A-Z\n",
+        }
+
+
+def test_heredoc_body_keeps_a_line_that_only_opens_with_the_delimiter():
+    # tree-sitter-bash's scanner compares a line's first bytes with the
+    # delimiter and stops there; bash wants the whole line.
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<EOF\nEOFX\nEOF;\n EOF\nEOF\n") == {
+            "EOF": "EOFX\nEOF;\n EOF\n",
+        }
+    assert _heredoc_bodies_by_delimiter(
+        "cat <<-EOF\n\thi\n\tEOFX\n  EOF\n\tEOF\n") == {
+            "EOF": "hi\nEOFX\n  EOF\n",
+        }
+
+
+def test_heredoc_lookalike_line_keeps_its_expansion():
+    root = parse("cat <<EOF\nEOF$v\nEOF\n")
+    redirect = root.named_children[0].named_children[-1]
+    assert redirect.heredoc.body == b"EOF$v\n"
+    word = redirect.named_children[-1]
+    assert NT.SIMPLE_EXPANSION in [c.type for c in word.named_children]
+
+
+def test_heredoc_unterminated_body_is_left_as_typed():
+    root = parse("cat <<EOF; echo x\nhi\n")
+    assert not root.has_error
+    assert root.source_text.decode() == "cat <<EOF; echo x\nhi\n"
+    assert root.warnings

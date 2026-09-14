@@ -41,11 +41,13 @@ def body_prefix(redirect_node: TSNodeLike) -> str:
     starts the body is what heredoc_bodies says over the whole tree, so
     a later heredoc on the same operator line is measured from the line
     after the earlier body's terminator rather than from the newline
-    the two operators share. What lies between that start and the body
-    node is exactly the dropped run when it is blank, and is body text
-    nowhere else, so a gap holding anything but blanks and newlines
-    yields nothing. The tree's text begins at its root, which sits past
-    any blanks before the first token, so offsets are taken from there.
+    the two operators share, innermost-first, which is the order the
+    parser's source keeps a line's bodies in (see relayout). What lies
+    between that start and the body node is exactly the dropped run when
+    it is blank, and is body text nowhere else, so a gap holding anything
+    but blanks and newlines yields nothing. The tree's text begins at its
+    root, which sits past any blanks before the first token, so offsets
+    are taken from there.
 
     Args:
         redirect_node (TSNodeLike): a heredoc_redirect node.
@@ -72,10 +74,9 @@ def body_prefix(redirect_node: TSNodeLike) -> str:
         for operator in heredoc_operators(root)
     ]
     word_start = start.start_byte - origin
-    span = next(
-        (span
-         for operator, span in zip(operators, heredoc_bodies(data, operators))
-         if operator.word_start == word_start), None)
+    spans = heredoc_bodies(data, operators, nested=True)
+    span = next((span for operator, span in zip(operators, spans)
+                 if operator.word_start == word_start), None)
     if span is None:
         return ""
     gap = data[span[0]:body.start_byte - origin]

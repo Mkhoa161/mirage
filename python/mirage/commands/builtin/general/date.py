@@ -26,6 +26,7 @@ from mirage.commands.spec.usage import extra_operand_error
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
 from mirage.utils.dates import parse_date_expr
+from mirage.utils.timezone import zone_from_env
 
 
 @command("date", resource=None, spec=SPECS["date"], provision=pure_provision)
@@ -35,23 +36,34 @@ async def date(
     texts: list[str],
     opts: CommandOpts,
 ) -> tuple[ByteSource | None, IOResult]:
+    """GNU ``date``: the current moment, or the one ``-d`` names,
+    rendered in the zone the command runs in.
+
+    The zone is ``-u``'s UTC, else the ``TZ`` of the command's own
+    environment (``TZ=Asia/Hong_Kong date`` and an exported ``TZ``
+    alike, as GNU reads it), else the host's local zone. It is read
+    from ``opts.env``, never from process state, so concurrent
+    workspaces cannot move each other's clock. ``%Z`` is tzdata's
+    abbreviation (``HKT``), as GNU prints it; the TypeScript twin reads
+    the same names from a table generated off zoneinfo, since Intl has
+    none.
+    """
     fl = FlagView(opts.flags, spec=SPECS["date"])
     u = fl.as_bool("u")
     d = fl.as_str("d")
     if len(texts) > 1:
         raise extra_operand_error(CommandName.DATE, texts[1])
+    zone = timezone.utc if u else zone_from_env(opts.env)
     if d is not None:
-        parsed_d = parse_date_expr(d, utc=u)
+        parsed_d = parse_date_expr(d, tz=zone)
         if parsed_d is None:
             # GNU's refusal, exit 1: a wrong answer with exit 0 poisons
             # whatever consumed it (the NaN-timestamp corpus failure).
             return None, IOResult(
                 exit_code=1, stderr=f"date: invalid date '{d}'\n".encode())
         dt = parsed_d
-    elif u:
-        dt = datetime.now(timezone.utc)
     else:
-        dt = datetime.now()
+        dt = datetime.now(zone)
     fmt: str | None = None
     for t in texts:
         if t.startswith("+"):
@@ -63,7 +75,8 @@ async def date(
         result = email.utils.format_datetime(dt)
     elif fmt is not None:
         result = gnu_strftime(dt, fmt)
+    elif zone is not None:
+        result = dt.strftime("%a %b %d %H:%M:%S %Z %Y")
     else:
-        result = dt.strftime("%a %b %d %H:%M:%S %Z %Y") if u else dt.strftime(
-            "%a %b %d %H:%M:%S %Y")
+        result = dt.strftime("%a %b %d %H:%M:%S %Y")
     return (result + "\n").encode(), IOResult()
