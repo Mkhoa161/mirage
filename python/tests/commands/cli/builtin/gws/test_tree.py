@@ -18,6 +18,7 @@ from mirage import Workspace
 from mirage.commands.cli.builtin.gws import GWS
 from mirage.core.google.config import GoogleConfig
 from mirage.io.types import materialize
+from mirage.types import ResourceName
 
 CONFIG = {"client_id": "cid", "refresh_token": "rt"}
 
@@ -32,6 +33,9 @@ def leaf(*path: str):
 def test_tree_lists_every_service():
     assert GWS.name == "gws"
     assert GWS.config_model is GoogleConfig
+    assert GWS.serves == (ResourceName.GDRIVE, ResourceName.GDOCS,
+                          ResourceName.GSHEETS, ResourceName.GSLIDES,
+                          ResourceName.GMAIL, ResourceName.GCAL)
     assert [g.name for g in GWS.subcommands] == [
         "drive", "sheets", "docs", "slides", "calendar", "forms", "gmail"
     ]

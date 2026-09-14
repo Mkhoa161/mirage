@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it, vi } from 'vitest'
+import { ResourceName } from '../../../../types.ts'
 import type * as UtilModule from './util.ts'
 import type { RestCall } from '../../../../core/notion/client.ts'
 import { cliSpecFor } from '../../specs.ts'
@@ -142,6 +143,7 @@ describe('ntn tree', () => {
     }
     expect(leaf('datasources', 'query').write).toBe(false)
     expect(leaf('datasources', 'resolve').write).toBe(false)
+    expect(NTN.serves).toEqual([ResourceName.NOTION])
   })
 })
 

@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { ResourceName } from '../../../../types.ts'
 import { LinearConfigSchema } from '../../../../core/linear/config.ts'
 import { CLISpec } from '../../types.ts'
 import { Operand, Option } from '../../../spec/types.ts'
@@ -44,6 +45,7 @@ export const LINEAR = new CLISpec({
   name: 'linear',
   description: 'Linear GraphQL API client',
   configModel: LinearConfigSchema,
+  serves: [ResourceName.LINEAR],
   subcommands: [
     new CLISpec({
       name: 'team',

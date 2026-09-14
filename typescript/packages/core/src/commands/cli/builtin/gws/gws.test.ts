@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it, vi } from 'vitest'
+import { ResourceName } from '../../../../types.ts'
 import type * as ClientModule from '../../../../core/google/client.ts'
 
 vi.mock('../../../../core/google/client.ts', async () => {
@@ -63,6 +64,17 @@ function leaf(...path: string[]) {
 }
 
 describe('gws tree', () => {
+  it('serves every google mount its verbs write to', () => {
+    expect(GWS.serves).toEqual([
+      ResourceName.GDRIVE,
+      ResourceName.GDOCS,
+      ResourceName.GSHEETS,
+      ResourceName.GSLIDES,
+      ResourceName.GMAIL,
+      ResourceName.GCAL,
+    ])
+  })
+
   it('lists every service and registers itself', () => {
     expect(GWS.subcommands.map((g) => g.name)).toEqual([
       'drive',

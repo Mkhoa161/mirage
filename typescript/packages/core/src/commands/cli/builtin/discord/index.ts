@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { ResourceName } from '../../../../types.ts'
 import { DiscordConfigSchema } from '../../../../core/discord/config.ts'
 import { CLISpec } from '../../types.ts'
 import { Option } from '../../../spec/types.ts'
@@ -35,6 +36,7 @@ export const DISCORD = new CLISpec({
   name: 'discord',
   description: 'Discord REST API client',
   configModel: DiscordConfigSchema,
+  serves: [ResourceName.DISCORD],
   subcommands: [
     new CLISpec({
       name: 'send',

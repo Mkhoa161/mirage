@@ -26,6 +26,7 @@ from mirage.commands.cli.builtin.slack.unpin_message import unpin_message
 from mirage.commands.cli.types import CLISpec
 from mirage.commands.spec.types import Option
 from mirage.core.slack.config import SlackConfig
+from mirage.types import ResourceName
 
 # The slack program, spelled with the OpenClaw Slack action vocabulary
 # (kebab verbs: send-message, read-messages, pin-message, list-pins,
@@ -36,6 +37,7 @@ SLACK = CLISpec(
     name="slack",
     description="Slack Web API client",
     config_model=SlackConfig,
+    serves=(ResourceName.SLACK, ),
     subcommands=(
         CLISpec(
             name="send-message",

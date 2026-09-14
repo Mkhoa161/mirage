@@ -40,7 +40,7 @@ GWS = CLISpec(
     description="Google Workspace API commands",
     config_model=GoogleConfig,
     serves=(ResourceName.GDRIVE, ResourceName.GDOCS, ResourceName.GSHEETS,
-            ResourceName.GSLIDES, ResourceName.GMAIL),
+            ResourceName.GSLIDES, ResourceName.GMAIL, ResourceName.GCAL),
     subcommands=(
         CLISpec(
             name="drive",

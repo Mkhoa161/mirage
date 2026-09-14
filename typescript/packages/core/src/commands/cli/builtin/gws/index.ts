@@ -44,6 +44,7 @@ export const GWS = new CLISpec({
     ResourceName.GSHEETS,
     ResourceName.GSLIDES,
     ResourceName.GMAIL,
+    ResourceName.GCAL,
   ],
   subcommands: [
     new CLISpec({

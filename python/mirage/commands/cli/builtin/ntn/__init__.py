@@ -27,6 +27,7 @@ from mirage.commands.cli.builtin.ntn.whoami import whoami
 from mirage.commands.cli.types import CLISpec
 from mirage.commands.spec.types import Operand, Option, UsageStyle
 from mirage.core.notion.config import NotionConfig
+from mirage.types import ResourceName
 
 # Operand names are upstream's, verbatim: they are what the refusal for
 # a missing one prints, so they are part of the grammar rather than
@@ -69,6 +70,7 @@ NTN = CLISpec(
     name="ntn",
     description="Notion CLI (Beta)",
     config_model=NotionConfig,
+    serves=(ResourceName.NOTION, ),
     # Upstream is a clap program, so this one answers in clap's voice:
     # its help layout and its refusal for a missing operand are pinned
     # against the real binary by integ/ntn_conformance.ts.

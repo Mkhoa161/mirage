@@ -22,6 +22,7 @@ from mirage.commands.cli.builtin.himalaya.send import send
 from mirage.commands.cli.types import CLISpec
 from mirage.commands.spec.types import Operand, Option
 from mirage.core.email.config import EmailConfig
+from mirage.types import ResourceName
 
 # The himalaya program tree, tracking github.com/pimalaya/himalaya's own
 # grammar: `envelope list|search` to triage, `message read/compose/send/
@@ -104,6 +105,7 @@ HIMALAYA = CLISpec(
     name="himalaya",
     description="IMAP/SMTP mail client",
     config_model=EmailConfig,
+    serves=(ResourceName.EMAIL, ),
     subcommands=(
         CLISpec(
             name="envelope",

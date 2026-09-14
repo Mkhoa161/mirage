@@ -25,6 +25,7 @@ from mirage.commands.cli.builtin.discord.thread_create import thread_create
 from mirage.commands.cli.types import CLISpec
 from mirage.commands.spec.types import Option
 from mirage.core.discord.config import DiscordConfig
+from mirage.types import ResourceName
 
 # The discord program, spelled with the OpenClaw Discord action
 # vocabulary (bare verbs: send, read, edit, delete, react, search,
@@ -35,6 +36,7 @@ DISCORD = CLISpec(
     name="discord",
     description="Discord REST API client",
     config_model=DiscordConfig,
+    serves=(ResourceName.DISCORD, ),
     subcommands=(
         CLISpec(
             name="send",

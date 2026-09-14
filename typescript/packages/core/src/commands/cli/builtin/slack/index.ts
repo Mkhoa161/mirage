@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { ResourceName } from '../../../../types.ts'
 import { SlackConfigSchema } from '../../../../core/slack/config.ts'
 import { CLISpec } from '../../types.ts'
 import { Option } from '../../../spec/types.ts'
@@ -36,6 +37,7 @@ export const SLACK = new CLISpec({
   name: 'slack',
   description: 'Slack Web API client',
   configModel: SlackConfigSchema,
+  serves: [ResourceName.SLACK],
   subcommands: [
     new CLISpec({
       name: 'send-message',

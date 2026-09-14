@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it, vi } from 'vitest'
+import { ResourceName } from '../../../../types.ts'
 import { DiscordAccessor } from '../../../../accessor/discord.ts'
 import type {
   DiscordMethod,
@@ -94,6 +95,7 @@ describe('discord tree', () => {
   it('classifies writers and keeps --answer repeatable', () => {
     const writers = new Set(DISCORD.subcommands.filter((v) => v.write).map((v) => v.name))
     expect(writers).toEqual(new Set(['send', 'edit', 'delete', 'react', 'thread-create', 'poll']))
+    expect(DISCORD.serves).toEqual([ResourceName.DISCORD])
     const pollSpec = DISCORD.subcommands.find((v) => v.name === 'poll')
     const answer = pollSpec?.options.find((o) => o.long === '--answer')
     expect(answer?.multiple).toBe(true)

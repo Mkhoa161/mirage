@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it, vi } from 'vitest'
+import { ResourceName } from '../../../../types.ts'
 import { SlackAccessor } from '../../../../accessor/slack.ts'
 import type { SlackResponse, SlackTransport } from '../../../../core/slack/client.ts'
 import { cliSpecFor } from '../../specs.ts'
@@ -83,6 +84,7 @@ describe('slack tree', () => {
   it('classifies writers', () => {
     const writers = new Set(SLACK.subcommands.filter((v) => v.write).map((v) => v.name))
     expect(writers).toEqual(new Set(['send-message', 'react', 'pin-message', 'unpin-message']))
+    expect(SLACK.serves).toEqual([ResourceName.SLACK])
   })
 })
 

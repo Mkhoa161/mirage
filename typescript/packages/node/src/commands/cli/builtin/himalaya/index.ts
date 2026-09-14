@@ -15,6 +15,7 @@
 import { registerCliSpec } from '@struktoai/mirage-core/commands/cli/specs'
 import { CLISpec } from '@struktoai/mirage-core/commands/cli/types'
 import { Operand, Option } from '@struktoai/mirage-core/commands/spec/index'
+import { ResourceName } from '@struktoai/mirage-core/types'
 import { EmailConfigSchema } from '../../../../core/email/config.ts'
 import { compose } from './compose.ts'
 import { forward } from './forward.ts'
@@ -125,6 +126,7 @@ export const HIMALAYA = new CLISpec({
   name: 'himalaya',
   description: 'IMAP/SMTP mail client',
   configModel: EmailConfigSchema,
+  serves: [ResourceName.EMAIL],
   subcommands: [
     new CLISpec({
       name: 'envelope',
