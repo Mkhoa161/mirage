@@ -43,3 +43,23 @@ describe('source reader', () => {
 it('leaves an unclosed delimiter quote as a syntax error', () => {
   expect(discoverHeredocs("cat <<'EOF\nbody", [])).toEqual([])
 })
+
+it.each([
+  '$[1 << 2]',
+  '$[1 << $[1 + 1]]',
+  '$[a[0] << 2]',
+  '$[a[1 << 2] << 3]',
+  '$[1 << $(echo 2)]',
+  '$[1 <<\n2]',
+])('ignores arithmetic shifts but finds the following heredoc: %s', (expression) => {
+  const source = `echo ${expression}; cat <<EOF\nbody\nEOF`
+  const documents = discoverHeredocs(source, [])
+  expect(documents).toHaveLength(1)
+  expect(documents[0]?.delimiter).toBe('EOF')
+  expect(documents[0]?.body).toBe('body\n')
+  expect(documents[0]?.terminated).toBe(true)
+})
+
+it('does not create a heredoc inside unclosed legacy arithmetic', () => {
+  expect(discoverHeredocs('echo $[1 << 2', [])).toEqual([])
+})

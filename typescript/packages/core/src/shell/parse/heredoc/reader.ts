@@ -143,6 +143,8 @@ export function discoverHeredocs(text: string, hints: HeredocOperator[]): Heredo
     }
     const char = text[index] ?? ''
     if (text.slice(index, index + 2) === '${') index = constructEnd(text, index, '}') ?? text.length
+    else if (text.slice(index, index + 2) === '$[')
+      index = constructEnd(text, index, ']') ?? text.length
     else if (text.slice(index, index + 2) === '((')
       index = constructEnd(text, index, ')') ?? text.length
     else if (char === '\\') index += 2

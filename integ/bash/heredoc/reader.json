@@ -959,6 +959,141 @@
         "disk",
         "opfs"
       ]
+    },
+    {
+      "id": "heredoc_reader_legacy_shift",
+      "command": "echo $[1 << 2]",
+      "expect": {
+        "exit": 0,
+        "stdout": "4\n",
+        "stderr": ""
+      },
+      "seq": 509964,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_quoted_shift",
+      "command": "echo \"$[1 << 2]\"",
+      "expect": {
+        "exit": 0,
+        "stdout": "4\n",
+        "stderr": ""
+      },
+      "seq": 509965,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_array_shift",
+      "command": "a=(2); echo $[a[0] << 2]",
+      "expect": {
+        "exit": 0,
+        "stdout": "8\n",
+        "stderr": ""
+      },
+      "seq": 509966,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_command_shift",
+      "command": "echo $[1 << $(echo 2)]",
+      "expect": {
+        "exit": 0,
+        "stdout": "4\n",
+        "stderr": ""
+      },
+      "seq": 509967,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_multiline_shift",
+      "command": "echo $[1 <<\n2]",
+      "expect": {
+        "exit": 0,
+        "stdout": "4\n",
+        "stderr": ""
+      },
+      "seq": 509968,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_shift_then_heredoc",
+      "command": "echo $[1 << 2]; cat <<EOF\nbody\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "4\nbody\n",
+        "stderr": ""
+      },
+      "seq": 509969,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_shift_before_body",
+      "command": "cat <<EOF | head -n $[1 <<\n1]\none\ntwo\nthree\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "one\ntwo\n",
+        "stderr": ""
+      },
+      "seq": 509970,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_shift_body",
+      "command": "cat <<EOF\n$[1 << 2]\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "4\n",
+        "stderr": ""
+      },
+      "seq": 509971,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
+    },
+    {
+      "id": "heredoc_reader_legacy_shift_quoted_body",
+      "command": "cat <<'EOF'\n$[1 << 2]\nEOF",
+      "expect": {
+        "exit": 0,
+        "stdout": "$[1 << 2]\n",
+        "stderr": ""
+      },
+      "seq": 509972,
+      "targets": [
+        "ram",
+        "disk",
+        "opfs"
+      ]
     }
   ]
 }

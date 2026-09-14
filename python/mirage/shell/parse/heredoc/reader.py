@@ -172,6 +172,9 @@ def discover_heredocs(data: bytes,
         if data[index:index + 2] == b"${":
             end = construct_end(data, index, constants.CLOSE_BRACE)
             index = len(data) if end is None else end
+        elif data[index:index + 2] == b"$[":
+            end = construct_end(data, index, constants.CLOSE_BRACKET)
+            index = len(data) if end is None else end
         elif data[index:index + 2] == b"((":
             end = construct_end(data, index, constants.CLOSE_PAREN)
             index = len(data) if end is None else end
