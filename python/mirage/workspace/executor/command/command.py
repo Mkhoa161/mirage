@@ -38,7 +38,9 @@ from mirage.shell.call_stack import CallStack
 from mirage.shell.job_table import JobTable
 from mirage.types import PathSpec, Producer
 from mirage.workspace.executor.builtins.links import path_stat
-from mirage.workspace.executor.command.cli import CLIContext, handle_cli
+from mirage.workspace.executor.command.cli import (CLIContext,
+                                                   drops_mount_caches,
+                                                   handle_cli)
 from mirage.workspace.executor.command.flags import option_error, parse_flags
 from mirage.workspace.executor.command.functions import run_shell_function
 from mirage.workspace.executor.command.routing import (CWD_DEFAULT_RAW,
@@ -207,12 +209,8 @@ async def handle_command(
                 ns=namespace_view_of(registry, namespace, dispatch),
                 session_view=session_view(session, registry.policies),
             ),
-            # An account CLI (one with a config model) writes to its
-            # service by id, past the dispatcher's per-path invalidation;
-            # a mount-tier CLI like git writes through the dispatcher,
-            # which invalidates as it goes, so it gets no drop.
-            drop_caches=(functools.partial(drop_mount_caches, registry) if
-                         cli_install.spec.config_model is not None else None),
+            drop_caches=(functools.partial(drop_mount_caches, registry)
+                         if drops_mount_caches(cli_install.spec) else None),
         )
 
     if cmd_name in CWD_DEFAULT_RAW:

@@ -24,7 +24,7 @@ import { ScriptSource } from '../../../runtime/routing/types.ts'
 import { LanguageRuntime } from '../../../runtime/language.ts'
 import type { RunArgs, RunResult, RuntimeLanguage } from '../../../runtime/types.ts'
 import { Session } from '../../session/session.ts'
-import { handleCli } from './cli.ts'
+import { dropsMountCaches, handleCli } from './cli.ts'
 
 // Mirrors python/tests/workspace/executor/command/test_cli.py.
 
@@ -620,5 +620,18 @@ describe('cache drop on a thrown leaf', () => {
     )
     expect(io.exitCode).toBe(1)
     expect(dropped).toEqual([])
+  })
+})
+
+describe('dropsMountCaches', () => {
+  it('is true for a root that reaches a service, false for the git tier', () => {
+    // A script root's config is opaque, so it never carries a config model,
+    // yet its program may reach a service exactly as an account CLI does;
+    // only a root with neither writes through the dispatcher.
+    expect(dropsMountCaches(makeInstall().spec)).toBe(true)
+    expect(
+      dropsMountCaches(new CLISpec({ name: 'pager', script: new ScriptSource("print('hi')") })),
+    ).toBe(true)
+    expect(dropsMountCaches(new CLISpec({ name: 'tool', fn: send }))).toBe(false)
   })
 })

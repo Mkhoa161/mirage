@@ -33,7 +33,9 @@ from mirage.shell.variable import VarAttr
 from mirage.types import Limit, MountMode, PathSpec
 from mirage.workspace import Workspace
 from mirage.workspace.cli.types import CLIInstall
-from mirage.workspace.executor.command.cli import CLIContext, handle_cli
+from mirage.workspace.executor.command.cli import (CLIContext,
+                                                   drops_mount_caches,
+                                                   handle_cli)
 from mirage.workspace.executor.command.flags import option_error, parse_flags
 from mirage.workspace.session import Session
 from mirage.workspace.session.state import seed_var, set_attr
@@ -770,3 +772,12 @@ async def test_a_mount_tier_cli_write_drops_nothing(tmp_path):
         body, listing = await _warm_then_run(ws, root, "tool poke")
         assert body == "v1\n"
         assert "made.txt" not in listing
+
+
+def test_a_service_reaching_root_drops_mount_caches():
+    # A script root's config is opaque, so it never carries a config
+    # model, yet its program may reach a service exactly as an account
+    # CLI does; only a root with neither writes through the dispatcher.
+    assert drops_mount_caches(make_install().spec)
+    assert drops_mount_caches(script_install().spec)
+    assert not drops_mount_caches(STASH)

@@ -215,6 +215,24 @@ class CLIContext:
     session_view: SessionView | None = None
 
 
+def drops_mount_caches(spec: CLISpec) -> bool:
+    """Whether a write verb of this CLI leaves every mount's caches stale.
+
+    A CLI that reaches a service writes past the dispatcher's per-path
+    invalidation, so no mount can see the write. Two roots do that: one
+    with a ``config_model`` (an account CLI, initialized from it) and a
+    script root, whose config is opaque by construction and whose
+    program may reach anything. A root with neither (``git``) has no
+    service to reach; its writes go through the dispatcher, which
+    invalidates as it goes, so a blanket drop would only cost every
+    other mount a reload.
+
+    Args:
+        spec (CLISpec): the installed root.
+    """
+    return spec.config_model is not None or spec.script is not None
+
+
 async def handle_cli(
     install: CLIInstall,
     parts: list[str | PathSpec],

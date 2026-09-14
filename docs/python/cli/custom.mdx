@@ -100,8 +100,9 @@ Mark every mutating leaf `write=True`. This is policy metadata; it does not
 perform the mutation or grant access. The handler still owns the service call.
 It is also the one cache signal: after a write verb of a CLI with a
 `config_model`, the executor expires every mount's cached listings and bodies,
-because an account CLI writes by id and no mount can see that write. A CLI
-without a `config_model` gets no such drop, since its writes go through the op
+because an account CLI writes by id and no mount can see that write. A script
+root counts too, since its config is opaque and its program may reach anything.
+A CLI with neither gets no such drop, since its writes go through the op
 dispatcher, which invalidates per path.
 
 ## Install it

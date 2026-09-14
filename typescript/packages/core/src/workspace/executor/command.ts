@@ -54,7 +54,7 @@ import type { ExecuteNodeFn, JobHandlerResult } from './jobs.ts'
 import { handleDisown, handleFg, handleJobs, handleKill, handlePs, handleWait } from './jobs.ts'
 import { versionRequest } from '../../commands/config.ts'
 
-import { handleCli } from './command/cli.ts'
+import { dropsMountCaches, handleCli } from './command/cli.ts'
 import { pathStat } from './builtins/links/index.ts'
 import { dropMountCaches, namespaceViewOf } from './command/run.ts'
 import type { NamespaceView, SessionView, StatPath } from '../../ops/types.ts'
@@ -226,11 +226,7 @@ export async function handleCommand(
           ns: namespaceViewOf(registry, namespace ?? null, dispatch),
           sessionView: sessionView(session, registry.policies),
         },
-        // An account CLI (one with a config model) writes to its service by
-        // id, past the dispatcher's per-path invalidation; a mount-tier CLI
-        // like git writes through the dispatcher, which invalidates as it
-        // goes, so it gets no drop.
-        cliInstall.spec.configModel !== null ? () => dropMountCaches(registry) : null,
+        dropsMountCaches(cliInstall.spec) ? () => dropMountCaches(registry) : null,
       ),
       mergeSignals(signal, session.abortSignal),
     )

@@ -174,6 +174,21 @@ export interface CLIContext {
 }
 
 /**
+ * Whether a write verb of this CLI leaves every mount's caches stale.
+ *
+ * A CLI that reaches a service writes past the dispatcher's per-path
+ * invalidation, so no mount can see the write. Two roots do that: one with a
+ * `configModel` (an account CLI, initialized from it) and a script root, whose
+ * config is opaque by construction and whose program may reach anything. A
+ * root with neither (`git`) has no service to reach; its writes go through the
+ * dispatcher, which invalidates as it goes, so a blanket drop would only cost
+ * every other mount a reload.
+ */
+export function dropsMountCaches(spec: CLISpec): boolean {
+  return spec.configModel !== null || spec.script !== null
+}
+
+/**
  * Execute a line whose head word is an installed CLI.
  *
  * Dispatch is by NAME: the install resolves the program tree and the
