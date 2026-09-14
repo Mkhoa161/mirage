@@ -1,0 +1,872 @@
+{
+  "cases": [
+    {
+      "id": "date_tz_prefix_utc",
+      "seq": 962340,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=UTC date -d '@0' '+%Y-%m-%d %H:%M:%S %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-01 00:00:00 +0000\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_prefix_hong_kong",
+      "seq": 962341,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -d '@0' '+%Y-%m-%d %H:%M:%S %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-01 08:00:00 +0800\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_exported",
+      "seq": 962342,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "export TZ=Asia/Hong_Kong; date -d '@0' '+%F %T %z'; TZ=UTC date -d '@0' '+%F %T %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-01 08:00:00 +0800\n1970-01-01 00:00:00 +0000\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_u_outranks_tz",
+      "seq": 962343,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -u -d '@0' '+%F %T %z %Z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-01 00:00:00 +0000 UTC\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_crosses_the_day",
+      "seq": 962344,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z' '+%F %T'; TZ=UTC date -d '1970-01-01T20:00:00Z' '+%F %T'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-02 04:00:00\n1970-01-01 20:00:00\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_relative_day",
+      "seq": 962345,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z 1 day' '+%F %T'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-03 04:00:00\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_naive_input_read_in_zone",
+      "seq": 962346,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -d '1970-01-01 00:00:00' +%s",
+      "expect": {
+        "exit": 0,
+        "stdout": "-28800\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_rfc_and_iso",
+      "seq": 962347,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -d '@0' -R; TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z' -I",
+      "expect": {
+        "exit": 0,
+        "stdout": "Thu, 01 Jan 1970 08:00:00 +0800\n1970-01-02\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_dst_zone_summer",
+      "seq": 962348,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=America/Los_Angeles date -d @1751328000 '+%F %T %z'; TZ=America/Los_Angeles date -d @1735689600 '+%F %T %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "2025-06-30 17:00:00 -0700\n2024-12-31 16:00:00 -0800\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_unknown_name_is_utc_under_that_name",
+      "seq": 962349,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Bogus/Zone date -d @0 '+%F %T %z %Z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-01 00:00:00 +0000 Bogus\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_leading_colon",
+      "seq": 962350,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=:Asia/Tokyo date -d @0 '+%T %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "09:00:00 +0900\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_posix_fixed_offsets",
+      "seq": 962351,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=UTC0 date -d @0 '+%T %z %Z'; TZ=JST-9 date -d @0 '+%T %z %Z'; TZ='<+0530>-5:30' date -d @0 '+%T %z %Z %:z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "00:00:00 +0000 UTC\n09:00:00 +0900 JST\n05:30:00 +0530 +0530 +05:30\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_posix_dst_rule",
+      "seq": 962352,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d @1751328000 '+%F %T %z %Z'; TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d @1735689600 '+%F %T %z %Z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "2025-07-01 02:00:00 +0200 CEST\n2025-01-01 01:00:00 +0100 CET\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_repeated_hour_is_standard_time",
+      "seq": 962353,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-10-26 02:30:00' '+%s %Z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1761442200 CET\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_day_keeps_the_wall_clock_hours_are_exact",
+      "seq": 962354,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-03-29 12:00:00 1 day' '+%F %T %Z'; TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-03-29 12:00:00 24 hours' '+%F %T %Z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "2025-03-30 12:00:00 CEST\n2025-03-30 13:00:00 CEST\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_empty_is_utc",
+      "seq": 962355,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ= date -d @0 '+%F %T %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1970-01-01 00:00:00 +0000\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_subshell_export_does_not_leak",
+      "seq": 962356,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "(export TZ=Asia/Hong_Kong; date -d @0 +%H); date -u -d @0 +%H",
+      "expect": {
+        "exit": 0,
+        "stdout": "08\n00\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_skipped_hour_is_invalid",
+      "seq": 962357,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Europe/Berlin date -d '2025-03-30 02:30:00' +%s",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "date: invalid date '2025-03-30 02:30:00'\n"
+      }
+    },
+    {
+      "id": "date_tz_abbrev_hong_kong",
+      "seq": 962358,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Hong_Kong date -d @0 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "HKT\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_london_summer_and_winter",
+      "seq": 962359,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Europe/London date -d @1751328000 +%Z; TZ=Europe/London date -d @1735689600 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "BST\nGMT\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_sydney_southern_dst",
+      "seq": 962360,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Australia/Sydney date -d @1751328000 +%Z; TZ=Australia/Sydney date -d @1735689600 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "AEST\nAEDT\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_kolkata",
+      "seq": 962361,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Kolkata date -d @0 '+%Z %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "IST +0530\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_numeric_zone_follows_its_history",
+      "seq": 962362,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Singapore date -d @0 +%Z; TZ=Asia/Singapore date -d @1751328000 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "+0730\n+08\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_numeric_negative",
+      "seq": 962363,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=America/Sao_Paulo date -d @0 +%Z; TZ=Etc/GMT+5 date -d @0 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "-03\n-05\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_shared_offset_keeps_the_later_name",
+      "seq": 962364,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Europe/Moscow date -d @1340000000 '+%Z %z'",
+      "expect": {
+        "exit": 0,
+        "stdout": "MSK +0400\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_dublin_1970_standard_time",
+      "seq": 962365,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Europe/Dublin date -d @0 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "IST\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_kathmandu_history",
+      "seq": 962366,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=Asia/Kathmandu date -d @0 +%Z; TZ=Asia/Kathmandu date -d @1751328000 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "+0530\n+0545\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_tz_abbrev_newfoundland",
+      "seq": 962367,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "TZ=America/St_Johns date -d @1751328000 +%Z; TZ=America/St_Johns date -d @1735689600 +%Z",
+      "expect": {
+        "exit": 0,
+        "stdout": "NDT\nNST\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

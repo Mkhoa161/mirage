@@ -15,7 +15,7 @@
 import { Language, type Node, Parser } from 'web-tree-sitter'
 
 import { ARITH_OPEN_TOKEN, DIGIT, NAME_CONT, QUOTES } from './constants.ts'
-import { protectedSource, sameShape } from './heredoc/index.ts'
+import { protectedSource, relayout, sameShape, wordBreaks } from './heredoc/index.ts'
 
 export interface ShellParserConfig {
   engineWasm: Uint8Array | ArrayBuffer
@@ -103,6 +103,36 @@ function parseProtected(parser: Parser, text: string): Node {
   const reused = parser.parse(text, shielded)
   if (reused === null || !sameShape(shielded.rootNode, reused.rootNode)) return tree.rootNode
   return reused.rootNode
+}
+
+/**
+ * Reparse heredoc lines tree-sitter-bash cannot read as bash does.
+ *
+ * Two shapes, in the order they have to be fixed. The lexer ends an
+ * unquoted delimiter at a blank, so `cat <<EOF; echo x` waits for a line
+ * reading `EOF;`: a blank is put where bash ends the word (`EOF ;`) and
+ * the line reparsed, which alone settles `<<EOF>out` and `<<EOF|wc`. The
+ * grammar then keeps everything after the operator, up to the body,
+ * inside the redirect, so a terminator on the operator line or a second
+ * heredoc's body in source order still fails; relayout moves the text to
+ * where the grammar reads it as bash did. Each retry is kept only when it
+ * parses cleanly; otherwise the tree and source as typed are handed back.
+ */
+function repairHeredocLines(parser: Parser, root: Node, text: string): [Node, string] {
+  const typed: [Node, string] = [root, text]
+  const offsets = wordBreaks(root)
+  if (offsets.length > 0) {
+    for (const offset of offsets.sort((a, b) => b - a)) {
+      text = `${text.slice(0, offset)} ${text.slice(offset)}`
+    }
+    root = parseProtected(parser, text)
+    if (!root.hasError) return [root, text]
+  }
+  const relaid = relayout(root, text)
+  if (relaid === null) return typed
+  const retried = parseProtected(parser, relaid)
+  if (retried.hasError) return typed
+  return [retried, relaid]
 }
 
 /**
@@ -246,6 +276,12 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
      * (see orphanedDollarOffsets); those expansions are rebraced and
      * the line reparsed, so the returned tree can spell `$id` as
      * `${id}`.
+     *
+     * A heredoc whose operator line the grammar cannot hold (a `;` after
+     * the operator, two heredocs on one line) is re-laid so the same
+     * text reaches the same commands (see repairHeredocLines), so the
+     * returned tree's text can put a statement typed on the operator
+     * line on the line after the body.
      */
     parse(command: string): Node {
       const source = stripLineContinuation(command)
@@ -272,6 +308,11 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
             text = split
           }
         }
+      }
+      if (root.hasError && text.includes('<<')) {
+        const repaired = repairHeredocLines(parser, root, text)
+        root = repaired[0]
+        text = repaired[1]
       }
       if (text.includes('$')) {
         root = repairOrphanedDollars(parser, root, text)

@@ -21,6 +21,7 @@ import {
   toIsoZ,
   utcDateFolder,
 } from './dates.ts'
+import { LOCAL_ZONE, UTC_ZONE } from './timezone.ts'
 
 describe('inMtimeWindow', () => {
   it('keeps everything under an unbounded window', () => {
@@ -76,79 +77,87 @@ describe('parseDateExpr', () => {
   const NOW = new Date(Date.UTC(2026, 7, 16, 13, 45, 30))
 
   it('parses relative displacements', () => {
-    expect(parseDateExpr('24 hours ago', true, NOW)).toEqual(
+    expect(parseDateExpr('24 hours ago', UTC_ZONE, NOW)).toEqual(
       new Date(Date.UTC(2026, 7, 15, 13, 45, 30)),
     )
-    expect(parseDateExpr('3 days', true, NOW)).toEqual(new Date(Date.UTC(2026, 7, 19, 13, 45, 30)))
-    expect(parseDateExpr('-2 weeks', true, NOW)).toEqual(new Date(Date.UTC(2026, 7, 2, 13, 45, 30)))
-    expect(parseDateExpr('2days', true, NOW)).toEqual(new Date(Date.UTC(2026, 7, 18, 13, 45, 30)))
+    expect(parseDateExpr('3 days', UTC_ZONE, NOW)).toEqual(
+      new Date(Date.UTC(2026, 7, 19, 13, 45, 30)),
+    )
+    expect(parseDateExpr('-2 weeks', UTC_ZONE, NOW)).toEqual(
+      new Date(Date.UTC(2026, 7, 2, 13, 45, 30)),
+    )
+    expect(parseDateExpr('2days', UTC_ZONE, NOW)).toEqual(
+      new Date(Date.UTC(2026, 7, 18, 13, 45, 30)),
+    )
   })
 
   it('parses word displacements', () => {
-    expect(parseDateExpr('yesterday', true, NOW)).toEqual(
+    expect(parseDateExpr('yesterday', UTC_ZONE, NOW)).toEqual(
       new Date(Date.UTC(2026, 7, 15, 13, 45, 30)),
     )
-    expect(parseDateExpr('tomorrow', true, NOW)).toEqual(
+    expect(parseDateExpr('tomorrow', UTC_ZONE, NOW)).toEqual(
       new Date(Date.UTC(2026, 7, 17, 13, 45, 30)),
     )
-    expect(parseDateExpr('now', true, NOW)).toEqual(NOW)
-    expect(parseDateExpr('last year', true, NOW)).toEqual(
+    expect(parseDateExpr('now', UTC_ZONE, NOW)).toEqual(NOW)
+    expect(parseDateExpr('last year', UTC_ZONE, NOW)).toEqual(
       new Date(Date.UTC(2025, 7, 16, 13, 45, 30)),
     )
-    expect(parseDateExpr('next month', true, NOW)).toEqual(
+    expect(parseDateExpr('next month', UTC_ZONE, NOW)).toEqual(
       new Date(Date.UTC(2026, 8, 16, 13, 45, 30)),
     )
   })
 
   it('normalizes month overflow through the calendar like GNU', () => {
-    expect(parseDateExpr('2026-01-31 1 month', true, NOW)).toEqual(new Date(Date.UTC(2026, 2, 3)))
+    expect(parseDateExpr('2026-01-31 1 month', UTC_ZONE, NOW)).toEqual(
+      new Date(Date.UTC(2026, 2, 3)),
+    )
   })
 
   it('parses an ISO base with a relative tail', () => {
-    expect(parseDateExpr('2026-08-16 12:00:00 24 hours ago', true, NOW)).toEqual(
+    expect(parseDateExpr('2026-08-16 12:00:00 24 hours ago', UTC_ZONE, NOW)).toEqual(
       new Date(Date.UTC(2026, 7, 15, 12, 0, 0)),
     )
   })
 
   it('parses @epoch and zone offsets', () => {
-    expect(parseDateExpr('@1755300000', true)).toEqual(new Date(1755300000 * 1000))
-    expect(parseDateExpr('2026-08-16T10:00:00+02:00', true)).toEqual(
+    expect(parseDateExpr('@1755300000', UTC_ZONE)).toEqual(new Date(1755300000 * 1000))
+    expect(parseDateExpr('2026-08-16T10:00:00+02:00', UTC_ZONE)).toEqual(
       new Date(Date.UTC(2026, 7, 16, 8, 0, 0)),
     )
   })
 
   it('refuses a zone past a day, as GNU and Python do', () => {
     for (const zone of ['+99:99', '+24:00', '+23:60']) {
-      expect(parseDateExpr(`2026-01-01T00:00${zone}`, true)).toBeNull()
+      expect(parseDateExpr(`2026-01-01T00:00${zone}`, UTC_ZONE)).toBeNull()
     }
-    expect(parseDateExpr('2026-01-01T00:00+23:59', true)).not.toBeNull()
+    expect(parseDateExpr('2026-01-01T00:00+23:59', UTC_ZONE)).not.toBeNull()
   })
 
   it('truncates fractional seconds instead of rounding into the next second', () => {
-    expect(parseDateExpr('2026-01-01T00:00:00.9999Z', true)).toEqual(
+    expect(parseDateExpr('2026-01-01T00:00:00.9999Z', UTC_ZONE)).toEqual(
       new Date(Date.UTC(2026, 0, 1, 0, 0, 0, 999)),
     )
-    expect(parseDateExpr('2026-01-01T00:00:00.5Z', true)).toEqual(
+    expect(parseDateExpr('2026-01-01T00:00:00.5Z', UTC_ZONE)).toEqual(
       new Date(Date.UTC(2026, 0, 1, 0, 0, 0, 500)),
     )
   })
 
   it('returns null for anything it cannot parse', () => {
-    expect(parseDateExpr('not a date', true, NOW)).toBeNull()
-    expect(parseDateExpr('24 hours agoo', true, NOW)).toBeNull()
-    expect(parseDateExpr('', true, NOW)).toBeNull()
-    expect(parseDateExpr('@abc', true, NOW)).toBeNull()
+    expect(parseDateExpr('not a date', UTC_ZONE, NOW)).toBeNull()
+    expect(parseDateExpr('24 hours agoo', UTC_ZONE, NOW)).toBeNull()
+    expect(parseDateExpr('', UTC_ZONE, NOW)).toBeNull()
+    expect(parseDateExpr('@abc', UTC_ZONE, NOW)).toBeNull()
   })
 })
 
 describe('parseDateExpr years below 100', () => {
   it('keeps a year below 100 as itself, as GNU and Python do', () => {
     // `Date.UTC(42, ...)` is 1942; GNU `date -d 0042-01-01` is year 42.
-    expect(parseDateExpr('0042-01-01', true)?.getUTCFullYear()).toBe(42)
-    expect(parseDateExpr('0042-01-01T00:00:00Z', true)?.getUTCFullYear()).toBe(42)
-    expect(parseDateExpr('0042-01-01T00:00+01:00', true)?.getUTCFullYear()).toBe(41)
-    expect(parseDateExpr('0099-12-31', false)?.getFullYear()).toBe(99)
-    expect(parseDateExpr('0042-01-01', true)?.getTime()).toBe(-60841756800 * 1000)
+    expect(parseDateExpr('0042-01-01', UTC_ZONE)?.getUTCFullYear()).toBe(42)
+    expect(parseDateExpr('0042-01-01T00:00:00Z', UTC_ZONE)?.getUTCFullYear()).toBe(42)
+    expect(parseDateExpr('0042-01-01T00:00+01:00', UTC_ZONE)?.getUTCFullYear()).toBe(41)
+    expect(parseDateExpr('0099-12-31', LOCAL_ZONE)?.getFullYear()).toBe(99)
+    expect(parseDateExpr('0042-01-01', UTC_ZONE)?.getTime()).toBe(-60841756800 * 1000)
   })
 })
 
@@ -168,7 +177,7 @@ describe('parseDateExpr @epoch', () => {
   ])('%s is %s', (word, accepted) => {
     // findutils 4.10 (gnulib): Number() would take `0x1`, `1e2`, `1.` and
     // `.5`, and GNU refuses every one of them.
-    expect(parseDateExpr(word, true) !== null).toBe(accepted)
+    expect(parseDateExpr(word, UTC_ZONE) !== null).toBe(accepted)
   })
 })
 

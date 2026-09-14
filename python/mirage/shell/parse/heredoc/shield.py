@@ -89,7 +89,8 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     does, without moving a single offset; the caller then reads the body
     back out of the untouched source. An empty line before the first
     kept one has no byte to mask without moving a row, so those are left
-    to body_prefix.
+    to body_prefix. Bodies are read innermost-first per line, the order
+    the parser's source keeps them in (see relayout).
 
     Args:
         data (bytes): the shell source.
@@ -102,7 +103,8 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     out = bytearray(data)
     changed = False
     operators = heredoc_operators(root)
-    for operator, span in zip(operators, heredoc_bodies(data, operators)):
+    spans = heredoc_bodies(data, operators, nested=True)
+    for operator, span in zip(operators, spans):
         if span is None:
             continue
         line = first_content_line(data, *span)

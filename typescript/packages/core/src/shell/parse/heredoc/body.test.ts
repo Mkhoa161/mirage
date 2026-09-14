@@ -28,10 +28,16 @@ function operator(command: string, token: string, dash = false): HeredocOperator
   }
 }
 
-function bodies(command: string, tokens: string[], dash = false): ([number, number] | null)[] {
+function bodies(
+  command: string,
+  tokens: string[],
+  dash = false,
+  nested = false,
+): ([number, number] | null)[] {
   return heredocBodies(
     command,
     tokens.map((token) => operator(command, token, dash)),
+    nested,
   )
 }
 
@@ -172,5 +178,26 @@ describe('heredocBodies', () => {
   it('starts the body after a multiline parameter expansion', () => {
     const cmd = 'cat <<EOF >${x:-\n/out}\nbody\nEOF\n'
     expect(bodies(cmd, ['EOF'])).toEqual([[cmd.indexOf('body'), cmd.indexOf('EOF\n')]])
+  })
+})
+
+describe('heredocBodies: nested order, the layout the parser source keeps', () => {
+  it("reads a line's bodies innermost-first", () => {
+    const command = 'cat <<A && cat <<B\nb\nB\na\nA\n'
+    const bStart = command.indexOf('\nb\n') + 1
+    const aStart = command.indexOf('\na\n') + 1
+    expect(bodies(command, ['A', 'B'], false, true)).toEqual([
+      [aStart, aStart + 2],
+      [bStart, bStart + 2],
+    ])
+  })
+
+  it('agrees with bash order on a single heredoc per line', () => {
+    const command = 'cat <<A\na\nA\ncat <<B\nb\nB\n'
+    expect(bodies(command, ['A', 'B'], false, true)).toEqual(bodies(command, ['A', 'B']))
+  })
+
+  it('still treats an operator inside a body as text', () => {
+    expect(bodies('cat <<A\ncat <<B\nA\nB\n', ['A', 'B'], false, true)).toEqual([[8, 16], null])
   })
 })

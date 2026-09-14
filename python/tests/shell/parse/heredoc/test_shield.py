@@ -118,11 +118,13 @@ def test_protected_source_handles_every_heredoc_on_the_line_list():
 
 
 def test_protected_source_shields_both_bodies_of_one_operator_line():
-    cmd = "cat <<A ; cat <<B\n\\one\nA\n\\two\nB\n"
+    # Laid out as the parser's source keeps two heredocs on one line:
+    # innermost-first (see relayout), so B's body precedes A's.
+    cmd = "cat <<A && cat <<B\n\\two\nB\n\\one\nA\n"
     out = protected_source(cmd.encode(), _root(cmd))
     assert out is not None
-    assert _diff(cmd, out) == [(cmd.index("\\one"), "x"),
-                               (cmd.index("\\two"), "x")]
+    assert _diff(cmd, out) == [(cmd.index("\\two"), "x"),
+                               (cmd.index("\\one"), "x")]
 
 
 def test_protected_source_shields_an_escaped_double_quoted_delimiter():

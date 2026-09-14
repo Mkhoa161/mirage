@@ -82,13 +82,14 @@ export function firstContentLine(text: string, bodyStart: number, bodyEnd: numbe
  * without moving a single offset; the caller then reads the body back
  * out of the untouched source. An empty line before the first kept one
  * has no character to mask without moving a row, so those are left to
- * bodyPrefix. Returns null when every body already lexes as bash reads
- * it.
+ * bodyPrefix. Bodies are read innermost-first per line, the order the
+ * parser's source keeps them in (see relayout). Returns null when every
+ * body already lexes as bash reads it.
  */
 export function protectedSource(text: string, root: Node): string | null {
   let out = text
   const operators = heredocOperators(root)
-  const spans = heredocBodies(text, operators)
+  const spans = heredocBodies(text, operators, true)
   operators.forEach((operator, position) => {
     const span = spans[position]
     if (span === null || span === undefined) return

@@ -42,12 +42,12 @@ def test_iso_base_with_relative_tail():
 
 
 def test_epoch():
-    parsed = parse_date_expr("@1755300000", utc=True)
+    parsed = parse_date_expr("@1755300000", tz=timezone.utc)
     assert parsed == datetime(2025, 8, 15, 23, 20, tzinfo=timezone.utc)
 
 
 def test_iso_datetime_with_offset_converts_under_utc():
-    parsed = parse_date_expr("2026-08-16T10:00:00+02:00", utc=True)
+    parsed = parse_date_expr("2026-08-16T10:00:00+02:00", tz=timezone.utc)
     assert parsed is not None
     assert parsed.hour == 8
     assert parsed.tzinfo == timezone.utc
@@ -57,8 +57,10 @@ def test_iso_zone_past_a_day_is_invalid():
     # GNU refuses `+99:99`; a zone strictly inside a day is also the
     # rule datetime enforces, and the TypeScript twin mirrors it.
     for zone in ("+99:99", "+24:00", "+23:60"):
-        assert parse_date_expr(f"2026-01-01T00:00{zone}", utc=True) is None
-    assert parse_date_expr("2026-01-01T00:00+23:59", utc=True) is not None
+        assert parse_date_expr(f"2026-01-01T00:00{zone}",
+                               tz=timezone.utc) is None
+    assert parse_date_expr("2026-01-01T00:00+23:59",
+                           tz=timezone.utc) is not None
 
 
 def test_invalid_returns_none():
@@ -101,4 +103,4 @@ def test_timestamp_iso_passes_none_through():
 def test_epoch_is_a_decimal_count_of_seconds(word, accepted):
     # findutils 4.10 (gnulib): float() would take `0x1`, `1e2`, `1.` and
     # `.5`, and GNU refuses every one of them.
-    assert (parse_date_expr(word, utc=True) is not None) is accepted
+    assert (parse_date_expr(word, tz=timezone.utc) is not None) is accepted
