@@ -1198,10 +1198,19 @@ jobs:
             --predicate '(process == "fskitd" OR process == "fskit_agent") AND messageType == error' \
             2>/dev/null | tail -40 || true
 
+  # The suite battery is split in two: the runner, both in-process hosts and
+  # the CLI driver all take the same suite-name filter, so one leg's list
+  # drives every step that costs time. Leg A is named and leg B is whatever
+  # is left, so a new integ/runtime/*.json joins a leg instead of leaving CI.
   integ-runtime:
     needs: [changes, typescript-build]
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [a, b]
     services:
       redis:
         image: redis:7
@@ -1241,8 +1250,36 @@ jobs:
       # broken build download cannot silently drop wasi/quickjs/docker
       # coverage.
       INTEG_RUNTIME_STRICT: "1"
+      # cli.sh runs the two hosts concurrently and waits on both, so a leg
+      # costs max(python, typescript) rather than their sum. This list was
+      # picked off measured per-suite wall clock to halve BOTH hosts (python
+      # 50/50, typescript 48/52), so the balance holds whichever one binds on
+      # a given runner. Re-read the `suite <host>/<name> <n>s` lines cli.sh
+      # prints before moving a suite across.
+      LEG_A_SUITES: "defaults guestops limits lines policy quickjs registry script_cli"
     steps:
       - uses: actions/checkout@v7
+
+      - name: Resolve this leg's suites
+        env:
+          LEG: ${{ matrix.leg }}
+        run: |
+          set -euo pipefail
+          all=$(jq -r '.suite' integ/runtime/*.json | sort -u)
+          a=$(printf '%s\n' $LEG_A_SUITES | sort -u)
+          unknown=$(comm -13 <(printf '%s\n' "$all") <(printf '%s\n' "$a"))
+          if [ -n "$unknown" ]; then
+            echo "LEG_A_SUITES names suites with no json: $unknown" >&2
+            exit 1
+          fi
+          b=$(comm -23 <(printf '%s\n' "$all") <(printf '%s\n' "$a"))
+          if [ -z "$a" ] || [ -z "$b" ]; then
+            echo "a leg is empty: every suite would run twice or not at all" >&2
+            exit 1
+          fi
+          if [ "$LEG" = a ]; then suites="$a"; else suites="$b"; fi
+          echo "SUITES=$(printf '%s' "$suites" | tr '\n' ' ')" >> "$GITHUB_ENV"
+          printf 'leg %s runs:\n%s\n' "$LEG" "$suites"
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -1350,17 +1387,18 @@ jobs:
           done
 
       - name: Run every runtime through the JSON suites (python)
-        run: ./python/.venv/bin/python integ/runtime/run.py
+        run: ./python/.venv/bin/python integ/runtime/run.py $SUITES
 
       - name: Run every runtime through the JSON suites (typescript)
         working-directory: integ
-        run: pnpm exec tsx runtime/run.ts
+        run: pnpm exec tsx runtime/run.ts $SUITES
 
       - name: Run every runtime through the CLI and both daemons
         run: |
           bash integ/runtime/cli.sh \
             "python/.venv/bin/mirage" \
-            "node typescript/packages/cli/dist/bin/mirage.js"
+            "node typescript/packages/cli/dist/bin/mirage.js" \
+            $SUITES
 
   integ-observability:
     needs: [changes, typescript-build]

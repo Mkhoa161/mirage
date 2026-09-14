@@ -277,6 +277,11 @@ run_host() {
       fi
       continue
     fi
+    # Every result line is written to a per-host log and printed only after
+    # both hosts finish, so the step is opaque while it runs and a suite's
+    # cost cannot be read back off the CI log. Record it per suite instead:
+    # this is what says whether the CI leg split is still balanced.
+    local suite_t0=$SECONDS
     local case_json
     while IFS= read -r case_json; do
       if ! jq -e --arg h "$host" \
@@ -297,6 +302,7 @@ run_host() {
         fail=$((fail + 1))
       fi
     done < <(jq -c '.cases[]' <<<"$suite_json")
+    echo "suite $host/$suite $((SECONDS - suite_t0))s"
   done
 
   $cli daemon stop >/dev/null 2>&1 </dev/null || true
