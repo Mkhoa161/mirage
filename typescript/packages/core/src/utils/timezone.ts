@@ -52,27 +52,37 @@ export interface Zone {
   parts(dt: Date): ZoneParts
   /**
    * The instant whose wall clock reads `p`. A wall clock two instants share
-   * (the hour repeated when DST ends) resolves to the later one, as glibc's
-   * mktime resolves it; one no instant shows (the hour skipped when DST
-   * starts) resolves under the standard offset, so a caller that must
-   * refuse it compares `parts` of the result against `p`.
+   * (the hour repeated when DST ends) resolves to the one under `prefer`,
+   * the offset in seconds east that a displaced moment started from, which
+   * is how gnulib hands mktime the base's tm_isdst, and to the later one
+   * without it, as glibc's mktime resolves an absolute reading. One no
+   * instant shows (the hour skipped when DST starts) is read under the
+   * offset in force before the change and so lands forward by the gap,
+   * which a caller that must refuse it detects by comparing `parts` of the
+   * result against `p`.
    */
-  fromWall(p: WallParts): Date
+  fromWall(p: WallParts, prefer?: number): Date
 }
 
 const HOUR = 3600
 const DAY_MS = 86_400_000
-const WEEK_MS = 7 * DAY_MS
 
-// A POSIX TZ name: `<...>` quotes any run of letters, digits and signs
-// (`<+0530>`), and a bare name is three or more letters (`EST`, `CEST`).
-const NAME_RE = /<([+\-0-9A-Za-z]+)>|([A-Za-z]{3,})/y
-// A POSIX offset or rule time: `[+-]h[h[h]][:mm[:ss]]`.
-const OFFSET_RE = /([+-]?)(\d{1,3})(?::(\d{1,2}))?(?::(\d{1,2}))?/y
-const RULE_RE = /M(\d{1,2})\.(\d)\.(\d)|J(\d{1,3})|(\d{1,3})/y
-// The rule glibc applies when a DST name comes with no `,rule`: the US
-// transitions, second Sunday of March and first Sunday of November.
-const DEFAULT_RULES = 'M3.2.0,M11.1.0'
+// A POSIX TZ name: `<...>` quotes three or more letters, digits and signs
+// (`<+0530>`), and a bare name is three or more letters (`EST`).
+const NAME_RE = /<([+\-0-9A-Za-z]{3,})>|([A-Za-z]{3,})/y
+// An unsigned `h[:m[:s]]` as glibc's `%hu:%hu:%hu` reads it: each field
+// takes any run of digits, and a colon with no digits after it ends the
+// number there.
+const CLOCK_RE = /(\d+)(?::(\d+))?(?::(\d+))?/y
+const DIGITS_RE = /\d+/y
+// `Mm.w.d`, read as far as it goes: `M3` and `M3.5` are the partial reads
+// glibc keeps when it refuses the rule.
+const MONTH_RULE_RE = /M(?:(\d+)(?:\.(\d+)(?:\.(\d+))?)?)?/y
+// glibc clamps a POSIX offset at 24 hours (`UTC24`, and `UTC99` reads the
+// same), one second past what Python's tzinfo may carry, so both mirage
+// hosts stop there: `TZ=UTC24 date -d @0 +%z` is `-2359` here, `-2400`
+// under GNU, and the wall clock lands one second later.
+const MAX_OFFSET = 24 * HOUR - 1
 
 /**
  * A Date from wall-clock fields read as UTC. `Date.UTC` reads a year below
@@ -167,16 +177,22 @@ export function numericAbbreviation(offsetSec: number): string {
 }
 
 /**
- * The abbreviation tzdata gives `name` at `offsetSec`, which is what GNU
- * date prints for `%Z` and what Python's zoneinfo renders. Intl only
- * offers `GMT+8`, so the lettered names ship in TZ_ABBREVS (generated
- * from zoneinfo by scripts/gen_tz_abbrevs.py) and are looked up by the
- * offset Intl does report; an offset with no row is one tzdata spells
- * out (`+08`).
+ * The abbreviation tzdata gives `name` at `offsetSec` as of `atSec` (epoch
+ * seconds), which is what GNU date prints for `%Z` and what Python's
+ * zoneinfo renders. Intl only offers `GMT+8`, so the names ship in
+ * TZ_ABBREVS (generated from zoneinfo by scripts/gen_tz_abbrevs.py), one
+ * row per name an offset has carried with the moment it took effect: the
+ * latest row for the offset that had taken effect by `atSec` wins, the
+ * earliest stands in before the table's 1970 start, and an offset with no
+ * row is one tzdata spells out (`+08`).
  */
-export function tzAbbreviation(name: string, offsetSec: number): string {
-  const row = TZ_ABBREVS[name]?.find(([offset]) => offset === offsetSec)
-  return row === undefined ? numericAbbreviation(offsetSec) : row[1]
+export function tzAbbreviation(name: string, offsetSec: number, atSec: number): string {
+  let found: string | undefined
+  for (const [offset, abbrev, since] of TZ_ABBREVS[name] ?? []) {
+    if (offset !== offsetSec) continue
+    if (found === undefined || since <= atSec) found = abbrev
+  }
+  return found ?? numericAbbreviation(offsetSec)
 }
 
 /**
@@ -218,21 +234,24 @@ class IntlZone implements Zone {
       ...wall,
       weekday: shown.getUTCDay(),
       offsetSec,
-      abbrev: tzAbbreviation(this.name, offsetSec),
+      abbrev: tzAbbreviation(this.name, offsetSec, Math.floor(dt.getTime() / 1000)),
     }
   }
 
-  fromWall(p: WallParts): Date {
+  fromWall(p: WallParts, prefer?: number): Date {
     const wall = utcFromWall(p).getTime()
-    // The offset at the wall clock read as UTC is within a day of the
-    // right one; the offset at that first guess is the right one except
-    // across a transition, where the two guesses are the two readings.
-    const first = wall - this.parts(new Date(wall)).offsetSec * 1000
-    const second = wall - this.parts(new Date(first)).offsetSec * 1000
-    for (const t of [Math.max(first, second), Math.min(first, second)]) {
-      if (utcFromWall(this.parts(new Date(t))).getTime() === wall) return new Date(t)
-    }
-    return new Date(second)
+    // The offsets a day before and a day after the wall clock read as UTC
+    // bracket any change near it; reading under each gives the candidate
+    // instants, both of which show `p` in a repeated hour and neither of
+    // which does in a skipped one.
+    const before = this.parts(new Date(wall - DAY_MS)).offsetSec
+    const after = this.parts(new Date(wall + DAY_MS)).offsetSec
+    const candidates =
+      before === after ? [wall - before * 1000] : [wall - before * 1000, wall - after * 1000]
+    const shown = candidates.filter((t) => utcFromWall(this.parts(new Date(t))).getTime() === wall)
+    if (shown.length === 0) return new Date(wall - before * 1000)
+    const kept = shown.find((t) => this.parts(new Date(t)).offsetSec === prefer)
+    return new Date(kept ?? Math.max(...shown))
   }
 }
 
@@ -241,7 +260,11 @@ class IntlZone implements Zone {
  * day it happens at: `M` is month/week/weekday (week 5 is the last such
  * weekday, weekday 0 is Sunday), `J` a Julian day that never counts
  * February 29, `D` a zero-based day of the year that does. The time may
- * run past a day in either direction (`/-1`, `/25`), as POSIX allows.
+ * run past a day in either direction (`/-1`, `/25`), as POSIX allows. The
+ * fields hold what glibc read, which for a rule it refused may sit outside
+ * POSIX's ranges (see readRule): week 0 counts as 1, a weekday past 6
+ * counts on from the month's first Sunday, and `J` day 0 is the day before
+ * January 1, the way glibc's arithmetic has them.
  */
 export interface TransitionRule {
   kind: 'M' | 'J' | 'D'
@@ -252,8 +275,26 @@ export interface TransitionRule {
   seconds: number
 }
 
+// The rules glibc applies when a DST name comes with no `,rule`, or one
+// clause is missing: the US transitions, second Sunday of March and first
+// Sunday of November, at 02:00.
+const US_RULES: readonly [TransitionRule, TransitionRule] = [
+  { kind: 'M', month: 3, week: 2, weekday: 0, day: 0, seconds: 2 * HOUR },
+  { kind: 'M', month: 11, week: 1, weekday: 0, day: 0, seconds: 2 * HOUR },
+]
+// What glibc leaves in a rule it refused: the state it zeroed before
+// reading, day 0 of the year at 00:00, or, once it had read a `J`, Julian
+// day 0, the day before January 1.
+const ZERO_RULE: TransitionRule = { kind: 'D', month: 0, week: 0, weekday: 0, day: 0, seconds: 0 }
+const REFUSED_JULIAN: TransitionRule = { ...ZERO_RULE, kind: 'J' }
+
 function isLeap(year: number): boolean {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+}
+
+// Days in `month` (1 for January) of `year`: day 0 of the next month.
+function daysInMonth(year: number, month: number): number {
+  return utcFromWall({ year, month, day: 0, hour: 0, minute: 0, second: 0, ms: 0 }).getUTCDate()
 }
 
 /** The transition's wall-clock moment in `year`, as ms of that wall clock read as UTC. */
@@ -270,9 +311,14 @@ export function transitionAt(rule: TransitionRule, year: number): number {
       second: 0,
       ms: 0,
     })
-    const ahead = (rule.weekday - first.getUTCDay() + 7) % 7
-    date = first.getTime() + ahead * DAY_MS + (rule.week - 1) * WEEK_MS
-    while (new Date(date).getUTCMonth() !== rule.month - 1) date -= WEEK_MS
+    let day = rule.weekday - first.getUTCDay()
+    if (day < 0) day += 7
+    const days = daysInMonth(year, rule.month)
+    for (let week = 1; week < rule.week; week++) {
+      if (day + 7 >= days) break
+      day += 7
+    }
+    date = first.getTime() + day * DAY_MS
   } else if (rule.kind === 'J') {
     date = jan1.getTime() + (rule.day - 1) * DAY_MS
     if (isLeap(year) && rule.day >= 60) date += DAY_MS
@@ -287,8 +333,11 @@ export function transitionAt(rule: TransitionRule, year: number): number {
  * (`CET-1CEST,M3.5.0,M10.5.0/3`), the way glibc reads one. The two offsets
  * and the two rules decide everything: an instant is in DST when it lies
  * between the start transition, given in standard wall time, and the end
- * transition, given in DST wall time, with the window wrapping the year in
- * the southern hemisphere.
+ * transition, given in DST wall time, both laid out in the year the UTC
+ * clock reads, with the window wrapping the year in the southern
+ * hemisphere and empty when the two coincide. The DST half may be nameless
+ * with a zero offset, which is what glibc keeps when it cannot read its
+ * name.
  */
 class PosixZone implements Zone {
   constructor(
@@ -301,10 +350,10 @@ class PosixZone implements Zone {
   ) {}
 
   private inDst(utcMs: number): boolean {
-    const year = new Date(utcMs + this.stdOffsetSec * 1000).getUTCFullYear()
+    const year = new Date(utcMs).getUTCFullYear()
     const start = transitionAt(this.start, year) - this.stdOffsetSec * 1000
     const end = transitionAt(this.end, year) - this.dstOffsetSec * 1000
-    if (start < end) return start <= utcMs && utcMs < end
+    if (start <= end) return start <= utcMs && utcMs < end
     return !(end <= utcMs && utcMs < start)
   }
 
@@ -315,15 +364,18 @@ class PosixZone implements Zone {
     return { ...shown, offsetSec, abbrev: inDst ? this.dst : this.std }
   }
 
-  fromWall(p: WallParts): Date {
+  fromWall(p: WallParts, prefer?: number): Date {
     const wall = utcFromWall(p).getTime()
     const asStd = wall - this.stdOffsetSec * 1000
     const asDst = wall - this.dstOffsetSec * 1000
-    // Standard time first: it is the later of two readings of a repeated
-    // hour, which is the one glibc's mktime picks, and the reading a
-    // skipped hour falls back to.
-    if (!this.inDst(asStd)) return new Date(asStd)
-    if (this.inDst(asDst)) return new Date(asDst)
+    const stdShows = !this.inDst(asStd)
+    const dstShows = this.inDst(asDst)
+    // A repeated hour: the reading on the base's side of the change, else
+    // standard time, the later of the two, which is the one glibc's mktime
+    // picks. A skipped hour reads under standard time, the offset in force
+    // before the change.
+    if (stdShows && dstShows) return new Date(prefer === this.dstOffsetSec ? asDst : asStd)
+    if (dstShows) return new Date(asDst)
     return new Date(asStd)
   }
 }
@@ -369,59 +421,139 @@ function readName(spec: string, pos: number): [string, number] {
   return [m[1] ?? m[2] ?? '', NAME_RE.lastIndex]
 }
 
-// A POSIX `[+-]hh[:mm[:ss]]` at `pos` as signed seconds, or null when none starts there.
-function readSeconds(spec: string, pos: number): [number | null, number] {
-  OFFSET_RE.lastIndex = pos
-  const m = OFFSET_RE.exec(spec)
+// An unsigned `h[:m[:s]]` at `pos` as glibc's `%hu:%hu:%hu` reads it: the
+// three fields and the position after them, or null and `pos` when no
+// digit starts there.
+function readClock(spec: string, pos: number): [[number, number, number] | null, number] {
+  CLOCK_RE.lastIndex = pos
+  const m = CLOCK_RE.exec(spec)
   if (m === null) return [null, pos]
-  const sign = m[1] === '-' ? -1 : 1
-  const total = Number(m[2]) * HOUR + Number(m[3] ?? 0) * 60 + Number(m[4] ?? 0)
-  return [sign * total, OFFSET_RE.lastIndex]
+  return [[Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)], CLOCK_RE.lastIndex]
 }
 
-function readRule(text: string): TransitionRule | null {
-  RULE_RE.lastIndex = 0
-  const m = RULE_RE.exec(text)
-  if (m === null) return null
-  let seconds = 2 * HOUR
-  let pos = RULE_RE.lastIndex
-  if (text[pos] === '/') {
-    const [read, after] = readSeconds(text, pos + 1)
-    if (read === null) return null
-    seconds = read
-    pos = after
+// A POSIX offset at `pos` as glibc's parse_offset reads it: seconds west of
+// Greenwich, and the position after it. A standard offset must start with
+// a sign or a digit and read at least an hour, else there is none (null,
+// and `pos` unmoved). A daylight offset takes a sign even when no hours
+// follow, and reads as null then, past the sign, for the caller to default.
+// Hours are clamped at 24 and minutes and seconds at 59, glibc's
+// compute_offset.
+function readOffset(spec: string, pos: number, dst: boolean): [number | null, number] {
+  const head = spec[pos] ?? ''
+  if (!dst && !(head === '+' || head === '-' || /\d/.test(head))) return [null, pos]
+  let sign = 1
+  if (head === '+' || head === '-') {
+    sign = head === '-' ? -1 : 1
+    pos += 1
   }
-  if (pos !== text.length) return null
-  const base = { month: 0, week: 0, weekday: 0, day: 0, seconds }
-  if (m[1] !== undefined) {
-    return { ...base, kind: 'M', month: Number(m[1]), week: Number(m[2]), weekday: Number(m[3]) }
-  }
-  if (m[4] !== undefined) return { ...base, kind: 'J', day: Number(m[4]) }
-  return { ...base, kind: 'D', day: Number(m[5]) }
+  const [clock, end] = readClock(spec, pos)
+  if (clock === null) return [null, pos]
+  const [hours, minutes, seconds] = clock
+  const west = Math.min(hours, 24) * HOUR + Math.min(minutes, 59) * 60 + Math.min(seconds, 59)
+  return [sign * west, end]
+}
+
+// An offset Python's tzinfo can carry too: within a day, one second short.
+function bounded(offsetSec: number): number {
+  return Math.max(-MAX_OFFSET, Math.min(MAX_OFFSET, offsetSec))
 }
 
 /**
- * The zone a POSIX TZ string names:
+ * One transition rule at `pos` as glibc's parse_rule reads it: the rule,
+ * the position after it, and whether glibc accepts it. An optional comma
+ * leads. `Jn` and `n` take a day, `Mm.w.d` a month, week and weekday, and
+ * the end of the string stands for the US rule of that half; `/time` may
+ * follow, `h[:m[:s]]` with an optional `-`, and is two o'clock when absent
+ * or unreadable. glibc refuses a day past 365, `J0`, a month outside 1 to
+ * 12, a week outside 1 to 5, a weekday past 6, anything else where a rule
+ * should start, and anything but `/`, `,` or the end after the date part;
+ * it keeps what it had read so far, and the time of day, which comes last,
+ * is still zero then. The refused rule comes back as glibc leaves it,
+ * except that a month outside its table (which glibc reads past) is the
+ * refused Julian rule here; the second rule is then never read (see
+ * posixZone).
+ */
+function readRule(spec: string, pos: number, which: 0 | 1): [TransitionRule, number, boolean] {
+  if (spec[pos] === ',') pos += 1
+  const head = spec[pos] ?? ''
+  let rule: TransitionRule
+  if (head === 'J' || /\d/.test(head)) {
+    const kind = head === 'J' ? 'J' : 'D'
+    const refused = kind === 'J' ? REFUSED_JULIAN : ZERO_RULE
+    DIGITS_RE.lastIndex = pos + (kind === 'J' ? 1 : 0)
+    const m = DIGITS_RE.exec(spec)
+    if (m === null) return [refused, pos, false]
+    const day = Number(m[0])
+    if (day > 365 || (kind === 'J' && day === 0)) return [refused, pos, false]
+    rule = { ...ZERO_RULE, kind, day }
+    pos = DIGITS_RE.lastIndex
+  } else if (head === 'M') {
+    MONTH_RULE_RE.lastIndex = pos
+    const m = MONTH_RULE_RE.exec(spec)
+    if (m === null) return [ZERO_RULE, pos, false]
+    const month = Number(m[1] ?? 0)
+    const week = Number(m[2] ?? 0)
+    const weekday = Number(m[3] ?? 0)
+    rule = { ...ZERO_RULE, kind: 'M', month, week, weekday }
+    if (!(month >= 1 && month <= 12)) return [REFUSED_JULIAN, pos, false]
+    const partial = m[1] === undefined || m[2] === undefined || m[3] === undefined
+    if (partial || !(week >= 1 && week <= 5) || weekday > 6) return [rule, pos, false]
+    pos = MONTH_RULE_RE.lastIndex
+  } else if (head === '') {
+    rule = US_RULES[which]
+  } else {
+    return [ZERO_RULE, pos, false]
+  }
+  const tail = spec[pos] ?? ''
+  if (tail !== '' && tail !== '/' && tail !== ',') return [rule, pos, false]
+  let seconds = 2 * HOUR
+  if (tail === '/') {
+    pos += 1
+    if (pos === spec.length) return [rule, pos, false]
+    const negative = spec[pos] === '-'
+    if (negative) pos += 1
+    const [clock, end] = readClock(spec, pos)
+    const [hours, minutes, secs] = clock ?? [2, 0, 0]
+    pos = end
+    seconds = (negative ? -1 : 1) * (hours * HOUR + minutes * 60 + secs)
+  }
+  return [{ ...rule, seconds }, pos, true]
+}
+
+/**
+ * The zone a POSIX TZ string names, read as glibc's tzset reads one:
  * `std[offset[dst[offset][,start[/time],end[/time]]]]`. POSIX counts an
  * offset west of Greenwich as positive, so `EST5` is five hours behind
- * UTC; a missing offset is zero, and a missing daylight offset is one hour
- * ahead of standard. A string that is not a TZ string at all (no name, or
- * a rule that does not parse) is UTC with no abbreviation, which is what
- * glibc falls back to.
+ * UTC; a missing standard offset is zero and ends the reading
+ * (`Bogus/Zone` is UTC under that name), and a missing daylight offset is
+ * one hour ahead of standard. What glibc cannot read it keeps rather than
+ * drops. A string with no name at all is UTC with no abbreviation. A
+ * daylight half whose name it cannot read is nameless UTC, so `EST5x`
+ * renders `+0000` with an empty `%Z` nearly all year, its rules being the
+ * zero ones. A rule it refuses is kept as far as it was read and the rule
+ * after it is never read, so `CET-1CEST,bogus` is CEST almost all year
+ * and `CET-1CEST,M3.5.0,M13.1.0` is CEST from late March to the year's
+ * end. A rule that is missing is the US one for that half; glibc consults
+ * a `posixrules` file for that on hosts that ship one, which is not
+ * mirrored.
  */
 export function posixZone(spec: string): Zone {
   const [std, afterStd] = readName(spec, 0)
   if (std === '') return new FixedZone(0, '')
-  const [west, afterOffset] = readSeconds(spec, afterStd)
-  const stdOffsetSec = -(west ?? 0)
+  const [west, afterOffset] = readOffset(spec, afterStd, false)
+  if (west === null || afterOffset === spec.length) {
+    return new FixedZone(bounded(0 - (west ?? 0)), std)
+  }
+  const stdOffsetSec = bounded(0 - west)
   const [dst, afterDst] = readName(spec, afterOffset)
-  if (dst === '') return new FixedZone(stdOffsetSec, std)
-  const [dstWest, afterDstOffset] = readSeconds(spec, afterDst)
-  const dstOffsetSec = dstWest !== null ? -dstWest : stdOffsetSec + HOUR
-  const rules = spec[afterDstOffset] === ',' ? spec.slice(afterDstOffset + 1) : DEFAULT_RULES
-  const clauses = rules.split(',')
-  const start = readRule(clauses[0] ?? '')
-  const end = clauses.length === 2 ? readRule(clauses[1] ?? '') : null
-  if (start === null || end === null) return new FixedZone(0, '')
+  let dstOffsetSec = 0
+  let pos = afterDst
+  if (dst !== '') {
+    const [dstWest, afterDstOffset] = readOffset(spec, afterDst, true)
+    dstOffsetSec = bounded(dstWest === null ? stdOffsetSec + HOUR : 0 - dstWest)
+    pos = afterDstOffset
+  }
+  const [start, afterStart, accepted] = readRule(spec, pos, 0)
+  const end = accepted ? readRule(spec, afterStart, 1)[0] : ZERO_RULE
   return new PosixZone(std, stdOffsetSec, dst, dstOffsetSec, start, end)
 }

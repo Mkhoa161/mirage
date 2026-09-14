@@ -122,20 +122,24 @@ function addMonthsGnu(dt: Date, count: number, zone: Zone): Date {
       year += 1
     }
   }
-  return zone.fromWall({ ...p, year, month, day })
+  return zone.fromWall({ ...p, year, month, day }, p.offsetSec)
 }
 
 // Displace a moment by `count` units, as gnulib does: months and years
 // move the calendar (addMonthsGnu); days and weeks move the calendar too,
 // keeping the wall clock across a DST change; hours, minutes and seconds
 // are exact, so they are added on the UTC timeline (`2025-03-29 12:00 CET
-// 24 hours` is `13:00 CEST`).
+// 24 hours` is `13:00 CEST`). A moved wall clock is read as mktime reads
+// it with the base's tm_isdst, which gnulib hands it: the hour repeated
+// when DST ends keeps the base's side of the change, and the hour skipped
+// when it starts lands past the gap (`2025-03-29 02:30 CET 1 day` and
+// `2025-03-31 02:30 CEST 1 day ago` are both `03:30 CEST`).
 function shiftDate(dt: Date, unit: string, count: number, zone: Zone): Date {
   if (unit === 'month') return addMonthsGnu(dt, count, zone)
   if (unit === 'year') return addMonthsGnu(dt, 12 * count, zone)
   if (unit === 'day' || unit === 'week') {
     const p = zone.parts(dt)
-    return zone.fromWall({ ...p, day: p.day + count * (unit === 'week' ? 7 : 1) })
+    return zone.fromWall({ ...p, day: p.day + count * (unit === 'week' ? 7 : 1) }, p.offsetSec)
   }
   return new Date(dt.getTime() + (UNIT_SECONDS[unit] ?? 0) * count * 1000)
 }

@@ -29,43 +29,60 @@ async def _run(ws: Workspace, line: str) -> tuple[str, str, int]:
 # variable alike, `-u` outranks it, and an instant renders on the calendar
 # day the zone shows (issue #1070).
 @pytest.mark.asyncio
-@pytest.mark.parametrize("line,expected", [
-    ("TZ=UTC date -d '@0' '+%Y-%m-%d %H:%M:%S %z'",
-     "1970-01-01 00:00:00 +0000\n"),
-    ("TZ=Asia/Hong_Kong date -d '@0' '+%Y-%m-%d %H:%M:%S %z'",
-     "1970-01-01 08:00:00 +0800\n"),
-    ("export TZ=Asia/Hong_Kong; date -d '@0' '+%F %T %z'",
-     "1970-01-01 08:00:00 +0800\n"),
-    ("TZ=Asia/Hong_Kong date -u -d '@0' '+%F %T %z %Z'",
-     "1970-01-01 00:00:00 +0000 UTC\n"),
-    ("TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z' '+%F %T'",
-     "1970-01-02 04:00:00\n"),
-    ("TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z 1 day' '+%F %T'",
-     "1970-01-03 04:00:00\n"),
-    ("TZ=Asia/Hong_Kong date -d '1970-01-01 00:00:00' +%s", "-28800\n"),
-    ("TZ=Asia/Hong_Kong date -d '@0' -R", "Thu, 01 Jan 1970 08:00:00 +0800\n"),
-    ("TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z' -I", "1970-01-02\n"),
-    ("TZ=America/Los_Angeles date -d @1751328000 '+%F %T %z'",
-     "2025-06-30 17:00:00 -0700\n"),
-    ("TZ=Bogus/Zone date -d @0 '+%F %T %z %Z'",
-     "1970-01-01 00:00:00 +0000 Bogus\n"),
-    ("TZ=:Asia/Tokyo date -d @0 '+%T %z'", "09:00:00 +0900\n"),
-    ("TZ=UTC0 date -d @0 '+%T %z %Z'", "00:00:00 +0000 UTC\n"),
-    ("TZ='<+0530>-5:30' date -d @0 '+%T %z %Z %:z'",
-     "05:30:00 +0530 +0530 +05:30\n"),
-    ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d @1751328000 '+%F %T %z %Z'",
-     "2025-07-01 02:00:00 +0200 CEST\n"),
-    ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-10-26 02:30:00' '+%s %Z'",
-     "1761442200 CET\n"),
-    ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-03-29 12:00:00 1 day' "
-     "'+%F %T %Z'", "2025-03-30 12:00:00 CEST\n"),
-    ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-03-29 12:00:00 24 hours'"
-     " '+%F %T %Z'", "2025-03-30 13:00:00 CEST\n"),
-    ("TZ=UTC date -d @0 '+%a %Z'", "Thu UTC\n"),
-    ("TZ= date -d @0 '+%F %T %z'", "1970-01-01 00:00:00 +0000\n"),
-    ("(export TZ=Asia/Hong_Kong; date -d @0 +%H); date -u -d @0 +%H",
-     "08\n00\n"),
-])
+@pytest.mark.parametrize(
+    "line,expected",
+    [
+        ("TZ=UTC date -d '@0' '+%Y-%m-%d %H:%M:%S %z'",
+         "1970-01-01 00:00:00 +0000\n"),
+        ("TZ=Asia/Hong_Kong date -d '@0' '+%Y-%m-%d %H:%M:%S %z'",
+         "1970-01-01 08:00:00 +0800\n"),
+        ("export TZ=Asia/Hong_Kong; date -d '@0' '+%F %T %z'",
+         "1970-01-01 08:00:00 +0800\n"),
+        ("TZ=Asia/Hong_Kong date -u -d '@0' '+%F %T %z %Z'",
+         "1970-01-01 00:00:00 +0000 UTC\n"),
+        ("TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z' '+%F %T'",
+         "1970-01-02 04:00:00\n"),
+        ("TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z 1 day' '+%F %T'",
+         "1970-01-03 04:00:00\n"),
+        ("TZ=Asia/Hong_Kong date -d '1970-01-01 00:00:00' +%s", "-28800\n"),
+        ("TZ=Asia/Hong_Kong date -d '@0' -R",
+         "Thu, 01 Jan 1970 08:00:00 +0800\n"),
+        ("TZ=Asia/Hong_Kong date -d '1970-01-01T20:00:00Z' -I",
+         "1970-01-02\n"),
+        ("TZ=America/Los_Angeles date -d @1751328000 '+%F %T %z'",
+         "2025-06-30 17:00:00 -0700\n"),
+        ("TZ=Bogus/Zone date -d @0 '+%F %T %z %Z'",
+         "1970-01-01 00:00:00 +0000 Bogus\n"),
+        ("TZ=:Asia/Tokyo date -d @0 '+%T %z'", "09:00:00 +0900\n"),
+        ("TZ=UTC0 date -d @0 '+%T %z %Z'", "00:00:00 +0000 UTC\n"),
+        ("TZ='<+0530>-5:30' date -d @0 '+%T %z %Z %:z'",
+         "05:30:00 +0530 +0530 +05:30\n"),
+        ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d @1751328000 '+%F %T %z %Z'",
+         "2025-07-01 02:00:00 +0200 CEST\n"),
+        ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-10-26 02:30:00' "
+         "'+%s %Z'", "1761442200 CET\n"),
+        ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-03-29 12:00:00 1 day' "
+         "'+%F %T %Z'", "2025-03-30 12:00:00 CEST\n"),
+        ("TZ='CET-1CEST,M3.5.0,M10.5.0/3' date -d '2025-03-29 12:00:00 "
+         "24 hours' '+%F %T %Z'", "2025-03-30 13:00:00 CEST\n"),
+        ("TZ=UTC date -d @0 '+%a %Z'", "Thu UTC\n"),
+        ("TZ= date -d @0 '+%F %T %z'", "1970-01-01 00:00:00 +0000\n"),
+        # A day shift landing in the hour CEST skips moves past the gap, and
+        # one landing in the hour it repeats keeps the base's side (gnulib
+        # hands mktime the base's tm_isdst).
+        ("TZ=Europe/Berlin date -d '2025-03-29 02:30:00 1 day' '+%F %T %z %Z'",
+         "2025-03-30 03:30:00 +0200 CEST\n"),
+        ("TZ=Europe/Berlin date -d '2025-10-25 02:30:00 1 day' '+%F %T %z %Z'",
+         "2025-10-26 02:30:00 +0200 CEST\n"),
+        ("TZ=Europe/Berlin date -d '2025-10-27 02:30:00 1 day ago' "
+         "'+%F %T %z %Z'", "2025-10-26 02:30:00 +0100 CET\n"),
+        # glibc keeps the names and offsets of a POSIX string whose rule it
+        # refuses, and clamps an offset's minutes at 59.
+        ("TZ='CET-1CEST,bogus' date -d @1720000000 '+%z %Z'", "+0200 CEST\n"),
+        ("TZ=UTC5:99 date -d @0 '+%T %z'", "18:01:00 -0559\n"),
+        ("(export TZ=Asia/Hong_Kong; date -d @0 +%H); date -u -d @0 +%H",
+         "08\n00\n"),
+    ])
 async def test_date_honors_the_command_environment_tz(line, expected):
     ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
     try:
@@ -128,6 +145,9 @@ async def test_tz_never_leaks_between_workspaces():
     ("TZ=America/Sao_Paulo date -d @0 +%Z", "-03\n"),
     ("TZ=Etc/GMT+5 date -d @0 +%Z", "-05\n"),
     ("TZ=Europe/Moscow date -d @1340000000 '+%Z %z'", "MSK +0400\n"),
+    ("TZ=Europe/Moscow date -d @1276848800 '+%Z %z'", "MSD +0400\n"),
+    ("TZ=Europe/Istanbul date -d @1435752000 +%Z; "
+     "TZ=Europe/Istanbul date -d @1498906800 +%Z", "EEST\n+03\n"),
 ])
 async def test_date_zone_abbreviation(line, expected):
     ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)

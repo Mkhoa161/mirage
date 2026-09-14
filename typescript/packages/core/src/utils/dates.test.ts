@@ -21,7 +21,7 @@ import {
   toIsoZ,
   utcDateFolder,
 } from './dates.ts'
-import { LOCAL_ZONE, UTC_ZONE } from './timezone.ts'
+import { LOCAL_ZONE, UTC_ZONE, resolveTz } from './timezone.ts'
 
 describe('inMtimeWindow', () => {
   it('keeps everything under an unbounded window', () => {
@@ -147,6 +147,39 @@ describe('parseDateExpr', () => {
     expect(parseDateExpr('24 hours agoo', UTC_ZONE, NOW)).toBeNull()
     expect(parseDateExpr('', UTC_ZONE, NOW)).toBeNull()
     expect(parseDateExpr('@abc', UTC_ZONE, NOW)).toBeNull()
+  })
+})
+
+describe('parseDateExpr calendar shifts across a DST change', () => {
+  // GNU date on debian:stable-slim: a shift landing in the hour a zone skips
+  // moves past the gap under the offset in force before the change,
+  // whichever side it started from, and one landing in the hour it repeats
+  // keeps the base's side of the change, as gnulib hands mktime the base's
+  // tm_isdst.
+  it.each([
+    ['2025-03-29 02:30:00 1 day', 1743298200],
+    ['2025-03-31 02:30:00 1 day ago', 1743298200],
+    ['2025-03-23 02:30:00 1 week', 1743298200],
+    ['2025-04-30 02:30:00 1 month ago', 1743298200],
+    ['2024-03-30 02:30:00 1 year', 1743298200],
+    ['2025-10-25 02:30:00 1 day', 1761438600],
+    ['2025-10-27 02:30:00 1 day ago', 1761442200],
+    ['2025-10-26 02:30:00 0 day', 1761442200],
+  ])('%s in Berlin is @%d', (text, epoch) => {
+    for (const zone of [resolveTz('Europe/Berlin'), resolveTz('CET-1CEST,M3.5.0,M10.5.0/3')]) {
+      expect(parseDateExpr(text, zone)?.getTime()).toBe(epoch * 1000)
+    }
+  })
+
+  it.each([
+    ['2025-03-08 02:30:00 1 day', 1741505400],
+    ['2025-03-10 02:30:00 1 day ago', 1741505400],
+    ['2025-11-01 01:30:00 1 day', 1762061400],
+    ['2025-11-03 01:30:00 1 day ago', 1762065000],
+  ])('%s in New York is @%d', (text, epoch) => {
+    // The same rules on the other side of UTC: 02:30 the night EDT starts
+    // is 03:30 EDT, and 01:30 the night it ends keeps the base's side.
+    expect(parseDateExpr(text, resolveTz('America/New_York'))?.getTime()).toBe(epoch * 1000)
   })
 })
 

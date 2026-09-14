@@ -252,6 +252,31 @@ describe('date honors the command environment TZ', () => {
     [{ TZ: 'UTC' }, ['+%a %Z'], { d: '@0' }, 'Thu UTC\n'],
     [{ TZ: 'UTC' }, [], { d: '@0' }, 'Thu Jan 01 00:00:00 UTC 1970\n'],
     [{ TZ: '' }, ['+%F %T %z'], { d: '@0' }, '1970-01-01 00:00:00 +0000\n'],
+    // A day shift landing in the hour CEST skips moves past the gap, and one
+    // landing in the hour it repeats keeps the base's side (gnulib hands
+    // mktime the base's tm_isdst).
+    [
+      { TZ: 'Europe/Berlin' },
+      ['+%F %T %z %Z'],
+      { d: '2025-03-29 02:30:00 1 day' },
+      '2025-03-30 03:30:00 +0200 CEST\n',
+    ],
+    [
+      { TZ: 'Europe/Berlin' },
+      ['+%F %T %z %Z'],
+      { d: '2025-10-25 02:30:00 1 day' },
+      '2025-10-26 02:30:00 +0200 CEST\n',
+    ],
+    [
+      { TZ: 'Europe/Berlin' },
+      ['+%F %T %z %Z'],
+      { d: '2025-10-27 02:30:00 1 day ago' },
+      '2025-10-26 02:30:00 +0100 CET\n',
+    ],
+    // glibc keeps the names and offsets of a POSIX string whose rule it
+    // refuses, and clamps an offset's minutes at 59.
+    [{ TZ: 'CET-1CEST,bogus' }, ['+%z %Z'], { d: '@1720000000' }, '+0200 CEST\n'],
+    [{ TZ: 'UTC5:99' }, ['+%T %z'], { d: '@0' }, '18:01:00 -0559\n'],
   ])('%j %j %j', async (env, texts, flags, expected) => {
     expect(await runDateEnv(env, texts, flags)).toEqual([expected, '', 0])
   })
@@ -297,6 +322,9 @@ describe("date: %Z is tzdata's abbreviation", () => {
     [{ TZ: 'America/Sao_Paulo' }, ['+%Z'], { d: '@0' }, '-03\n'],
     [{ TZ: 'Etc/GMT+5' }, ['+%Z'], { d: '@0' }, '-05\n'],
     [{ TZ: 'Europe/Moscow' }, ['+%Z %z'], { d: '@1340000000' }, 'MSK +0400\n'],
+    [{ TZ: 'Europe/Moscow' }, ['+%Z %z'], { d: '@1276848800' }, 'MSD +0400\n'],
+    [{ TZ: 'Europe/Istanbul' }, ['+%Z'], { d: '@1435752000' }, 'EEST\n'],
+    [{ TZ: 'Europe/Istanbul' }, ['+%Z'], { d: '@1498906800' }, '+03\n'],
   ])('%j %j %j', async (env, texts, flags, expected) => {
     expect(await runDateEnv(env, texts, flags)).toEqual([expected, '', 0])
   })

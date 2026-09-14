@@ -56,15 +56,50 @@ def _add_months(dt: datetime, count: int) -> datetime:
     return dt.replace(year=year, month=month, day=day)
 
 
+def _place(wall: datetime, tz: tzinfo, offset: timedelta | None) -> datetime:
+    """Put a displaced wall clock back on the timeline, the way mktime
+    does when gnulib hands it the base moment's ``tm_isdst``.
+
+    A wall clock the zone shows once is that instant. One it shows
+    twice (the hour repeated when DST ends) is the reading under the
+    base's offset, so a summer base stays in summer time and a winter
+    one in winter time, else the later reading. One it never shows
+    (the hour skipped when DST starts) is read under the offset in
+    force before the change and lands past the gap whichever side the
+    base was on: ``2025-03-29 02:30 CET 1 day`` and ``2025-03-31 02:30
+    CEST 1 day ago`` are both ``03:30 CEST`` under GNU.
+
+    Args:
+        wall (datetime): the naive wall clock after the displacement.
+        tz (tzinfo): the zone it is read in.
+        offset (timedelta | None): the base moment's UTC offset.
+    """
+    first = wall.replace(tzinfo=tz, fold=0)
+    second = wall.replace(tzinfo=tz, fold=1)
+    shown = [
+        reading for reading in (first, second)
+        if reading.astimezone(timezone.utc).astimezone(tz).replace(
+            tzinfo=None) == wall
+    ]
+    if not shown:
+        return first.astimezone(timezone.utc).astimezone(tz)
+    if first.utcoffset() == second.utcoffset():
+        return first
+    for reading in shown:
+        if reading.utcoffset() == offset:
+            return reading
+    return second
+
+
 def _shift(dt: datetime, unit: str, count: int) -> datetime:
     """Displace a moment by ``count`` units, as gnulib does.
 
-    Months and years move the calendar (``_add_months``); days and
-    weeks move the calendar too, keeping the wall clock across a DST
-    change, which Python's aware arithmetic already does; hours,
-    minutes and seconds are exact, so they are added on the UTC
-    timeline (``2025-03-29 12:00 CET 24 hours`` is ``13:00 CEST``).
-    A naive moment has no zone to cross, so every unit is plain
+    Months and years move the calendar (``_add_months``), and days and
+    weeks move it too, keeping the wall clock across a DST change; the
+    moved wall clock is then read as mktime reads it (``_place``).
+    Hours, minutes and seconds are exact, so they are added on the UTC
+    timeline (``2025-03-29 12:00 CET 24 hours`` is ``13:00 CEST``). A
+    naive moment has no zone to cross, so every unit is plain
     arithmetic there.
 
     Args:
@@ -72,14 +107,20 @@ def _shift(dt: datetime, unit: str, count: int) -> datetime:
         unit (str): a key of ``_UNIT_SECONDS`` or a calendar unit.
         count (int): how many units, signed.
     """
+    calendar = unit in _CALENDAR_UNITS or unit in ("day", "week")
+    if dt.tzinfo is not None and not calendar:
+        delta = timedelta(seconds=_UNIT_SECONDS[unit] * count)
+        return (dt.astimezone(timezone.utc) + delta).astimezone(dt.tzinfo)
+    wall = dt.replace(tzinfo=None)
     if unit == "month":
-        return _add_months(dt, count)
-    if unit == "year":
-        return _add_months(dt, 12 * count)
-    delta = timedelta(seconds=_UNIT_SECONDS[unit] * count)
-    if dt.tzinfo is None or unit in ("day", "week"):
-        return dt + delta
-    return (dt.astimezone(timezone.utc) + delta).astimezone(dt.tzinfo)
+        wall = _add_months(wall, count)
+    elif unit == "year":
+        wall = _add_months(wall, 12 * count)
+    else:
+        wall += timedelta(seconds=_UNIT_SECONDS[unit] * count)
+    if dt.tzinfo is None:
+        return wall
+    return _place(wall, dt.tzinfo, dt.utcoffset())
 
 
 def _localize(dt: datetime, tz: tzinfo | None) -> datetime | None:
