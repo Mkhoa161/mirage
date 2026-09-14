@@ -1266,29 +1266,31 @@ jobs:
           LEG: ${{ matrix.leg }}
         run: |
           set -euo pipefail
-          # A json with no .suite must fail here, not be filtered out: its
-          # name would reach neither leg, so all three drivers would skip
-          # the file and CI would pass without running any of its cases.
-          # Validating instead of dropping does not catch it either --
-          # `jq -r` renders a missing key as the string "null", which is a
-          # legal suite name shape.
-          # The name check is separate: a suite name reaches three `run:`
-          # lines unquoted, so refuse anything that is not a bare name.
-          names=""
+          # Collation for sort/comm, and for the name pattern below.
+          export LC_ALL=C
+          # Every suite json has to yield exactly one usable name here. A
+          # file this step drops or repairs instead of refusing is a file
+          # whose name reaches neither leg, so all three drivers skip it
+          # and CI passes without running any of its cases. Both halves
+          # are checked per file, verbatim, naming the file that failed:
+          # `jq -r` renders a missing key as the string "null", which is
+          # itself a legal name shape, so the emptiness check cannot be
+          # folded into the pattern check.
+          names=()
           for f in integ/runtime/*.json; do
             n=$(jq -r '.suite // empty' "$f")
             if [ -z "$n" ]; then
               echo "$f declares no .suite" >&2
               exit 1
             fi
-            names="$names$n
-          "
+            case "$n" in
+              *[!a-z0-9_]*)
+                echo "$f: .suite '$n' is not [a-z0-9_]+" >&2
+                exit 1 ;;
+            esac
+            names+=("$n")
           done
-          all=$(printf '%s' "$names" | tr -d ' ' | grep -v '^$' | sort -u)
-          if printf '%s\n' "$all" | grep -qvx '[a-z0-9_]\+'; then
-            echo "suite names must match [a-z0-9_]+: $all" >&2
-            exit 1
-          fi
+          all=$(printf '%s\n' "${names[@]}" | sort -u)
           a=$(printf '%s' "$LEG_A_SUITES" | tr ' ' '\n' | grep -v '^$' | sort -u)
           unknown=$(comm -13 <(printf '%s\n' "$all") <(printf '%s\n' "$a"))
           if [ -n "$unknown" ]; then
