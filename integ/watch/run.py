@@ -288,7 +288,8 @@ class ConsumerPoller:
         self._root = root
         self._checkpoint: str | None = None
 
-    async def pump(self) -> tuple[FileEvent, ...]:
+    async def pump(self,
+                   timeout: float | None = None) -> tuple[FileEvent, ...]:
         """Pull one delta, notify every change, and return them.
 
         Returning the changes (rather than nothing) is what lets a
@@ -296,10 +297,44 @@ class ConsumerPoller:
         the change visible yet". A production loop ignores the return
         value and just runs again on its interval.
 
+        ``timeout`` caps the pull and nothing else, which is the whole
+        point of putting it there. The pull is the only await before
+        ``self._checkpoint`` moves, so abandoning it mutates nothing:
+        the checkpoint still names the last delta that was notified in
+        full, and the next pump re-reads the same ground. A cap on the
+        body instead could land between the checkpoint assignment and
+        the last ``notify``, and those changes would never be reported
+        again -- the delta is computed against the new checkpoint, so
+        no later pump rediscovers them. That is a lost event, the
+        failure this poller exists to catch, and it is not worth
+        trading for a tidier bound. A timed-out pull is reported as
+        "no changes observed" rather than raised, because that is the
+        same thing the caller does about it: pump again. On the
+        supported Pythons ``asyncio.TimeoutError`` is the builtin
+        ``TimeoutError``, so a timeout the backend client raises from
+        inside the pull is caught here too. It is not distinguished
+        because it says the same thing on another clock -- the
+        listing did not finish -- and the answer to it is the same.
+
+        The notify loop is left uncapped deliberately: it touches only
+        process memory (cache eviction against the RAM index and file
+        stores, then a push into each matching ``RAMWatchQueue``), so
+        it has no backend to hang on.
+
+        Args:
+            timeout (float | None): Seconds allowed for the backend
+                listing. None waits for it indefinitely, which is what
+                the baseline pumps want.
+
         Returns:
-            tuple[FileEvent, ...]: The changes handed to ``notify``.
+            tuple[FileEvent, ...]: The changes handed to ``notify``;
+                empty when the listing ran out of time.
         """
-        delta = await self._hook.pull(self._root, self._checkpoint)
+        try:
+            delta = await asyncio.wait_for(
+                self._hook.pull(self._root, self._checkpoint), timeout)
+        except asyncio.TimeoutError:
+            return ()
         self._checkpoint = delta.checkpoint
         for change in delta.changes:
             await self._ws.notify(change)
@@ -356,16 +391,29 @@ class PullTrigger:
     slow one could stretch the phase past ``EVENT_TIMEOUT`` many
     times over and swallow the timeout the case must fail on.
 
-    Two limits of that bound, both deliberate. The loop always pumps
-    once before consulting the deadline, because one pump is the
-    correct behavior for a backend with no lag and the case has to
-    get it. And an in-flight listing is not cancelled at the
-    deadline, so the phase can overrun by the cost of its last pump;
-    capping a single request is the backend client's timeout to
-    enforce, not this loop's. What holds regardless is that the phase
-    ends within ``PUMP_WINDOW`` plus the cost of a single pump, which
-    leaves the rest of ``EVENT_TIMEOUT`` to the stream: an event the
-    watcher genuinely never delivers fails on that timeout, not here.
+    The deadline caps each listing too, not only the decision to
+    start another one: every pump is handed the time left, so a
+    listing that hangs is abandoned at the deadline instead of
+    running on to whatever the backend client eventually does about
+    it. Gating the start alone was not enough -- one pump was always
+    already in flight when the deadline passed, so the phase really
+    cost ``PUMP_WINDOW`` plus one full listing. What is capped is the
+    listing, not ``pump`` as a whole, for the reason
+    ``ConsumerPoller.pump`` gives: stopping the body after its
+    checkpoint moved would drop the changes it had not yet notified.
+
+    The loop still always pumps once, because one pump is the correct
+    behavior for a backend with no lag and the case has to get it; it
+    is now capped like every other pump rather than unbounded.
+
+    One residual, stated rather than rounded away: abandoning a
+    listing means cancelling it and waiting for it to unwind, and
+    that unwind is the backend client's, not ours. So the phase ends
+    within ``PUMP_WINDOW`` plus the cost of tearing down one
+    in-flight request, not within ``PUMP_WINDOW`` flat. That is a far
+    smaller overrun than a full listing, and it leaves the rest of
+    ``EVENT_TIMEOUT`` to the stream: an event the watcher genuinely
+    never delivers fails on that timeout, not here.
 
     The loop waits for the case's own path instead of any change: a
     nested create also creates its parent directory, and a rename
@@ -381,7 +429,8 @@ class PullTrigger:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + PUMP_WINDOW
         while True:
-            changes = await self._poller.pump()
+            remaining = deadline - loop.time()
+            changes = await self._poller.pump(timeout=max(remaining, 0.0))
             if any(change.path.virtual == want for change in changes):
                 return
             remaining = deadline - loop.time()
