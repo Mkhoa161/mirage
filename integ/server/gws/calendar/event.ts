@@ -19,7 +19,14 @@ import type { CalendarEntry, CalendarEvent, EventTime } from '../store/types.ts'
 import { asObj, asStr } from '../wire/json.ts'
 import type { JsonObj } from '../wire/json.ts'
 import { googleError, ok } from '../wire/reply.ts'
-import { eventEndMs, eventStartMs, isIanaZone, parseDate, parseDateTime } from './zone.ts'
+import {
+  eventEndMs,
+  eventStartMs,
+  formatEventTime,
+  isIanaZone,
+  parseDate,
+  parseDateTime,
+} from './zone.ts'
 
 const DEFAULT_MAX_RESULTS = 250
 
@@ -42,8 +49,8 @@ export function fmtEvent(cal: CalendarEntry, ev: CalendarEvent): JsonObj {
     kind: 'calendar#event',
     id: ev.id,
     status: ev.status,
-    start: { ...ev.start },
-    end: { ...ev.end },
+    start: { ...formatEventTime(ev.start) },
+    end: { ...formatEventTime(ev.end) },
     created: ev.created,
     updated: ev.updated,
     iCalUID: `${ev.id}@google.com`,

@@ -1549,6 +1549,68 @@
         "stdout": "EEST\n+03\nEET\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "date_implicit_local_0",
+      "seq": 962390,
+      "command": "unset TZ; z=$(date -d @1789430400 +%Z); test -n \"$z\" && echo ok",
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout": "ok\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "date_implicit_local_1",
+      "seq": 962391,
+      "command": "unset TZ; a=$(date -d @1789430400); b=$(date -d @1789430400 \"+%a %b %d %H:%M:%S %Z %Y\"); test \"$a\" = \"$b\" && echo ok",
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout": "ok\n",
+        "stderr": ""
+      }
     }
   ]
 }
