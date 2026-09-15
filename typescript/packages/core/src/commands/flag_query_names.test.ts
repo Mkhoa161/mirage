@@ -73,8 +73,8 @@ describe('flag query names', () => {
         // A module binding no spec has nothing to validate against: the
         // view it queries was constructed by its caller, which is where
         // the names are checked. Python's twin skips the same shape for
-        // the same reason, and the spec-less CLI-tier sites (109 in
-        // python, 118 in TypeScript) are a shared design gap, not drift.
+        // the same reason, and the spec-less CLI-tier sites (over a
+        // hundred in each language) are a shared design gap, not drift.
         if (keys.size === 0) continue
         const allowed = new Set<string>()
         for (const key of keys) {
