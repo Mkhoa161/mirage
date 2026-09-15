@@ -36,9 +36,10 @@ def test_walk_yields_files_with_etag_fingerprints():
     files = {e.virtual: e for e in entries if not e.is_dir}
     assert set(files) == {"/s3/data/a.txt", "/s3/data/b.txt"}
     assert files["/s3/data/a.txt"].size == 5
-    # ETag, not the mtime|size composite: the mock's LastModified is a
-    # constant, so a composite would collide across files of equal size.
-    assert "|" not in (files["/s3/data/a.txt"].fingerprint or "")
+    # The ETag leads the composite, and it is the field carrying the
+    # distinction here: the mock's LastModified is a constant, so the
+    # stamp and size alone would collide across files of equal size.
+    assert (files["/s3/data/a.txt"].fingerprint or "").split("|")[0] != ""
     assert (files["/s3/data/a.txt"].fingerprint
             != files["/s3/data/b.txt"].fingerprint)
 

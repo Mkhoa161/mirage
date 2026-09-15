@@ -209,31 +209,41 @@ class EventStream:
         if self._task is None:
             self._task = asyncio.ensure_future(self._agen.__anext__())
 
-    async def expect(self, want_path: str, want_kind: str) -> object | None:
-        """Return the next change for ``want_path``, skipping others
-        (a nested create also emits its parent dir), or None on
-        timeout or kind mismatch.
+    async def expect(self, want_path: str,
+                     want_kind: str) -> tuple[object | None, str]:
+        """Return the next change for ``want_path`` and why, if not.
+
+        Changes for other paths are skipped (a nested create also
+        emits its parent dir). The second element is empty on success
+        and otherwise says what actually happened, which is the whole
+        point of returning it: a kind mismatch and a silent timeout are
+        different failures with different causes, and reporting both as
+        "no <kind> within 20s" sent three rounds of investigation after
+        a timeout that was never happening.
 
         Args:
             want_path (str): Virtual path the case expects.
             want_kind (str): FileChangeKind value the case expects.
         """
         deadline = asyncio.get_running_loop().time() + EVENT_TIMEOUT
+        seen: list[str] = []
         while True:
             self._arm()
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
-                return None
+                return None, _nothing_arrived(want_kind, want_path, seen)
             done, _ = await asyncio.wait({self._task}, timeout=remaining)
             if not done:
-                return None
+                return None, _nothing_arrived(want_kind, want_path, seen)
             change = self._task.result()
             self._task = None
+            seen.append(f"{change.kind.value} {change.path.virtual}")
             if change.path.virtual != want_path:
                 continue
             if change.kind.value != want_kind:
-                return None
-            return change
+                return None, (f"{want_path} arrived as "
+                              f"{change.kind.value}, not {want_kind}")
+            return change, ""
 
     async def absent(self, path: str) -> bool:
         """Assert no change for ``path`` arrives within the window.
@@ -289,6 +299,19 @@ class ConsumerPoller:
         self._checkpoint = delta.checkpoint
         for change in delta.changes:
             await self._ws.notify(change)
+
+
+def _nothing_arrived(want_kind: str, want_path: str, seen: list[str]) -> str:
+    """Word a timeout, naming the changes that did arrive.
+
+    Args:
+        want_kind (str): The expected FileChangeKind value.
+        want_path (str): The expected virtual path.
+        seen (list[str]): Changes delivered for other paths meanwhile.
+    """
+    other = f"; delivered meanwhile: {', '.join(seen)}" if seen else \
+        "; nothing was delivered at all"
+    return f"no {want_kind} for {want_path} within {EVENT_TIMEOUT}s{other}"
 
 
 DISK_EVENT_BY_KIND = {
@@ -413,10 +436,9 @@ async def _run_case(ws: Workspace, op: object, trigger, stream: EventStream,
     await _mutate(op, case["mutate"])
     await trigger(case)
     if want.get("delivered", True):
-        change = await stream.expect(want["path"], want["kind"])
+        change, why = await stream.expect(want["path"], want["kind"])
         if change is None:
-            return False, (f"no {want['kind']} for {want['path']} within "
-                           f"{EVENT_TIMEOUT}s")
+            return False, why
     else:
         if not await stream.absent(want["path"]):
             return False, f"unexpected delivery for {want['path']}"
