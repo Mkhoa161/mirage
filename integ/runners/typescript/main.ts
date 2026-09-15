@@ -71,9 +71,14 @@ function parseArgs(): {
     else if (argv[i] === '--emit' && i + 1 < argv.length) emit = argv[++i]
     else if (argv[i] === '--strict') strict = true
     else if (argv[i] === '--allow-skip' && i + 1 < argv.length) allowSkip = argv[++i]
-    else if (argv[i] === '--target-jobs' && i + 1 < argv.length) {
-      const n = Number(argv[++i])
-      if (!Number.isInteger(n) || n < 1) {
+    else if (argv[i] === '--target-jobs') {
+      // The missing-value form is refused rather than ignored, as argparse
+      // refuses it on the python host: a trailing `--target-jobs` that read
+      // as "one worker" would drop the concurrency a workflow asked for and
+      // still exit 0.
+      const raw = i + 1 < argv.length ? argv[++i] : ''
+      const n = Number(raw)
+      if (raw === '' || !Number.isInteger(n) || n < 1) {
         process.stderr.write('--target-jobs takes an integer >= 1\n')
         process.exit(2)
       }

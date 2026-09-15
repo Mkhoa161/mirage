@@ -361,6 +361,36 @@ def ts_stdout(args: list[str]) -> str:
     return proc.stdout if proc.returncode == 0 else ""
 
 
+# Minted back to back, the way the pool starts targets. A clock reading is
+# unique only when the caller is slower than its resolution, which the
+# serial loop was and the pool is not. Dynamic import because `tsx --eval`
+# compiles as cjs, where a top-level await does not parse.
+RUN_ID_PROBE = (
+    "import('./runners/typescript/adapters/index.ts').then((m) => {\n"
+    "  const ids = Array.from({ length: 8 }, () => m.runId())\n"
+    "  console.log(new Set(ids).size)\n"
+    "})\n")
+
+
+def selftest_run_ids() -> None:
+    """Two pooled targets must never be handed one namespace.
+
+    Every backend builds its world out of the run id -- a ``/_run/<id>``
+    path on gws, an s3 key prefix, a gridfs database, a dropbox account --
+    so a shared one is two targets seeding and resetting each other. The
+    typescript host minted ``${pid}-${Date.now()}``, which the serial loop
+    made unique by being slower than a millisecond and the pool is not:
+    five targets started in one tick took one id.
+    """
+    proc = subprocess.run([str(TSX), "--eval", RUN_ID_PROBE],
+                          capture_output=True,
+                          text=True,
+                          cwd=ROOT)
+    check("run ids: eight minted in one tick are distinct (ts)",
+          proc.stdout.strip() == "8",
+          f"distinct: {proc.stdout.strip()!r} {proc.stderr[-200:]}")
+
+
 def selftest_typescript_gates(require: bool) -> None:
     """The same two exits on the typescript host, so the gate is symmetric.
 
@@ -393,6 +423,11 @@ def selftest_typescript_gates(require: bool) -> None:
           f"exit {code}: {err}")
     code, err = run_typescript(["--target", "trello"], blanked)
     check("permissive (ts): the same run still exits 0", code == 0,
+          f"exit {code}: {err}")
+    selftest_run_ids()
+
+    code, err = run_typescript(["--target", "ram", "--target-jobs"], {})
+    check("--target-jobs with no value is refused (ts)", code == 2,
           f"exit {code}: {err}")
 
     # The pool's two claims on this host too. The equivalence needs stdout,
