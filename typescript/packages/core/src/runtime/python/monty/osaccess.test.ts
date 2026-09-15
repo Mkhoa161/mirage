@@ -94,7 +94,23 @@ function listing(names: string[], dirs: string[] = []): Mock<BridgeDispatchFn> {
   })
 }
 
-const noop = vi.fn<BridgeDispatchFn>(() => Promise.resolve(undefined))
+// A backend that answers nothing: every op is refused with EACCES,
+// which is not an absence and must not read as one.
+function refusing(): Mock<BridgeDispatchFn> {
+  return vi.fn<BridgeDispatchFn>((_op, path) =>
+    Promise.reject(Object.assign(new Error(`denied: ${path}`), { code: 'EACCES' })),
+  )
+}
+
+// A bridge with nothing behind it. A listing still has to REFUSE
+// rather than answer undefined: the real dispatcher returns an array
+// or rejects with a coded error, and a door that reads a broken answer
+// as an empty directory would hide the break.
+const noop = vi.fn<BridgeDispatchFn>((op, path) =>
+  op === 'readdir'
+    ? Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+    : Promise.resolve(undefined),
+)
 
 describe('MirageOSAccess environment', () => {
   it('answers os.getenv from the run environment, with the caller default on a miss', () => {
@@ -264,6 +280,37 @@ describe('MirageOSAccess stat', () => {
     const st = wrapped.instance as GuestStat
     expect(st.st_mode & 0o170000).toBe(0o40000)
     expect(st.st_nlink).toBe(2)
+  })
+
+  it('raises a refused listing rather than reporting the path absent', async () => {
+    // A backend that will not answer has said nothing about whether
+    // the path is there, so every predicate built on the listing has
+    // to carry the refusal out. Reading it as "not a directory" turned
+    // an authorization or transport failure into a missing file, which
+    // is the one answer a guest cannot tell from the truth.
+    const access = accessOn(refusing(), {}, ['/parent/child'])
+    await expect(Promise.resolve(access.handle('Path.stat', ['/parent']))).rejects.toThrow(
+      '[Errno 13] Permission denied',
+    )
+    await expect(Promise.resolve(access.handle('Path.is_dir', ['/parent']))).rejects.toThrow(
+      '[Errno 13] Permission denied',
+    )
+    await expect(Promise.resolve(access.handle('Path.exists', ['/parent']))).rejects.toThrow(
+      '[Errno 13] Permission denied',
+    )
+  })
+
+  it('raises a refused listing under a mount too, on the same rule', async () => {
+    const access = accessOn(refusing())
+    await expect(Promise.resolve(access.handle('Path.is_dir', ['/ram/x']))).rejects.toThrow(
+      '[Errno 13] Permission denied',
+    )
+    await expect(Promise.resolve(access.handle('Path.exists', ['/ram/x']))).rejects.toThrow(
+      '[Errno 13] Permission denied',
+    )
+    await expect(Promise.resolve(access.handle('Path.iterdir', ['/ram/x']))).rejects.toThrow(
+      '[Errno 13] Permission denied',
+    )
   })
 })
 

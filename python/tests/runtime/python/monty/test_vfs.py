@@ -14,6 +14,8 @@
 
 import errno
 
+import pytest
+
 from mirage.runtime.python.monty.vfs import MontyVFS
 from mirage.runtime.resolver import PrefixResolver
 from mirage.runtime.vfs import RuntimeVFS
@@ -161,6 +163,32 @@ def test_an_rmdir_is_remembered_and_a_mkdir_forgets():
     vfs.mkdir("/s3/gone", parents=False)
     assert vfs.read("/s3/gone") is None
     assert core.ops("read") == ["/s3/gone"]
+
+
+class RefusingCore(CountingCore):
+    """Core that answers nothing: every op is refused, not missed."""
+
+    def __init__(self) -> None:
+        super().__init__({})
+
+    def _raw(self, op, path, **kwargs):
+        self.calls.append((op, path))
+        raise PermissionError(errno.EACCES, "denied", path)
+
+
+def test_a_refused_listing_is_not_read_as_an_absence():
+    # A backend that will not answer has said nothing about whether the
+    # path is there, so the refusal has to come out as itself. Folding
+    # it into "no entries" reports an authorization or a transport
+    # failure as a missing directory, which is the one answer a guest
+    # cannot tell from the truth.
+    vfs = MontyVFS(RefusingCore())
+    with pytest.raises(PermissionError):
+        vfs.readdir("/s3/d")
+    with pytest.raises(PermissionError):
+        vfs.stat("/s3/d")
+    with pytest.raises(PermissionError):
+        vfs.read("/s3/d")
 
 
 def test_a_listing_miss_is_not_cached_because_a_directory_may_gain_entries():

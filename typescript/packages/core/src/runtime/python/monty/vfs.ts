@@ -22,10 +22,14 @@ import { asGuestError, guestError } from './errors.ts'
 // A read asks for BYTES, and a directory is a legitimate way to have
 // none of them.
 const ABSENT_CONTENT = new Set(['FileNotFoundError', 'IsADirectoryError', 'NotADirectoryError'])
-// A stat asks whether the path EXISTS, and there a directory is the
-// answer rather than its absence: reading IsADirectoryError as a miss
-// would send the guest to the scratch tree for a path the mount holds.
-const ABSENT_ROW = new Set(['FileNotFoundError', 'NotADirectoryError'])
+// A stat and a listing both ask whether the path IS THERE, and there a
+// directory is the answer rather than its absence: reading
+// IsADirectoryError as a miss would send the guest to the scratch tree
+// for a path the mount holds. Nothing else belongs in either set. A
+// backend that refused the op has not said the path is gone, and
+// folding that refusal into "no" reports a permission or a transport
+// failure as an absence the guest cannot tell from a real one.
+const ABSENT_PATH = new Set(['FileNotFoundError', 'NotADirectoryError'])
 
 function isAbsence(err: unknown, names: Set<string>): boolean {
   return err instanceof Error && names.has(err.name)
@@ -182,6 +186,28 @@ export class MontyVFS {
     return null
   }
 
+  /**
+   * The directory's entries, or null when there is nothing to list:
+   * no path there, or a path that is not a directory. The twin of
+   * python's `MontyVFS.readdir`, for the callers that answer a
+   * predicate from a listing.
+   *
+   * It runs past the negative cache in both directions, as python's
+   * does, because the self-heal that materializes a directory into
+   * monty's own tree lists a path a stat just missed.
+   *
+   * Args:
+   *   path: the directory to list.
+   */
+  async readdirOrNull(path: string): Promise<VFSEntry[] | null> {
+    try {
+      return await this.readdir(path)
+    } catch (caught) {
+      if (!isAbsence(caught, ABSENT_PATH)) throw caught
+      return null
+    }
+  }
+
   /** The directory's entries. Throws when it is not a directory. */
   async readdir(path: string): Promise<VFSEntry[]> {
     const prefix = path.endsWith('/') ? path : path + '/'
@@ -223,18 +249,22 @@ export class MontyVFS {
    *   path: the path to stat.
    */
   async stat(path: string): Promise<VFSStat | null> {
-    const row = await this.orNull(path, ABSENT_ROW, () => this.core.stat(path))
+    const row = await this.orNull(path, ABSENT_PATH, () => this.core.stat(path))
     if (row === null) this.missing.add(path)
     return row
   }
 
-  /** The parent's entry for `path`, or null when the parent lacks one. */
+  /**
+   * The parent's entry for `path`, or null when the parent lacks one
+   * or has no listing to lack it in. A parent the mount refuses to
+   * list is neither, and raises.
+   */
   async entryFor(path: string): Promise<VFSEntry | null> {
     if (this.missing.has(path)) return null
     const slash = path.lastIndexOf('/')
     const parent = slash <= 0 ? '/' : path.slice(0, slash)
-    const entries = await this.readdir(parent)
-    const found = entries.find((e) => e.path === path || e.path === path + '/') ?? null
+    const entries = await this.readdirOrNull(parent)
+    const found = entries?.find((e) => e.path === path || e.path === path + '/') ?? null
     if (found === null) this.missing.add(path)
     return found
   }

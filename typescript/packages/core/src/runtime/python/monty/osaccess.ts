@@ -236,10 +236,7 @@ export class MirageOSAccess {
       case 'Path.iterdir':
         return vfs.readdir(path).then((entries) => entries.map((e) => e.path))
       case 'Path.is_dir':
-        return vfs.readdir(path).then(
-          () => true,
-          () => false,
-        )
+        return vfs.readdirOrNull(path).then((entries) => entries !== null)
       // Monty's own tree holds no links, so declining would answer
       // False for one the shell made; the mount's name plane is the
       // only place the fact lives. Creation stays out of reach: the
@@ -247,20 +244,22 @@ export class MirageOSAccess {
       case 'Path.is_symlink':
         return vfs.isLink(path)
       case 'Path.is_file':
-        return vfs.entryFor(path).then(
-          (e) =>
-            e !== null && !e.isDir && (e.mode === undefined || (e.mode & 0o170000) === 0o100000),
-          () => false,
-        )
+        return vfs
+          .entryFor(path)
+          .then(
+            (e) =>
+              e !== null && !e.isDir && (e.mode === undefined || (e.mode & 0o170000) === 0o100000),
+          )
+      // A path the parent's listing does not name may still be a
+      // directory the mount only implies (the root above a nested
+      // mount), so the listing is the second question, not a rescue
+      // from the first: a parent the mount refused to list raises.
       case 'Path.exists':
-        return vfs.entryFor(path).then(
-          (e) => e !== null,
-          () =>
-            vfs.readdir(path).then(
-              () => true,
-              () => false,
-            ),
-        )
+        return vfs
+          .entryFor(path)
+          .then((e) =>
+            e !== null ? true : vfs.readdirOrNull(path).then((entries) => entries !== null),
+          )
       // A row the mount does not have is not an absence yet: the
       // path may be a guest scratch file, and only the tree knows.
       // `Path.iterdir` strings arriving as guest str (python:
@@ -381,10 +380,7 @@ export class MirageOSAccess {
    */
   private remoteIsDir(path: string, vfs: MontyVFS | null): boolean | Promise<boolean> {
     if (vfs === null) return false
-    return vfs.readdir(path).then(
-      () => true,
-      () => false,
-    )
+    return vfs.readdirOrNull(path).then((entries) => entries !== null)
   }
 
   /**
@@ -396,16 +392,14 @@ export class MirageOSAccess {
    */
   private scratchIterdir(path: string, vfs: MontyVFS | null): unknown {
     if (vfs === null) return this.tree.iterdir(path)
-    return vfs.readdir(path).then(
-      (entries) => {
-        return mergeEntries(
-          path,
-          this.tree.isDir(path) ? this.tree.iterdir(path) : [],
-          entries.map((entry) => entry.path),
-        )
-      },
-      () => this.tree.iterdir(path),
-    )
+    return vfs.readdirOrNull(path).then((entries) => {
+      if (entries === null) return this.tree.iterdir(path)
+      return mergeEntries(
+        path,
+        this.tree.isDir(path) ? this.tree.iterdir(path) : [],
+        entries.map((entry) => entry.path),
+      )
+    })
   }
 
   private async openMounted(path: string, mode: string, vfs: MontyVFS): Promise<unknown> {
@@ -436,11 +430,8 @@ export class MirageOSAccess {
     }
     const entry = await vfs.entryFor(path)
     if (entry === null) {
-      const isDir = await vfs.readdir(path).then(
-        () => true,
-        () => false,
-      )
-      throw isDir ? guestError('EISDIR', path) : guestError('ENOENT', path)
+      const listed = await vfs.readdirOrNull(path)
+      throw listed !== null ? guestError('EISDIR', path) : guestError('ENOENT', path)
     }
     if (entry.isDir) throw guestError('EISDIR', path)
     return handle
@@ -477,14 +468,9 @@ export class MirageOSAccess {
     kwargs: Record<string, unknown>,
     vfs: MontyVFS,
   ): Promise<null> {
-    const entry = await vfs.entryFor(path).catch(() => null)
+    const entry = await vfs.entryFor(path)
     if (entry !== null && !entry.isDir) throw guestError('EEXIST', path)
-    const exists =
-      entry !== null ||
-      (await vfs.readdir(path).then(
-        () => true,
-        () => false,
-      ))
+    const exists = entry !== null || (await vfs.readdirOrNull(path)) !== null
     if (exists) {
       if (kwargs.exist_ok === true) return null
       throw guestError('EEXIST', path)

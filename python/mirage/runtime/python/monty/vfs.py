@@ -25,10 +25,14 @@ T = TypeVar("T")
 # A read asks for BYTES, and a directory is a legitimate way to have
 # none of them.
 ABSENT_CONTENT = (FileNotFoundError, IsADirectoryError, NotADirectoryError)
-# A stat asks whether the path EXISTS, and there a directory is the
-# answer rather than its absence: reading IsADirectoryError as a miss
-# would send the guest to monty's own tree for a path the mount holds.
-ABSENT_ROW = (FileNotFoundError, NotADirectoryError)
+# A stat and a listing both ask whether the path IS THERE, and there a
+# directory is the answer rather than its absence: reading
+# IsADirectoryError as a miss would send the guest to monty's own tree
+# for a path the mount holds. Nothing else belongs in either tuple. A
+# backend that refused the op has not said the path is gone, and
+# folding that refusal into "no" reports a permission or a transport
+# failure as an absence the guest cannot tell from a real one.
+ABSENT_PATH = (FileNotFoundError, NotADirectoryError)
 # Neither list carries ValueError, which both of them used to. It was
 # never in the TypeScript twin, and it is wide enough to swallow a bug:
 # a pydantic ValidationError from a malformed row is a ValueError, and
@@ -80,7 +84,7 @@ class MontyVFS:
             return None
         try:
             return self._core.readdir(virtual)
-        except ABSENT_CONTENT:
+        except ABSENT_PATH:
             return None
 
     def stat(self, virtual: str) -> VFSStat | None:
@@ -97,7 +101,7 @@ class MontyVFS:
         Args:
             virtual (str): the path to stat.
         """
-        row = self._or_none(virtual, ABSENT_ROW,
+        row = self._or_none(virtual, ABSENT_PATH,
                             lambda core: core.stat(virtual))
         if row is None:
             self._missing.add(virtual)
