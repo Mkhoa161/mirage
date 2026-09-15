@@ -132,16 +132,20 @@ class MontyVFS:
         """Whether the mount's name plane holds a symlink at `virtual`.
 
         Answered through the readlink op, not through the parent's
-        listing, even though a readdir row now carries the mark. Two
-        reasons, and both are about this tier rather than about the
-        mark. The predicate arrives for one path with no listing in
+        listing, even though a readdir row now carries the mark. Three
+        reasons, and all of them are about this tier rather than about
+        the mark. The predicate arrives for one path with no listing in
         hand, and every other predicate here materializes that path
         alone, so reading the parent would trade one dispatch for a
-        readdir plus a stat per sibling (the TS twin reads the row
-        because its own `exists` and `is_file` already go through that
-        listing). And readlink is the gated channel: the node table has
-        no session, so a mark read outside an admitted listing would
-        answer for a path the door hides.
+        readdir plus a stat per sibling. A listing read is reached
+        through the negative cache, and a DANGLING link is remembered
+        as absent the moment the guest's own `exists()` stats it, so
+        the mark would answer False for a link that is plainly there.
+        And readlink is the gated channel: the node table has no
+        session, so a mark read outside an admitted listing would
+        answer for a path the door hides. The TypeScript twin asks
+        readlink for the same three reasons now; it used to read the
+        mark, and the dangling case is what caught it.
 
         Args:
             virtual (str): the path to test.

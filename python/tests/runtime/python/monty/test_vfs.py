@@ -176,6 +176,19 @@ class RefusingCore(CountingCore):
         raise PermissionError(errno.EACCES, "denied", path)
 
 
+def test_a_dangling_link_is_still_a_link_after_a_stat_miss():
+    # `exists()` stats, the stat follows the link and misses, and the
+    # door remembers the path as absent. `is_link` has to keep seeing
+    # it: the name plane is where the fact lives, and the miss was the
+    # target's, not the link's. Pinned here because the TypeScript twin
+    # read the mark off the parent's listing, which goes through that
+    # cache, and answered False for a link plainly there.
+    core = CountingCore({}, links={"/s3/dangling": "/s3/gone"})
+    vfs = MontyVFS(core)
+    assert vfs.stat("/s3/dangling") is None
+    assert vfs.is_link("/s3/dangling") is True
+
+
 def test_a_created_ancestor_is_forgotten_along_with_the_leaf():
     # `mkdir(parents=True)` brings the ancestors into being too, so a
     # miss the guest already cached for one of them is stale the moment

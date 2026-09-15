@@ -69,8 +69,22 @@ function accessOn(
 // The door builds each row from a name plus one stat, so a double
 // standing in for the bridge answers both; a name it did not list stats
 // as a missing path.
-function listing(names: string[], dirs: string[] = []): Mock<BridgeDispatchFn> {
+function listing(
+  names: string[],
+  dirs: string[] = [],
+  links: string[] = [],
+): Mock<BridgeDispatchFn> {
   return vi.fn<BridgeDispatchFn>((op, path) => {
+    // A real backend answers a target or refuses with EINVAL for a
+    // path that is not a link; undefined is neither.
+    if (op === 'readlink') {
+      if (!links.includes(path)) {
+        return Promise.reject(
+          Object.assign(new Error(`not a symbolic link: ${path}`), { code: 'EINVAL' }),
+        )
+      }
+      return Promise.resolve(path + '.target')
+    }
     if (op === 'readdir') {
       // A real mount refuses to list a path it does not have, and the
       // door asks with a trailing slash. Answering every path would
@@ -209,7 +223,11 @@ describe('MirageOSAccess scratch paths', () => {
   })
 
   it('answers is_symlink false for a scratch path, whose tree holds no links', async () => {
-    const access = accessOn(vi.fn<BridgeDispatchFn>(() => Promise.resolve(undefined)))
+    const access = accessOn(
+      vi.fn<BridgeDispatchFn>((_op, path) =>
+        Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' })),
+      ),
+    )
     expect(await access.handle('Path.is_symlink', ['/tmp/l'])).toBe(false)
   })
 })
@@ -558,10 +576,22 @@ describe('MirageOSAccess path operations', () => {
 
   // Monty's own tree holds no links, so declining this verb answered
   // False for a link the shell made.
-  it('answers is_symlink from the parent listing mark', async () => {
-    const dispatch = listing(['/ram/d/l', '/ram/d/f'])
+  it('answers is_symlink from the name plane, through readlink', async () => {
+    const dispatch = listing(['/ram/d/l', '/ram/d/f'], [], ['/ram/d/l'])
     const access = accessOn(dispatch, {}, ['/ram'], ['l'])
     expect(await access.handle('Path.is_symlink', ['/ram/d/l'])).toBe(true)
     expect(await access.handle('Path.is_symlink', ['/ram/d/f'])).toBe(false)
+  })
+
+  it('still sees a dangling link after the guest asked exists() first', async () => {
+    // `exists()` stats, the stat follows the link and misses, and the
+    // path is remembered as absent. Reading the mark off the parent
+    // listing went through that cache, so `is_symlink()` answered
+    // False for a link plainly there. python asks readlink, which
+    // never consulted the cache, so only this host diverged.
+    const dispatch = listing([], [], ['/ram/d/dangling'])
+    const access = accessOn(dispatch, {}, ['/ram'], ['dangling'])
+    expect(await access.handle('Path.exists', ['/ram/d/dangling'])).toBe(false)
+    expect(await access.handle('Path.is_symlink', ['/ram/d/dangling'])).toBe(true)
   })
 })

@@ -37,8 +37,9 @@ function viewOn(
 
 // The door builds each row from a name plus one stat, so a double
 // standing in for the bridge answers both; a name it did not list stats
-// as a missing path.
-function listingOf(names: string[]): Mock<BridgeDispatchFn> {
+// as a missing path. `links` are the paths readlink resolves: a real
+// backend answers a target or refuses with EINVAL, never undefined.
+function listingOf(names: string[], links: string[] = []): Mock<BridgeDispatchFn> {
   return vi.fn<BridgeDispatchFn>((op, path) => {
     if (op === 'readdir') return Promise.resolve(names)
     if (op === 'stat') {
@@ -48,6 +49,14 @@ function listingOf(names: string[]): Mock<BridgeDispatchFn> {
       return Promise.resolve(
         new FileStat({ name: path, size: 1, type: FileType.FILE, content: ContentType.TEXT }),
       )
+    }
+    if (op === 'readlink') {
+      if (!links.includes(path)) {
+        return Promise.reject(
+          Object.assign(new Error(`not a symbolic link: ${path}`), { code: 'EINVAL' }),
+        )
+      }
+      return Promise.resolve(path + '.target')
     }
     return Promise.resolve(undefined)
   })
@@ -326,23 +335,34 @@ describe('MontyVFS negative cache', () => {
   })
 })
 
-// The link mark rides the parent's listing, which the door already
-// resolved, so a predicate the guest asks per path adds no dispatch of
-// its own. Monty's own tree holds no links, so declining would answer
-// False for one the shell made.
+// Asked of the name plane through readlink, as python's is_link is.
+// Monty's own tree holds no links, so declining would answer False for
+// one the shell made.
 describe('MontyVFS.isLink', () => {
-  it('reads the mark off the parent listing', async () => {
-    const vfs = viewOn(listingOf(['/ram/link']), ['/ram'], ['link'])
+  it('reads the link through readlink', async () => {
+    const vfs = viewOn(listingOf(['/ram/link'], ['/ram/link']), ['/ram'], ['link'])
     expect(await vfs.isLink('/ram/link')).toBe(true)
   })
 
-  it('answers false for an entry with no mark', async () => {
+  it('answers false for a path that is not a link', async () => {
     const vfs = viewOn(listingOf(['/ram/f']))
     expect(await vfs.isLink('/ram/f')).toBe(false)
   })
 
-  it('answers false when the parent will not list', async () => {
-    const dispatch = vi.fn<BridgeDispatchFn>(() => Promise.reject(new Error('no such dir')))
+  it('answers false for a path that is not there at all', async () => {
+    const dispatch = vi.fn<BridgeDispatchFn>((_op, path) =>
+      Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' })),
+    )
     expect(await viewOn(dispatch).isLink('/ram/gone/l')).toBe(false)
+  })
+
+  it('still sees a dangling link the guest already stat-missed', async () => {
+    // The stat follows the link and misses, which remembers the path
+    // as absent. Reading the mark off the parent went through that
+    // cache, so `is_symlink()` answered False for a link plainly
+    // there whenever the guest called `exists()` first.
+    const vfs = viewOn(listingOf([], ['/ram/dangling']), ['/ram'], ['dangling'])
+    expect(await vfs.stat('/ram/dangling')).toBeNull()
+    expect(await vfs.isLink('/ram/dangling')).toBe(true)
   })
 })

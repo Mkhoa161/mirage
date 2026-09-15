@@ -221,19 +221,33 @@ export class MontyVFS {
   /**
    * Whether the mount's name plane holds a symlink at `path`.
    *
-   * Read off the parent's listing, which the door already marks, so a
-   * predicate the guest asks per path costs no dispatch of its own
-   * beyond the one `entryFor` was going to make. A parent that will
-   * not list answers False, the same as pathlib does for a path it
-   * cannot reach.
+   * Answered through the readlink op, exactly as python's `is_link`
+   * is, and deliberately not through the parent's listing mark. The
+   * mark is only reachable behind `entryFor`, which consults the
+   * negative cache, and a DANGLING link is the case that breaks on:
+   * the guest's own `exists()` stats it, the stat follows the link
+   * and misses, the path is remembered as absent, and `is_symlink()`
+   * then answered False for a link that is plainly there. The mark
+   * was worth that coupling while `exists` and `is_file` already went
+   * through the same listing; they ask the row now, so reading it
+   * here would also buy a readdir plus a stat per sibling to answer
+   * about one path.
    *
    * Args:
    *   path: the path to test.
    */
   isLink(path: string): Promise<boolean> {
-    return this.entryFor(path).then(
-      (e) => e?.isLink === true,
-      () => false,
+    return this.core.readlink(path).then(
+      () => true,
+      (caught: unknown) => {
+        // EINVAL for a path that is not a link, ENOENT for one that is
+        // not there: `is_symlink` is False either way, which is what
+        // pathlib answers for both. A broken answer is not one of
+        // those and stays a raise, the line python's `except OSError`
+        // draws too.
+        if (caught instanceof TypeError) throw caught
+        return false
+      },
     )
   }
 
