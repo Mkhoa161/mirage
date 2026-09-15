@@ -16,7 +16,7 @@ import { mergeEntries } from './list.ts'
 import { parseMode } from '../../handles/mode.ts'
 import type { MontyBindingBits } from './binding.ts'
 import { guestError } from './errors.ts'
-import { statResult } from './stat.ts'
+import { isDirRow, isRegularRow, statResult } from './stat.ts'
 import { ScratchTree } from './tree.ts'
 import type { MontyVFS } from './vfs.ts'
 
@@ -119,8 +119,7 @@ function dateMarker(): Record<string, unknown> {
  * `MontyVFS`, and a path under no mount answers from a per-run
  * `ScratchTree`, so `/tmp` really does behave like `/tmp` on both
  * hosts. Declining is reserved for what neither half can serve: an
- * operation this door does not implement, and `Path.stat` (see the
- * note at that case).
+ * operation this door does not implement.
  *
  * Args:
  *   binding: the loaded binding's door pieces (NOT_HANDLED sentinel
@@ -235,31 +234,35 @@ export class MirageOSAccess {
       }
       case 'Path.iterdir':
         return vfs.readdir(path).then((entries) => entries.map((e) => e.path))
+      // The mount's own row answers the three predicates whenever it
+      // has one, which is what python's door does. A listing is a
+      // second question, not a cheaper spelling of the first: a
+      // backend may serve a stat for a path it will not list, and
+      // asking the listing first reported that as a failure rather
+      // than as the row it had. The fallback stays for the one path
+      // with no row of its own, a directory the mount only implies
+      // (the root above a nested mount).
       case 'Path.is_dir':
-        return vfs.readdirOrNull(path).then((entries) => entries !== null)
+        return vfs
+          .stat(path)
+          .then((st) =>
+            st !== null ? isDirRow(st) : vfs.readdirOrNull(path).then((e) => e !== null),
+          )
       // Monty's own tree holds no links, so declining would answer
       // False for one the shell made; the mount's name plane is the
       // only place the fact lives. Creation stays out of reach: the
       // binding emits no symlink verb to serve.
       case 'Path.is_symlink':
         return vfs.isLink(path)
+      // No listing fallback here, and that is not an omission: an
+      // implied directory is the only path a mount lists without a
+      // row, and it is not a regular file.
       case 'Path.is_file':
-        return vfs
-          .entryFor(path)
-          .then(
-            (e) =>
-              e !== null && !e.isDir && (e.mode === undefined || (e.mode & 0o170000) === 0o100000),
-          )
-      // A path the parent's listing does not name may still be a
-      // directory the mount only implies (the root above a nested
-      // mount), so the listing is the second question, not a rescue
-      // from the first: a parent the mount refused to list raises.
+        return vfs.stat(path).then((st) => st !== null && isRegularRow(st))
       case 'Path.exists':
         return vfs
-          .entryFor(path)
-          .then((e) =>
-            e !== null ? true : vfs.readdirOrNull(path).then((entries) => entries !== null),
-          )
+          .stat(path)
+          .then((st) => (st !== null ? true : vfs.readdirOrNull(path).then((e) => e !== null)))
       // A row the mount does not have is not an absence yet: the
       // path may be a guest scratch file, and only the tree knows.
       // `Path.iterdir` strings arriving as guest str (python:

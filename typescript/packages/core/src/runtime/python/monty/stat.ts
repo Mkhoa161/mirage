@@ -43,6 +43,35 @@ export interface GuestStat {
 }
 
 /**
+ * The row's type bits, the one rule every answer derived from a mode
+ * reads.
+ *
+ * monty's own `StatResult` keeps whatever type bits the mode carries
+ * and ORs in a default only when it carries none, so a backend
+ * reporting a character device (`/dev/null`) or a symlink stays one
+ * and a backend reporting permissions alone still yields a mode
+ * `S_ISDIR` can mask. Deriving the type from `isDir` alone reported
+ * every such row regular.
+ *
+ * Args:
+ *   st: the mount's row for the path.
+ */
+function fileType(st: VFSStat): number {
+  const declared = st.mode & S_IFMT
+  return declared !== 0 ? declared : st.isDir ? S_IFDIR : S_IFREG
+}
+
+/** Whether the row is a regular file: python's `S_ISREG` of its mode. */
+export function isRegularRow(st: VFSStat): boolean {
+  return fileType(st) === S_IFREG
+}
+
+/** Whether the row is a directory: python's `S_ISDIR` of its mode. */
+export function isDirRow(st: VFSStat): boolean {
+  return fileType(st) === S_IFDIR
+}
+
+/**
  * One mount row as the guest's stat fields.
  *
  * The numbers are monty's own `StatResult.file_stat` / `dir_stat`
@@ -57,13 +86,7 @@ export interface GuestStat {
  *   st: the mount's row for the path.
  */
 export function statFields(st: VFSStat): GuestStat {
-  // monty's own StatResult keeps whatever type bits the mode carries and
-  // ORs in a default only when it carries none, so a backend reporting a
-  // character device (`/dev/null`) or a symlink stays one and a backend
-  // reporting permissions alone still yields a mode `S_ISDIR` can mask.
-  // Deriving the type from `isDir` alone reported every such row regular.
-  const declared = st.mode & S_IFMT
-  const type = declared !== 0 ? declared : st.isDir ? S_IFDIR : S_IFREG
+  const type = fileType(st)
   // Seconds, as CPython reports them; 0 is the door's spelling of "no
   // stamp", and it stays 0 rather than becoming the host clock.
   const stamp = st.mtimeMs / 1000

@@ -312,6 +312,37 @@ describe('MirageOSAccess stat', () => {
       '[Errno 13] Permission denied',
     )
   })
+
+  it('answers the predicates from the row when the mount will not list', async () => {
+    // A backend may serve a stat for a path it refuses to list, and
+    // the row is the better answer anyway: it says what the path IS,
+    // where a listing only says whether it opens. Asking the listing
+    // first turned a served stat into a refusal for is_dir and into a
+    // miss for is_file, neither of which the python door reports.
+    const statOnly = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'stat' && (path === '/ram/d' || path === '/ram/d/f.txt')) {
+        return Promise.resolve(
+          new FileStat({
+            name: path,
+            size: 3,
+            type: path === '/ram/d' ? FileType.DIRECTORY : FileType.FILE,
+          }),
+        )
+      }
+      return Promise.reject(Object.assign(new Error(`denied: ${path}`), { code: 'EACCES' }))
+    })
+    const access = accessOn(statOnly)
+    await expect(Promise.resolve(access.handle('Path.is_dir', ['/ram/d']))).resolves.toBe(true)
+    await expect(Promise.resolve(access.handle('Path.is_file', ['/ram/d']))).resolves.toBe(false)
+    await expect(Promise.resolve(access.handle('Path.exists', ['/ram/d']))).resolves.toBe(true)
+    await expect(Promise.resolve(access.handle('Path.is_file', ['/ram/d/f.txt']))).resolves.toBe(
+      true,
+    )
+    await expect(Promise.resolve(access.handle('Path.is_dir', ['/ram/d/f.txt']))).resolves.toBe(
+      false,
+    )
+    expect(statOnly.mock.calls.filter(([op]) => op === 'readdir')).toHaveLength(0)
+  })
 })
 
 describe('MirageOSAccess clock and lexical doors', () => {
