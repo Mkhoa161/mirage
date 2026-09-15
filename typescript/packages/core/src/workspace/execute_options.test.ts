@@ -12,7 +12,8 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as abort from './abort.ts'
 import { RegisteredCommand } from '../commands/config.ts'
 import { CommandSpec, Operand } from '../commands/spec/types.ts'
 import { IOResult } from '../io/types.ts'
@@ -272,13 +273,35 @@ describe('execute({ signal }): mid-flight cancellation', () => {
 
   it('aborts inside a command substitution', async () => {
     const ws = await makeWs()
-    const t0 = Date.now()
-    await expect(
-      ws.execute('echo "$(sleep 5)"', { signal: AbortSignal.timeout(100) }),
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(Date.now() - t0).toBeLessThan(1000)
-    await ws.close()
-  })
+    const ac = new AbortController()
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    let exited = false
+    const originalSleep = abort.sleep
+    const spy = vi.spyOn(abort, 'sleep').mockImplementation(async (ms, signal) => {
+      entered()
+      try {
+        await originalSleep(ms, signal)
+      } finally {
+        exited = true
+      }
+    })
+    try {
+      const pending = ws.execute('echo "$(sleep 3600)"', { signal: ac.signal })
+      const settled = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      // Synchronize on the inner command, not parsing/runner wall time.
+      await started
+      ac.abort()
+      await settled
+      expect(exited).toBe(true)
+    } finally {
+      ac.abort()
+      spy.mockRestore()
+      await ws.close()
+    }
+  }, 10_000)
 
   it('aborts on manual AbortController.abort() during sleep', async () => {
     const ws = await makeWs()
