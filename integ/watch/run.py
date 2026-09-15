@@ -17,10 +17,11 @@ import json
 import os
 import sys
 import tempfile
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import aiohttp
 from aiohttp import web
@@ -73,6 +74,85 @@ class ExternalWriter(Protocol):
 
     async def remove_all(self, path: str) -> None:
         ...
+
+
+class BackendStatMetadata(Protocol):
+    """The fields a backend stat answers with, as opendal spells them.
+
+    Only the three the pull diagnostic reports are named, so the
+    protocol says what is read rather than restating opendal's whole
+    ``Metadata``.
+    """
+
+    @property
+    def etag(self) -> str | None:
+        ...
+
+    @property
+    def content_length(self) -> int:
+        ...
+
+    @property
+    def last_modified(self) -> datetime:
+        ...
+
+
+@runtime_checkable
+class BackendStatSource(Protocol):
+    """The one call the pull diagnostic's backend probe makes.
+
+    Satisfied by the opendal operator the Nextcloud battery writes
+    through, and deliberately not by ``ExternalWriter``: the other
+    writers speak through a second workspace or GitHub's contents API
+    and have no stat of their own, so the capability is a separate
+    type rather than a fourth method every writer has to grow.
+    """
+
+    async def stat(self, path: str) -> BackendStatMetadata:
+        ...
+
+
+BackendProbe = Callable[[str], Awaitable[str]]
+
+
+async def _backend_stat_line(op: BackendStatSource, key: str) -> str:
+    """Render what the backend itself holds for ``key`` right now.
+
+    This is the third fact a give-up needs and the only one that does
+    not come from mirage: the listing's fingerprint before and after
+    say what the poller saw, and this says what the backend was
+    willing to tell it. An etag that never moves while the content
+    length does is a backend that publishes a stale validator; an
+    etag that moved is a listing that did not read it.
+
+    Args:
+        op (BackendStatSource): Backend stat surface, bound by
+            ``_stat_probe``.
+        key (str): Backend-relative key, as the case's ``mutate``
+            block spells it.
+    """
+    meta = await op.stat(key)
+    return (f"etag={meta.etag} size={meta.content_length} "
+            f"modified={meta.last_modified}")
+
+
+def _stat_probe(op: ExternalWriter) -> BackendProbe | None:
+    """Bind ``op``'s stat as a probe, or None when it has none.
+
+    The probe is passed into ``PullTrigger`` already bound, so the
+    trigger takes one callable over a backend key and never sees an
+    opendal type. A writer with no stat answers None rather than a
+    probe that raises, so the diagnostic says the probe was
+    unavailable instead of reporting an ``AttributeError`` as if the
+    backend had refused.
+
+    Args:
+        op (ExternalWriter): External writer this battery mutates
+            through.
+    """
+    if not isinstance(op, BackendStatSource):
+        return None
+    return partial(_backend_stat_line, op)
 
 
 def _nextcloud_config(url: str) -> NextcloudConfig:
@@ -391,6 +471,32 @@ class ConsumerPoller:
             await self._ws.notify(change)
         return delta.changes
 
+    def fingerprint_for(self, virtual: str) -> str | None:
+        """The fingerprint the kept checkpoint holds for ``virtual``.
+
+        The checkpoint is ``ListingDeltaHook``'s own snapshot, a
+        ``{virtual: fingerprint}`` JSON map, so this reads the exact
+        value the next delta will compare against rather than a
+        re-derived one. That is what makes it worth exposing: a pull
+        case that is told no path changed has one comparison to
+        inspect, and only this side of it is inside the harness.
+
+        None means the path is not in the snapshot, which is also the
+        answer before any pump has laid a checkpoint down. The two are
+        one absence to a reader and every caller here reads it after
+        the baseline pump, so they are not told apart. An entry the
+        snapshot carries with no fingerprint of its own is ``""``,
+        which is a different fact and stays distinguishable.
+
+        Args:
+            virtual (str): Workspace-virtual path, spelled as a case's
+                ``expect`` block spells it.
+        """
+        if self._checkpoint is None:
+            return None
+        snapshot: dict[str, str] = json.loads(self._checkpoint)
+        return snapshot.get(virtual)
+
 
 DISK_EVENT_BY_KIND = {
     "create": "created",
@@ -432,39 +538,78 @@ def _framed(path: str) -> str:
     return "/" + path.strip("/")
 
 
-def _miss_detail(want: str, observed: tuple[FileEvent, ...],
-                 pumps: int) -> str:
+def _render_fingerprint(value: str | None) -> str:
+    """Spell one snapshot fingerprint for the give-up line.
+
+    Absent and empty are different facts and would read the same if
+    both rendered as nothing. A path the snapshot does not carry at
+    all means the walk never reported the object; ``ListingDeltaHook``
+    stores ``""`` for an entry the walk did report with no fingerprint
+    of its own, which is a listing that saw the object and had nothing
+    to compare. So each gets its own word.
+
+    Args:
+        value (str | None): Fingerprint from
+            ``ConsumerPoller.fingerprint_for``.
+    """
+    if value is None:
+        return "<absent>"
+    if not value:
+        return "<empty>"
+    return value
+
+
+def _miss_detail(want: str, observed: tuple[FileEvent, ...], pumps: int,
+                 before: str | None, after: str | None, probed: str) -> str:
     """Describe a re-pump phase that never saw ``want``.
 
-    The three causes a give-up can have are told apart by what the
-    deltas carried, so the line names both sides of the comparison
-    that failed: the path the trigger waited for, and the paths the
-    last delta that reported anything actually carried. No paths at
-    all across several pumps is a fingerprint that never moved or a
-    backend that never published the write; paths that are all
-    unrelated to the case is visibility lag on that one object; and
-    a path that differs from ``want`` only in its framing is the
-    comparison asymmetry, which this reports and deliberately does
-    not paper over -- ``EventStream`` compares ``_framed`` paths
-    while the trigger compares the raw ``virtual``, so a trailing or
-    leading slash blinds the trigger to a change the stream would
-    have matched.
+    The line names both sides of the comparison that failed: the path
+    the trigger waited for, and the paths the last delta that reported
+    anything actually carried. Paths that are all unrelated to the
+    case is visibility lag on that one object, and a path that differs
+    from ``want`` only in its framing is the comparison asymmetry,
+    which this reports and deliberately does not paper over --
+    ``EventStream`` compares ``_framed`` paths while the trigger
+    compares the raw ``virtual``, so a trailing or leading slash
+    blinds the trigger to a change the stream would have matched.
+
+    No paths at all is the one outcome those two cannot tell apart,
+    because it is consistent with a fingerprint that never moved and
+    with a backend that never published the write. The three trailing
+    fields are what separate them, and they are the reason this takes
+    six arguments: the fingerprint the listing held for ``want``
+    before the phase and after it are the exact values the delta
+    compared, so equal ones say the listing never saw a change to
+    report, and the backend's own etag, length and mtime say whether
+    there was one to see. An etag that moved with equal fingerprints
+    is the listing; equal everywhere is the backend.
 
     Args:
         want (str): Virtual path the case expects.
         observed (tuple[FileEvent, ...]): Last delta that reported
             any change; empty when no delta reported one.
         pumps (int): Pumps the phase issued.
+        before (str | None): Snapshot fingerprint for ``want`` read
+            after the mutation and before the first pump.
+        after (str | None): The same fingerprint once the phase gave
+            up.
+        probed (str): The backend's own record of the case's key,
+            already rendered by ``_backend_stat_line`` -- or the text
+            of whatever it raised, or a note that no probe ran.
     """
     head = (f"waited for {want!r} over {pumps} pump(s) in "
             f"{PUMP_WINDOW}s, last delta reported ")
     if not observed:
-        return head + "no paths"
-    paths = [change.path.virtual for change in observed]
-    tail = f"{paths}"
-    if any(_framed(path) == _framed(want) for path in paths):
-        tail += " (framed match: raw comparison missed it)"
-    return head + tail
+        tail = "no paths"
+    else:
+        paths = [change.path.virtual for change in observed]
+        tail = f"{paths}"
+        if any(_framed(path) == _framed(want) for path in paths):
+            tail += " (framed match: raw comparison missed it)"
+    return (f"{head}{tail}; listing fingerprint "
+            f"before={_render_fingerprint(before)} "
+            f"after={_render_fingerprint(after)}; "
+            f"backend stat: {probed}")
 
 
 class CaseTrigger:
@@ -542,19 +687,65 @@ class PullTrigger(CaseTrigger):
     is built from the deltas the loop already read, on the give-up
     path only, so a case whose first pump sees its change pays
     nothing for it.
+
+    It carries two facts the deltas alone cannot: the fingerprint the
+    kept listing held for the case's path on entry (which is after
+    the mutation and before any pump, so it is the pre-write value
+    the next delta compares against) and the same fingerprint once
+    the phase gives up. A give-up that reported no paths with those
+    two equal is a listing that never moved, and the backend probe
+    then says whether there was a move to see.
     """
 
-    def __init__(self, poller: ConsumerPoller) -> None:
+    def __init__(self,
+                 poller: ConsumerPoller,
+                 probe: BackendProbe | None = None) -> None:
+        """Args:
+            poller (ConsumerPoller): The consumer's poll loop, pumped
+                once per attempt and read for its checkpoint.
+            probe (BackendProbe | None): Renders the backend's own
+                record of one backend key, for the give-up line.
+                None when the battery's writer has no stat to bind,
+                which is every backend but Nextcloud.
+        """
         self._poller = poller
+        self._probe = probe
         self._miss = ""
 
     def diagnostic(self) -> str:
         """What the last re-pump phase failed to see, or "" when it
-        saw the case's path (or when no phase has run)."""
+        saw the case's path (or when no phase has run). Carries the
+        listing fingerprints and the backend stat the phase read."""
         return self._miss
+
+    async def _probed(self, case: dict) -> str:
+        """The backend's own record of this case's key, as text.
+
+        A diagnostic must not be able to turn a case failure into a
+        crash, so the probe's exception is rendered rather than
+        raised -- it is reported, not swallowed, and a probe that
+        refuses is itself a fact about the write. The overflow
+        battery calls the trigger with an ``expect`` block and
+        nothing else, so a case with no ``mutate`` names no key and
+        is reported as unprobed rather than guessed at.
+
+        Args:
+            case (dict): The case the trigger was called with.
+        """
+        mutate = case.get("mutate")
+        key = mutate.get("path") if mutate else None
+        if self._probe is None:
+            return "no probe bound"
+        if key is None:
+            return "no mutate key on case"
+        try:
+            return await self._probe(key)
+        except Exception as exc:
+            return f"probe raised {type(exc).__name__}: {exc}"
 
     async def __call__(self, case: dict) -> None:
         want = case["expect"]["path"]
+        before = self._poller.fingerprint_for(want)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + PUMP_WINDOW
         self._miss = ""
@@ -570,7 +761,9 @@ class PullTrigger(CaseTrigger):
                 return
             remaining = deadline - loop.time()
             if remaining <= 0:
-                self._miss = _miss_detail(want, observed, pumps)
+                self._miss = _miss_detail(want, observed, pumps, before,
+                                          self._poller.fingerprint_for(want),
+                                          await self._probed(case))
                 return
             await asyncio.sleep(min(PUMP_INTERVAL, remaining))
 
@@ -825,8 +1018,9 @@ async def _run_overflow_pull(spec: dict, results: list) -> None:
         resource = ws.registry.mount_for(spec["mount"]).resource
         poller = ConsumerPoller(resource.delta_hook(), ws, _framed_root(spec))
         await poller.pump()
-        await _overflow_core(spec, ws, op, PullTrigger(poller), "pull",
-                             results)
+        await _overflow_core(spec, ws, op, PullTrigger(poller,
+                                                       _stat_probe(op)),
+                             "pull", results)
     finally:
         await ws.close()
 
@@ -932,7 +1126,8 @@ async def _run_nested_pull(spec: dict, results: list) -> None:
                                       resource_path=block["root"])
         poller = ConsumerPoller(resource.delta_hook(), ws, root)
         await poller.pump()
-        await _nested_core(spec, ws, op, PullTrigger(poller), "pull", results)
+        await _nested_core(spec, ws, op, PullTrigger(poller, _stat_probe(op)),
+                           "pull", results)
     finally:
         await ws.close()
 
@@ -992,8 +1187,9 @@ async def _run_pull(spec: dict, ws: Workspace,
     agen = ws.watch(spec["watch_dir"])
     poller = ConsumerPoller(resource.delta_hook(), ws, hook_root)
     await poller.pump()
-    results.extend(await _run_battery(ws, op, PullTrigger(poller), agen,
-                                      spec["cases"], "pull", "pull"))
+    results.extend(await _run_battery(ws, op,
+                                      PullTrigger(poller, _stat_probe(op)),
+                                      agen, spec["cases"], "pull", "pull"))
 
     for scope in spec.get("scopes", []):
         # A scope whose mutation the backend has no op for (hf has no
@@ -1004,8 +1200,9 @@ async def _run_pull(spec: dict, ws: Workspace,
         agen = ws.watch(scope["watch"])
         poller = ConsumerPoller(resource.delta_hook(), ws, hook_root)
         await poller.pump()
-        results.extend(await _run_battery(ws, op, PullTrigger(poller), agen,
-                                          scope["cases"],
+        results.extend(await _run_battery(ws, op,
+                                          PullTrigger(poller, _stat_probe(op)),
+                                          agen, scope["cases"],
                                           f"pull:{scope['id']}", "pull"))
     await _run_overflow_pull(spec, results)
     await _run_nested_pull(spec, results)
