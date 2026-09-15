@@ -85,10 +85,8 @@ function dateCommand(
     result = formatRFC5322(dt, zone)
   } else if (fmt !== null) {
     result = strftime(dt, fmt, zone)
-  } else if (named !== null) {
-    result = strftime(dt, '%a %b %d %H:%M:%S %Z %Y', zone)
   } else {
-    result = strftime(dt, '%a %b %d %H:%M:%S %Y', zone)
+    result = strftime(dt, '%a %b %d %H:%M:%S %Z %Y', zone)
   }
   return [ENC.encode(result + '\n'), new IOResult()]
 }

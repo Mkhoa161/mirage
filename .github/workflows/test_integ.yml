@@ -398,6 +398,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       redis:
         image: redis:7
@@ -452,7 +453,7 @@ jobs:
             -p qjs-wasi.wasm -O /tmp/quickjs/qjs-wasi.wasm
 
       - name: Run declarative battery (python hosts)
-        run: ./python/.venv/bin/python integ/runners/python/main.py --facet core --strict --allow-skip chroma,lancedb,nextcloud,notion,postgres,qdrant
+        run: ./python/.venv/bin/python integ/runners/python/main.py --facet core --strict --target-jobs 4 --allow-skip chroma,lancedb,nextcloud,notion,postgres,qdrant
 
       # Moved here from the `integ` job when the HTTP fixture server became a
       # TypeScript kit fake: the adapter still starts it, but the interpreter is
@@ -465,6 +466,7 @@ jobs:
     needs: [changes, typescript-build]
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       redis:
         image: redis:7
@@ -512,8 +514,10 @@ jobs:
       # fails when it tests nothing; this asserts the kit the fakes are built
       # on still keeps its promises, none of which the battery can reach: no
       # corpus case sends a run or tenant header, and the runner awaits one
-      # case at a time, so run isolation, tenant isolation and the write queue
-      # are unreachable there by construction rather than by omission.
+      # case at a time within a target, so tenant isolation and the write
+      # queue are what keep two concurrent targets from reading each other
+      # once --target-jobs is above one, and no corpus case can reach them
+      # from the inside.
       - name: Assert the mock-server kit (run/tenant isolation, seeder, queue)
         working-directory: integ
         run: pnpm run selftest
@@ -581,7 +585,7 @@ jobs:
 
       - name: Run declarative battery (typescript hosts)
         working-directory: integ
-        run: pnpm exec tsx runners/typescript/main.ts --facet core --strict --allow-skip chroma,lancedb,nextcloud,notion,postgres,qdrant
+        run: pnpm exec tsx runners/typescript/main.ts --facet core --strict --target-jobs 4 --allow-skip chroma,lancedb,nextcloud,notion,postgres,qdrant
 
       # The fixture server is python (started by the adapter through
       # startPythonServer), so this runs here rather than in integ-ts, which

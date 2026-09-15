@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from mirage.io import IOResult
 from mirage.shell.parse.constants import (BASH_KEYWORDS, CASE_TERMINATORS,
                                           SEPARATOR_TOKENS, STRUCTURAL_TOKENS)
+from mirage.shell.parse.parse import parse
 from mirage.shell.types import TSNodeLike
 
 
@@ -146,8 +147,18 @@ def _is_recovered_quoted_heredoc_end(previous: TSNodeLike | None,
     return False
 
 
+def _missing_quote(node: TSNodeLike) -> str | None:
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        if current.is_missing and current.type in ("'", '"', "`"):
+            return ""
+        stack.extend(current.children)
+    return None
+
+
 def find_syntax_error(node: TSNodeLike) -> str | None:
-    """Locate a top-level structural syntax error in a parsed AST.
+    """Locate structural errors and missing tokens throughout a parsed AST.
 
     Args:
         node (TSNodeLike): root node from parse().
@@ -155,6 +166,20 @@ def find_syntax_error(node: TSNodeLike) -> str | None:
     Returns:
         str | None: text of the offending region, or None if the AST is clean.
     """
+    # Parameter syntax is judged during expansion (bad substitution), and
+    # `[` is a builtin whose argument grammar is judged by that builtin.
+    if node.type == "expansion":
+        return None
+    if (node.type == "test_command" and node.children
+            and node.children[0].type == "["):
+        return _missing_quote(node)
+    if node.type == "command_substitution":
+        source = (node.text or b"").decode()
+        unclosed = find_unterminated_backtick(source)
+        if unclosed is not None:
+            return unclosed
+        if source.startswith("$(") and source.endswith(")"):
+            return find_syntax_error(parse(source[2:-1]))
     stray = _stray_case_terminator(node)
     if stray is not None:
         return stray
@@ -162,15 +187,28 @@ def find_syntax_error(node: TSNodeLike) -> str | None:
         return None
     previous = None
     for child in node.children:
+        # Bash permits unquoted spaces in associative subscripts. The
+        # grammar recovers their earlier plain words as ERROR children.
+        if (node.type == "subscript" and child.type == "ERROR"
+                and child.children
+                and all(part.type == "word" and not part.has_error
+                        for part in child.children)):
+            continue
         if child.is_missing:
             text = child.text
             return text.decode(errors="replace") if text else ""
-        if child.type == "ERROR" and _is_structural_error(child):
+        if (child.type == "ERROR" and _is_structural_error(child)
+                and not (node.type == "for_statement" and
+                         (child.text or b"").strip() == b"in")):
             if _is_recovered_quoted_heredoc_end(previous, child):
                 previous = child
                 continue
             text = child.text
             return text.decode(errors="replace") if text else ""
+        if child.type != "ERROR":
+            nested = find_syntax_error(child)
+            if nested is not None:
+                return nested
         if child.is_named:
             previous = child
     return None

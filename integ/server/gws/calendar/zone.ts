@@ -99,7 +99,7 @@ export function zoneOffsetMs(instant: number, timeZone: string): number {
     get('minute'),
     get('second'),
   )
-  return asUtc - instant
+  return asUtc - Math.floor(instant / 1000) * 1000
 }
 
 // A wall-clock reading (as UTC millis) resolved in `timeZone`, as an
@@ -143,4 +143,17 @@ export function eventStartMs(ev: CalendarEvent, tz: string): number {
 // start=D, end=D+1 and its instant end is midnight opening the next day.
 export function eventEndMs(ev: CalendarEvent, tz: string): number {
   return slotMs(ev.end, tz) ?? eventStartMs(ev, tz)
+}
+
+export function formatEventTime(slot: EventTime): EventTime {
+  if (slot.dateTime === undefined) return { ...slot }
+  const parsed = parseDateTime(slot.dateTime)
+  if (parsed === null || parsed.offset !== null || slot.timeZone === undefined) return { ...slot }
+  const instant = wallClockMs(parsed.wall, slot.timeZone)
+  const offset = zoneOffsetMs(instant, slot.timeZone) / 60_000
+  const minutes = Math.abs(offset)
+  const suffix = `${offset < 0 ? '-' : '+'}${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+  const wall = new Date(instant + offset * 60_000).toISOString().slice(0, 19)
+  const fraction = DATE_TIME.exec(slot.dateTime)?.[7] ?? ''
+  return { ...slot, dateTime: `${wall}${fraction}${suffix}` }
 }
