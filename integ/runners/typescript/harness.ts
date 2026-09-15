@@ -72,6 +72,28 @@ export interface ServiceEnv {
 
 const SERVICE_KEYS = new Set(['python', 'typescript', 'shared'])
 
+/**
+ * What runs one target. The pool takes it as an argument so a gate can pass a
+ * recorder and watch what actually overlaps, which no end-to-end run can show:
+ * every service-free target finishes in one event-loop tick.
+ */
+export type TargetRunner = (
+  target: Target,
+  cases: Case[],
+  root: string,
+  report: Report | null,
+  emit: EmitRow[] | null,
+) => Promise<void>
+
+export interface EmitRow {
+  target: string
+  id: string
+  exit: number
+  stdout: string
+  stderr: string
+  check: string | null
+}
+
 export interface Target {
   id: string
   hosts: string[]
@@ -230,11 +252,31 @@ export function integRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 }
 
+/**
+ * Reject a target whose `exclusive` is not a boolean.
+ *
+ * The twin of the `shared` check in `loadServices`, and for the same reason:
+ * one file is read by two hosts, and a hand-edited `"exclusive": 1` would run
+ * the target alone on python and pool it here. That is the failure this key
+ * exists to prevent, arriving as a typescript-only flake rather than as a
+ * manifest error.
+ */
+export function validateTargets(targets: Target[]): Target[] {
+  for (const target of targets) {
+    if ('exclusive' in target && typeof target.exclusive !== 'boolean') {
+      throw new Error(
+        `targets.json: target '${target.id}' declares 'exclusive' as ${typeof target.exclusive}, must be a boolean`,
+      )
+    }
+  }
+  return targets
+}
+
 export function loadTargets(root: string): Map<string, Target> {
   const data = JSON.parse(readFileSync(join(root, 'targets.json'), 'utf8')) as {
     targets: Target[]
   }
-  return new Map(data.targets.map((t) => [t.id, t]))
+  return new Map(validateTargets(data.targets).map((t) => [t.id, t]))
 }
 
 /**

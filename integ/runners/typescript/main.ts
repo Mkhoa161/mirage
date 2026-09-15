@@ -17,7 +17,7 @@ import { ConsistencyPolicy } from '@struktoai/mirage-node'
 import { parseSessionProfile } from '@struktoai/mirage-core/policy/profile'
 import { ConcurrencyLimiter } from '@struktoai/mirage-core/concurrency/limiter'
 import { ADAPTERS, openConsistency } from './adapters/index.ts'
-import type { Case, ServiceEnv, Target } from './harness.ts'
+import type { Case, EmitRow, ServiceEnv, Target, TargetRunner } from './harness.ts'
 import {
   Report,
   compare,
@@ -38,13 +38,20 @@ import {
 
 const TS_HOSTS = ['typescript-node', 'typescript-browser']
 
-interface EmitRow {
-  target: string
-  id: string
-  exit: number
-  stdout: string
-  stderr: string
-  check: string | null
+/**
+ * How many targets may be in flight, refusing what `int()` would refuse.
+ *
+ * `Number()` is wider than python's `int()` -- it takes `0x10`, `1e2` and
+ * `4.0` and would have run 16, 100 and 4 workers where argparse exits 2 --
+ * so the digits are checked before the value is read.
+ */
+function parseJobs(raw: string): number {
+  const n = Number(raw)
+  if (!/^\d+$/.test(raw.trim()) || !Number.isInteger(n) || n < 1) {
+    process.stderr.write('--target-jobs takes an integer >= 1\n')
+    process.exit(2)
+  }
+  return n
 }
 
 function parseArgs(): {
@@ -72,23 +79,17 @@ function parseArgs(): {
     else if (argv[i] === '--strict') strict = true
     else if (argv[i] === '--allow-skip' && i + 1 < argv.length) allowSkip = argv[++i]
     else if (argv[i] === '--target-jobs' || argv[i].startsWith('--target-jobs=')) {
-      // The missing-value form is refused rather than ignored, as argparse
-      // refuses it on the python host: a trailing `--target-jobs` that read
-      // as "one worker" would drop the concurrency a workflow asked for and
-      // still exit 0.
-      // `--target-jobs=4` as well as `--target-jobs 4`, because argparse
-      // takes both on the python host: a workflow line normalised to the
-      // `=` spelling used to fall through unmatched here, leaving the
-      // default of one worker and exiting 0 -- the same silent downgrade
-      // the missing-value form is refused for.
+      // Both spellings, and a missing value refused rather than ignored,
+      // because argparse takes `--target-jobs=4` and refuses the empty form
+      // on the python host. A word this chain does not match is dropped in
+      // silence, so either would have left the default of one worker and
+      // exited 0 -- the concurrency a workflow asked for, silently gone.
+      // The same hole is open on every other flag here and is left alone:
+      // it predates this change.
       const eq = argv[i].indexOf('=')
-      const raw = eq === -1 ? (i + 1 < argv.length ? argv[++i] : '') : argv[i].slice(eq + 1)
-      const n = Number(raw)
-      if (raw === '' || !Number.isInteger(n) || n < 1) {
-        process.stderr.write('--target-jobs takes an integer >= 1\n')
-        process.exit(2)
-      }
-      targetJobs = n
+      targetJobs = parseJobs(
+        eq === -1 ? (i + 1 < argv.length ? argv[++i] : '') : argv[i].slice(eq + 1),
+      )
     }
   }
   return { targets, emit, facet, strict, allowSkip, targetJobs }
@@ -98,7 +99,7 @@ function parseArgs(): {
  * Run every eligible target with at most `width` in flight.
  *
  * Targets own separate workspaces and mint a fresh run id per open, so they
- * overlap safely; `planRun` names the two exceptions. Output order does not
+ * overlap safely; `planRun` names the two kinds that cannot. Output order does not
  * depend on completion order: every target, exclusive ones included, fills its
  * own report and emit slot, and the slots are absorbed in selection order. So
  * a concurrent run prints exactly what the serial run printed on STDOUT --
@@ -108,7 +109,7 @@ function parseArgs(): {
  * rather than exiting here, so a pooled run that lost one target still prints
  * the counts for every other one.
  */
-async function runPool(
+export async function runPool(
   eligible: Target[],
   cases: Case[],
   root: string,
@@ -116,8 +117,16 @@ async function runPool(
   emit: EmitRow[] | null,
   services: Map<string, ServiceEnv>,
   width: number,
+  runner: TargetRunner = runTarget,
 ): Promise<number> {
   const { alone, pool } = planRun(eligible, services)
+  // On stderr, so the stdout equivalence holds, and unconditional so a change
+  // that quietly routed every run down the serial loop would show as this line
+  // going missing rather than as the battery merely being slower. Mutation
+  // testing found that exact regression invisible.
+  process.stderr.write(
+    `pool: ${String(pool.length)} target(s) at width ${String(width)}, ${String(alone.length)} alone\n`,
+  )
   const slots = eligible.map(() => ({
     report: report === null ? null : new Report(false),
     emit: emit === null ? null : ([] as EmitRow[]),
@@ -125,7 +134,7 @@ async function runPool(
   const errors: [string, unknown][] = []
   for (const at of alone) {
     try {
-      await runTarget(eligible[at], cases, root, slots[at].report, slots[at].emit)
+      await runner(eligible[at], cases, root, slots[at].report, slots[at].emit)
     } catch (err: unknown) {
       errors.push([eligible[at].id, err])
     }
@@ -144,7 +153,7 @@ async function runPool(
     const next = prev.then(async () => {
       const release = await limiter.acquire()
       try {
-        await runTarget(target, cases, root, slot.report, slot.emit)
+        await runner(target, cases, root, slot.report, slot.emit)
       } catch (err: unknown) {
         // Recorded, not thrown: a sibling still has a workspace open and a
         // backend to tear down, and rejecting here would strand both.
@@ -175,7 +184,7 @@ async function runPool(
   return errors.length
 }
 
-async function runTarget(
+export async function runTarget(
   target: Target,
   cases: Case[],
   root: string,
@@ -387,25 +396,23 @@ async function main(): Promise<void> {
     process.exit(2)
   }
   if (emitPath) {
+    // No file, deliberately, where the report path prints partial counts:
+    // parity.py diffs two emits by (target, id), so a short one reads as a
+    // pile of ONLY-PY/ONLY-TS rows rather than as the run that broke.
     if (threw) {
-      process.stderr.write(`${String(threw)} target(s) threw\n`)
-      process.exitCode = 1
-      return
+      process.stderr.write(`${String(threw)} target(s) failed to run\n`)
+      process.exit(1)
     }
     writeFileSync(emitPath, JSON.stringify(emit))
     return
   }
   if (report === null) return
   process.stdout.write(`\n${report.summary()}\n`)
-  // `exitCode` rather than `exit`, because node's stdout to a pipe is async
-  // and the pool flushes the whole log in one burst just before this: an
-  // immediate exit truncates the tail a CI reader needs.
   if (threw) {
-    process.stderr.write(`${String(threw)} target(s) threw\n`)
-    process.exitCode = 1
-    return
+    process.stderr.write(`${String(threw)} target(s) failed to run\n`)
+    process.exit(1)
   }
-  if (report.failed) process.exitCode = 1
+  if (report.failed) process.exit(1)
 }
 
 main().catch((err: unknown) => {

@@ -126,7 +126,8 @@ async def run_target(target: dict, cases: list[dict], root: Path,
 async def run_slot(target: dict, cases: list[dict], root: Path,
                    report: harness.Report | None, emit: list[dict] | None,
                    limiter: ConcurrencyLimiter, lane: asyncio.Lock,
-                   errors: list[tuple[str, BaseException]]) -> None:
+                   errors: list[tuple[str, BaseException]],
+                   runner: harness.TargetRunner) -> None:
     """Run one target under its lane and the overall width.
 
     The lane is taken before the worker so a target waiting on a busy
@@ -142,10 +143,12 @@ async def run_slot(target: dict, cases: list[dict], root: Path,
         lane (asyncio.Lock): the lock for this target's lane.
         errors (list[tuple[str, BaseException]]): where a raising
             target is recorded.
+        runner (harness.TargetRunner): what runs one target; the gate
+            passes a recorder to watch what actually overlaps.
     """
     async with lane, limiter.acquire():
         try:
-            await run_target(target, cases, root, report, emit)
+            await runner(target, cases, root, report, emit)
         except Exception as exc:
             # Recorded, not raised: a sibling still has a workspace open
             # and a backend to tear down, and aborting the gather here
@@ -154,18 +157,25 @@ async def run_slot(target: dict, cases: list[dict], root: Path,
             errors.append((target["id"], exc))
 
 
-async def run_pool(eligible: list[dict], cases: list[dict], root: Path,
-                   report: harness.Report | None, emit: list[dict] | None,
-                   services: dict,
-                   width: int) -> list[tuple[str, BaseException]]:
+async def run_pool(
+    eligible: list[dict],
+    cases: list[dict],
+    root: Path,
+    report: harness.Report | None,
+    emit: list[dict] | None,
+    services: dict,
+    width: int,
+    runner: harness.TargetRunner | None = None
+) -> list[tuple[str, BaseException]]:
     """Run every eligible target with at most ``width`` in flight.
 
     Targets own separate workspaces and mint a fresh run id per open, so
-    they overlap safely; ``plan_run`` names the two exceptions. Output
+    they overlap safely; ``plan_run`` names the two kinds that cannot. Output
     order does not depend on completion order: every target, exclusive
     ones included, fills its own report and emit slot, and the slots are
     absorbed in selection order. So a concurrent run prints exactly what
-    the serial run printed.
+    the serial run printed on STDOUT; stderr is not ordered, and the
+    ``ERROR`` block below is appended in completion order.
 
     Args:
         eligible (list[dict]): targets that passed the host and env checks.
@@ -176,17 +186,28 @@ async def run_pool(eligible: list[dict], cases: list[dict], root: Path,
         emit (list[dict] | None): the run's emit rows, or None when reporting.
         services (dict): the table from load_services.
         width (int): how many targets may be in flight.
+        runner (harness.TargetRunner | None): what runs one target,
+            defaulting to the real one; the gate passes a recorder.
 
     Returns:
         list[tuple[str, BaseException]]: the targets that raised.
     """
+    run_one = run_target if runner is None else runner
     alone, pool = harness.plan_run(eligible, services)
+    # On stderr, so the stdout equivalence holds, and unconditional so a
+    # change that quietly routed every run down the serial loop would show
+    # as this line going missing rather than as the battery merely being
+    # slower. Mutation testing found that exact regression invisible.
+    print(
+        f"pool: {len(pool)} target(s) at width {width}, "
+        f"{len(alone)} alone",
+        file=sys.stderr)
     slots = [(None if report is None else harness.Report(stream=False),
               None if emit is None else []) for _ in eligible]
     errors: list[tuple[str, BaseException]] = []
     for i in alone:
         try:
-            await run_target(eligible[i], cases, root, *slots[i])
+            await run_one(eligible[i], cases, root, *slots[i])
         except Exception as exc:
             errors.append((eligible[i]["id"], exc))
     limiter = ConcurrencyLimiter(width)
@@ -196,7 +217,7 @@ async def run_pool(eligible: list[dict], cases: list[dict], root: Path,
         lanes.setdefault(lane, asyncio.Lock())
         running[i] = asyncio.create_task(
             run_slot(eligible[i], cases, root, slots[i][0], slots[i][1],
-                     limiter, lanes[lane], errors))
+                     limiter, lanes[lane], errors, run_one))
     # Awaited in selection order, and each slot flushed the moment every
     # slot before it has. Waiting for the whole pool before printing
     # anything would give CI one silent step and then a wall of text,
@@ -222,9 +243,12 @@ async def run_pool(eligible: list[dict], cases: list[dict], root: Path,
             task.cancel()
         if rest:
             await asyncio.gather(*rest, return_exceptions=True)
-    for target_id, exc in errors:
-        print(f"ERROR [{target_id}]", file=sys.stderr)
-        traceback.print_exception(type(exc), exc, exc.__traceback__)
+        # Inside the finally, not after it: a BaseException on its way out
+        # would otherwise discard every failure the pool had already
+        # recorded, which is the diagnosis the drain exists to preserve.
+        for target_id, exc in errors:
+            print(f"ERROR [{target_id}]", file=sys.stderr)
+            traceback.print_exception(type(exc), exc, exc.__traceback__)
     return errors
 
 
@@ -323,8 +347,11 @@ async def main() -> None:
         sys.exit(2)
 
     if args.emit:
+        # No file, deliberately, where the report path prints partial counts:
+        # parity.py diffs two emits by (target, id), so a short one reads as
+        # a pile of ONLY-PY/ONLY-TS rows rather than as the run that broke.
         if raised:
-            print(f"{len(raised)} target(s) raised", file=sys.stderr)
+            print(f"{len(raised)} target(s) failed to run", file=sys.stderr)
             sys.exit(1)
         Path(args.emit).write_text(json.dumps(emit))
         return
@@ -335,7 +362,7 @@ async def main() -> None:
     # else broke". The serial loop lets the exception abort the run, so
     # this is the one place the two modes deliberately differ.
     if raised:
-        print(f"{len(raised)} target(s) raised", file=sys.stderr)
+        print(f"{len(raised)} target(s) failed to run", file=sys.stderr)
         sys.exit(1)
     if report.failed:
         sys.exit(1)

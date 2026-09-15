@@ -17,6 +17,7 @@ import os
 import subprocess
 import tempfile
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -36,6 +37,13 @@ CASE_DIRS = ("unix", "bash", "crossmount", "resources", "cli", "session",
 # mints a fresh run id per ``open_target`` and is free to overlap.
 SERVICE_KEYS = frozenset({"python", "typescript", "shared"})
 
+# What runs one target. The pool takes it as an argument so a gate can pass
+# a recorder and watch what actually overlaps, which no end-to-end run can
+# show: every service-free target finishes in one event-loop tick.
+TargetRunner = Callable[
+    [dict, list[dict], Path, "Report | None", "list[dict] | None"],
+    Awaitable[None]]
+
 
 def integ_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -43,7 +51,35 @@ def integ_root() -> Path:
 
 def load_targets(root: Path) -> dict:
     data = json.loads((root / "targets.json").read_text())
+    validate_targets(data)
     return {t["id"]: t for t in data["targets"]}
+
+
+def validate_targets(data: dict) -> list[dict]:
+    """Reject a target whose ``exclusive`` is not a boolean.
+
+    The twin of the ``shared`` check in :func:`validate_services`, and for
+    the same reason: one file is read by two hosts, and a hand-edited
+    ``"exclusive": 1`` would run the target alone on one of them and pool
+    it on the other. That is the failure this key exists to prevent --
+    a secrets target's fetch function replaced under a sibling asserting
+    call counts against it, or opfs swapping ``globalThis.navigator``
+    while another target reads it -- arriving as a typescript-only flake
+    rather than as a manifest error.
+
+    Args:
+        data (dict): the parsed targets.json.
+
+    Returns:
+        list[dict]: the validated target list.
+    """
+    for target in data["targets"]:
+        flag = target.get("exclusive")
+        if flag is not None and not isinstance(flag, bool):
+            raise KeyError(f"targets.json: target {target['id']!r} declares "
+                           f"'exclusive' as {type(flag).__name__}, must be a "
+                           f"boolean")
+    return data["targets"]
 
 
 def load_services(root: Path) -> dict:
@@ -687,7 +723,7 @@ def plan_run(targets: list[dict],
     Returns:
         tuple: positions that run alone, and (position, lane) for the pool.
     """
-    alone = [i for i, t in enumerate(targets) if t.get("exclusive")]
+    alone = [i for i, t in enumerate(targets) if t.get("exclusive") is True]
     pool = [(i, target_lane(t, services)) for i, t in enumerate(targets)
-            if not t.get("exclusive")]
+            if t.get("exclusive") is not True]
     return alone, pool

@@ -398,7 +398,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     services:
       redis:
         image: redis:7
@@ -466,7 +466,7 @@ jobs:
     needs: [changes, typescript-build]
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     services:
       redis:
         image: redis:7
