@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { pathRulesActive } from '../../../../context/session_context.ts'
-import { isEacces } from '../../../../utils/errors.ts'
+import { isEacces, isMissingPath } from '../../../../utils/errors.ts'
 import { mountKey, mountPrefixOf, rekey } from '../../../../utils/key_prefix.ts'
 import type { Accessor } from '../../../../accessor/base.ts'
 import type { IndexCacheStore } from '../../../../cache/index/store.ts'
@@ -62,6 +62,24 @@ class WalkBudget {
   }
 }
 
+/**
+ * Whether `err` is a fact about the tree rather than a failure to read it.
+ *
+ * Absence counts as zero, because an entry listed a moment ago can be
+ * gone by the time the walk reaches it; `isMissingPath` is that set (a
+ * stamped ENOENT, or a path outside every mount). A refusal counts as
+ * zero too: GNU `du` skips a directory it cannot read rather than
+ * abandoning the total, and says so on stderr. Everything else -- a 429,
+ * a 5xx, an aborted line -- says the walk never saw that subtree, and a
+ * confidently wrong size is worse than an unknown one, so it surfaces
+ * instead of being summed as nothing. Python's `du.py` walker already
+ * reads exactly this set (`except (FileNotFoundError, ValueError)` then
+ * `except PermissionError`); this is the TypeScript side catching up.
+ */
+function absentOrRefused(err: unknown): boolean {
+  return isMissingPath(err) || isEacces(err)
+}
+
 async function duWalk(
   ops: CommandIO,
   accessor: Accessor,
@@ -73,7 +91,8 @@ async function duWalk(
   let info
   try {
     info = await ops.stat(accessor, path, index)
-  } catch {
+  } catch (err) {
+    if (!absentOrRefused(err)) throw err
     return 0
   }
   if (info.type !== FileType.DIRECTORY) {
@@ -88,7 +107,11 @@ async function duWalk(
   try {
     children = await ops.readdir(accessor, path, index)
   } catch (err) {
-    if (isEacces(err)) budget.unreadable.push(path.virtual)
+    if (isEacces(err)) {
+      budget.unreadable.push(path.virtual)
+      return 0
+    }
+    if (!isMissingPath(err)) throw err
     return 0
   }
   let total = 0
