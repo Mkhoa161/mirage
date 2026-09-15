@@ -127,9 +127,35 @@ describe('MontyVFS values', () => {
     const vfs = viewOn(dispatch)
     expect(await vfs.readOrNull('/ram/a')).toEqual(new TextEncoder().encode('hi'))
     expect(await vfs.readOrNull('/ram/nope')).toBeNull()
-    // The miss is remembered, so the second probe costs no dispatch.
+    // The read does NOT remember the miss, so it asks again: only the
+    // existence question feeds the cache. See the negative-cache block.
     expect(await vfs.readOrNull('/ram/nope')).toBeNull()
-    expect(dispatch.mock.calls.filter(([, p]) => p === '/ram/nope')).toHaveLength(1)
+    expect(dispatch.mock.calls.filter(([, p]) => p === '/ram/nope')).toHaveLength(2)
+  })
+
+  it('does not let a refused read poison the row for the same path', async () => {
+    // A mount reports a read of a directory as FileNotFoundError, so a
+    // read that recorded its miss made every later stat, is_dir and
+    // exists of that directory answer from monty's own tree defaults
+    // instead of the mount's row.
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'read') {
+        return Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+      }
+      return Promise.resolve(new FileStat({ name: path, size: 0, type: FileType.DIRECTORY }))
+    })
+    const vfs = viewOn(dispatch)
+    expect(await vfs.readOrNull('/ram/sub')).toBeNull()
+    expect(await vfs.stat('/ram/sub')).toMatchObject({ isDir: true })
+  })
+
+  it('short-circuits a read once the row said the path is not there', async () => {
+    // The cache is about the path, not about one op.
+    const dispatch = listingOf([])
+    const vfs = viewOn(dispatch)
+    expect(await vfs.stat('/ram/nope')).toBeNull()
+    expect(await vfs.readOrNull('/ram/nope')).toBeNull()
+    expect(dispatch.mock.calls.filter(([op]) => op === 'read')).toHaveLength(0)
   })
 
   it('readOrNull lets a transport failure propagate rather than faking absence', async () => {
@@ -181,6 +207,47 @@ describe('MontyVFS values', () => {
     const vfs = viewOn(listingOf(['/ram/a']))
     expect(await vfs.entryFor('/ram/a')).toMatchObject({ isDir: false })
     expect(await vfs.entryFor('/ram/nope')).toBeNull()
+  })
+})
+
+describe('MontyVFS stat', () => {
+  it("answers the mount's row for a path it holds", async () => {
+    await expect(viewOn(listingOf(['/ram/x'])).stat('/ram/x')).resolves.toMatchObject({
+      size: 1,
+      isDir: false,
+    })
+  })
+
+  it('answers null for an absence, so the caller can try the scratch tree', async () => {
+    await expect(viewOn(listingOf([])).stat('/ram/x')).resolves.toBeNull()
+  })
+
+  it('remembers the absence, so a repeated stat costs no second dispatch', async () => {
+    const dispatch = listingOf([])
+    const view = viewOn(dispatch)
+    await view.stat('/ram/x')
+    const spent = dispatch.mock.calls.length
+    await expect(view.stat('/ram/x')).resolves.toBeNull()
+    expect(dispatch.mock.calls.length).toBe(spent)
+  })
+
+  it('lets a transport failure propagate rather than faking absence', async () => {
+    const dispatch = vi.fn<BridgeDispatchFn>(() => Promise.reject(new Error('network down')))
+    await expect(viewOn(dispatch).stat('/ram/x')).rejects.toThrow('network down')
+  })
+
+  it('does not read EISDIR as absence, since a directory is what stat answers', async () => {
+    // read's negative cache counts IsADirectoryError as "nothing here",
+    // which is right for bytes and wrong for a row: caching it would
+    // send the guest to the scratch tree for a directory the mount
+    // holds. The python twin draws the same line.
+    const dispatch = vi.fn<BridgeDispatchFn>(() =>
+      Promise.reject(Object.assign(new Error('is a dir'), { code: 'EISDIR' })),
+    )
+    const view = viewOn(dispatch)
+    await expect(view.stat('/ram/d')).rejects.toThrow('Is a directory')
+    await expect(view.stat('/ram/d')).rejects.toThrow('Is a directory')
+    expect(dispatch.mock.calls.length).toBe(2)
   })
 })
 

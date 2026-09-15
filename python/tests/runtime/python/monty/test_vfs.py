@@ -29,12 +29,17 @@ class CountingCore(RuntimeVFS):
 
     def __init__(self,
                  files: dict[str, bytes],
-                 links: dict[str, str] | None = None) -> None:
+                 links: dict[str, str] | None = None,
+                 dirs: set[str] | None = None) -> None:
         super().__init__(dispatch=None,
                          loop=None,
                          resolver=PrefixResolver(lambda: []))
         self.files = files
         self.links = dict(links or {})
+        # A directory stats but does not read, which is the shape a
+        # real mount reports and the reason the two questions cache
+        # separately.
+        self.dirs = set(dirs or ())
         self.calls: list[tuple[str, str]] = []
 
     def _raw(self, op, path, **kwargs):
@@ -44,6 +49,11 @@ class CountingCore(RuntimeVFS):
                 raise FileNotFoundError(path)
             return self.files[path]
         if op == "stat":
+            if path in self.dirs:
+                return FileStat(name=path,
+                                size=0,
+                                type=FileType.DIRECTORY,
+                                content=None)
             if path not in self.files:
                 raise FileNotFoundError(path)
             return FileStat(name=path,
@@ -73,12 +83,37 @@ class CountingCore(RuntimeVFS):
 
 def test_a_miss_is_remembered_so_a_repeated_probe_costs_no_dispatch():
     # Monty asks whether a path exists on nearly every guest
-    # expression, so the second miss must not reach the mount.
+    # expression, so the second miss must not reach the mount. It is
+    # the existence question that is cached, which is the one monty
+    # actually asks that often.
     core = CountingCore({})
     vfs = MontyVFS(core)
+    assert vfs.stat("/s3/nope.txt") is None
+    assert vfs.stat("/s3/nope.txt") is None
+    assert core.ops("stat") == ["/s3/nope.txt"]
+
+
+def test_a_refused_read_does_not_poison_the_row():
+    # A mount reports a read of a directory as FileNotFoundError, so a
+    # read that recorded its miss made every later stat, is_dir and
+    # exists of that directory answer from monty's own tree defaults
+    # instead of the mount's row.
+    core = CountingCore({}, dirs={"/s3/sub"})
+    vfs = MontyVFS(core)
+    assert vfs.read("/s3/sub") is None
+    row = vfs.stat("/s3/sub")
+    assert row is not None
+    assert row.is_dir
+
+
+def test_a_missing_row_still_short_circuits_a_later_read():
+    # The cache is about the path, not about one op: once the mount has
+    # said the path is not there, a read need not ask again.
+    core = CountingCore({})
+    vfs = MontyVFS(core)
+    assert vfs.stat("/s3/nope.txt") is None
     assert vfs.read("/s3/nope.txt") is None
-    assert vfs.read("/s3/nope.txt") is None
-    assert core.ops("read") == ["/s3/nope.txt"]
+    assert core.ops("read") == []
 
 
 def test_a_write_forgets_the_miss_so_the_guest_sees_its_own_file():

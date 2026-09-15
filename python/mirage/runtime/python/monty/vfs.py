@@ -12,8 +12,28 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+from typing import Callable, TypeVar
+
 from mirage.runtime.types import VFSEntry, VFSStat
 from mirage.runtime.vfs import RuntimeVFS
+
+T = TypeVar("T")
+
+# What counts as "nothing here" depends on what was asked, so there is
+# one tuple per question rather than one tuple for the class.
+#
+# A read asks for BYTES, and a directory is a legitimate way to have
+# none of them.
+ABSENT_CONTENT = (FileNotFoundError, IsADirectoryError, NotADirectoryError)
+# A stat asks whether the path EXISTS, and there a directory is the
+# answer rather than its absence: reading IsADirectoryError as a miss
+# would send the guest to monty's own tree for a path the mount holds.
+ABSENT_ROW = (FileNotFoundError, NotADirectoryError)
+# Neither list carries ValueError, which both of them used to. It was
+# never in the TypeScript twin, and it is wide enough to swallow a bug:
+# a pydantic ValidationError from a malformed row is a ValueError, and
+# reporting it as "the path is not there" hides it behind an answer
+# the guest cannot tell from a real miss.
 
 
 class MontyVFS:
@@ -24,6 +44,13 @@ class MontyVFS:
     a second dispatch. Reads and listings return None for a miss rather
     than raising, which is the shape the encoder above wants, and every
     mutation keeps the cache honest.
+
+    Only a question about EXISTENCE may feed that cache. A failed read
+    proves nothing about the path: a ram mount reports a read of a
+    directory as FileNotFoundError, so a read that recorded its miss
+    made every later ``stat``, ``is_dir`` and ``exists`` of that
+    directory answer from monty's own tree defaults instead of the
+    mount's row - the exact divergence ``path_stat`` exists to remove.
 
     Args:
         core (RuntimeVFS | None): the shared op vocabulary, or None
@@ -41,43 +68,60 @@ class MontyVFS:
 
     def read(self, virtual: str) -> bytes | None:
         """The file's bytes, or None when the mount does not have it."""
-        if self._core is None or virtual in self._missing:
-            return None
-        try:
-            return self._core.read(virtual)
-        except (FileNotFoundError, IsADirectoryError, NotADirectoryError,
-                ValueError):
-            self._missing.add(virtual)
-            return None
+        return self._or_none(virtual, ABSENT_CONTENT,
+                             lambda core: core.read(virtual))
 
     def readdir(self, virtual: str) -> list[VFSEntry] | None:
         """The directory's entries, or None when it is not a directory."""
+        # Deliberately past the negative cache in both directions: the
+        # self-heal that materializes a directory into monty's own tree
+        # runs a listing for a path a stat just missed.
         if self._core is None:
             return None
         try:
             return self._core.readdir(virtual)
-        except (FileNotFoundError, IsADirectoryError, NotADirectoryError,
-                ValueError):
+        except ABSENT_CONTENT:
             return None
 
     def stat(self, virtual: str) -> VFSStat | None:
         """The path's row, or None when the mount does not have it.
 
-        There is no TypeScript twin, and not for want of one: that
-        binding converts whatever its os callback returns structurally,
-        so a stat comes back to the guest as a dict and `st.st_size`
-        raises AttributeError. Python's binding hands over an `OSAccess`
-        subclass instead, which can build monty's own `StatResult`.
+        None rather than a raise, because the caller's next move is
+        monty's own tree: a path no mount holds may still be a guest
+        temp file, and only the tree knows. The TypeScript twin answers
+        the same way and builds the guest's `stat_result` by hand
+        (`monty/stat.ts`), since the JS package exports no `StatResult`
+        to construct; what it cannot carry is the sequence half, so a
+        guest subscripts a stat on this host only.
 
         Args:
             virtual (str): the path to stat.
         """
-        if self._core is None or virtual in self._missing:
+        row = self._or_none(virtual, ABSENT_ROW,
+                            lambda core: core.stat(virtual))
+        if row is None:
+            self._missing.add(virtual)
+        return row
+
+    def _or_none(self, virtual: str, absent: tuple[type[Exception], ...],
+                 run: Callable[[RuntimeVFS], T]) -> T | None:
+        """Run one op, answering None for an absence rather than raising.
+
+        It records nothing itself: only the caller that asked the
+        existence question may feed the negative cache.
+
+        Args:
+            virtual (str): the path the operation names.
+            absent (tuple[type[Exception], ...]): what counts as
+                "nothing here" for this question.
+            run (Callable[[RuntimeVFS], T]): the op to attempt.
+        """
+        core = self._core
+        if core is None or virtual in self._missing:
             return None
         try:
-            return self._core.stat(virtual)
-        except (FileNotFoundError, NotADirectoryError, ValueError):
-            self._missing.add(virtual)
+            return run(core)
+        except absent:
             return None
 
     def is_link(self, virtual: str) -> bool:

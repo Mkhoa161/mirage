@@ -26,6 +26,7 @@ import {
   isIanaZone,
   parseDate,
   parseDateTime,
+  slotMs,
 } from './zone.ts'
 
 const DEFAULT_MAX_RESULTS = 250
@@ -49,8 +50,8 @@ export function fmtEvent(cal: CalendarEntry, ev: CalendarEvent): JsonObj {
     kind: 'calendar#event',
     id: ev.id,
     status: ev.status,
-    start: { ...formatEventTime(ev.start) },
-    end: { ...formatEventTime(ev.end) },
+    start: { ...formatEventTime(ev.start, cal.timeZone) },
+    end: { ...formatEventTime(ev.end, cal.timeZone) },
     created: ev.created,
     updated: ev.updated,
     iCalUID: `${ev.id}@google.com`,
@@ -122,15 +123,21 @@ export interface EventTimes {
 }
 
 const MISSING_END = 'Missing end time.'
+const EMPTY_RANGE = 'The specified time range is empty.'
+// Google's refusal for an end that falls strictly before its start. Equal
+// ends are ACCEPTED, for a timed event and an all-day one alike (probed
+// live 2026-09-15), so the comparison here is `<`, never `<=`.
 
 function invalidArgument(message: string): Reply {
   return googleError(400, message, 'INVALID_ARGUMENT')
 }
 
-// Google's wording for a value its parser cannot read as the field's type,
-// which is what an offset-free dateTime with no zone is to it too.
-function invalidFormat(value: string): Reply {
-  return invalidArgument(`Invalid value for: Invalid format: "${value}"`)
+// Google's answer for a value its parser cannot read at all: a bare
+// `Bad Request`, with no mention of the field or the value. Probed live
+// against an unparseable dateTime and an impossible calendar date
+// (2026-02-30), which answer identically.
+function invalidFormat(): Reply {
+  return invalidArgument('Bad Request')
 }
 
 function readSlot(
@@ -164,25 +171,42 @@ function slotRefusal(slot: EventTime, which: 'start' | 'end'): Reply | null {
   }
   if (slot.dateTime !== undefined) {
     const parsed = parseDateTime(slot.dateTime)
-    if (parsed === null || (parsed.offset === null && slot.timeZone === undefined)) {
-      return invalidFormat(slot.dateTime)
+    if (parsed === null) return invalidFormat()
+    // A readable wall clock with nothing to resolve it by is a different
+    // refusal from an unreadable value, and the live API says so.
+    if (parsed.offset === null && slot.timeZone === undefined) {
+      return invalidArgument(`Missing time zone definition for ${which} time.`)
     }
   }
-  if (slot.date !== undefined && parseDate(slot.date) === null) return invalidFormat(slot.date)
+  if (slot.date !== undefined && parseDate(slot.date) === null) return invalidFormat()
   return null
 }
 
 // The start and end an insert or patch body asks for, or the 400 that
 // refuses it. A patch falls back to the stored slot it does not mention,
 // and is refused before anything replaces the stored event.
-export function readEventTimes(body: JsonObj, fallback?: CalendarEvent): EventTimes | Reply {
+export function readEventTimes(
+  body: JsonObj,
+  calendarTz: string,
+  fallback?: CalendarEvent,
+): EventTimes | Reply {
   const start = readSlot(body.start, fallback?.start)
   const end = readSlot(body.end, fallback?.end)
   if (start === undefined || end === undefined) return invalidArgument(MISSING_END)
   for (const t of [start, end]) {
     if (t.date === undefined && t.dateTime === undefined) return invalidArgument(MISSING_END)
   }
-  return slotRefusal(start, 'start') ?? slotRefusal(end, 'end') ?? { start, end }
+  const refused = slotRefusal(start, 'start') ?? slotRefusal(end, 'end')
+  if (refused !== null) return refused
+  // Ordering is checked only once both slots are known readable, so a
+  // malformed value earns its own refusal rather than an empty-range one.
+  // The zone is the calendar's, which is what an all-day slot resolves by
+  // and what makes a cross-zone pair compare as instants rather than as
+  // wall clocks.
+  const from = slotMs(start, calendarTz)
+  const to = slotMs(end, calendarTz)
+  if (from !== null && to !== null && to < from) return invalidArgument(EMPTY_RANGE)
+  return { start, end }
 }
 
 export function makeEvent(st: GwsState, body: JsonObj, times: EventTimes): CalendarEvent {

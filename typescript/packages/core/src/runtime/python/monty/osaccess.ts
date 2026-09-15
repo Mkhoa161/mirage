@@ -16,6 +16,7 @@ import { mergeEntries } from './list.ts'
 import { parseMode } from '../../handles/mode.ts'
 import type { MontyBindingBits } from './binding.ts'
 import { guestError } from './errors.ts'
+import { statResult } from './stat.ts'
 import { ScratchTree } from './tree.ts'
 import type { MontyVFS } from './vfs.ts'
 
@@ -129,6 +130,7 @@ function dateMarker(): Record<string, unknown> {
  *   vfs: the mount view, or null when no workspace is attached.
  */
 export class MirageOSAccess {
+  private readonly bits: MontyBindingBits
   private readonly notHandled: symbol
   private readonly fileHandle: MontyBindingBits['MontyFileHandle']
   private readonly env: Record<string, string>
@@ -140,6 +142,7 @@ export class MirageOSAccess {
   private readonly bases = new Map<string, Uint8Array>()
 
   constructor(binding: MontyBindingBits, env: Record<string, string>, vfs: MontyVFS | null) {
+    this.bits = binding
     this.notHandled = binding.NOT_HANDLED
     this.fileHandle = binding.MontyFileHandle
     this.env = env
@@ -258,15 +261,14 @@ export class MirageOSAccess {
               () => false,
             ),
         )
-      // `Path.stat` is deliberately not served: the JS binding
-      // converts a callback's answer structurally, so a stat object
-      // arrives in the guest as a dict (and a 10-tuple as a list) and
-      // `st.st_size` raises AttributeError — probed on 0.0.21.
-      // Python's binding takes a real `StatResult`, which is why its
-      // guests get a working stat; until @pydantic/monty grows a
-      // StatResult (and Path) marker for the JS side, a guest stat
-      // raises PermissionError here. `Path.iterdir` strings arriving
-      // as guest str (python: PosixPath) is the same upstream gap.
+      // A row the mount does not have is not an absence yet: the
+      // path may be a guest scratch file, and only the tree knows.
+      // `Path.iterdir` strings arriving as guest str (python:
+      // PosixPath) remains an upstream gap; the wire has no Path.
+      case 'Path.stat':
+        return vfs
+          .stat(path)
+          .then((st) => (st === null ? this.scratchStat(path) : statResult(this.bits, st)))
       default:
         return this.notHandled
     }
@@ -339,11 +341,16 @@ export class MirageOSAccess {
         return vfs === null ? false : vfs.isLink(path)
       case 'Path.iterdir':
         return this.scratchIterdir(path, vfs)
-      // `Path.stat` stays declined even for scratch files — see the
-      // upstream-gap note in `mountedOp`.
+      case 'Path.stat':
+        return this.scratchStat(path)
       default:
         return this.notHandled
     }
+  }
+
+  /** The scratch tree's row for `path`, as the guest's `os.stat_result`. */
+  private scratchStat(path: string): object {
+    return statResult(this.bits, this.tree.stat(path))
   }
 
   /**

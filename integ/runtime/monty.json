@@ -288,9 +288,6 @@
     },
     {
       "id": "builtin_open",
-      "hosts": [
-        "python"
-      ],
       "world": {
         "runtimes": [
           "monty",
@@ -317,9 +314,6 @@
     },
     {
       "id": "builtin_open_write",
-      "hosts": [
-        "python"
-      ],
       "world": {
         "runtimes": [
           "monty",
@@ -726,9 +720,6 @@
           }
         }
       },
-      "hosts": [
-        "python"
-      ],
       "steps": [
         {
           "command": "python3 -c",
@@ -741,10 +732,10 @@
       ]
     },
     {
-      "id": "fs_stat_requires_js_named_tuple",
+      "id": "fs_stat_after_a_refused_read_of_the_same_directory",
       "filesystem": {
         "monty": {
-          "stat": false
+          "stat": true
         }
       },
       "world": {
@@ -756,22 +747,76 @@
           "/data": {
             "resource": "ram",
             "files": {
-              "seed.txt": "seed\n",
               "sub/inner.txt": "inner\n"
             }
           }
         }
       },
-      "hosts": [
-        "typescript"
-      ],
       "steps": [
         {
           "command": "python3 -c",
-          "script": "fs/py/stat.py",
+          "script": "fs/py/stat_after_read.py",
+          "expect": {
+            "exit": 0,
+            "stdout": "row survived 0o40755\nis_dir True\nexists True\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fs_stat_sequence_python_only",
+      "hosts": [
+        "python"
+      ],
+      "world": {
+        "runtimes": [
+          "monty",
+          "vfs"
+        ],
+        "mounts": {
+          "/data": {
+            "resource": "ram",
+            "files": {
+              "seed.txt": "seed\n"
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "command": "python3 -c \"import os; st = os.stat('/data/seed.txt'); print(st[6], st[0] == st.st_mode, len(st))\"",
+          "expect": {
+            "exit": 0,
+            "stdout": "5 True 10\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fs_stat_sequence_unsupported_on_typescript",
+      "hosts": [
+        "typescript"
+      ],
+      "world": {
+        "runtimes": [
+          "monty",
+          "vfs"
+        ],
+        "mounts": {
+          "/data": {
+            "resource": "ram",
+            "files": {
+              "seed.txt": "seed\n"
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "command": "python3 -c \"import os; print(os.stat('/data/seed.txt')[6])\"",
           "expect": {
             "exit": 1,
-            "stderr_contains": "PermissionError"
+            "stderr_contains": "'stat_result' object is not subscriptable"
           }
         }
       ]

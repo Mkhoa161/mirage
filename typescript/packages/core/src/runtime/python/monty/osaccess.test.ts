@@ -17,6 +17,7 @@ import type { BridgeDispatchFn } from '../../types.ts'
 import { ContentType, FileStat, FileType } from '../../../types.ts'
 import { RuntimeVFS } from '../../vfs.ts'
 import { MirageOSAccess } from './index.ts'
+import type { GuestStat } from './stat.ts'
 import { MontyVFS } from './vfs.ts'
 import { PrefixResolver } from '../../resolver.ts'
 
@@ -31,7 +32,18 @@ class FakeHandle {
   ) {}
 }
 
-const BITS = { NOT_HANDLED, MontyFileHandle: FakeHandle }
+// Stands in for the binding's ClassInstance wrapper, which carries a
+// host object into the guest as a class instance rather than a dict.
+// The fake keeps the wrapped object reachable so a test can read the
+// stat fields the real wrapper would send.
+class FakeClassInstance {
+  constructor(
+    readonly instance: object,
+    readonly options?: { name?: string; eagerAttrs?: readonly string[] | 'all' },
+  ) {}
+}
+
+const BITS = { NOT_HANDLED, MontyFileHandle: FakeHandle, ClassInstance: FakeClassInstance }
 
 function accessOn(
   dispatch: BridgeDispatchFn,
@@ -182,14 +194,6 @@ describe('MirageOSAccess declining', () => {
     expect(accessOn(noop).handle('Path.chmod', ['/ram/x'])).toBe(NOT_HANDLED)
   })
 
-  it('declines Path.stat, which the JS binding cannot carry to the guest', () => {
-    // Probed on 0.0.21: a stat answer arrives as a guest dict (or
-    // list), so st.st_size raises AttributeError; python's binding
-    // takes a real StatResult. Upstream gap, not a policy choice.
-    expect(accessOn(noop).handle('Path.stat', ['/ram/x'])).toBe(NOT_HANDLED)
-    expect(accessOn(noop).handle('Path.stat', ['/tmp/x'])).toBe(NOT_HANDLED)
-  })
-
   it('a rename whose destination leaves the workspace raises EXDEV', () => {
     // python routes it to the dispatcher, whose resolver answers
     // CrossMountError; half-applying the move would lose the file.
@@ -200,6 +204,44 @@ describe('MirageOSAccess declining', () => {
 
   it('accepts a path object as well as a string', () => {
     expect(accessOn(noop).handle('Path.mkdir', [{ path: '/ram/d' }], {})).not.toBe(NOT_HANDLED)
+  })
+})
+
+describe('MirageOSAccess stat', () => {
+  it("answers a mounted path from the mount's own row", async () => {
+    const access = accessOn(listing(['/ram/x'], []))
+    const wrapped = (await access.handle('Path.stat', ['/ram/x'])) as FakeClassInstance
+    expect(wrapped).toBeInstanceOf(FakeClassInstance)
+    expect(wrapped.options?.name).toBe('stat_result')
+    const st = wrapped.instance as GuestStat
+    expect(st.st_size).toBe(1)
+    expect(st.st_mode & 0o170000).toBe(0o100000)
+    expect(st.st_nlink).toBe(1)
+  })
+
+  it('reports a mounted directory the way monty does, 4096 bytes and two links', async () => {
+    const access = accessOn(listing(['/ram/d'], ['/ram/d']))
+    const wrapped = (await access.handle('Path.stat', ['/ram/d'])) as FakeClassInstance
+    const st = wrapped.instance as GuestStat
+    expect(st.st_size).toBe(4096)
+    expect(st.st_mode & 0o170000).toBe(0o40000)
+    expect(st.st_nlink).toBe(2)
+  })
+
+  it('falls back to the scratch tree for a path no mount holds', () => {
+    const access = accessOn(noop)
+    access.handle('Path.mkdir', ['/tmp'], {})
+    access.handle('Path.write_text', ['/tmp/x', 'hello'])
+    const st = (access.handle('Path.stat', ['/tmp/x']) as FakeClassInstance).instance as GuestStat
+    expect(st.st_size).toBe(5)
+    expect(st.st_mode).toBe(0o100644)
+  })
+
+  it('raises the guest FileNotFoundError when neither half has the path', async () => {
+    const access = accessOn(listing([]))
+    await expect(Promise.resolve(access.handle('Path.stat', ['/ram/nope']))).rejects.toThrow(
+      "[Errno 2] No such file or directory: '/ram/nope'",
+    )
   })
 })
 

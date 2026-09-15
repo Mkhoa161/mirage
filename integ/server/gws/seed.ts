@@ -39,16 +39,17 @@ import { isReply } from './wire/reply.ts'
 export function seedCalendars(st: GwsState, entries: JsonObj[]): void {
   for (const entry of entries) {
     const id = asStr(entry.id) ?? ''
+    const timeZone = asStr(entry.timeZone) ?? DEFAULT_CALENDAR_TZ
     st.calendars.set(id, {
       id,
       summary: asStr(entry.summary) ?? '',
-      timeZone: asStr(entry.timeZone) ?? DEFAULT_CALENDAR_TZ,
+      timeZone,
       accessRole: asStr(entry.accessRole) ?? 'owner',
       ...(asBool(entry.hidden) === true ? { hidden: true } : {}),
     })
     const bucket = eventsOf(st, id)
     for (const raw of asObjArr(entry.events)) {
-      const times = readEventTimes(raw)
+      const times = readEventTimes(raw, timeZone)
       if (isReply(times)) {
         throw new Error(`seed event ${JSON.stringify(raw)} refused: ${JSON.stringify(times.body)}`)
       }

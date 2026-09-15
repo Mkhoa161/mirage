@@ -13,15 +13,22 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { CrossMountError } from '../../errors.ts'
-import type { RuntimeVFS, VFSEntry } from '../../vfs.ts'
+import type { RuntimeVFS, VFSEntry, VFSStat } from '../../vfs.ts'
 import { asGuestError, guestError } from './errors.ts'
 
-// The three ways a mount says "there is nothing here", as opposed to
-// "I could not reach it": only these may be remembered as absence.
-const ABSENT_NAMES = new Set(['FileNotFoundError', 'IsADirectoryError', 'NotADirectoryError'])
+// What counts as "nothing here" depends on what was asked, so there is
+// one list per question rather than one list for the class.
+//
+// A read asks for BYTES, and a directory is a legitimate way to have
+// none of them.
+const ABSENT_CONTENT = new Set(['FileNotFoundError', 'IsADirectoryError', 'NotADirectoryError'])
+// A stat asks whether the path EXISTS, and there a directory is the
+// answer rather than its absence: reading IsADirectoryError as a miss
+// would send the guest to the scratch tree for a path the mount holds.
+const ABSENT_ROW = new Set(['FileNotFoundError', 'NotADirectoryError'])
 
-function isAbsence(err: unknown): boolean {
-  return err instanceof Error && ABSENT_NAMES.has(err.name)
+function isAbsence(err: unknown, names: Set<string>): boolean {
+  return err instanceof Error && names.has(err.name)
 }
 
 /**
@@ -39,6 +46,13 @@ function isAbsence(err: unknown): boolean {
  * remembered, because monty asks whether a path exists on nearly every
  * guest expression and each miss otherwise costs a fresh listing;
  * every mutation keeps the cache honest.
+ *
+ * Only a question about EXISTENCE may feed that cache. A failed read
+ * proves nothing about the path: a ram mount reports a read of a
+ * directory as FileNotFoundError, so a read that recorded its miss
+ * made every later `stat`, `is_dir` and `exists` of that directory
+ * answer from monty's own tree defaults instead of the mount's row —
+ * the exact divergence the bridged stat exists to remove.
  *
  * Args:
  *   core: the shared op vocabulary.
@@ -71,7 +85,7 @@ export class MontyVFS {
     try {
       return await this.core.read(path)
     } catch (caught) {
-      throw this.absent(path, asGuestError(caught, path))
+      throw asGuestError(caught, path)
     }
   }
 
@@ -80,16 +94,8 @@ export class MontyVFS {
    * shape python's `MontyVFS.read` answers, for callers that need
    * "missing" as a value (an append's base) rather than a raise.
    */
-  async readOrNull(path: string): Promise<Uint8Array | null> {
-    if (this.missing.has(path)) return null
-    try {
-      return await this.core.read(path)
-    } catch (caught) {
-      const guest = asGuestError(caught, path)
-      if (!isAbsence(guest)) throw guest
-      this.missing.add(path)
-      return null
-    }
+  readOrNull(path: string): Promise<Uint8Array | null> {
+    return this.orNull(path, ABSENT_CONTENT, () => this.core.read(path))
   }
 
   async write(path: string, data: unknown): Promise<number> {
@@ -205,6 +211,23 @@ export class MontyVFS {
     )
   }
 
+  /**
+   * The path's row, or null when the mount does not have it.
+   *
+   * Null rather than a throw, because the caller's next move is the
+   * scratch tree: a path no mount holds may still be a guest temp
+   * file, and only the tree knows. The twin of python's
+   * `MontyVFS.stat`, down to the three absences it remembers.
+   *
+   * Args:
+   *   path: the path to stat.
+   */
+  async stat(path: string): Promise<VFSStat | null> {
+    const row = await this.orNull(path, ABSENT_ROW, () => this.core.stat(path))
+    if (row === null) this.missing.add(path)
+    return row
+  }
+
   /** The parent's entry for `path`, or null when the parent lacks one. */
   async entryFor(path: string): Promise<VFSEntry | null> {
     if (this.missing.has(path)) return null
@@ -217,17 +240,28 @@ export class MontyVFS {
   }
 
   /**
-   * Remember `path` as absent when `err` says it is, then hand the
-   * error back for throwing. A transport failure is not an absence,
-   * so only the three fs codes that mean "nothing here" are cached.
+   * Run one op, answering null for an absence rather than raising, and
+   * short-circuiting a path already known not to exist.
    *
-   * Args:
+   * It records nothing itself: only the caller that asked the
+   * existence question may feed the cache. Args:
    *   path: the path the operation named.
-   *   err: the guest-shaped error the op failed with.
+   *   names: what counts as "nothing here" for this question.
+   *   run: the op to attempt.
    */
-  private absent(path: string, err: unknown): unknown {
-    if (isAbsence(err)) this.missing.add(path)
-    return err
+  private async orNull<T>(
+    path: string,
+    names: Set<string>,
+    run: () => Promise<T>,
+  ): Promise<T | null> {
+    if (this.missing.has(path)) return null
+    try {
+      return await run()
+    } catch (caught) {
+      const guest = asGuestError(caught, path)
+      if (!isAbsence(guest, names)) throw guest
+      return null
+    }
   }
 
   private async mutate(path: string, run: () => Promise<void>): Promise<null> {
