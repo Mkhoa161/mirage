@@ -44,6 +44,7 @@ EVENT_TIMEOUT = 20.0
 ABSENT_WINDOW = 1.0
 PUMP_WINDOW = EVENT_TIMEOUT / 2
 PUMP_INTERVAL = 0.25
+PROBE_TIMEOUT = 5.0
 CLASS_BY_KIND = {
     "create": "OCP\\Files\\Events\\Node\\NodeCreatedEvent",
     "update": "OCP\\Files\\Events\\Node\\NodeWrittenEvent",
@@ -729,6 +730,26 @@ class PullTrigger(CaseTrigger):
         nothing else, so a case with no ``mutate`` names no key and
         is reported as unprobed rather than guessed at.
 
+        For the same reason the probe is bounded by ``PROBE_TIMEOUT``:
+        a diagnostic must not be able to outlive the failure it is
+        describing. This runs on the give-up path, after the pump
+        window is already spent and before ``_run_case`` starts the
+        ``EVENT_TIMEOUT`` wait the case has to fail on, so a slow stat
+        would add its full delay to that failure and a hung one would
+        keep the timeout from ever firing -- the battery would then
+        hang until the CI job's own default, with no case result at
+        all. The cap is its own constant rather than the remaining
+        pump window, which is zero by here, and it is far shorter than
+        ``EVENT_TIMEOUT`` so it cannot eat into it.
+
+        Only a deadline *we* imposed renders as a timeout; a
+        ``TimeoutError`` the backend client raised is re-raised into
+        the handler below and rendered as what it is, because on the
+        supported Pythons ``asyncio.TimeoutError`` *is* the builtin
+        ``TimeoutError`` and only ``cm.expired()`` can say whose clock
+        fired. ``ConsumerPoller.pump`` tells them apart the same way,
+        and for the same reason.
+
         Args:
             case (dict): The case the trigger was called with.
         """
@@ -739,7 +760,14 @@ class PullTrigger(CaseTrigger):
         if key is None:
             return "no mutate key on case"
         try:
-            return await self._probe(key)
+            cap = asyncio.timeout(PROBE_TIMEOUT)
+            try:
+                async with cap:
+                    return await self._probe(key)
+            except TimeoutError:
+                if not cap.expired():
+                    raise
+                return f"probe timed out after {PROBE_TIMEOUT}s"
         except Exception as exc:
             return f"probe raised {type(exc).__name__}: {exc}"
 
