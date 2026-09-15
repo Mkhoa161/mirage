@@ -483,6 +483,31 @@ describe('a failed backend open is not evidence of absence', () => {
     }
   }, 30_000)
 
+  it('a failing parent listing propagates out of the parent-listing probe', async () => {
+    const parser = await getTestParser()
+    const listing = new RAMResource()
+    // The store's key iteration is reached only by the parent readdir, not
+    // by the stat probe ahead of it, so this fails exactly the one channel.
+    vi.spyOn(listing.store.files, 'keys').mockImplementation(() => {
+      throw new Error('backend listing failed')
+    })
+    const ws = new Workspace(
+      { '/r': new RAMResource(), '/data': listing },
+      { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
+    )
+    try {
+      // The stat probe misses on a name RAM does not hold, which is the
+      // one route into the parent-listing probe. The parent's readdir is
+      // the channel that fails there, and a channel that could not answer
+      // is not a name reported free.
+      await expect(
+        ws.dispatch('symlink', '/data/notes.txt', [], { target: '/r/t' }),
+      ).rejects.toThrow('backend listing failed')
+    } finally {
+      await ws.close()
+    }
+  }, 30_000)
+
   it('readlink still answers ENOENT where no mount serves the path', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
