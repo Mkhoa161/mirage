@@ -17,8 +17,10 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import AsyncGenerator
 from functools import partial
 from pathlib import Path
+from typing import Protocol
 
 import aiohttp
 from aiohttp import web
@@ -30,7 +32,7 @@ from mirage.accessor.nextcloud import NextcloudAccessor
 from mirage.core.disk.watch import DiskEventHook
 from mirage.resource.nextcloud import NextcloudConfig, NextcloudResource
 from mirage.types import FileEvent, PathSpec
-from mirage.watch import RAMWatchQueue, Watcher
+from mirage.watch import DeltaHook, RAMWatchQueue, Watcher
 
 CASE_DIR = Path(__file__).resolve().parent
 DEFAULT_RESULTS_FILE = (Path(tempfile.gettempdir()) /
@@ -49,6 +51,30 @@ CLASS_BY_KIND = {
 }
 
 
+class ExternalWriter(Protocol):
+    """The backend-mutation surface every battery writes through.
+
+    Satisfied by the opendal operator the Nextcloud battery uses and by
+    the writers in ``backends.py`` that mirror it, so ``_mutate`` and
+    ``_seed`` need no per-backend branch.
+    """
+
+    async def create_dir(self, path: str) -> None:
+        ...
+
+    async def write(self, path: str, data: bytes) -> None:
+        ...
+
+    async def delete(self, path: str) -> None:
+        ...
+
+    async def rename(self, path: str, to: str) -> None:
+        ...
+
+    async def remove_all(self, path: str) -> None:
+        ...
+
+
 def _nextcloud_config(url: str) -> NextcloudConfig:
     """Build a NextcloudConfig for ``url`` from the deployment env.
 
@@ -62,7 +88,8 @@ def _nextcloud_config(url: str) -> NextcloudConfig:
     )
 
 
-async def _build_nextcloud(spec: dict) -> tuple[Workspace, object] | None:
+async def _build_nextcloud(
+        spec: dict) -> tuple[Workspace, ExternalWriter] | None:
     """Build the watched workspace and a separate external writer.
 
     Returns None when the deployment env is absent, so a local run
@@ -82,7 +109,7 @@ async def _build_nextcloud(spec: dict) -> tuple[Workspace, object] | None:
 
 
 async def _build_nextcloud_nested(
-        spec: dict) -> tuple[Workspace, object] | None:
+        spec: dict) -> tuple[Workspace, ExternalWriter] | None:
     """Build the nested-mount battery's workspace: the outer mount at
     the account root plus a second mount, rooted at a subfolder of the
     same account, nested inside the outer mount's subtree.
@@ -134,12 +161,13 @@ def _framed_root(spec: dict) -> PathSpec:
                                   resource_path=_watch_rel(spec))
 
 
-async def _mutate(op: object, mutate: dict) -> None:
+async def _mutate(op: ExternalWriter, mutate: dict) -> None:
     """Apply one mutation directly to the backend, bypassing the
     watched workspace so its cache is genuinely stale.
 
     Args:
-        op (object): opendal operator of a separate accessor.
+        op (ExternalWriter): opendal operator of a separate
+            accessor.
         mutate (dict): {"op", "path", "body"?}.
     """
     if mutate["op"] == "write":
@@ -200,9 +228,9 @@ class EventStream:
     consuming lazily would lose events notified before the first await.
     """
 
-    def __init__(self, agen: object) -> None:
+    def __init__(self, agen: AsyncGenerator[FileEvent, None]) -> None:
         self._agen = agen
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[FileEvent] | None = None
 
     async def start(self) -> None:
         """Arm the iterator and yield to the loop so the subscriber
@@ -214,7 +242,7 @@ class EventStream:
         if self._task is None:
             self._task = asyncio.ensure_future(self._agen.__anext__())
 
-    async def expect(self, want_path: str) -> object | None:
+    async def expect(self, want_path: str) -> FileEvent | None:
         """Return the next change for ``want_path``, skipping others
         (a nested create also emits its parent dir), or None only when
         the timeout expires with no change for that path.
@@ -288,7 +316,7 @@ class ConsumerPoller:
     until that case's mutation is visible in the backend listing.
     """
 
-    def __init__(self, hook: object, ws: Workspace, root: PathSpec) -> None:
+    def __init__(self, hook: DeltaHook, ws: Workspace, root: PathSpec) -> None:
         self._hook = hook
         self._ws = ws
         self._root = root
@@ -605,7 +633,7 @@ async def _run_check(ws: Workspace, check: dict) -> tuple[bool, str]:
     return ok, f"{check['cmd']!r} absent {check['absent']!r}"
 
 
-async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
+async def _run_case(ws: Workspace, op: ExternalWriter, trigger: CaseTrigger,
                     stream: EventStream, case: dict) -> tuple[bool, str]:
     """Run one warm -> mutate -> trigger -> event -> checks case.
 
@@ -616,7 +644,7 @@ async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
 
     Args:
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (CaseTrigger): Fires the change signal for this case
             (pull pump or push webhook POST) and, when the case then
             fails, says what it saw while doing so.
@@ -650,7 +678,7 @@ async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
     return True, f"{want['kind']} {verdict} + {checks} checks"
 
 
-async def _seed(ws: Workspace, op: object, spec: dict) -> None:
+async def _seed(ws: Workspace, op: ExternalWriter, spec: dict) -> None:
     """Reset the watch dir and lay down the seed files.
 
     Both halves of the reset are load-bearing. The external writer
@@ -663,7 +691,7 @@ async def _seed(ws: Workspace, op: object, spec: dict) -> None:
 
     Args:
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         spec (dict): Parsed case file.
     """
     root = _watch_rel(spec) + "/"
@@ -675,16 +703,18 @@ async def _seed(ws: Workspace, op: object, spec: dict) -> None:
         await op.write(f"data/{name}", b"seed")
 
 
-async def _run_battery(ws: Workspace, op: object, trigger: CaseTrigger,
-                       agen: object, cases: list[dict], label: str,
-                       mode: str) -> list[tuple[str, bool, str]]:
+async def _run_battery(ws: Workspace, op: ExternalWriter, trigger: CaseTrigger,
+                       agen: AsyncGenerator[FileEvent,
+                                            None], cases: list[dict],
+                       label: str, mode: str) -> list[tuple[str, bool, str]]:
     """Run one battery of cases against one armed watch iterator.
 
     Args:
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (CaseTrigger): Case trigger (pull pump or push POST).
-        agen (object): The ``watch`` async iterator for this battery.
+        agen (AsyncGenerator[FileEvent, None]): The ``watch``
+            async iterator for this battery.
         cases (list[dict]): Cases to run in order; a case with a
             ``modes`` list runs only in those modes (a rename is a
             MOVE via webhook, but a DELETE + CREATE pair via diff).
@@ -709,8 +739,8 @@ async def _run_battery(ws: Workspace, op: object, trigger: CaseTrigger,
     return results
 
 
-async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
-                         mode: str, results: list) -> None:
+async def _overflow_core(spec: dict, ws: Workspace, op: ExternalWriter,
+                         trigger, mode: str, results: list) -> None:
     """Shared body of the overflow battery: many changes against a
     tiny queue must collapse into one UNKNOWN event at the watch root.
 
@@ -721,7 +751,7 @@ async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
     Args:
         spec (dict): Parsed case file (needs an ``overflow`` block).
         ws (Workspace): Overflow-dedicated workspace (tiny queue).
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (Callable): Case trigger (pull pump or push POST).
         mode (str): "pull" or "push".
         results (list): Result rows to append to.
@@ -762,7 +792,7 @@ async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
         await stream.close()
 
 
-async def _overflow_workspace(spec: dict) -> tuple[Workspace, object]:
+async def _overflow_workspace(spec: dict) -> tuple[Workspace, ExternalWriter]:
     """Build the overflow battery's own workspace with a tiny queue.
 
     A dedicated workspace is required because the custom queue factory
@@ -831,7 +861,7 @@ async def _run_overflow_push(spec: dict, results: list) -> None:
         await ws.close()
 
 
-async def _seed_nested(op: object, block: dict) -> None:
+async def _seed_nested(op: ExternalWriter, block: dict) -> None:
     """Reset the nested battery's subtree and lay down its seeds.
 
     Seeding goes through the external writer only: the battery's
@@ -839,7 +869,8 @@ async def _seed_nested(op: object, block: dict) -> None:
     from inside would have to cross the nested mount boundary.
 
     Args:
-        op (object): External writer operator (outer account root).
+        op (ExternalWriter): External writer operator (outer
+            account root).
         block (dict): The ``nested`` block of the case file.
     """
     root = block["root"].strip("/") + "/"
@@ -850,7 +881,7 @@ async def _seed_nested(op: object, block: dict) -> None:
         await op.write(rel, body.encode())
 
 
-async def _nested_core(spec: dict, ws: Workspace, op: object,
+async def _nested_core(spec: dict, ws: Workspace, op: ExternalWriter,
                        trigger: CaseTrigger, mode: str, results: list) -> None:
     """Shared body of the nested-mount battery: one watch on the shared
     ancestor spans both mounts, and each event must invalidate the
@@ -860,7 +891,7 @@ async def _nested_core(spec: dict, ws: Workspace, op: object,
     Args:
         spec (dict): Parsed case file (needs a ``nested`` block).
         ws (Workspace): Nested-mount workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (CaseTrigger): Case trigger (pull pump or push POST).
         mode (str): "pull" or "push".
         results (list): Result rows to append to.
@@ -941,7 +972,7 @@ async def _run_nested_push(spec: dict, results: list) -> None:
 
 
 async def _run_pull(spec: dict, ws: Workspace,
-                    op: object) -> list[tuple[str, bool, str]]:
+                    op: ExternalWriter) -> list[tuple[str, bool, str]]:
     """Run all batteries in pull mode (consumer-owned poll loop).
 
     The poller always pulls the full watch_dir; scope filtering
@@ -951,7 +982,7 @@ async def _run_pull(spec: dict, ws: Workspace,
     Args:
         spec (dict): Parsed case file.
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
     """
     resource = ws.registry.mount_for(spec["mount"]).resource
     hook_root = _framed_root(spec)
@@ -982,13 +1013,13 @@ async def _run_pull(spec: dict, ws: Workspace,
 
 
 async def _run_event(spec: dict, ws: Workspace,
-                     op: object) -> list[tuple[str, bool, str]]:
+                     op: ExternalWriter) -> list[tuple[str, bool, str]]:
     """Run all batteries in event mode (raw notification -> hook -> notify).
 
     Args:
         spec (dict): Parsed case file.
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
     """
     # The battery names the backend rather than asking the mount for a
     # hook: the payload it has to build is watchdog's, so the call site
@@ -1018,7 +1049,7 @@ async def _run_event(spec: dict, ws: Workspace,
 
 
 async def _run_push(spec: dict, ws: Workspace,
-                    op: object) -> list[tuple[str, bool, str]]:
+                    op: ExternalWriter) -> list[tuple[str, bool, str]]:
     """Run all batteries in push mode (webhook -> notify).
 
     Starts the sample webhook receiver a consumer would host, POSTs the
@@ -1030,7 +1061,7 @@ async def _run_push(spec: dict, ws: Workspace,
     Args:
         spec (dict): Parsed case file.
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
     """
     runner = web.AppRunner(make_app(ws, _files_prefix(), spec["mount"]))
     await runner.setup()
