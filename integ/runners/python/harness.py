@@ -90,6 +90,15 @@ def validate_services(data: dict) -> dict:
         if unknown:
             raise KeyError(f"targets.json: service {name!r} declares unknown "
                            f"key(s): {', '.join(unknown)}")
+        # The value, not only the key. One file is read by two hosts, and
+        # python reads `shared` for truth where typescript reads it for
+        # `=== true`, so a hand-edited `"shared": 1` would serialize the
+        # lane here and pool it there -- two targets on a one-world fake
+        # in flight together, as a typescript-only flake.
+        if "shared" in hosts and not isinstance(hosts["shared"], bool):
+            raise KeyError(f"targets.json: service {name!r} declares "
+                           f"'shared' as {type(hosts['shared']).__name__}, "
+                           f"must be a boolean")
     return services
 
 
@@ -657,19 +666,23 @@ def plan_run(targets: list[dict],
 
     A lane bounds a target against its own service's other targets; an
     ``exclusive`` target is bounded against EVERY other target, because
-    what it touches is process-global rather than server-side. opfs is
-    the only one: its opener replaces ``globalThis.navigator`` for the
+    what it touches is process-global rather than server-side. Two
+    kinds carry it today. opfs replaces ``globalThis.navigator`` for the
     length of the run and restores the previous descriptor afterwards,
-    which no second target may be reading across. Those run first, one
-    at a time, before the pool opens.
-
-    Args:
-        targets (list[dict]): eligible targets, in selection order.
-        services (dict): the table from load_services.
+    which no second target may be reading across. The four ``secrets-*``
+    targets publish a fetch function into the process-global source
+    registry under a fixed name, and the healthy one's closes over a
+    per-open counter the cases assert call counts against, so a second
+    target on the same kind would silently replace it. Those run first,
+    one at a time, before the pool opens; all five are small.
 
     Positions rather than entries, because the caller holds one output
     slot per position: two ``--target ram`` on one line are two runs, and
     anything keyed by the entry would merge one slot twice.
+
+    Args:
+        targets (list[dict]): eligible targets, in selection order.
+        services (dict): the table from load_services.
 
     Returns:
         tuple: positions that run alone, and (position, lane) for the pool.

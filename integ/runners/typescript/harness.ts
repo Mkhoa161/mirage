@@ -76,8 +76,9 @@ export interface Target {
   id: string
   hosts: string[]
   // This target's opener touches process-global state, so it runs alone --
-  // not merely apart from its own service's other targets. opfs is the only
-  // one: it replaces `globalThis.navigator` for the length of the run.
+  // not merely apart from its own service's other targets: opfs replaces
+  // `globalThis.navigator`, and a `secrets-*` target registers a fetch
+  // function under a fixed name in the process-global source registry.
   exclusive?: boolean
   service?: string
   epoch?: string
@@ -269,6 +270,15 @@ export function loadServices(root: string): Map<string, ServiceEnv> {
     if (unknown.length) {
       throw new Error(
         `targets.json: service '${name}' declares unknown key(s): ${unknown.join(', ')}`,
+      )
+    }
+    // The value, not only the key. One file is read by two hosts, and python
+    // reads `shared` for truth where this reads it for `=== true`, so a
+    // hand-edited `"shared": 1` would serialize the lane there and pool it
+    // here -- two targets on a one-world fake in flight together.
+    if ('shared' in hosts && typeof hosts.shared !== 'boolean') {
+      throw new Error(
+        `targets.json: service '${name}' declares 'shared' as ${typeof hosts.shared}, must be a boolean`,
       )
     }
   }
@@ -813,8 +823,13 @@ export class Report {
  */
 export function targetLane(target: Target, services: Map<string, ServiceEnv>): string {
   const service = target.service
-  if (service !== undefined && services.get(service)?.shared === true) return service
-  return `solo:${target.id}`
+  if (service === undefined) return `solo:${target.id}`
+  const entry = services.get(service)
+  // Thrown, not optional-chained past: python indexes the table and raises a
+  // KeyError, and a manifest naming an undeclared service must not read here
+  // as "not shared" and quietly pool.
+  if (entry === undefined) throw new Error(`unknown service: ${service}`)
+  return entry.shared === true ? service : `solo:${target.id}`
 }
 
 /**
@@ -822,8 +837,10 @@ export function targetLane(target: Target, services: Map<string, ServiceEnv>): s
  *
  * A lane bounds a target against its own service's other targets; an
  * `exclusive` target is bounded against EVERY other target, because what it
- * touches is process-global rather than server-side. Those run first, one at
- * a time, before the pool opens.
+ * touches is process-global rather than server-side: opfs replaces
+ * `globalThis.navigator`, and the four `secrets-*` targets publish a fetch
+ * function into the process-global source registry under a fixed name. Those
+ * run first, one at a time, before the pool opens.
  *
  * Positions rather than entries, because the caller holds one output slot per
  * position: two `--target ram` on one line are two runs, and anything keyed by

@@ -71,12 +71,18 @@ function parseArgs(): {
     else if (argv[i] === '--emit' && i + 1 < argv.length) emit = argv[++i]
     else if (argv[i] === '--strict') strict = true
     else if (argv[i] === '--allow-skip' && i + 1 < argv.length) allowSkip = argv[++i]
-    else if (argv[i] === '--target-jobs') {
+    else if (argv[i] === '--target-jobs' || argv[i].startsWith('--target-jobs=')) {
       // The missing-value form is refused rather than ignored, as argparse
       // refuses it on the python host: a trailing `--target-jobs` that read
       // as "one worker" would drop the concurrency a workflow asked for and
       // still exit 0.
-      const raw = i + 1 < argv.length ? argv[++i] : ''
+      // `--target-jobs=4` as well as `--target-jobs 4`, because argparse
+      // takes both on the python host: a workflow line normalised to the
+      // `=` spelling used to fall through unmatched here, leaving the
+      // default of one worker and exiting 0 -- the same silent downgrade
+      // the missing-value form is refused for.
+      const eq = argv[i].indexOf('=')
+      const raw = eq === -1 ? (i + 1 < argv.length ? argv[++i] : '') : argv[i].slice(eq + 1)
       const n = Number(raw)
       if (raw === '' || !Number.isInteger(n) || n < 1) {
         process.stderr.write('--target-jobs takes an integer >= 1\n')
@@ -95,7 +101,12 @@ function parseArgs(): {
  * overlap safely; `planRun` names the two exceptions. Output order does not
  * depend on completion order: every target, exclusive ones included, fills its
  * own report and emit slot, and the slots are absorbed in selection order. So
- * a concurrent run prints exactly what the serial run printed.
+ * a concurrent run prints exactly what the serial run printed on STDOUT --
+ * stderr is written straight through from inside `runTarget` and interleaves.
+ *
+ * Returns how many targets threw. Reported by the caller after the summary,
+ * rather than exiting here, so a pooled run that lost one target still prints
+ * the counts for every other one.
  */
 async function runPool(
   eligible: Target[],
@@ -105,7 +116,7 @@ async function runPool(
   emit: EmitRow[] | null,
   services: Map<string, ServiceEnv>,
   width: number,
-): Promise<void> {
+): Promise<number> {
   const { alone, pool } = planRun(eligible, services)
   const slots = eligible.map(() => ({
     report: report === null ? null : new Report(false),
@@ -156,15 +167,12 @@ async function runPool(
     if (report !== null && slot.report !== null) report.absorb(slot.report)
     if (emit !== null && slot.emit !== null) emit.push(...slot.emit)
   }
-  if (errors.length) {
-    for (const [id, err] of errors) {
-      process.stderr.write(
-        `ERROR [${id}] ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
-      )
-    }
-    process.stderr.write(`${String(errors.length)} target(s) threw\n`)
-    process.exit(1)
+  for (const [id, err] of errors) {
+    process.stderr.write(
+      `ERROR [${id}] ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
+    )
   }
+  return errors.length
 }
 
 async function runTarget(
@@ -351,10 +359,11 @@ async function main(): Promise<void> {
   // One worker means the old loop, unchanged. The pool cannot stand in for
   // it: a target waiting on a busy lane lets a later one take the worker
   // first, so the default run would quietly reorder itself.
+  let threw = 0
   if (targetJobs === 1) {
     for (const target of eligible) await runTarget(target, cases, root, report, emit)
   } else {
-    await runPool(eligible, cases, root, report, emit, services, targetJobs)
+    threw = await runPool(eligible, cases, root, report, emit, services, targetJobs)
   }
 
   // A skip is one line on stderr and exit 0, so a facet whose service
@@ -378,12 +387,25 @@ async function main(): Promise<void> {
     process.exit(2)
   }
   if (emitPath) {
+    if (threw) {
+      process.stderr.write(`${String(threw)} target(s) threw\n`)
+      process.exitCode = 1
+      return
+    }
     writeFileSync(emitPath, JSON.stringify(emit))
     return
   }
   if (report === null) return
   process.stdout.write(`\n${report.summary()}\n`)
-  if (report.failed) process.exit(1)
+  // `exitCode` rather than `exit`, because node's stdout to a pipe is async
+  // and the pool flushes the whole log in one burst just before this: an
+  // immediate exit truncates the tail a CI reader needs.
+  if (threw) {
+    process.stderr.write(`${String(threw)} target(s) threw\n`)
+    process.exitCode = 1
+    return
+  }
+  if (report.failed) process.exitCode = 1
 }
 
 main().catch((err: unknown) => {

@@ -192,6 +192,11 @@ def selftest_strict_exit() -> None:
 
 
 SHARED_SERVICES = {"discord", "github", "http", "linear", "trello"}
+# opfs swaps globalThis.navigator; a secrets target publishes a fetch
+# function into the process-global source registry under a fixed name.
+PROCESS_GLOBAL_TARGETS = [
+    "opfs", "secrets-dead", "secrets-env", "secrets-gated", "secrets-implicit"
+]
 
 
 def selftest_target_pool() -> None:
@@ -209,9 +214,9 @@ def selftest_target_pool() -> None:
     alone, pool = harness.plan_run(data["targets"], services)
 
     targets = data["targets"]
-    named = [targets[i]["id"] for i in alone]
-    check("pool: only a process-global opener runs alone", named == ["opfs"],
-          f"ran alone: {named}")
+    named = sorted(targets[i]["id"] for i in alone)
+    check("pool: exactly the process-global openers run alone",
+          named == PROCESS_GLOBAL_TARGETS, f"ran alone: {named}")
 
     lanes = {lane for _, lane in pool if not lane.startswith("solo:")}
     check("pool: exactly the one-world fakes hold a lane",
@@ -238,6 +243,14 @@ def selftest_target_pool() -> None:
     check("pool: two targets on a one-world fake share its lane",
           len(twin_lanes) == 2 and set(twin_lanes) == {"github"},
           f"lanes: {twin_lanes}")
+
+    def shared_not_bool() -> None:
+        harness.validate_services(
+            with_manifest(
+                lambda d: d["services"]["github"].update({"shared": 1})))
+
+    check("services: a non-boolean 'shared' is rejected",
+          *raises(shared_not_bool, "must be a boolean"))
 
     def unknown_key() -> None:
         harness.validate_services(
@@ -391,6 +404,43 @@ def selftest_run_ids() -> None:
           f"distinct: {proc.stdout.strip()!r} {proc.stderr[-200:]}")
 
 
+# planRun and targetLane are the typescript twins of what selftest_target_pool
+# asserts on python, and opfs -- the target `exclusive` exists for -- runs only
+# here, so the structural claims were gated on the host that cannot break them.
+PLAN_PROBE = (
+    "import('./runners/typescript/harness.ts').then((m) => {\n"
+    "  const root = m.integRoot()\n"
+    "  const services = m.loadServices(root)\n"
+    "  const targets = [...m.loadTargets(root).values()]\n"
+    "  const { alone, pool } = m.planRun(targets, services)\n"
+    "  const named = alone.map((i) => targets[i].id).sort().join(',')\n"
+    "  const lanes = [...new Set(pool.map((p) => p.lane)"
+    ".filter((l) => !l.startsWith('solo:')))].sort().join(',')\n"
+    "  const gws = pool.filter((p) => targets[p.at].service === 'gws')\n"
+    "  const solo = gws.length > 1 && gws.every((p) => "
+    "p.lane.startsWith('solo:'))\n"
+    "  console.log(`${named}|${lanes}|${String(solo)}`)\n"
+    "})\n")
+
+
+def selftest_plan_run() -> None:
+    """The lane split, asserted on the typescript host too.
+
+    """
+    proc = subprocess.run([str(TSX), "--eval", PLAN_PROBE],
+                          capture_output=True,
+                          text=True,
+                          cwd=ROOT)
+    want = (f"{','.join(PROCESS_GLOBAL_TARGETS)}|"
+            f"{','.join(sorted(SHARED_SERVICES))}|true")
+    check(
+        "pool (ts): the same targets run alone and the same fakes hold a "
+        "lane",
+        proc.stdout.strip() == want,
+        f"got {proc.stdout.strip()!r}, wanted {want!r} "
+        f"{proc.stderr[-200:]}")
+
+
 def selftest_typescript_gates(require: bool) -> None:
     """The same two exits on the typescript host, so the gate is symmetric.
 
@@ -425,6 +475,10 @@ def selftest_typescript_gates(require: bool) -> None:
     check("permissive (ts): the same run still exits 0", code == 0,
           f"exit {code}: {err}")
     selftest_run_ids()
+    selftest_plan_run()
+
+    code, err = run_typescript(["--target", "ram", "--target-jobs=0"], {})
+    check("--target-jobs=0 is refused (ts)", code == 2, f"exit {code}: {err}")
 
     code, err = run_typescript(["--target", "ram", "--target-jobs"], {})
     check("--target-jobs with no value is refused (ts)", code == 2,
