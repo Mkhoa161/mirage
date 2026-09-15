@@ -1370,12 +1370,14 @@ export class Workspace {
   }
 
   async close(): Promise<void> {
-    if (this.closed) return
     // Re-entry is guarded by the in-flight promise, not by flipping `closed`
     // up front. A runtime still replaying its journal has to see an open
     // workspace or its final writes fail, which is how an interrupted python
     // program used to lose its last mutations. Python guards the same way,
     // with `_close_lock`, and sets its flags once teardown is done.
+    // Awaiting the memoized attempt rather than short-circuiting on `closed`
+    // keeps every caller told: teardown runs once, and if it raised, each
+    // caller sees why instead of the second one reading success.
     this.closing ??= this.runClose()
     await this.closing
   }

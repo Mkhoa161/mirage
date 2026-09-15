@@ -482,6 +482,9 @@ describe('closeWorkspace surfaces closer failures', () => {
     expect((ws as unknown as { closed: boolean }).closed).toBe(true)
     await expect(ws.execute('echo hi')).rejects.toThrow('Workspace is closed')
     await expect(ws.dispatch('stat', '/m')).rejects.toThrow('Workspace is closed')
+    // Teardown ran once and is not retried, so a second caller has to be told
+    // why it failed rather than reading the memoized attempt as success.
+    await expect(ws.close()).rejects.toThrow('journal replay failed')
   }, 30_000)
 
   it('keeps the closer failure when a later teardown stage fails too', async () => {
