@@ -19,10 +19,10 @@ import type { GwsState } from './state.ts'
 //
 // `loadState` reads 25 tables to rebuild a world that the PREVIOUS request
 // already had in hand, and every request paid for it, reads included. Measured
-// on the gdrive target: 9,593 requests, 98.5 s of loadState, against 0.73 s of
-// actual handler work. The rows only change under a request this process
-// served, so the world it just wrote is the world the next one would read
-// back.
+// across the five core-facet gws targets: 19,240 requests, 125s of loadState,
+// against 1.0s of actual handler work. The rows only change under a request
+// this process served, so the world it just wrote is the world the next one
+// would read back.
 //
 // TWO BOUNDARIES MAKE THIS SAFE, AND BOTH ARE LOAD-BEARING.
 //
@@ -44,27 +44,62 @@ import type { GwsState } from './state.ts'
 //
 // The one thing that changes a tenant's rows from outside a route is /reset,
 // which is why gws declares `afterReset` and this module exports `dropTenants`.
-const WORLDS = new WeakMap<C, Map<string, GwsState>>()
-
-export function cachedState(db: C, tenant: string): GwsState | undefined {
-  return WORLDS.get(db)?.get(tenant)
+interface Cached {
+  world: GwsState | undefined
+  // Every drop bumps this, and `putState` refuses a world whose token is no
+  // longer current. That is not belt-and-braces, it is the whole reason a
+  // miss is safe to fill.
+  //
+  // A READ does not join the run's write queue -- `Router.run` chains it off
+  // whatever was queued when it started and lets it run alongside a later
+  // write. So a read that misses can be inside `loadState`, which is 25
+  // independent queries, when a /reset clears the tenant, reseeds it and drops
+  // this entry. Without the token that read would then hand `putState` the
+  // world it read BEFORE the reset, reinstalling it into the cache the reset
+  // had just emptied, and every later request would serve a pre-reset world
+  // that no flush ever wrote. The request itself still answers from its own
+  // snapshot, which is what it did before this cache existed; what must not
+  // happen is that snapshot OUTLIVING the request.
+  token: number
 }
 
-export function putState(db: C, tenant: string, st: GwsState): void {
-  const live = WORLDS.get(db)
-  if (live !== undefined) {
-    live.set(tenant, st)
-    return
+const WORLDS = new WeakMap<C, Map<string, Cached>>()
+
+function entry(db: C, tenant: string): Cached {
+  let live = WORLDS.get(db)
+  if (live === undefined) {
+    live = new Map()
+    WORLDS.set(db, live)
   }
-  WORLDS.set(db, new Map([[tenant, st]]))
+  let row = live.get(tenant)
+  if (row === undefined) {
+    row = { world: undefined, token: 0 }
+    live.set(tenant, row)
+  }
+  return row
+}
+
+export function cachedState(db: C, tenant: string): GwsState | undefined {
+  return WORLDS.get(db)?.get(tenant)?.world
+}
+
+// Taken BEFORE the load it will be handed back with, never after.
+export function loadToken(db: C, tenant: string): number {
+  return entry(db, tenant).token
+}
+
+export function putState(db: C, tenant: string, st: GwsState, token: number): void {
+  const row = entry(db, tenant)
+  if (row.token !== token) return
+  row.world = st
 }
 
 export function dropState(db: C, tenant: string): void {
-  WORLDS.get(db)?.delete(tenant)
+  const row = entry(db, tenant)
+  row.world = undefined
+  row.token += 1
 }
 
 export function dropTenants(db: C, tenants: readonly string[]): void {
-  const live = WORLDS.get(db)
-  if (live === undefined) return
-  for (const tenant of tenants) live.delete(tenant)
+  for (const tenant of tenants) dropState(db, tenant)
 }

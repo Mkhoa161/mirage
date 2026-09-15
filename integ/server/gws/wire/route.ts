@@ -15,7 +15,7 @@
 import { Prisma } from '../../../generated/gws/index.js'
 import { RouteError } from '../../kit/typescript/index.ts'
 import type { Ctx, Dmmf, KitHandler, KitRoute, Reply } from '../../kit/typescript/index.ts'
-import { cachedState, dropState, putState } from '../store/cache.ts'
+import { cachedState, dropState, loadToken, putState } from '../store/cache.ts'
 import type { C } from '../store/client.ts'
 import { loadState } from '../store/load.ts'
 import { saveState } from '../store/save.ts'
@@ -81,8 +81,13 @@ function stateful(handler: KitHandler<GwsState>, write: boolean): KitHandler<C> 
   return async (ctx: Ctx<C>): Promise<Reply> => {
     let st = cachedState(ctx.db, ctx.tenant)
     if (st === undefined) {
+      // The token is taken BEFORE the load, and `putState` drops the world on
+      // the floor if an invalidation landed while those 25 queries were in
+      // flight. A read does not join the run's write queue, so a /reset can
+      // clear, reseed and drop this tenant underneath one; see `Cached.token`.
+      const token = loadToken(ctx.db, ctx.tenant)
       st = await loadState(ctx.db, ctx.tenant)
-      putState(ctx.db, ctx.tenant, st)
+      putState(ctx.db, ctx.tenant, st, token)
     }
     const before = write ? 0 : fingerprint(st)
     try {

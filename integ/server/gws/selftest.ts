@@ -19,8 +19,11 @@ import type { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { ANNOUNCE_RE } from '../kit/typescript/announce.ts'
 import { start } from '../kit/typescript/serve.ts'
+import { DEFAULT_RUN, DEFAULT_TENANT } from '../kit/typescript/tenant.ts'
 import type { JsonValue } from '../kit/typescript/types.ts'
 import { gwsFake } from './fake.ts'
+import { cachedState, dropState, loadToken, putState } from './store/cache.ts'
+import { loadState } from './store/load.ts'
 
 // The corpus exercises the SURFACES of this fake heavily -- seven vendor APIs
 // across the gdrive, gdocs, gsheets, gslides, gmail and gcal targets -- so this
@@ -495,6 +498,36 @@ async function main(): Promise<void> {
     } finally {
       await a.close()
       await b.close()
+    }
+
+    // Door four: a read does NOT join the run's write queue -- Router.run
+    // chains it off whatever was queued when it started -- so a read that
+    // misses can still be inside loadState's 25 queries when a /reset clears
+    // the tenant, reseeds it and drops the entry. Reinstalling what that load
+    // read would put a pre-reset world back into the cache the reset had just
+    // emptied, and every later request would serve it.
+    //
+    // Pinned directly rather than through the HTTP surface, because the window
+    // cannot be forced from outside: it needs one load to outlive one reset,
+    // and a load is ~10ms against a reset's ~100ms, so a race fired from a
+    // client would pass whether the guard existed or not. What is testable is
+    // the contract the guard rests on, which is exactly what is checked here.
+    const c = await start(gwsFake, 0)
+    try {
+      const db = c.runtime.pool.client(DEFAULT_RUN)
+      const world = await loadState(db, DEFAULT_TENANT)
+      const stale = loadToken(db, DEFAULT_TENANT)
+      dropState(db, DEFAULT_TENANT)
+      putState(db, DEFAULT_TENANT, world, stale)
+      check(
+        'a world read before an invalidation is not installed after it',
+        cachedState(db, DEFAULT_TENANT) === undefined,
+      )
+      const current = loadToken(db, DEFAULT_TENANT)
+      putState(db, DEFAULT_TENANT, world, current)
+      check('and one read after it is', cachedState(db, DEFAULT_TENANT) === world)
+    } finally {
+      await c.close()
     }
 
     // ---- a read route must never be the only place a counter moved
