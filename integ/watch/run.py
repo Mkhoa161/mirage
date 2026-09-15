@@ -277,7 +277,9 @@ class ConsumerPoller:
     This is the whole pattern: pull a delta from the resource's hook,
     feed each change to ``ws.notify``, keep the checkpoint. In
     production this body runs on an interval (or after a webhook
-    doorbell); the integ pumps it once per case for determinism.
+    doorbell). The integ pumps it once per battery to lay down the
+    baseline checkpoint, then lets ``PullTrigger`` re-pump per case
+    until that case's mutation is visible in the backend listing.
     """
 
     def __init__(self, hook: object, ws: Workspace, root: PathSpec) -> None:
