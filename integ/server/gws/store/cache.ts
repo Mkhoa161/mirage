@@ -120,13 +120,14 @@ export function installFlushed(db: C, tenant: string, st: GwsState): void {
   row.generation += 1
 }
 
-// Creates the entry when there is none, rather than the cheaper
-// `WORLDS.get(db)?.get(tenant)?`. That looks like dead weight and is not: a
-// drop on a tenant nothing has cached yet still has to advance the
-// generation, or a load already in flight on that tenant compares 0 against 0
-// and installs the world it read before this drop.
+// Nothing to do when the tenant has no entry, and that is safe rather than
+// lucky: `withState` registers the entry SYNCHRONOUSLY, before the await it
+// then races against, so a load in flight always has a row here for this to
+// find and bump. Creating one for a tenant no request ever touched would only
+// accumulate rows per tenant name a /reset happened to list.
 export function dropState(db: C, tenant: string): void {
-  const row = entry(db, tenant)
+  const row = WORLDS.get(db)?.get(tenant)
+  if (row === undefined) return
   row.world = undefined
   row.generation += 1
 }
