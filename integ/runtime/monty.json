@@ -910,6 +910,25 @@
           }
         }
       ]
+    },
+    {
+      "id": "monty_023_python_surface",
+      "world": {
+        "runtimes": [
+          "monty",
+          "vfs"
+        ]
+      },
+      "steps": [
+        {
+          "command": "python3 -c 'from itertools import accumulate, batched, zip_longest; print('\"'\"'total={:04d}'\"'\"'.format(6)); print(list(accumulate([1,2,3]))); print(list(batched([1,2,3], 2))); print(list(zip_longest([1,2], [3], fillvalue=0)))'",
+          "expect": {
+            "exit": 0,
+            "stdout": "total=0006\n[1, 3, 6]\n[(1, 2), (3,)]\n[(1, 3), (2, 0)]\n",
+            "stderr": ""
+          }
+        }
+      ]
     }
   ]
 }

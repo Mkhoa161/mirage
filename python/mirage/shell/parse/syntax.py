@@ -187,6 +187,13 @@ def find_syntax_error(node: TSNodeLike) -> str | None:
         return None
     previous = None
     for child in node.children:
+        # Bash permits unquoted spaces in associative subscripts. The
+        # grammar recovers their earlier plain words as ERROR children.
+        if (node.type == "subscript" and child.type == "ERROR"
+                and child.children
+                and all(part.type == "word" and not part.has_error
+                        for part in child.children)):
+            continue
         if child.is_missing:
             text = child.text
             return text.decode(errors="replace") if text else ""

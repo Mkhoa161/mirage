@@ -104,6 +104,7 @@ class QueryReader {
     const field = first.quoted ? last.value : first.value
     const value = first.quoted ? first : last
     const op = operator.value
+    if (!Object.hasOwn(QUERY_OPERATORS, field)) throw new Error(`unsupported query field: ${field}`)
     if (
       operator.quoted ||
       (first.quoted && (last.quoted || op !== 'in')) ||

@@ -164,8 +164,10 @@ MISSING_QUOTE_CASES = json.loads(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("command",
-                         [case["command"] for case in MISSING_QUOTE_CASES])
+@pytest.mark.parametrize("command", [
+    case["command"]
+    for case in MISSING_QUOTE_CASES if case["expect"]["exit"] == 2
+])
 async def test_missing_nested_quote_refuses_before_any_execution(command):
     ws = Workspace({"/data": RAMResource()})
     try:

@@ -175,6 +175,15 @@ export function findSyntaxError(
   if (!node.hasError) return null
   let previous: TSNodeLike | null = null
   for (const child of node.children) {
+    // Bash permits unquoted spaces in associative subscripts. The grammar
+    // recovers their earlier plain words as ERROR children.
+    if (
+      node.type === 'subscript' &&
+      child.type === 'ERROR' &&
+      child.children.length > 0 &&
+      child.children.every((part) => part.type === 'word' && !part.hasError)
+    )
+      continue
     if (child.isMissing) return child.text
     if (
       child.type === 'ERROR' &&

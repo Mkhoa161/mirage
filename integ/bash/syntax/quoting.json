@@ -123,6 +123,37 @@
         "stdout": "",
         "stderr": "mirage: syntax error in command\n"
       }
+    },
+    {
+      "id": "syntax_associative_key_with_spaces",
+      "seq": 510104,
+      "command": "declare -A m; m[two words]=v; echo \"${m[two words]}\"; declare -p m",
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "s3-prefix",
+        "databricks-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder"
+      ],
+      "expect": {
+        "exit": 0,
+        "stdout": "v\ndeclare -A m=([\"two words\"]=\"v\" )\n",
+        "stderr": ""
+      }
     }
   ]
 }

@@ -114,8 +114,8 @@ const missingQuoteCases = JSON.parse(
     new URL('../../../../../../integ/bash/syntax/quoting.json', import.meta.url),
     'utf8',
   ),
-) as { cases: { command: string }[] }
-it.each(missingQuoteCases.cases.map((c) => c.command))(
+) as { cases: { command: string; expect: { exit: number } }[] }
+it.each(missingQuoteCases.cases.filter((c) => c.expect.exit === 2).map((c) => c.command))(
   'missing nested quote refuses before any execution: %s',
   async (command) => {
     const ws = new Workspace({ '/data': new RAMResource() }, { shellParser: parser })
