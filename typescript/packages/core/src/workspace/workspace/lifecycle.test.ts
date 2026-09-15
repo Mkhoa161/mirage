@@ -423,3 +423,62 @@ it.each(['service', 'clear'])('unmount drains index invalidation (%s)', async (k
     await ws.close()
   }
 })
+
+describe('closeWorkspace surfaces closer failures', () => {
+  function wsWithFailingClosers(failures: string[]): {
+    ws: Workspace
+    order: string[]
+    ready: Promise<void>
+  } {
+    const resource = new RAMResource()
+    const ws = new Workspace(
+      { '/m': [resource, MountMode.WRITE] },
+      { mode: MountMode.WRITE, shellParser: parser },
+    )
+    const order: string[] = []
+    const closeResource = resource.close.bind(resource)
+    vi.spyOn(resource, 'close').mockImplementation(async () => {
+      order.push('resource')
+      await closeResource()
+    })
+    const ready = ws.dispatch('stat', '/m').then(() => {
+      const closers = (ws as unknown as { closers: (() => Promise<void>)[] }).closers
+      for (const message of failures) {
+        closers.push(() => {
+          order.push(message)
+          return Promise.reject(new Error(message))
+        })
+      }
+      closers.push(() => {
+        order.push('later closer')
+        return Promise.resolve()
+      })
+    })
+    return { ws, order, ready }
+  }
+
+  it('raises a single closer failure once teardown has finished', async () => {
+    const { ws, order, ready } = wsWithFailingClosers(['journal replay failed'])
+    await ready
+    await expect(ws.close()).rejects.toThrow('journal replay failed')
+    // The point of the old catch: teardown still completes. The closers
+    // after the failure ran, and the resource still closed.
+    expect(order).toEqual(['journal replay failed', 'later closer', 'resource'])
+  }, 30_000)
+
+  it('aggregates when more than one closer fails', async () => {
+    const { ws, order, ready } = wsWithFailingClosers(['first gone', 'second gone'])
+    await ready
+    const err = await ws.close().then(
+      () => null,
+      (raised: unknown) => raised,
+    )
+    expect(err).toBeInstanceOf(AggregateError)
+    expect((err as AggregateError).errors.map((e: Error) => e.message)).toEqual([
+      'first gone',
+      'second gone',
+    ])
+    expect(order).toContain('later closer')
+    expect(order).toContain('resource')
+  }, 30_000)
+})

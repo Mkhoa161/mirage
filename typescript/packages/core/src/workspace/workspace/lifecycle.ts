@@ -60,16 +60,20 @@ export async function closeWorkspace(deps: CloseDeps): Promise<void> {
   // one of those writes fail with "Workspace is closed", so a python program
   // killed by its timeout silently lost its last mutations. Python has always
   // ordered it this way (`close_async` closes line runtimes before resources).
+  // Collected rather than thrown here: the rest of teardown still has to
+  // run, but a failed replay is the data-loss signal above going quiet
+  // again, so it is raised once everything is released.
+  const failures: unknown[] = []
   for (const fn of deps.closers.splice(0)) {
     try {
       await fn()
-    } catch {
-      // keep tearing down; swallow subsystem-cleanup failures
+    } catch (err) {
+      failures.push(err)
     }
   }
   const retirements = await Promise.allSettled([...deps.registry.retiringResources.values()])
   for (const result of retirements) {
-    if (result.status === 'rejected') throw result.reason as Error
+    if (result.status === 'rejected') throw teardownFailure([...failures, result.reason])
   }
   const drainTasks = [...(deps.cache.drainTasks?.values() ?? [])]
   for (const task of drainTasks) {
@@ -102,4 +106,10 @@ export async function closeWorkspace(deps: CloseDeps): Promise<void> {
   }
   deps.opened.clear()
   deps.openOrder.length = 0
+  if (failures.length > 0) throw teardownFailure(failures)
+}
+
+function teardownFailure(failures: unknown[]): Error {
+  if (failures.length === 1) return failures[0] as Error
+  return new AggregateError(failures, 'workspace teardown failed')
 }
