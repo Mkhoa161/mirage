@@ -19,7 +19,12 @@ import { dirname, join, resolve } from 'node:path'
 import type { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { ANNOUNCE_RE } from '../kit/typescript/announce.ts'
+import { start } from '../kit/typescript/serve.ts'
+import { DEFAULT_RUN, DEFAULT_TENANT } from '../kit/typescript/tenant.ts'
 import type { JsonValue } from '../kit/typescript/types.ts'
+import { gwsFake } from './fake.ts'
+import { cachedState, dropState, withState } from './store/cache.ts'
+import { loadState } from './store/load.ts'
 
 import { parseDriveQuery, matchQuery } from './drive/query.ts'
 import { createDriveItem } from './drive/item.ts'
@@ -891,6 +896,107 @@ async function main(): Promise<void> {
         '2026-02-03T10:30:00.000Z/2026-02-03T11:00:00.000Z',
       ],
     )
+
+    // ---- the cached tenant world, and the four ways it can go stale
+    //
+    // Every check above already rides the cache. What they cannot see is it
+    // going WRONG, which needs the fake IN THIS PROCESS: what these assert is
+    // what the cache HOLDS, and a request answers from the world in its own
+    // hand either way.
+    const rw = `${at}/_run/rw`
+    check('run rw seeds', (await reset(rw, seed)) === 200)
+    await post(`${rw}/v1/documents`, 't1', { title: 'before-reset' })
+    // Door one: /reset replaces the rows with no route involved, which is
+    // what `Fake.afterReset` exists for.
+    check('resetting run rw again', (await reset(rw, seed)) === 200)
+    eq('a scoped reset drops the cached world', await fileNames(rw, 't1'), ['Recall Survey'])
+
+    const home = await start(gwsFake, 0)
+    try {
+      const at2 = home.endpoint
+      check('the in-process fake seeds', (await reset(at2, seed)) === 200)
+      const db = home.runtime.pool.client(DEFAULT_RUN)
+      const T = DEFAULT_TENANT
+
+      // Door two: a write handler that THROWS mutated in place and flushed
+      // nothing. Asserted on the cache rather than a later response: the one
+      // write route that can be made to throw from outside (`multipart/mixed`
+      // with no boundary=) parses before it mints, so nothing observable
+      // changes and a response-level check would pass either way.
+      await api(`${at2}/drive/v3/files`, T)
+      check('a read left a world cached', cachedState(db, T) !== undefined)
+      const headless = Buffer.from(
+        'From: a@example.com\r\nTo: b@example.com\r\nSubject: boom\r\n' +
+          'Content-Type: multipart/mixed\r\n\r\nbody\r\n',
+        'utf8',
+      )
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      const boom = await post(`${at2}/gmail/v1/users/me/messages/send`, T, { raw: headless })
+      check('a write route that throws is a 500', boom.status === 500, String(boom.status))
+      check('and its half-applied world is evicted', cachedState(db, T) === undefined)
+
+      // Door three: a read that missed can still be inside loadState when a
+      // /reset drops the entry, or when a write that missed alongside it
+      // flushes its own copy; see `Cached` in store/cache.ts.
+      //
+      // Driven by suspending a real load inside `withState`, because the
+      // window needs a ~10ms load to outlive a ~100ms reset or write and a
+      // race fired from a client would pass either way. The write arm goes
+      // through the REAL write route, not the cache primitive under it.
+      const stale = await loadState(db, T)
+      dropState(db, T)
+      const overtaken = await withState(db, T, async () => {
+        await post(`${at2}/v1/documents`, T, { title: 'overtaking-write' })
+        return stale
+      })
+      check('a load a write overtook still answers its own snapshot', overtaken === stale)
+      check('but is not what stays cached', cachedState(db, T) !== stale)
+      const named = await fileNames(at2, T)
+      check(
+        'and the write it was overtaken by survives',
+        named.includes('overtaking-write'),
+        named.join(','),
+      )
+      dropState(db, T)
+      const dropped = await loadState(db, T)
+      const raced = await withState(db, T, async () => {
+        dropState(db, T)
+        return dropped
+      })
+      check('a load a reset overtook answers its own snapshot too', raced === dropped)
+      check('and leaves the cache empty rather than stale', cachedState(db, T) === undefined)
+      // The positive control: every check above would also pass against a
+      // `withState` that simply never installed anything.
+      const fresh = await loadState(db, T)
+      check(
+        'while an uncontested load does install',
+        (await withState(db, T, async () => fresh)) === fresh && cachedState(db, T) === fresh,
+      )
+    } finally {
+      await home.close()
+    }
+
+    // Door four: keyed by the run's CLIENT, not its name, so two servers in
+    // ONE process cannot reach each other's worlds. A map keyed by
+    // `run|tenant` passes every other check here and fails this one.
+    const a = await start(gwsFake, 0)
+    const b = await start(gwsFake, 0)
+    try {
+      check('two in-process fakes seed the same run name', (await reset(a.endpoint, seed)) === 200)
+      check('both of them', (await reset(b.endpoint, seed)) === 200)
+      await post(`${a.endpoint}/v1/documents`, 't1', { title: 'only-in-a' })
+      eq('a world belongs to one runtime', await fileNames(b.endpoint, 't1'), ['Recall Survey'])
+      eq('and the other runtime kept its own', await fileNames(a.endpoint, 't1'), [
+        'Recall Survey',
+        'only-in-a',
+      ])
+    } finally {
+      await a.close()
+      await b.close()
+    }
 
     // ---- a read route must never be the only place a counter moved
     check(
