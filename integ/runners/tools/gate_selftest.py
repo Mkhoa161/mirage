@@ -14,6 +14,7 @@
 
 import asyncio
 import contextlib
+import functools
 import io
 import json
 import os
@@ -269,29 +270,26 @@ def selftest_target_pool() -> None:
           len(twin_lanes) == 2 and set(twin_lanes) == {"github"},
           f"lanes: {twin_lanes}")
 
-    def shared_not_bool() -> None:
-        harness.validate_services(
-            with_manifest(
-                lambda d: d["services"]["github"].update({"shared": 1})))
+    bad_shared = with_manifest(
+        lambda d: d["services"]["github"].update({"shared": 1}))
+    check(
+        "services: a non-boolean 'shared' is rejected",
+        *raises(functools.partial(harness.validate_services, bad_shared),
+                "must be a boolean"))
 
-    check("services: a non-boolean 'shared' is rejected",
-          *raises(shared_not_bool, "must be a boolean"))
+    bad_exclusive = with_manifest(lambda d: next(
+        t for t in d["targets"] if t["id"] == "opfs").update({"exclusive": 1}))
+    check(
+        "targets: a non-boolean 'exclusive' is rejected",
+        *raises(functools.partial(harness.validate_targets, bad_exclusive),
+                "must be a boolean"))
 
-    def exclusive_not_bool() -> None:
-        harness.validate_targets(
-            with_manifest(lambda d: next(t for t in d["targets"] if t["id"] ==
-                                         "opfs").update({"exclusive": 1})))
-
-    check("targets: a non-boolean 'exclusive' is rejected",
-          *raises(exclusive_not_bool, "must be a boolean"))
-
-    def unknown_key() -> None:
-        harness.validate_services(
-            with_manifest(
-                lambda d: d["services"]["trello"].update({"nosuchkey": True})))
-
-    check("services: an unknown key on a service entry is rejected",
-          *raises(unknown_key, "unknown key"))
+    stray_key = with_manifest(
+        lambda d: d["services"]["trello"].update({"nosuchkey": True}))
+    check(
+        "services: an unknown key on a service entry is rejected",
+        *raises(functools.partial(harness.validate_services, stray_key),
+                "unknown key"))
 
     code = run_main(["--target", "ram", "--target-jobs", "0"], {})
     check("--target-jobs below one is refused", code == 2, f"exit {code}")
