@@ -12,8 +12,6 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-// Mirror of python/tests/commands/builtin/mem0/test_search.py.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Mem0Accessor } from '../../../accessor/mem0.ts'
