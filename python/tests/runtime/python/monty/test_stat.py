@@ -23,8 +23,8 @@ pytestmark = pytest.mark.skipif(pydantic_monty is None,
 
 
 def test_file_row_keeps_size_mode_and_stamp() -> None:
-    st = stat_result(VFSStat(size=5, is_dir=False, mtime_ns=1_500_000_000,
-                             mode=0o100644))
+    st = stat_result(
+        VFSStat(size=5, is_dir=False, mtime_ns=1_500_000_000, mode=0o100644))
     assert st.st_size == 5
     assert st.st_mode == 0o100644
     assert st.st_mtime == 1.5
@@ -32,8 +32,8 @@ def test_file_row_keeps_size_mode_and_stamp() -> None:
 
 
 def test_directory_row_is_monty_s_own_four_kilobytes_and_two_links() -> None:
-    st = stat_result(VFSStat(size=17, is_dir=True, mtime_ns=2_000_000_000,
-                             mode=0o40755))
+    st = stat_result(
+        VFSStat(size=17, is_dir=True, mtime_ns=2_000_000_000, mode=0o40755))
     assert st.st_mode == 0o40755
     assert st.st_size == 4096
     assert st.st_nlink == 2

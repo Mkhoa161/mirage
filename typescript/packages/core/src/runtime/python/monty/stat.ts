@@ -17,6 +17,7 @@ import type { MontyBindingBits } from './binding.ts'
 
 const S_IFREG = 0o100000
 const S_IFDIR = 0o40000
+const S_IFMT = 0o170000
 const PERMISSION_BITS = 0o7777
 // What monty's own StatResult reports for a directory, so a guest sees
 // the same two numbers whichever host answered.
@@ -56,7 +57,13 @@ export interface GuestStat {
  *   st: the mount's row for the path.
  */
 export function statFields(st: VFSStat): GuestStat {
-  const type = st.isDir ? S_IFDIR : S_IFREG
+  // monty's own StatResult keeps whatever type bits the mode carries and
+  // ORs in a default only when it carries none, so a backend reporting a
+  // character device (`/dev/null`) or a symlink stays one and a backend
+  // reporting permissions alone still yields a mode `S_ISDIR` can mask.
+  // Deriving the type from `isDir` alone reported every such row regular.
+  const declared = st.mode & S_IFMT
+  const type = declared !== 0 ? declared : st.isDir ? S_IFDIR : S_IFREG
   // Seconds, as CPython reports them; 0 is the door's spelling of "no
   // stamp", and it stays 0 rather than becoming the host clock.
   const stamp = st.mtimeMs / 1000

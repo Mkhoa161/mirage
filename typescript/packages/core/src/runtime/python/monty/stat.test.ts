@@ -43,11 +43,21 @@ describe('statFields', () => {
     expect(st.st_nlink).toBe(2)
   })
 
-  it('takes the type bits from the row, not from the mode it was handed', () => {
+  it('fills the type bits in from the row when the mode carries none', () => {
     // A backend that reports permissions alone still yields a mode the
     // guest can mask with S_IFMT, which is what `stat.S_ISDIR` reads.
     expect(statFields({ size: 0, isDir: true, mtimeMs: 0, mode: 0o755 }).st_mode).toBe(0o40755)
     expect(statFields({ size: 0, isDir: false, mtimeMs: 0, mode: 0o644 }).st_mode).toBe(0o100644)
+  })
+
+  it('keeps the type bits the mode already carries, as monty itself does', () => {
+    // Probed: StatResult.file_stat(mode=0o020666) answers 0o20666 and
+    // dir_stat(mode=0o100644) answers 0o100644, so monty only ever ORs
+    // a default in. Deriving the type from `isDir` alone reported the
+    // always-mounted /dev/null as a regular file on this host and a
+    // character device on the other.
+    expect(statFields({ size: 0, isDir: false, mtimeMs: 0, mode: 0o020666 }).st_mode).toBe(0o020666)
+    expect(statFields({ size: 0, isDir: false, mtimeMs: 0, mode: 0o120777 }).st_mode).toBe(0o120777)
   })
 
   it('keeps an unknown stamp at zero rather than substituting the host clock', () => {
@@ -57,24 +67,35 @@ describe('statFields', () => {
 
 describe('statResult', () => {
   it('wraps the fields as a named class instance, not a bare object', () => {
-    const seen: Array<[object, unknown]> = []
+    // Parameter properties rather than a bare constructor body, which
+    // is also how `osaccess.test.ts` spells this fake: a class whose
+    // only member is a constructor is not a class worth writing.
     class FakeClassInstance {
-      constructor(instance: object, options?: { name?: string }) {
-        seen.push([instance, options])
-      }
+      constructor(
+        readonly instance: object,
+        readonly options?: { name?: string; eagerAttrs?: readonly string[] | 'all' },
+      ) {}
+    }
+    class FakeHandle {
+      constructor(
+        readonly path: string,
+        readonly mode: string,
+      ) {}
     }
     const bits = {
       NOT_HANDLED: Symbol('NOT_HANDLED'),
-      MontyFileHandle: class {},
+      MontyFileHandle: FakeHandle,
       ClassInstance: FakeClassInstance,
     }
     const wrapped = statResult(bits, { size: 4, isDir: false, mtimeMs: 0, mode: 0o644 })
     expect(wrapped).toBeInstanceOf(FakeClassInstance)
-    expect(seen).toHaveLength(1)
-    expect((seen[0]?.[0] as GuestStat).st_size).toBe(4)
+    expect((wrapped as FakeClassInstance).instance as GuestStat).toMatchObject({ st_size: 4 })
     // The name the guest sees in `type(st)` and in the repr; without
     // the wrapper the answer converts structurally and arrives as a
     // dict, where `st.st_size` raises AttributeError.
-    expect(seen[0]?.[1]).toEqual({ name: 'stat_result', eagerAttrs: 'all' })
+    expect((wrapped as FakeClassInstance).options).toEqual({
+      name: 'stat_result',
+      eagerAttrs: 'all',
+    })
   })
 })

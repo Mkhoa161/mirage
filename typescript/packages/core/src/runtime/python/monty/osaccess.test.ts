@@ -71,7 +71,16 @@ function accessOn(
 // as a missing path.
 function listing(names: string[], dirs: string[] = []): Mock<BridgeDispatchFn> {
   return vi.fn<BridgeDispatchFn>((op, path) => {
-    if (op === 'readdir') return Promise.resolve(names)
+    if (op === 'readdir') {
+      // A real mount refuses to list a path it does not have, and the
+      // door asks with a trailing slash. Answering every path would
+      // make any probe built on a listing read as "yes, a directory".
+      const under = names.filter((n) => n.startsWith(path))
+      if (under.length === 0 && !dirs.includes(path.replace(/\/$/, ''))) {
+        return Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+      }
+      return Promise.resolve(under)
+    }
     if (op === 'stat' && names.includes(path)) {
       return Promise.resolve(
         new FileStat({
@@ -242,6 +251,19 @@ describe('MirageOSAccess stat', () => {
     await expect(Promise.resolve(access.handle('Path.stat', ['/ram/nope']))).rejects.toThrow(
       "[Errno 2] No such file or directory: '/ram/nope'",
     )
+  })
+
+  it('stats a directory the workspace lists although no mount claims it', async () => {
+    // Only /parent/child is mounted, so /parent is served by neither
+    // the mount view nor the scratch tree, yet exists and is_dir both
+    // answer True for it through the listing. A stat that read only
+    // the tree reported it missing, which python does not.
+    const access = accessOn(listing(['/parent/child']), {}, ['/parent/child'])
+    expect(await access.handle('Path.is_dir', ['/parent'])).toBe(true)
+    const wrapped = (await access.handle('Path.stat', ['/parent'])) as FakeClassInstance
+    const st = wrapped.instance as GuestStat
+    expect(st.st_mode & 0o170000).toBe(0o40000)
+    expect(st.st_nlink).toBe(2)
   })
 })
 

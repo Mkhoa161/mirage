@@ -764,6 +764,68 @@
       ]
     },
     {
+      "id": "fs_stat_of_a_directory_above_a_nested_mount",
+      "filesystem": {
+        "monty": {
+          "stat": true
+        }
+      },
+      "world": {
+        "runtimes": [
+          "monty",
+          "vfs"
+        ],
+        "mounts": {
+          "/parent/child": {
+            "resource": "ram",
+            "files": {
+              "a.txt": "a\n"
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "command": "python3 -c \"from pathlib import Path; print('is_dir', Path('/parent').is_dir()); print('exists', Path('/parent').exists()); print('stat', oct(Path('/parent').stat().st_mode & 0o170000))\"",
+          "expect": {
+            "exit": 0,
+            "stdout": "is_dir True\nexists True\nstat 0o40000\n"
+          }
+        }
+      ]
+    },
+    {
+      "id": "fs_stat_of_the_scratch_root",
+      "filesystem": {
+        "monty": {
+          "stat": true
+        }
+      },
+      "world": {
+        "runtimes": [
+          "monty",
+          "vfs"
+        ],
+        "mounts": {
+          "/data": {
+            "resource": "ram",
+            "files": {
+              "a.txt": "a\n"
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "command": "python3 -c \"import os; from pathlib import Path; print('os', oct(os.stat('/').st_mode & 0o170000)); print('pathlib', oct(Path('/').stat().st_mode & 0o170000)); print('nlink', os.stat('/').st_nlink)\"",
+          "expect": {
+            "exit": 0,
+            "stdout": "os 0o40000\npathlib 0o40000\nnlink 2\n"
+          }
+        }
+      ]
+    },
+    {
       "id": "fs_stat_sequence_python_only",
       "hosts": [
         "python"

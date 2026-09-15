@@ -45,13 +45,17 @@ export function eventsOf(st: GwsState, calendarId: string): Map<string, Calendar
   return bucket
 }
 
-export function fmtEvent(cal: CalendarEntry, ev: CalendarEvent): JsonObj {
+export function fmtEvent(cal: CalendarEntry, ev: CalendarEvent, renderTz?: string): JsonObj {
+  // The calendar's zone is what a single event renders in; a list
+  // renders in the zone its `timeZone` parameter asked for, which is
+  // the only place the two differ.
+  const tz = renderTz ?? cal.timeZone
   const out: JsonObj = {
     kind: 'calendar#event',
     id: ev.id,
     status: ev.status,
-    start: { ...formatEventTime(ev.start, cal.timeZone) },
-    end: { ...formatEventTime(ev.end, cal.timeZone) },
+    start: { ...formatEventTime(ev.start, tz) },
+    end: { ...formatEventTime(ev.end, tz) },
     created: ev.created,
     updated: ev.updated,
     iCalUID: `${ev.id}@google.com`,
@@ -80,7 +84,13 @@ export function listCalendarEvents(
   cal: CalendarEntry,
   query: URLSearchParams,
 ): Reply {
-  const tz = query.get('timeZone') ?? cal.timeZone
+  const asked = query.get('timeZone')
+  // Rendering in this zone means handing it to Intl, which throws a
+  // RangeError for anything it cannot resolve. A request door refuses
+  // instead of crashing the read. (The generic refusal, not a probed
+  // per-field wording.)
+  if (asked !== null && !isIanaZone(asked)) return invalidFormat()
+  const tz = asked ?? cal.timeZone
   const showDeleted = query.get('showDeleted') === 'true'
   const q = query.get('q')
   const timeMin = query.get('timeMin')
@@ -111,7 +121,11 @@ export function listCalendarEvents(
     summary: cal.summary,
     timeZone: tz,
     accessRole: cal.accessRole,
-    items: page.map((ev) => fmtEvent(cal, ev)),
+    // The list reports `tz` as the collection's zone, so its items are
+    // rendered in it: `?timeZone=UTC` on a non-UTC calendar otherwise
+    // reported UTC and handed back calendar-offset times, and a caller
+    // grouping by local date read the wrong day.
+    items: page.map((ev) => fmtEvent(cal, ev, tz)),
   }
   if (start + max < rows.length) out.nextPageToken = String(start + max)
   return ok(out)

@@ -268,7 +268,7 @@ export class MirageOSAccess {
       case 'Path.stat':
         return vfs
           .stat(path)
-          .then((st) => (st === null ? this.scratchStat(path) : statResult(this.bits, st)))
+          .then((st) => (st === null ? this.scratchStat(path, vfs) : statResult(this.bits, st)))
       default:
         return this.notHandled
     }
@@ -342,15 +342,35 @@ export class MirageOSAccess {
       case 'Path.iterdir':
         return this.scratchIterdir(path, vfs)
       case 'Path.stat':
-        return this.scratchStat(path)
+        return this.scratchStat(path, vfs)
       default:
         return this.notHandled
     }
   }
 
-  /** The scratch tree's row for `path`, as the guest's `os.stat_result`. */
-  private scratchStat(path: string): object {
-    return statResult(this.bits, this.tree.stat(path))
+  /**
+   * The scratch tree's row for `path`, as the guest's `os.stat_result`.
+   *
+   * A directory the workspace can list but no mount claims (the root
+   * above nested mounts, `/parent` when only `/parent/child` is
+   * mounted) is not in the tree, and falling straight through reported
+   * it missing although `exists` and `is_dir` both answered True for
+   * it. So the same door those two use answers here, and a hit is
+   * materialized exactly as python's `_ensure_dir` materializes it,
+   * which is what keeps the two hosts' rows identical.
+   *
+   * Args:
+   *   path: the guest path to stat.
+   *   vfs: the mount view, or null outside a workspace.
+   */
+  private scratchStat(path: string, vfs: MontyVFS | null): unknown {
+    if (this.tree.exists(path)) return statResult(this.bits, this.tree.stat(path))
+    const listed = this.remoteIsDir(path, vfs)
+    if (listed === false) return statResult(this.bits, this.tree.stat(path))
+    return Promise.resolve(listed).then((isDir) => {
+      if (isDir) this.tree.mkdir(path, true, true)
+      return statResult(this.bits, this.tree.stat(path))
+    })
   }
 
   /**

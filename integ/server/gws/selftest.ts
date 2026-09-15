@@ -108,6 +108,11 @@ function field(rows: JsonValue | undefined, name: string): string[] {
   return arr(rows).map((row) => String(obj(row)[name] ?? ''))
 }
 
+/** Each listed event's rendered `start.dateTime`, the zone check's subject. */
+function startsOf(body: JsonValue): string[] {
+  return arr(obj(body).items).map((row) => String(obj(obj(row).start)?.dateTime ?? ''))
+}
+
 async function api(
   url: string,
   tenant: string,
@@ -554,6 +559,27 @@ async function compatibilityHttp(at: string): Promise<void> {
     dateTime: '2026-09-25T19:59:00+08:00',
     timeZone: 'Asia/Hong_Kong',
   })
+  // events.list renders in the zone its `timeZone` parameter asks for,
+  // which is also the zone it reports. Rendering in the calendar's while
+  // reporting the asked-for one hands a caller times it cannot group by
+  // the local date it was told to read them in.
+  const inUtc = await api(`${events}?timeZone=UTC&q=zoneless request`, 't1')
+  eq(
+    'HTTP Calendar list reports the zone it was asked for',
+    obj(inUtc.body).timeZone ?? null,
+    'UTC',
+  )
+  eq('HTTP Calendar list renders its items in that zone', startsOf(inUtc.body), [
+    '2026-09-25T11:59:00+00:00',
+  ])
+  const perCal = await api(`${events}?q=zoneless request`, 't1')
+  eq('and falls back to the calendar zone when none was asked for', startsOf(perCal.body), [
+    '2026-09-25T19:59:00+08:00',
+  ])
+  // Rendering in a zone means handing it to Intl, which throws for one
+  // it cannot resolve; the door refuses rather than crashing the read.
+  const badZone = await api(`${events}?timeZone=Not/AZone`, 't1')
+  eq('HTTP Calendar list refuses a zone it cannot resolve', badZone.status, 400)
 }
 
 async function main(): Promise<void> {
@@ -598,6 +624,23 @@ async function main(): Promise<void> {
     check('extras.calendars that is not a list is a 400', badExtras === 400, String(badExtras))
     const unknown = await reset(at, { tenants: ['t1'], extras: { workspace: 'x' } })
     check('an unknown extras key is a 400', unknown === 400, String(unknown))
+    // Every timed event renders in its calendar's zone, so a zone Intl
+    // cannot resolve would throw a RangeError out of a later read. Both
+    // doors that set one refuse it here instead.
+    const badDefault = await reset(at, {
+      tenants: ['t1'],
+      extras: { calendarTimeZone: 'Not/AZone' },
+    })
+    check('a calendarTimeZone that is not a zone is a 400', badDefault === 400, String(badDefault))
+    const badCalZone = await reset(at, {
+      tenants: ['t1'],
+      extras: { calendars: [{ id: 'z@example.com', summary: 'z', timeZone: 'Not/AZone' }] },
+    })
+    check(
+      'a seeded calendar zone that is not a zone is a 400',
+      badCalZone === 400,
+      String(badCalZone),
+    )
 
     // ---- the clock is pinned and PERSISTED, which is what makes it resume
     check('reseed', (await reset(at, seed)) === 200)
