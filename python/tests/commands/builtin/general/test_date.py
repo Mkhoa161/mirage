@@ -13,6 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import asyncio
+import time
 
 import pytest
 
@@ -155,3 +156,33 @@ async def test_date_zone_abbreviation(line, expected):
         assert await _run(ws, line) == (expected, "", 0)
     finally:
         await ws.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("host_zone,summer,winter", [
+    ("America/Los_Angeles", "PDT -0700", "PST -0800"),
+    ("Asia/Hong_Kong", "HKT +0800", "HKT +0800"),
+    ("UTC", "UTC +0000", "UTC +0000"),
+])
+async def test_implicit_host_timezone(monkeypatch, host_zone, summer, winter):
+    try:
+        with monkeypatch.context() as patch:
+            patch.setenv("TZ", host_zone)
+            time.tzset()
+            ws = Workspace({"/": RAMResource()})
+            try:
+                for epoch, expected in [(1789430400, summer),
+                                        (1767225600, winter)]:
+                    assert await _run(
+                        ws,
+                        f"unset TZ; date -d @{epoch} '+%Z %z'") == (expected +
+                                                                    "\n", "",
+                                                                    0)
+                    implicit = await _run(ws, f"unset TZ; date -d @{epoch}")
+                    explicit = await _run(ws,
+                                          f"TZ={host_zone} date -d @{epoch}")
+                    assert implicit == explicit
+            finally:
+                await ws.close()
+    finally:
+        time.tzset()

@@ -329,3 +329,14 @@ describe("date: %Z is tzdata's abbreviation", () => {
     expect(await runDateEnv(env, texts, flags)).toEqual([expected, '', 0])
   })
 })
+
+it('renders the implicit host zone in explicit and default formats', async () => {
+  const hostZone = new Intl.DateTimeFormat().resolvedOptions().timeZone
+  for (const d of ['@1789430400', '@1767225600']) {
+    for (const format of [[], ['+%Z %z']]) {
+      const implicit = await runDateEnv({}, format, { d })
+      expect(implicit).toEqual(await runDateEnv({ TZ: hostZone }, format, { d }))
+      expect(implicit[0].trim()).not.toBe('')
+    }
+  }
+})

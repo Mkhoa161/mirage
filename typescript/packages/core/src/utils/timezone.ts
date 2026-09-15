@@ -120,9 +120,7 @@ class UtcZone implements Zone {
   }
 }
 
-// The host's zone, through the local `Date` getters. It carries no
-// abbreviation: the runtime offers none short of Intl's default locale,
-// and `%Z` has always rendered empty for a local time here.
+// Resolve the host zone at the instant being formatted, just as explicit TZ does.
 class LocalZone implements Zone {
   parts(dt: Date): ZoneParts {
     return {
@@ -135,7 +133,11 @@ class LocalZone implements Zone {
       ms: dt.getMilliseconds(),
       weekday: dt.getDay(),
       offsetSec: -dt.getTimezoneOffset() * 60,
-      abbrev: '',
+      abbrev: tzAbbreviation(
+        new Intl.DateTimeFormat().resolvedOptions().timeZone,
+        -dt.getTimezoneOffset() * 60,
+        Math.floor(dt.getTime() / 1000),
+      ),
     }
   }
 

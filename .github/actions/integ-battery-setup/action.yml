@@ -91,6 +91,8 @@ runs:
         cat /tmp/sshsrv.log
         echo "SSH_HOST=127.0.0.1" >> "$GITHUB_ENV"
         echo "SSH_PORT=2222" >> "$GITHUB_ENV"
+    # Keep in sync with the observability job: 2.21 removed the v1 query
+    # endpoints used by the accessor and jaeger_seed.py.
     - name: Start jaeger all-in-one and seed traces over OTLP
       shell: bash
       run: |
