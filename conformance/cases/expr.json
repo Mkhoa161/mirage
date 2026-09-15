@@ -1,0 +1,187 @@
+{
+  "command": "expr",
+  "cases": [
+    {
+      "id": "expr_div_truncates_pos",
+      "cmd": "expr 10 / 3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_div_neg_dividend_truncates",
+      "cmd": "expr -10 / 3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "-3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_div_neg_divisor_truncates",
+      "cmd": "expr 10 / -3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "-3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_div_both_neg_truncates",
+      "cmd": "expr -10 / -3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_mod_neg_dividend",
+      "cmd": "expr -10 % 3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "-1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_mod_neg_divisor",
+      "cmd": "expr 10 % -3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_div_by_zero",
+      "cmd": "expr 1 / 0",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "expr: division by zero\n"
+      }
+    },
+    {
+      "id": "expr_mod_by_zero",
+      "cmd": "expr 1 % 0",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "expr: division by zero\n"
+      }
+    },
+    {
+      "id": "expr_zero_result_exits_1",
+      "cmd": "expr -1 / 2",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "0\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_zero_result_exits_1_neg_divisor",
+      "cmd": "expr 1 / -2",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "0\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expr_rejects_plus_prefixed_operand",
+      "cmd": "expr +5 + 1",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "expr: non-integer argument\n"
+      }
+    },
+    {
+      "id": "expr_rejects_surrounding_whitespace",
+      "cmd": "expr ' 5 ' + 1",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "expr: non-integer argument\n"
+      }
+    },
+    {
+      "id": "expr_rejects_underscore_separator",
+      "cmd": "expr '1_0' + 1",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "expr: non-integer argument\n"
+      }
+    },
+    {
+      "id": "expr_accepts_leading_zero_as_decimal",
+      "cmd": "expr 05 + 1",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "6\n",
+        "stderr_text": ""
+      }
+    }
+  ]
+}

@@ -62,8 +62,12 @@ function parseFlags(flags: Record<string, FlagValue>): CutOptions | string {
   if (explicitDelimiter !== null && Array.from(explicitDelimiter).length !== 1) {
     return 'cut: the delimiter must be a single character\n'
   }
+  // A refusal arrives as the stderr text to print, the same shape every
+  // other check in this function returns.
+  const ranges = parseRanges(range, mode)
+  if (typeof ranges === 'string') return ranges
   return {
-    ranges: parseRanges(range),
+    ranges,
     mode,
     delimiter: explicitDelimiter ?? '\t',
     complement: flags.complement === true,

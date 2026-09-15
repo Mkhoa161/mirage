@@ -254,3 +254,82 @@ describe('rgFull -I in directory walks', () => {
     expect(out).toEqual(['/log/app.log'])
   })
 })
+
+const DIGIT_FILES: Record<string, string> = {
+  '/num/one.txt': 'ab\n',
+  '/num/two.txt': 'a1b2c\n',
+  '/num/three.txt': 'a1b\n',
+}
+
+function digitStatFn(path: string): Promise<FileStat> {
+  const content = DIGIT_FILES[path]
+  if (content === undefined) return Promise.reject(new Error(`ENOENT: ${path}`))
+  const name = path.split('/').pop() ?? ''
+  return Promise.resolve(
+    new FileStat({ name, type: FileType.FILE, content: ContentType.TEXT, size: content.length }),
+  )
+}
+
+function digitReadBytesFn(path: string): Promise<Uint8Array> {
+  const content = DIGIT_FILES[path]
+  if (content === undefined) return Promise.reject(new Error(`ENOENT: ${path}`))
+  return Promise.resolve(ENC.encode(content))
+}
+
+function digitReaddirFn(path: string): Promise<string[]> {
+  return Promise.reject(new Error(`not a dir: ${path}`))
+}
+
+describe('rgFull -o GNU semantics', () => {
+  // GNU grep 3.11: an empty match prints nothing at all, but the line is
+  // still selected, so -c says 1 and the exit status is 0. Every non-empty
+  // match prints, one per line.
+  it('prints nothing for an empty match yet counts the line', async () => {
+    const printed = await rgFull(
+      digitReaddirFn,
+      digitStatFn,
+      digitReadBytesFn,
+      '/num/one.txt',
+      '[0-9]*',
+      opts({ onlyMatching: true }),
+      null,
+    )
+    expect(printed).toEqual([])
+    const counted = await rgFull(
+      digitReaddirFn,
+      digitStatFn,
+      digitReadBytesFn,
+      '/num/one.txt',
+      '[0-9]*',
+      opts({ onlyMatching: true, countOnly: true }),
+      null,
+    )
+    expect(counted).toEqual(['1'])
+  })
+
+  it('prints every non-empty match on the line', async () => {
+    const out = await rgFull(
+      digitReaddirFn,
+      digitStatFn,
+      digitReadBytesFn,
+      '/num/two.txt',
+      '[0-9]',
+      opts({ onlyMatching: true }),
+      null,
+    )
+    expect(out).toEqual(['1', '2'])
+  })
+
+  it('drops the empty matches around a non-empty one', async () => {
+    const out = await rgFull(
+      digitReaddirFn,
+      digitStatFn,
+      digitReadBytesFn,
+      '/num/three.txt',
+      '[0-9]*',
+      opts({ onlyMatching: true }),
+      null,
+    )
+    expect(out).toEqual(['1'])
+  })
+})

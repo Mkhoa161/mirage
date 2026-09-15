@@ -118,7 +118,38 @@ function parseNumbering(raw: string): [string, RegExp | null] {
   return [raw, null]
 }
 
-function parseOptions(flags: Record<string, FlagValue>): NlConfig {
+// gnulib appends strerror(ERANGE) when a value parsed but fell outside the
+// option's range. Measured under LC_ALL=C on glibc; it is the string here
+// most likely to read differently under another libc or locale.
+const ERANGE = 'Numerical result out of range'
+
+// GNU nl refuses a non-numeric value for each of its four numeric options,
+// with its own wording per option and — unlike expand and cut — the WHOLE
+// argument quoted. Same shape as numberFlagError in tail_counts.ts: validate
+// first, so the parseInt below cannot hand back a prefix or NaN.
+//
+// The four options split two ways. `-v` and `-i` are signed: GNU numbers from
+// a negative start and counts up, and `-i -2` genuinely decrements, so a
+// leading `-` and a zero are both legal. `-w` and `-l` must be at least 1,
+// and their refusal carries a THIRD colon-clause the scan failure does not: a
+// value that parsed but fell out of range reads `: Numerical result out of
+// range`, while an empty or non-numeric one keeps the plain two-clause form.
+// Both spell a leading `+` the way GNU does, as a sign on an otherwise
+// unsigned value.
+function numberError(
+  label: string,
+  raw: FlagValue | undefined,
+  positive = false,
+): string | null {
+  if (typeof raw !== 'string') return null
+  if (!/^[+-]?\d+$/.test(raw)) return `nl: ${label}: '${raw}'\n`
+  if (positive && Number.parseInt(raw, 10) < 1) {
+    return `nl: ${label}: '${raw}': ${ERANGE}\n`
+  }
+  return null
+}
+
+function parseOptions(flags: Record<string, FlagValue>): NlConfig | string {
   const bodyValue = flags.body_numbering
   const footerValue = flags.footer_numbering
   const headerValue = flags.header_numbering
@@ -138,6 +169,12 @@ function parseOptions(flags: Record<string, FlagValue>): NlConfig {
   const formatValue = flags.number_format
   const delimiterValue = flags.section_delimiter
   const blankValue = flags.l ?? flags.join_blank_lines
+  const numberErr =
+    numberError('invalid starting line number', startValue) ??
+    numberError('invalid line number increment', incrementValue) ??
+    numberError('invalid line number field width', widthValue, true) ??
+    numberError('invalid line number of blank lines', blankValue, true)
+  if (numberErr !== null) return numberErr
   return {
     numbering: { body: bodyNumbering, footer: footerNumbering, header: headerNumbering },
     patterns: { body: bodyPattern, footer: footerPattern, header: headerPattern },
@@ -158,6 +195,9 @@ export async function nlGeneric(
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
 ): Promise<CommandFnResult> {
   const config = parseOptions(opts.flags)
+  if (typeof config === 'string') {
+    return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(config) })]
+  }
   if (paths.length > 0) {
     // Operands read eagerly so a missing one is reported up front and the
     // remaining operands still number (GNU); the IOResult is sealed before

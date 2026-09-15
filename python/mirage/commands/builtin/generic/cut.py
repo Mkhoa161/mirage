@@ -80,7 +80,7 @@ async def cut(
 ) -> tuple[ByteSource | None, IOResult]:
     try:
         parsed = parse_flags(flags or {})
-        ranges = parse_ranges(parsed.ranges)
+        ranges = parse_ranges(parsed.ranges, parsed.mode)
     except (TypeError, ValueError) as exc:
         return None, IOResult(exit_code=1, stderr=(str(exc) + "\n").encode())
     if paths:

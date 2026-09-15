@@ -1,8 +1,8 @@
 {
   "cases": [
     {
-      "id": "bc_no_input",
-      "seq": 555,
+      "id": "nl_v_invalid_word",
+      "seq": 601700,
       "targets": [
         "ram",
         "disk",
@@ -27,16 +27,19 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "bc",
+      "command": "printf 'x\\n' | nl -v abc",
       "expect": {
-        "exit": 0,
+        "exit": 1,
         "stdout": "",
-        "stderr": ""
-      }
+        "stderr": "nl: invalid starting line number: 'abc'\n"
+      },
+      "flags": [
+        "v"
+      ]
     },
     {
-      "id": "bc_div_truncates_at_default_scale",
-      "seq": 601400,
+      "id": "nl_w_invalid_word",
+      "seq": 601701,
       "targets": [
         "ram",
         "disk",
@@ -61,16 +64,19 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '7/2' | bc",
+      "command": "printf 'x\\n' | nl -w abc",
       "expect": {
-        "exit": 0,
-        "stdout": "3\n",
-        "stderr": ""
-      }
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number field width: 'abc'\n"
+      },
+      "flags": [
+        "w"
+      ]
     },
     {
-      "id": "bc_div_neg_truncates_toward_zero",
-      "seq": 601401,
+      "id": "nl_i_invalid_word",
+      "seq": 601702,
       "targets": [
         "ram",
         "disk",
@@ -95,16 +101,19 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '-7/2' | bc",
+      "command": "printf 'x\\n' | nl -i abc",
       "expect": {
-        "exit": 0,
-        "stdout": "-3\n",
-        "stderr": ""
-      }
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number increment: 'abc'\n"
+      },
+      "flags": [
+        "i"
+      ]
     },
     {
-      "id": "bc_mod_default_scale",
-      "seq": 601402,
+      "id": "nl_l_invalid_word",
+      "seq": 601703,
       "targets": [
         "ram",
         "disk",
@@ -129,155 +138,19 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '7%2' | bc",
+      "command": "printf 'x\\n' | nl -l abc",
       "expect": {
-        "exit": 0,
-        "stdout": "1\n",
-        "stderr": ""
-      }
-    },
-    {
-      "id": "bc_mod_neg_default_scale",
-      "seq": 601403,
-      "targets": [
-        "ram",
-        "disk",
-        "redis",
-        "opfs",
-        "s3",
-        "databricks",
-        "gridfs",
-        "s3-prefix",
-        "databricks-prefix",
-        "gridfs-prefix",
-        "hf",
-        "hf-prefix",
-        "dropbox",
-        "dropbox-root",
-        "onedrive",
-        "sharepoint",
-        "sharepoint-prefix",
-        "ssh",
-        "nextcloud",
-        "gdrive",
-        "gdrive-folder",
-        "box"
-      ],
-      "command": "echo '-7%2' | bc",
-      "expect": {
-        "exit": 0,
-        "stdout": "-1\n",
-        "stderr": ""
-      }
-    },
-    {
-      "id": "bc_scale_pads_trailing_zero",
-      "seq": 601404,
-      "targets": [
-        "ram",
-        "disk",
-        "redis",
-        "opfs",
-        "s3",
-        "databricks",
-        "gridfs",
-        "s3-prefix",
-        "databricks-prefix",
-        "gridfs-prefix",
-        "hf",
-        "hf-prefix",
-        "dropbox",
-        "dropbox-root",
-        "onedrive",
-        "sharepoint",
-        "sharepoint-prefix",
-        "ssh",
-        "nextcloud",
-        "gdrive",
-        "gdrive-folder",
-        "box"
-      ],
-      "command": "echo 'scale=2; 7/2' | bc",
-      "expect": {
-        "exit": 0,
-        "stdout": "3.50\n",
-        "stderr": ""
-      }
-    },
-    {
-      "id": "bc_default_scale_is_zero",
-      "seq": 601405,
-      "targets": [
-        "ram",
-        "disk",
-        "redis",
-        "opfs",
-        "s3",
-        "databricks",
-        "gridfs",
-        "s3-prefix",
-        "databricks-prefix",
-        "gridfs-prefix",
-        "hf",
-        "hf-prefix",
-        "dropbox",
-        "dropbox-root",
-        "onedrive",
-        "sharepoint",
-        "sharepoint-prefix",
-        "ssh",
-        "nextcloud",
-        "gdrive",
-        "gdrive-folder",
-        "box"
-      ],
-      "command": "echo 'scale' | bc",
-      "expect": {
-        "exit": 0,
-        "stdout": "0\n",
-        "stderr": ""
-      }
-    },
-    {
-      "id": "bc_l_sets_scale_20",
-      "seq": 601406,
-      "targets": [
-        "ram",
-        "disk",
-        "redis",
-        "opfs",
-        "s3",
-        "databricks",
-        "gridfs",
-        "s3-prefix",
-        "databricks-prefix",
-        "gridfs-prefix",
-        "hf",
-        "hf-prefix",
-        "dropbox",
-        "dropbox-root",
-        "onedrive",
-        "sharepoint",
-        "sharepoint-prefix",
-        "ssh",
-        "nextcloud",
-        "gdrive",
-        "gdrive-folder",
-        "box"
-      ],
-      "command": "echo 'scale' | bc -l",
-      "expect": {
-        "exit": 0,
-        "stdout": "20\n",
-        "stderr": ""
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number of blank lines: 'abc'\n"
       },
       "flags": [
         "l"
       ]
     },
     {
-      "id": "bc_l_div_no_longer_truncates",
-      "seq": 601407,
+      "id": "nl_v_trailing_garbage_quotes_whole_arg",
+      "seq": 601704,
       "targets": [
         "ram",
         "disk",
@@ -302,19 +175,278 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '7/2' | bc -l",
+      "command": "printf 'x\\n' | nl -v 2x",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid starting line number: '2x'\n"
+      },
+      "flags": [
+        "v"
+      ]
+    },
+    {
+      "id": "nl_w_trailing_garbage_quotes_whole_arg",
+      "seq": 601705,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -w 2x",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number field width: '2x'\n"
+      },
+      "flags": [
+        "w"
+      ]
+    },
+    {
+      "id": "nl_v_valid_start",
+      "seq": 601706,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -v 5",
       "expect": {
         "exit": 0,
-        "stdout": "3.50000000000000000000\n",
+        "stdout": "     5\tx\n",
         "stderr": ""
+      },
+      "flags": [
+        "v"
+      ]
+    },
+    {
+      "id": "nl_v_negative_start_is_accepted",
+      "seq": 601707,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -v -5",
+      "expect": {
+        "exit": 0,
+        "stdout": "    -5\tx\n",
+        "stderr": ""
+      },
+      "flags": [
+        "v"
+      ]
+    },
+    {
+      "id": "nl_i_negative_increment_decrements",
+      "seq": 601708,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\ny\\nz\\n' | nl -i -2",
+      "expect": {
+        "exit": 0,
+        "stdout": "     1\tx\n    -1\ty\n    -3\tz\n",
+        "stderr": ""
+      },
+      "flags": [
+        "i"
+      ]
+    },
+    {
+      "id": "nl_w_zero_is_out_of_range",
+      "seq": 601709,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -w 0",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number field width: '0': Numerical result out of range\n"
+      },
+      "flags": [
+        "w"
+      ]
+    },
+    {
+      "id": "nl_w_negative_is_out_of_range",
+      "seq": 601710,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -w -3",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number field width: '-3': Numerical result out of range\n"
+      },
+      "flags": [
+        "w"
+      ]
+    },
+    {
+      "id": "nl_l_zero_is_out_of_range",
+      "seq": 601711,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -l 0",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number of blank lines: '0': Numerical result out of range\n"
       },
       "flags": [
         "l"
       ]
     },
     {
-      "id": "bc_divide_by_zero_exits_0",
-      "seq": 601408,
+      "id": "nl_l_negative_is_out_of_range",
+      "seq": 601712,
       "targets": [
         "ram",
         "disk",
@@ -339,16 +471,19 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '1/0' | bc",
+      "command": "printf 'x\\n' | nl -l -2",
       "expect": {
-        "exit": 0,
+        "exit": 1,
         "stdout": "",
-        "stderr": "Runtime error (func=(main), adr=3): Divide by zero\n"
-      }
+        "stderr": "nl: invalid line number of blank lines: '-2': Numerical result out of range\n"
+      },
+      "flags": [
+        "l"
+      ]
     },
     {
-      "id": "bc_decimal_addition_is_exact",
-      "seq": 601409,
+      "id": "nl_w_empty_omits_the_range_clause",
+      "seq": 601713,
       "targets": [
         "ram",
         "disk",
@@ -373,16 +508,19 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '0.1+0.2' | bc",
+      "command": "printf 'x\\n' | nl -w ''",
       "expect": {
-        "exit": 0,
-        "stdout": ".3\n",
-        "stderr": ""
-      }
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number field width: ''\n"
+      },
+      "flags": [
+        "w"
+      ]
     },
     {
-      "id": "bc_power_is_bignum",
-      "seq": 601410,
+      "id": "nl_l_empty_omits_the_range_clause",
+      "seq": 601714,
       "targets": [
         "ram",
         "disk",
@@ -407,12 +545,52 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "echo '2^100' | bc",
+      "command": "printf 'x\\n' | nl -l ''",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number of blank lines: ''\n"
+      },
+      "flags": [
+        "l"
+      ]
+    },
+    {
+      "id": "nl_w_leading_plus_is_a_sign",
+      "seq": 601715,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | nl -w +3",
       "expect": {
         "exit": 0,
-        "stdout": "1267650600228229401496703205376\n",
+        "stdout": "  1\tx\n",
         "stderr": ""
-      }
+      },
+      "flags": [
+        "w"
+      ]
     }
   ]
 }

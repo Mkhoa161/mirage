@@ -13,6 +13,13 @@ from mirage.io.async_line_iterator import AsyncLineIterator
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec, PolymorphicReadFn, StatFn
 
+_NUMBER = re.compile(r"^[+-]?[0-9]+$")
+
+# gnulib appends `strerror(ERANGE)` when a value parsed but fell outside
+# the option's range. Measured under LC_ALL=C on glibc; it is the string
+# here most likely to read differently under another libc or locale.
+_ERANGE = "Numerical result out of range"
+
 
 @dataclass(frozen=True, slots=True)
 class NlFlags:
@@ -29,17 +36,71 @@ class NlFlags:
     no_renumber: bool = False
 
 
+def _number_error(label: str,
+                  raw: str | None,
+                  *,
+                  positive: bool = False) -> str | None:
+    """GNU ``nl``'s refusal for one of its four numeric options.
+
+    Each option has its own wording and -- unlike expand and cut -- the
+    WHOLE argument is quoted. Same shape as ``number_flag_error`` in
+    ``tail_counts.py``: validate first, so the ``int`` that follows
+    cannot see a prefix.
+
+    The four options split two ways. ``-v`` and ``-i`` are signed: GNU
+    numbers from a negative start and counts up, and ``-i -2`` genuinely
+    decrements, so a leading ``-`` and a zero are both legal. ``-w`` and
+    ``-l`` must be at least 1, and their refusal carries a THIRD
+    colon-clause the scan failure does not: a value that parsed but fell
+    out of range reads ``: Numerical result out of range``, while an
+    empty or non-numeric one keeps the plain two-clause form. Both spell
+    a leading ``+`` the way GNU does, as a sign on an otherwise unsigned
+    value.
+
+    Args:
+        label (str): the option's own message text, e.g. "invalid
+            starting line number".
+        raw (str | None): the raw option value, or None when unset.
+        positive (bool): the option requires at least 1, which adds the
+            out-of-range clause for a value that parsed too small.
+
+    Returns:
+        str | None: the single stderr line to print, or None when the
+            value is one GNU accepts.
+    """
+    if raw is None:
+        return None
+    if _NUMBER.match(raw) is None:
+        return f"nl: {label}: '{raw}'"
+    if positive and int(raw) < 1:
+        return f"nl: {label}: '{raw}': {_ERANGE}"
+    return None
+
+
 def parse_flags(flags: Mapping[str, FlagValue]) -> NlFlags:
     fl = FlagView(flags, spec=SPECS["nl"])
+    start_raw = fl.as_str("starting_line_number")
+    increment_raw = fl.as_str("line_increment")
+    width_raw = fl.as_str("number_width")
+    join_blank_lines_raw = fl.as_str("join_blank_lines")
+    error = (_number_error("invalid starting line number", start_raw)
+             or _number_error("invalid line number increment", increment_raw)
+             or _number_error(
+                 "invalid line number field width", width_raw, positive=True)
+             or _number_error("invalid line number of blank lines",
+                              join_blank_lines_raw,
+                              positive=True))
+    if error is not None:
+        raise ValueError(error)
     return NlFlags(
         body_numbering_raw=fl.as_str("body_numbering"),
-        start_raw=fl.as_str("starting_line_number"),
-        increment_raw=fl.as_str("line_increment"),
-        width_raw=fl.as_str("number_width"),
+        start_raw=start_raw,
+        increment_raw=increment_raw,
+        width_raw=width_raw,
         separator=fl.as_str("number_separator"),
         footer_numbering_raw=fl.as_str("footer_numbering"),
         header_numbering_raw=fl.as_str("header_numbering"),
-        join_blank_lines_raw=fl.as_str("join_blank_lines"),
+        join_blank_lines_raw=join_blank_lines_raw,
         number_format=fl.as_str("number_format") or "rn",
         delimiter=fl.as_str("section_delimiter") or "\\:",
         no_renumber=fl.as_bool("no_renumber"),

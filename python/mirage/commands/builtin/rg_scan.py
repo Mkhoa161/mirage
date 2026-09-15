@@ -136,13 +136,25 @@ async def rg_full(
             if files_only:
                 return [path]
             if only_matching and m and not invert:
-                text = m.group(0)
+                # GNU -o prints every match on the line, one per line,
+                # and prints nothing at all for an empty match -- but
+                # the line is still selected, so `count` is already
+                # incremented above and -c, -l and the exit status see
+                # it. Mirrors `searchFile` in rg_scan.ts and
+                # `grep_lines` in grep_scan.py; a bare `search` here
+                # printed only the first match, and printed a prefix
+                # with no match after it for an empty one.
+                for found in compiled.finditer(line):
+                    text = found.group(0)
+                    if not text:
+                        continue
+                    one = f"{i_ln}:{text}" if line_numbers else text
+                    results.append(f"{file_prefix}:{one}"
+                                   if file_prefix is not None else one)
             else:
-                text = line
-            pfx = f"{i_ln}:{text}" if line_numbers else text
-            if file_prefix is not None:
-                pfx = f"{file_prefix}:{pfx}"
-            results.append(pfx)
+                one = f"{i_ln}:{line}" if line_numbers else line
+                results.append(
+                    f"{file_prefix}:{one}" if file_prefix is not None else one)
             if max_count is not None and count >= max_count:
                 break
         if count_only:
@@ -217,13 +229,24 @@ async def rg_full(
                         if max_count is not None and file_count >= max_count:
                             break
                         continue
+                    # ripgrep -I drops per-file labels in directory
+                    # walks, which is the only thing this branch words
+                    # differently from the single-file one above; -o
+                    # itself reads the same, one printed line per
+                    # non-empty match and nothing at all for an empty
+                    # one.
                     if only_matching and m and not invert:
-                        text = m.group(0)
+                        for found in compiled.finditer(line):
+                            text = found.group(0)
+                            if not text:
+                                continue
+                            one = (f"{i_ln}:{text}" if line_numbers else text)
+                            results.append(
+                                one if no_filename else f"{entry}:{one}")
                     else:
-                        text = line
-                    pfx = f"{i_ln}:{text}" if line_numbers else text
-                    # ripgrep -I drops per-file labels in directory walks.
-                    results.append(pfx if no_filename else f"{entry}:{pfx}")
+                        one = f"{i_ln}:{line}" if line_numbers else line
+                        results.append(
+                            one if no_filename else f"{entry}:{one}")
                 if count_only and file_count > 0:
                     results.append(
                         str(file_count

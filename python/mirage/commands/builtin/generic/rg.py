@@ -23,7 +23,6 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.types import FlagView
-from mirage.io.stream import exit_on_empty
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import FileStat, FileType, PathSpec
 from mirage.utils.errors import FS_ERRORS, WALK_ERRORS, fs_strerror
@@ -208,6 +207,12 @@ async def rg(
         if len(paths) > 1 or f.with_filename:
             all_results: list[str] = []
             warnings: list[str] = []
+            # Status comes from selection, not from the printed lines:
+            # with -o a zero-width match selects the line and prints
+            # nothing, so `all_results` is no longer a proxy for
+            # "nothing matched". Same per-file IOResult that
+            # `grep_generic` reads selection off.
+            matched = False
             for p in paths:
                 try:
                     raw = await rb(p.virtual)
@@ -217,9 +222,11 @@ async def rg(
                     warnings.append(f"rg: {p.raw_path}: {fs_strerror(exc)}")
                     continue
                 data = split_lines(raw.decode(errors="replace"))
+                file_io = IOResult(exit_code=1)
                 hits = grep_lines(p.raw_path, data, pat, f.invert,
                                   f.line_numbers, f.count_only, f.files_only,
-                                  f.only_matching, f.max_count)
+                                  f.only_matching, f.max_count, file_io)
+                matched = matched or file_io.exit_code == 0
                 if f.count_only:
                     if grep_count_has_matches(hits):
                         all_results.append(
@@ -231,7 +238,7 @@ async def rg(
                 else:
                     all_results.extend(hits)
             stderr = format_optional_records(warnings)
-            code = exit_code_for(bool(all_results), bool(warnings), False)
+            code = exit_code_for(matched, bool(warnings), False)
             if not all_results:
                 return b"", IOResult(exit_code=code, stderr=stderr)
             return format_records(all_results), IOResult(exit_code=code,
@@ -247,6 +254,10 @@ async def rg(
         else:
             raw_bytes = await rb(paths[0].virtual)
             source = _wrap_bytes(raw_bytes)
+        # Status comes from selection, not from an empty stream: with -o
+        # a zero-width match selects the line and prints nothing, so
+        # emptiness is no longer a proxy for "nothing matched".
+        io = IOResult(exit_code=1)
         stream = grep_stream(
             source,
             pat,
@@ -255,16 +266,17 @@ async def rg(
             only_matching=f.only_matching,
             max_count=f.max_count,
             count_only=f.count_only,
+            io=io,
         )
         if f.count_only:
             stream = nonzero_count_stream(stream)
-        io = IOResult()
-        return exit_on_empty(stream, io), io
+        return stream, io
 
     source = resolve_source(stdin,
                             "rg: usage: rg [flags] pattern [path]",
                             error_cls=UsageError)
     pat = compile_pattern(pattern, f.ignore_case, f.fixed_string, f.whole_word)
+    io = IOResult(exit_code=1)
     stream = grep_stream(
         source,
         pat,
@@ -273,11 +285,11 @@ async def rg(
         only_matching=f.only_matching,
         max_count=f.max_count,
         count_only=f.count_only,
+        io=io,
     )
     if f.count_only:
         stream = nonzero_count_stream(stream)
-    io = IOResult()
-    return exit_on_empty(stream, io), io
+    return stream, io
 
 
 async def _wrap_bytes(data: bytes) -> AsyncIterator[bytes]:

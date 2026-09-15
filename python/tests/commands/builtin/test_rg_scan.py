@@ -410,3 +410,69 @@ class TestWarnings:
         warnings = []
         result = await rg(backend, "/tmp/nodir", "foo", warnings=warnings)
         assert result == []
+
+
+class TestOnlyMatchingDirectoryWalk:
+    """GNU's -o rule holds on the directory branch, not just single files.
+
+    Every non-empty match prints on its own line and an empty match
+    prints nothing at all, while the line still counts as selected. The
+    directory branch words only the per-file label differently (-I drops
+    it), so it had drifted to printing just the first match and, for an
+    empty match, a label with nothing after it.
+    """
+
+    @pytest.mark.anyio
+    async def test_every_match_on_the_line(self, backend):
+        await _mkdir(backend, "/tmp/d")
+        await _write(backend, "/tmp/d/x.txt", "a1b2c\n")
+        result = await rg(backend,
+                          "/tmp/d",
+                          "[0-9]",
+                          only_matching=True,
+                          line_numbers=False)
+        assert result == ["/tmp/d/x.txt:1", "/tmp/d/x.txt:2"]
+
+    @pytest.mark.anyio
+    async def test_line_numbers_repeat_per_match(self, backend):
+        await _mkdir(backend, "/tmp/d")
+        await _write(backend, "/tmp/d/x.txt", "a1b2c\n")
+        result = await rg(backend,
+                          "/tmp/d",
+                          "[0-9]",
+                          only_matching=True,
+                          line_numbers=True)
+        assert result == ["/tmp/d/x.txt:1:1", "/tmp/d/x.txt:1:2"]
+
+    @pytest.mark.anyio
+    async def test_empty_match_prints_no_bare_label(self, backend):
+        await _mkdir(backend, "/tmp/d")
+        await _write(backend, "/tmp/d/y.txt", "ab\n")
+        result = await rg(backend,
+                          "/tmp/d",
+                          "[0-9]*",
+                          only_matching=True,
+                          line_numbers=False)
+        assert result == []
+
+    @pytest.mark.anyio
+    async def test_empty_matches_dropped_around_a_real_one(self, backend):
+        await _mkdir(backend, "/tmp/d")
+        await _write(backend, "/tmp/d/z.txt", "1a22b\n")
+        result = await rg(backend,
+                          "/tmp/d",
+                          "[0-9]*",
+                          only_matching=True,
+                          line_numbers=False)
+        assert result == ["/tmp/d/z.txt:1", "/tmp/d/z.txt:22"]
+
+    @pytest.mark.anyio
+    async def test_count_still_counts_the_selected_line(self, backend):
+        await _mkdir(backend, "/tmp/d")
+        await _write(backend, "/tmp/d/y.txt", "ab\n")
+        result = await rg(backend,
+                          "/tmp/d",
+                          "[0-9]*",
+                          only_matching=True,
+                          count_only=True)
+        assert result == ["/tmp/d/y.txt:1"]

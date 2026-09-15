@@ -2374,6 +2374,188 @@
         "stdout_text": "",
         "stderr_text": ""
       }
+    },
+    {
+      "id": "grep_o_empty_match_prints_nothing",
+      "cmd": "grep -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_empty_pattern_prints_nothing",
+      "cmd": "grep -o ''",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_start_anchor_prints_nothing",
+      "cmd": "grep -o '^'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_end_anchor_prints_nothing",
+      "cmd": "grep -o '$'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_empty_matches_dropped_around_a_real_one",
+      "cmd": "grep -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a1b\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_every_match_on_the_line",
+      "cmd": "grep -o '[0-9]'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a1b2c\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n2\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_oc_still_counts_the_selected_line",
+      "cmd": "grep -oc '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_c_counts_a_line_matched_only_emptily",
+      "cmd": "grep -c '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_empty_match_on_every_line_prints_nothing",
+      "cmd": "grep -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\nb\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_without_o_prints_the_whole_line",
+      "cmd": "grep '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "ab\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_star_keeps_only_the_nonempty_match",
+      "cmd": "grep -o 'b*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "abc\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "b\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_o_nonempty_runs_kept_in_order",
+      "cmd": "grep -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "1a22b\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n22\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "grep_on_line_prefix_on_the_single_entry",
+      "cmd": "grep -on '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a1b\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1:1\n",
+        "stderr_text": ""
+      }
     }
   ]
 }

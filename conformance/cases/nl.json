@@ -1,0 +1,229 @@
+{
+  "command": "nl",
+  "cases": [
+    {
+      "id": "nl_v_invalid_word",
+      "cmd": "nl -v abc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid starting line number: 'abc'\n"
+      }
+    },
+    {
+      "id": "nl_w_invalid_word",
+      "cmd": "nl -w abc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number field width: 'abc'\n"
+      }
+    },
+    {
+      "id": "nl_i_invalid_word",
+      "cmd": "nl -i abc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number increment: 'abc'\n"
+      }
+    },
+    {
+      "id": "nl_l_invalid_word",
+      "cmd": "nl -l abc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number of blank lines: 'abc'\n"
+      }
+    },
+    {
+      "id": "nl_v_trailing_garbage_quotes_whole_arg",
+      "cmd": "nl -v 2x",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid starting line number: '2x'\n"
+      }
+    },
+    {
+      "id": "nl_w_trailing_garbage_quotes_whole_arg",
+      "cmd": "nl -w 2x",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number field width: '2x'\n"
+      }
+    },
+    {
+      "id": "nl_v_valid_start",
+      "cmd": "nl -v 5",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "     5\tx\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "nl_v_negative_start_is_accepted",
+      "cmd": "nl -v -5",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "    -5\tx\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "nl_i_negative_increment_decrements",
+      "cmd": "nl -i -2",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\ny\nz\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "     1\tx\n    -1\ty\n    -3\tz\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "nl_w_zero_is_out_of_range",
+      "cmd": "nl -w 0",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number field width: '0': Numerical result out of range\n"
+      }
+    },
+    {
+      "id": "nl_w_negative_is_out_of_range",
+      "cmd": "nl -w -3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number field width: '-3': Numerical result out of range\n"
+      }
+    },
+    {
+      "id": "nl_l_zero_is_out_of_range",
+      "cmd": "nl -l 0",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number of blank lines: '0': Numerical result out of range\n"
+      }
+    },
+    {
+      "id": "nl_l_negative_is_out_of_range",
+      "cmd": "nl -l -2",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number of blank lines: '-2': Numerical result out of range\n"
+      }
+    },
+    {
+      "id": "nl_w_empty_omits_the_range_clause",
+      "cmd": "nl -w ''",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number field width: ''\n"
+      }
+    },
+    {
+      "id": "nl_l_empty_omits_the_range_clause",
+      "cmd": "nl -l ''",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "nl: invalid line number of blank lines: ''\n"
+      }
+    },
+    {
+      "id": "nl_w_leading_plus_is_a_sign",
+      "cmd": "nl -w +3",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "x\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "  1\tx\n",
+        "stderr_text": ""
+      }
+    }
+  ]
+}

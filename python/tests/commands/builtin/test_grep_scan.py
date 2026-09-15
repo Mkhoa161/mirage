@@ -4,7 +4,7 @@ import pytest
 
 from mirage.commands.builtin.grep_pattern import compile_pattern
 from mirage.commands.builtin.grep_scan import (grep_files_only, grep_lines,
-                                               grep_recursive)
+                                               grep_recursive, grep_stream)
 from mirage.commands.builtin.utils.wrap import (call_read_bytes, call_readdir,
                                                 call_stat, to_pathspec)
 from mirage.core.ram.mkdir import mkdir
@@ -12,6 +12,7 @@ from mirage.core.ram.read import read
 from mirage.core.ram.readdir import readdir
 from mirage.core.ram.stat import stat
 from mirage.core.ram.write import write_bytes as _async_write_bytes
+from mirage.io.types import IOResult
 from mirage.types import ContentType, FileStat, FileType
 
 
@@ -362,3 +363,159 @@ class TestWarnings:
         )
         assert result == ["/tmp/rwalk/a.txt"]
         assert warnings == []
+
+
+async def _byte_source(data):
+    yield data
+
+
+async def _run_stream(data, pattern, **kwargs):
+    io = IOResult(exit_code=1)
+    chunks = []
+    async for chunk in grep_stream(_byte_source(data),
+                                   compile_pattern(pattern),
+                                   io=io,
+                                   **kwargs):
+        chunks.append(chunk)
+    return b"".join(chunks), io
+
+
+def _only(lines, pattern, **kwargs):
+    return grep_lines("/f.txt", lines, compile_pattern(pattern),
+                      kwargs.get("invert", False),
+                      kwargs.get("line_numbers", False),
+                      kwargs.get("count_only", False),
+                      kwargs.get("files_only", False), True,
+                      kwargs.get("max_count"), kwargs.get("io"))
+
+
+class TestGrepLinesReportsSelection:
+    """`grep_lines` answers selection on an IOResult, as `grep_stream` does.
+
+    The returned list cannot stand in for it: under -o an empty match
+    prints nothing and still selects the line, so a caller deriving the
+    status from an empty list answers 1 where GNU answers 0. `rg`'s
+    multi-operand and -H branches read it off this channel.
+    """
+
+    def test_empty_match_selects_the_line_although_nothing_prints(self):
+        io = IOResult(exit_code=1)
+        assert _only(["ab"], "[0-9]*", io=io) == []
+        assert io.exit_code == 0
+
+    def test_no_match_at_all_leaves_the_seeded_status(self):
+        io = IOResult(exit_code=1)
+        assert _only(["ab"], "[0-9]", io=io) == []
+        assert io.exit_code == 1
+
+    def test_a_printed_match_also_selects(self):
+        io = IOResult(exit_code=1)
+        assert _only(["a1b"], "[0-9]", io=io) == ["1"]
+        assert io.exit_code == 0
+
+    def test_selection_is_reported_under_count_only(self):
+        io = IOResult(exit_code=1)
+        assert _only(["ab"], "[0-9]*", count_only=True, io=io) == ["1"]
+        assert io.exit_code == 0
+
+    def test_omitting_the_channel_is_still_supported(self):
+        assert _only(["a1b"], "[0-9]") == ["1"]
+
+
+class TestOnlyMatchingEmptyMatches:
+    """GNU's two-part -o rule, which is easy to half-implement.
+
+    An empty match prints nothing, but the line is still selected: `-c`
+    counts it, the exit status is 0, and grep's binary-file notice still
+    fires. And every non-empty match on the line prints, one per line,
+    not just the first.
+    """
+
+    def test_lines_path_drops_the_empty_match(self):
+        assert _only(["ab"], "[0-9]*") == []
+
+    def test_lines_path_still_selects_the_line_for_count(self):
+        assert _only(["ab"], "[0-9]*", count_only=True) == ["1"]
+
+    def test_lines_path_still_selects_the_line_for_files_only(self):
+        assert _only(["ab"], "[0-9]*", files_only=True) == ["/f.txt"]
+
+    def test_lines_path_keeps_only_the_real_match(self):
+        assert _only(["a1b"], "[0-9]*") == ["1"]
+
+    def test_lines_path_prints_every_match_on_the_line(self):
+        assert _only(["a1b2c"], "[0-9]") == ["1", "2"]
+
+    def test_lines_path_keeps_nonempty_runs_in_order(self):
+        assert _only(["1a22b"], "[0-9]*") == ["1", "22"]
+
+    def test_lines_path_numbers_every_printed_match(self):
+        assert _only(["a1b2c"], "[0-9]", line_numbers=True) == ["1:1", "1:2"]
+
+    @pytest.mark.anyio
+    async def test_stream_path_drops_the_empty_match(self):
+        out, io = await _run_stream(b"ab\n", "[0-9]*", only_matching=True)
+        assert out == b""
+        assert io.exit_code == 0
+
+    @pytest.mark.anyio
+    async def test_stream_path_drops_an_empty_pattern(self):
+        out, io = await _run_stream(b"ab\n", "", only_matching=True)
+        assert out == b""
+        assert io.exit_code == 0
+
+    @pytest.mark.anyio
+    async def test_stream_path_drops_a_start_anchor(self):
+        out, io = await _run_stream(b"ab\n", "^", only_matching=True)
+        assert out == b""
+        assert io.exit_code == 0
+
+    @pytest.mark.anyio
+    async def test_stream_path_selects_every_line_with_no_output(self):
+        out, io = await _run_stream(b"a\nb\n", "[0-9]*", only_matching=True)
+        assert out == b""
+        assert io.exit_code == 0
+
+    @pytest.mark.anyio
+    async def test_stream_path_counts_the_selected_line_not_the_matches(self):
+        # `grep -oc '[0-9]*'` on `ab` is 1, not 0 and not ripgrep's 3.
+        out, io = await _run_stream(b"ab\n",
+                                    "[0-9]*",
+                                    only_matching=True,
+                                    count_only=True)
+        assert out == b"1\n"
+        assert io.exit_code == 0
+
+    @pytest.mark.anyio
+    async def test_stream_path_keeps_only_the_real_match(self):
+        out, _ = await _run_stream(b"a1b\n", "[0-9]*", only_matching=True)
+        assert out == b"1\n"
+
+    @pytest.mark.anyio
+    async def test_stream_path_prints_every_match_on_the_line(self):
+        out, _ = await _run_stream(b"a1b2c\n", "[0-9]", only_matching=True)
+        assert out == b"1\n2\n"
+
+    @pytest.mark.anyio
+    async def test_stream_path_keeps_nonempty_runs_in_order(self):
+        out, _ = await _run_stream(b"1a22b\n", "[0-9]*", only_matching=True)
+        assert out == b"1\n22\n"
+
+    @pytest.mark.anyio
+    async def test_stream_path_keeps_the_one_nonempty_star_match(self):
+        out, _ = await _run_stream(b"abc\n", "b*", only_matching=True)
+        assert out == b"b\n"
+
+    @pytest.mark.anyio
+    async def test_stream_path_numbers_every_printed_match(self):
+        out, _ = await _run_stream(b"a1b\n",
+                                   "[0-9]*",
+                                   only_matching=True,
+                                   line_numbers=True)
+        assert out == b"1:1\n"
+
+    @pytest.mark.anyio
+    async def test_stream_path_reports_no_selection_when_nothing_matches(self):
+        out, io = await _run_stream(b"ab\n", "[0-9]", only_matching=True)
+        assert out == b""
+        assert io.exit_code == 1

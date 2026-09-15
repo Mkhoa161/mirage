@@ -12,6 +12,12 @@ from mirage.commands.spec.types import FlagValue, FlagView
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec, PolymorphicReadFn, StatFn
 
+# GNU accepts a leading `+` on every integer flag value and reads `+4`
+# as 4; `-` is not a sign here but the first invalid character, which is
+# why `-4` is refused and quoted whole.
+_TAB_SIZE = re.compile(r"^\+?[0-9]+$")
+_PARSED_PREFIX = re.compile(r"^\+?[0-9]*")
+
 
 @dataclass(frozen=True, slots=True)
 class ExpandFlags:
@@ -19,10 +25,39 @@ class ExpandFlags:
     initial_only: bool = False
 
 
+def _tab_size(raw: str | None) -> int:
+    """One GNU ``expand`` tab size, refused before any operand is opened.
+
+    GNU quotes from the first character it could not parse onward, so
+    ``--tabs=8x`` reports ``'x'`` while ``--tabs=abc`` and ``--tabs=-4``
+    both report the whole argument (for ``-4`` the first unparseable
+    character is at position 0, because ``-`` is not a sign here). An
+    empty value is not an error: ``--tabs=''`` is an empty tab-stop list,
+    which leaves expand on its default 8. Pre-validated the way head/tail
+    do it, so the ``int`` below cannot see a prefix.
+
+    Args:
+        raw (str | None): the raw ``-t``/``--tabs`` value, or None.
+
+    Returns:
+        int: the tab size, 8 when unset or empty.
+
+    Raises:
+        ValueError: the single stderr line to print, exit 1.
+    """
+    if raw is None or raw == "":
+        return 8
+    if _TAB_SIZE.match(raw) is None:
+        remainder = _PARSED_PREFIX.sub("", raw, count=1)
+        raise ValueError("expand: tab size contains invalid "
+                         f"character(s): '{remainder}'")
+    return int(raw)
+
+
 def parse_flags(flags: Mapping[str, FlagValue]) -> ExpandFlags:
     fl = FlagView(flags, spec=SPECS["expand"])
     return ExpandFlags(
-        tabsize=int(fl.as_str("tabs") or "8"),
+        tabsize=_tab_size(fl.as_str("tabs")),
         initial_only=fl.as_bool("initial"),
     )
 

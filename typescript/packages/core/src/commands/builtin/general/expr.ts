@@ -24,10 +24,57 @@ const ENC = new TextEncoder()
 const ARITH_OPS = new Set(['+', '-', '*', '/', '%'])
 const CMP_OPS = new Set(['=', '!=', '<', '>', '<=', '>='])
 
-function parseIntStrict(s: string): number | null {
-  if (!/^-?\d+$/.test(s)) return null
+// GNU expr's operand grammar, which is narrower than either language's
+// own integer parser: no sign but a leading `-`, no surrounding space,
+// no digit separator, no `0x`/`1e3` form. Leading zeros are decimal, so
+// `05` is 5. `\d` is ASCII-only in JavaScript, matching `[0-9]` in the
+// python twin (`INT_OPERAND_RE`, expr.py).
+//
+// The grammar is shared but the precision is not: GNU expr and the python
+// twin are arbitrary precision, while an operand read here becomes a
+// float64 and so cannot be answered exactly past 2**53. That gap predates
+// this parser and no case pins a value that large; closing it means
+// BigInt arithmetic throughout, which is its own change.
+const INT_OPERAND_RE = /^-?\d+$/
+
+const NON_INTEGER = 'expr: non-integer argument'
+const DIVISION_BY_ZERO = 'expr: division by zero'
+
+// An operand or operation GNU expr refuses, worded as GNU words it.
+class ExprError extends Error {}
+
+// One expr operand read as GNU reads it, or null when it is not an
+// integer in GNU's grammar -- the read a comparison uses, since a
+// comparison falls back to comparing strings instead of refusing.
+function intOperandOrNone(s: string): number | null {
+  if (!INT_OPERAND_RE.test(s)) return null
   const n = Number.parseInt(s, 10)
   return Number.isFinite(n) ? n : null
+}
+
+// The same read for an arithmetic operand, which GNU refuses outright.
+function parseIntOperand(s: string): number {
+  const n = intOperandOrNone(s)
+  if (n === null) throw new ExprError(NON_INTEGER)
+  return n
+}
+
+// Integer division truncated toward zero, as C and GNU expr do it.
+// JavaScript's `/` is exact here only because the quotient is trimmed
+// with `Math.trunc`; a zero divisor is GNU's `division by zero`, not
+// an Infinity on stdout.
+function truncDiv(a: number, b: number): number {
+  if (b === 0) throw new ExprError(DIVISION_BY_ZERO)
+  return Math.trunc(a / b)
+}
+
+// The remainder that takes the dividend's sign, as GNU expr does:
+// `-10 % 3` is -1 and `10 % -3` is 1, which JavaScript's own `%`
+// already answers. GNU reports a zero divisor here with the same
+// `division by zero` message it uses for `/`, not a modulo variant.
+function truncMod(a: number, b: number): number {
+  if (b === 0) throw new ExprError(DIVISION_BY_ZERO)
+  return a % b
 }
 
 function exprEval(args: string[]): [string, number] {
@@ -48,9 +95,8 @@ function exprEval(args: string[]): [string, number] {
     return [result, exitCode]
   }
   if (args.length === 3 && typeof args[1] === 'string' && ARITH_OPS.has(args[1])) {
-    const a = parseIntStrict(args[0] ?? '')
-    const b = parseIntStrict(args[2] ?? '')
-    if (a === null || b === null) return ['', 2]
+    const a = parseIntOperand(args[0] ?? '')
+    const b = parseIntOperand(args[2] ?? '')
     let val: number
     switch (args[1]) {
       case '+':
@@ -63,20 +109,23 @@ function exprEval(args: string[]): [string, number] {
         val = a * b
         break
       case '/':
-        val = Math.trunc(a / b)
+        val = truncDiv(a, b)
         break
       default:
-        val = a % b
+        val = truncMod(a, b)
         break
     }
     const result = String(val)
+    // GNU expr exits 1 when the value is `0` or empty even on full
+    // success, so exit 1 means "the answer was zero" and exit 2 is the
+    // only error status.
     const exitCode = result === '0' ? 1 : 0
     return [result, exitCode]
   }
   if (args.length === 3 && typeof args[1] === 'string' && CMP_OPS.has(args[1])) {
     const [left, op, right] = args as [string, string, string]
-    const l = parseIntStrict(left)
-    const r = parseIntStrict(right)
+    const l = intOperandOrNone(left)
+    const r = intOperandOrNone(right)
     let cmp: boolean
     if (l !== null && r !== null) {
       switch (op) {
@@ -144,8 +193,17 @@ function exprCommand(
   if (texts.length === 0) {
     return [ENC.encode('\n'), new IOResult({ exitCode: 2 })]
   }
-  const [result, exitCode] = exprEval(texts)
-  return [ENC.encode(result + '\n'), new IOResult({ exitCode })]
+  try {
+    const [result, exitCode] = exprEval(texts)
+    return [ENC.encode(result + '\n'), new IOResult({ exitCode })]
+  } catch (err) {
+    if (err instanceof ExprError) {
+      // GNU writes the refusal to stderr, nothing to stdout, and exits
+      // 2; exit 1 is reserved for a zero-valued success.
+      return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${err.message}\n`) })]
+    }
+    throw err
+  }
 }
 
 export const GENERAL_EXPR = command({

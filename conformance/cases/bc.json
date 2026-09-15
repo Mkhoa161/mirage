@@ -1,0 +1,213 @@
+{
+  "command": "bc",
+  "cases": [
+    {
+      "id": "bc_div_truncates_at_default_scale",
+      "cmd": "echo '7/2' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_div_neg_truncates_toward_zero",
+      "cmd": "echo '-7/2' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "-3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_mod_default_scale",
+      "cmd": "echo '7%2' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_mod_neg_default_scale",
+      "cmd": "echo '-7%2' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "-1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_default_scale_is_zero",
+      "cmd": "echo 'scale' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "0\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_scale_pads_trailing_zero",
+      "cmd": "echo 'scale=2; 7/2' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "3.50\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_decimal_addition_is_exact",
+      "cmd": "echo '0.1+0.2' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": ".3\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_divide_by_zero_exits_0",
+      "cmd": "echo '1/0' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": "Runtime error (func=(main), adr=3): Divide by zero\n"
+      }
+    },
+    {
+      "id": "bc_modulo_by_zero_exits_0",
+      "cmd": "echo '1%0' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": "Runtime error (func=(main), adr=3): Modulo by zero\n"
+      }
+    },
+    {
+      "id": "bc_runtime_error_is_non_fatal",
+      "cmd": "printf '1/0\\n2+2\\n' | bc 2>/dev/null",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "4\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_l_sets_scale_20",
+      "cmd": "echo 'scale' | bc -l",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "20\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_l_div_no_longer_truncates",
+      "cmd": "echo '7/2' | bc -l",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "3.50000000000000000000\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_l_sin_zero_is_bare_zero",
+      "cmd": "echo 's(0)' | bc -l",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "0\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_l_cos_zero_is_padded",
+      "cmd": "echo 'c(0)' | bc -l",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1.00000000000000000000\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "bc_l_divide_by_zero_exits_0",
+      "cmd": "echo '1/0' | bc -l",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": "Runtime error (func=(main), adr=3): Divide by zero\n"
+      }
+    },
+    {
+      "id": "bc_power_is_bignum",
+      "cmd": "echo '2^100' | bc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1267650600228229401496703205376\n",
+        "stderr_text": ""
+      }
+    }
+  ]
+}

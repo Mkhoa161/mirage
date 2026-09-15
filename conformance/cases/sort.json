@@ -104,6 +104,20 @@
         "stdout_text": "",
         "stderr_text": "sort: field number is zero: invalid field specification '0'\n"
       }
+    },
+    {
+      "id": "sort_astral_plane_codepoint_order",
+      "cmd": "sort",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_base64": "egrwnYSeCu+/vQo=",
+      "expect": {
+        "exit": 0,
+        "stdout_base64": "egrvv70K8J2Engo=",
+        "stderr_text": ""
+      }
     }
   ]
 }

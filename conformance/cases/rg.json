@@ -1,0 +1,158 @@
+{
+  "command": "rg",
+  "cases": [
+    {
+      "id": "rg_o_every_match_on_the_line",
+      "cmd": "rg -o '[0-9]'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a1b2c\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n2\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_non_empty_matches_across_lines",
+      "cmd": "printf 'error: disk full\\nwarning: low memory\\ninfo: all good\\nerror: timeout\\nnote: done\\n' > /data/rglog.txt; rg -o 'err[a-z]*' /data/rglog.txt",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "error\nerror\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_empty_match_prints_nothing",
+      "cmd": "rg -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_empty_pattern_prints_nothing",
+      "cmd": "rg -o ''",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_start_anchor_prints_nothing",
+      "cmd": "rg -o '^'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_end_anchor_prints_nothing",
+      "cmd": "rg -o '$'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_empty_matches_dropped_around_a_real_one",
+      "cmd": "rg -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a1b\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_nonempty_runs_kept_in_order",
+      "cmd": "rg -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "1a22b\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n22\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_star_keeps_only_the_nonempty_match",
+      "cmd": "rg -o 'b*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "abc\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "b\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_oc_still_counts_the_selected_line",
+      "cmd": "rg -oc '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "ab\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "1\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "rg_o_empty_match_on_every_line_prints_nothing",
+      "cmd": "rg -o '[0-9]*'",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\nb\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "",
+        "stderr_text": ""
+      }
+    }
+  ]
+}

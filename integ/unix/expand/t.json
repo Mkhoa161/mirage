@@ -70,6 +70,191 @@
       "flags": [
         "t"
       ]
+    },
+    {
+      "id": "expand_tabs_invalid_word",
+      "seq": 601251,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a\\tb\\n' | expand --tabs=abc",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "expand: tab size contains invalid character(s): 'abc'\n"
+      },
+      "flags": [
+        "t"
+      ]
+    },
+    {
+      "id": "expand_tabs_invalid_suffix_quotes_remainder",
+      "seq": 601252,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a\\tb\\n' | expand --tabs=8x",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "expand: tab size contains invalid character(s): 'x'\n"
+      },
+      "flags": [
+        "t"
+      ]
+    },
+    {
+      "id": "expand_tabs_leading_plus_is_a_sign",
+      "seq": 601253,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a\\tb\\n' | expand --tabs=+4",
+      "expect": {
+        "exit": 0,
+        "stdout": "a   b\n",
+        "stderr": ""
+      },
+      "flags": [
+        "t"
+      ]
+    },
+    {
+      "id": "expand_tabs_empty_list_is_the_default_size",
+      "seq": 601254,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a\\tb\\n' | expand --tabs=''",
+      "expect": {
+        "exit": 0,
+        "stdout": "a       b\n",
+        "stderr": ""
+      },
+      "flags": [
+        "t"
+      ]
+    },
+    {
+      "id": "expand_tabs_minus_is_an_invalid_character",
+      "seq": 601255,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a\\tb\\n' | expand --tabs=-4",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "expand: tab size contains invalid character(s): '-4'\n"
+      },
+      "flags": [
+        "t"
+      ]
     }
   ]
 }

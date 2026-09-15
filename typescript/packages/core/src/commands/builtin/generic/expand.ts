@@ -70,7 +70,28 @@ export async function expandGeneric(
 ): Promise<CommandFnResult> {
   const fl = new FlagView(opts.flags, specOf('expand'))
   const tabsValue = fl.asStr('tabs')
-  const tabsize = tabsValue === undefined ? 8 : Number.parseInt(tabsValue, 10)
+  // GNU refuses a tab size it cannot read whole, before it opens an operand,
+  // and quotes from the first character it could not parse onward:
+  // `--tabs=8x` reports 'x' while `--tabs=abc` and `--tabs=-4` both report
+  // the whole argument (for `-4` the first unparseable character is at
+  // position 0, because `-` is not a sign here; a leading `+` is, and `+4`
+  // reads as 4). An empty value is not an error: `--tabs=''` is an empty
+  // tab-stop list, which leaves expand on its default 8. Pre-validated the
+  // way head/tail do it, so the parseInt below cannot hand back a prefix or
+  // NaN.
+  const tabsGiven = tabsValue !== undefined && tabsValue !== ''
+  if (tabsGiven && !/^\+?\d+$/.test(tabsValue)) {
+    return [
+      null,
+      new IOResult({
+        exitCode: 1,
+        stderr: ENC.encode(
+          `expand: tab size contains invalid character(s): '${tabsValue.replace(/^\+?\d*/, '')}'\n`,
+        ),
+      }),
+    ]
+  }
+  const tabsize = tabsGiven ? Number.parseInt(tabsValue, 10) : 8
   const leadingOnly = fl.asBool('initial')
   if (paths.length > 0) {
     // A missing operand is reported and skipped; the remaining operands

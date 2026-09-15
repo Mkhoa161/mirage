@@ -1,0 +1,89 @@
+{
+  "command": "expand",
+  "cases": [
+    {
+      "id": "expand_tabs_invalid_word",
+      "cmd": "expand --tabs=abc",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\tb\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "expand: tab size contains invalid character(s): 'abc'\n"
+      }
+    },
+    {
+      "id": "expand_tabs_invalid_suffix_quotes_remainder",
+      "cmd": "expand --tabs=8x",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\tb\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "expand: tab size contains invalid character(s): 'x'\n"
+      }
+    },
+    {
+      "id": "expand_tabs_valid_width",
+      "cmd": "expand --tabs=4",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\tb\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "a   b\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expand_tabs_leading_plus_is_a_sign",
+      "cmd": "expand --tabs=+4",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\tb\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "a   b\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expand_tabs_empty_list_is_the_default_size",
+      "cmd": "expand --tabs=''",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\tb\n",
+      "expect": {
+        "exit": 0,
+        "stdout_text": "a       b\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "expand_tabs_minus_is_an_invalid_character",
+      "cmd": "expand --tabs=-4",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_text": "a\tb\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "expand: tab size contains invalid character(s): '-4'\n"
+      }
+    }
+  ]
+}

@@ -108,14 +108,28 @@ function searchFile(
       return ['']
     }
     const lineNo = i + 1
-    let text: string
     if (opts.onlyMatching && m !== null && !opts.invert) {
-      text = m[0]
+      // GNU -o prints every match on the line, one per line, and prints
+      // nothing at all for an empty match; the line still counts as
+      // selected, which is what -c and the exit status read.
+      globalRe.lastIndex = 0
+      for (;;) {
+        const hit = globalRe.exec(line)
+        if (hit === null) break
+        // A global regex that matched the empty string leaves lastIndex
+        // where it was, so exec would keep returning it.
+        if (hit[0] === '') {
+          globalRe.lastIndex += 1
+          continue
+        }
+        const only = opts.lineNumbers ? `${String(lineNo)}:${hit[0]}` : hit[0]
+        results.push(prefixPath !== null ? `${prefixPath}:${only}` : only)
+      }
+      globalRe.lastIndex = 0
     } else {
-      text = line
+      const out = opts.lineNumbers ? `${String(lineNo)}:${line}` : line
+      results.push(prefixPath !== null ? `${prefixPath}:${out}` : out)
     }
-    const out = opts.lineNumbers ? `${String(lineNo)}:${text}` : text
-    results.push(prefixPath !== null ? `${prefixPath}:${out}` : out)
     if (opts.maxCount !== null && count.n >= opts.maxCount) break
   }
   if (opts.countOnly) {

@@ -92,6 +92,223 @@
         "stdout": "1\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "expr_div_neg_truncates_toward_zero",
+      "seq": 601343,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr -10 / 3",
+      "expect": {
+        "exit": 0,
+        "stdout": "-3\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_mod_sign_follows_dividend",
+      "seq": 601344,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr -10 % 3",
+      "expect": {
+        "exit": 0,
+        "stdout": "-1\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_mod_sign_ignores_divisor",
+      "seq": 601345,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr 10 % -3",
+      "expect": {
+        "exit": 0,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_divide_by_zero",
+      "seq": 601346,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr 1 / 0",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "expr: division by zero\n"
+      }
+    },
+    {
+      "id": "expr_zero_result_exits_1",
+      "seq": 601347,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr -1 / 2",
+      "expect": {
+        "exit": 1,
+        "stdout": "0\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_plus_prefixed_operand_rejected",
+      "seq": 601348,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr +5 + 1",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "expr: non-integer argument\n"
+      }
+    },
+    {
+      "id": "expr_leading_zero_is_decimal",
+      "seq": 601349,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr 05 + 1",
+      "expect": {
+        "exit": 0,
+        "stdout": "6\n",
+        "stderr": ""
+      }
     }
   ]
 }

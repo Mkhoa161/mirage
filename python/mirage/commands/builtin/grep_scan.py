@@ -39,7 +39,35 @@ def grep_lines(
     files_only: bool,
     only_matching: bool,
     max_count: int | None,
+    io: IOResult | None = None,
 ) -> list[str]:
+    """Grep one already-read input, returning the lines to print.
+
+    Args:
+        path (str): the operand's path, which -l answers with.
+        data (list[str]): the input's lines, without terminators.
+        compiled (re.Pattern[str]): the compiled pattern.
+        invert (bool): -v, select the lines that do not match.
+        line_numbers (bool): -n, prefix each printed line with its
+            number.
+        count_only (bool): -c, answer with the number of selected lines.
+        files_only (bool): -l, answer with the path when anything was
+            selected.
+        only_matching (bool): -o, print the matched text rather than the
+            line.
+        max_count (int | None): -m, stop after this many selected lines.
+        io (IOResult | None): when given, receives exit status 0 as soon
+            as a line is selected. The twin of ``grep_stream``'s own
+            ``io``, and needed for the same reason: selection cannot be
+            read off the returned list under -o, because GNU prints
+            nothing for a zero-width match and still counts the line, so
+            a caller deriving the status from an empty list reports 1
+            where GNU says 0.
+
+    Returns:
+        list[str]: the lines to print, the count under -c, or the path
+            under -l.
+    """
     results: list[str] = []
     count = 0
     for i, line in enumerate(data, 1):
@@ -48,13 +76,21 @@ def grep_lines(
         if not matched:
             continue
         count += 1
+        if io is not None:
+            io.exit_code = 0
         if not count_only and not files_only:
             if only_matching and m and not invert:
-                text = m.group(0)
+                # GNU -o prints every match on the line, one per line,
+                # and prints nothing at all for an empty match -- but the
+                # line is still selected, so `count` is already
+                # incremented above and -c, -l and the exit status see it.
+                for found in compiled.finditer(line):
+                    text = found.group(0)
+                    if not text:
+                        continue
+                    results.append(f"{i}:{text}" if line_numbers else text)
             else:
-                text = line
-            prefix = f"{i}:{text}" if line_numbers else text
-            results.append(prefix)
+                results.append(f"{i}:{line}" if line_numbers else line)
         if max_count is not None and count >= max_count:
             break
     if count_only:
@@ -167,7 +203,28 @@ async def grep_stream(
     count_only: bool = False,
     after_context: int = 0,
     before_context: int = 0,
+    io: IOResult | None = None,
 ) -> AsyncIterator[bytes]:
+    """Stream grep's output for one input.
+
+    Args:
+        source (AsyncIterator[bytes]): the input's bytes.
+        pat (re.Pattern[str]): the compiled pattern.
+        invert (bool): -v, select the lines that do not match.
+        line_numbers (bool): -n, prefix each printed line with its
+            number.
+        only_matching (bool): -o, print the matched text rather than the
+            line.
+        max_count (int | None): -m, stop after this many selected lines.
+        count_only (bool): -c, print the number of selected lines.
+        after_context (int): -A, trailing context lines.
+        before_context (int): -B, leading context lines.
+        io (IOResult | None): when given, receives exit status 0 as soon
+            as a line is selected. Selection cannot be read off the
+            output for -o, because GNU prints nothing for a zero-width
+            match and still counts the line, so a caller that derives
+            the status from an empty stream reports 1 where GNU says 0.
+    """
     has_context = after_context > 0 or before_context > 0
     if has_context and not count_only and not only_matching:
         all_lines: list[str] = []
@@ -182,6 +239,8 @@ async def grep_stream(
                 after_context,
                 before_context,
         ):
+            if io is not None:
+                io.exit_code = 0
             yield chunk
         return
     match_count = 0
@@ -194,26 +253,31 @@ async def grep_stream(
             hit = not hit
         if not hit:
             continue
-        if only_matching and not invert:
-            for m in pat.finditer(line):
-                match_count += 1
-                if not count_only:
-                    yield m.group().encode() + b"\n"
-                if max_count and match_count >= max_count:
-                    if count_only:
-                        yield str(match_count).encode() + b"\n"
-                    return
-        else:
-            match_count += 1
-            if not count_only:
-                if line_numbers:
-                    yield f"{line_num}:{line}\n".encode()
-                else:
-                    yield raw_line + b"\n"
-            if max_count and match_count >= max_count:
-                if count_only:
-                    yield str(match_count).encode() + b"\n"
-                return
+        # The count is per selected LINE, never per match, which is what
+        # makes `grep -oc '[0-9]*'` on `ab` answer 1 the way GNU does:
+        # the empty match selects the line even though -o prints nothing
+        # for it. -m counts selected lines for the same reason.
+        match_count += 1
+        if io is not None:
+            io.exit_code = 0
+        if not count_only:
+            if only_matching and not invert:
+                for m in pat.finditer(line):
+                    text = m.group()
+                    if not text:
+                        continue
+                    if line_numbers:
+                        yield f"{line_num}:{text}\n".encode()
+                    else:
+                        yield text.encode() + b"\n"
+            elif line_numbers:
+                yield f"{line_num}:{line}\n".encode()
+            else:
+                yield raw_line + b"\n"
+        if max_count and match_count >= max_count:
+            if count_only:
+                yield str(match_count).encode() + b"\n"
+            return
     if count_only:
         yield str(match_count).encode() + b"\n"
 

@@ -14,7 +14,6 @@
 
 import { mountKey, mountPrefixOf } from '../../../utils/key_prefix.ts'
 import { cacheAwareStream } from '../../../cache/read_through.ts'
-import { exitOnEmpty } from '../../../io/stream.ts'
 import { mountParentReaddir, mountParentStat } from '../utils/operands.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
 import { FileType, PathSpec, type FileStat } from '../../../types.ts'
@@ -24,7 +23,12 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { FlagView } from '../../spec/types.ts'
 import { compilePattern, resolvePattern } from '../grep_pattern.ts'
-import { grepStream, nonzeroCountStream, prefixLines } from '../grep_scan.ts'
+import {
+  grepStream,
+  nonzeroCountStream,
+  prefixLines,
+  type GrepStreamOptions,
+} from '../grep_scan.ts'
 import { rgFolderFiletype, rgFull } from '../rg_scan.ts'
 import { resolveSource } from '../utils/stream.ts'
 
@@ -78,6 +82,22 @@ function parseFlags(fl: FlagView): RgFlags {
   }
 }
 
+// The stream reports selection on `io` rather than the caller reading it off
+// an empty output: under -o a line whose only match is empty prints nothing
+// and is still selected, so it exits 0 (GNU grep 3.11).
+function streamOptionsOf(flags: RgFlags, io: IOResult): GrepStreamOptions {
+  return {
+    invert: flags.invert,
+    lineNumbers: flags.lineNumbers,
+    countOnly: flags.countOnly,
+    onlyMatching: flags.onlyMatching,
+    maxCount: flags.maxCount,
+    afterContext: flags.afterContext,
+    beforeContext: flags.beforeContext,
+    io,
+  }
+}
+
 function makeSpec(path: string, template: PathSpec): PathSpec {
   return new PathSpec({
     virtual: path,
@@ -124,17 +144,12 @@ export async function rgGeneric(
       return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${msg}\n`) })]
     }
     const pat = compilePattern(exprText, flags.ignoreCase, flags.fixedString, flags.wholeWord)
-    const matched = grepStream(source, pat, {
-      invert: flags.invert,
-      lineNumbers: flags.lineNumbers,
-      countOnly: flags.countOnly,
-      onlyMatching: flags.onlyMatching,
-      maxCount: flags.maxCount,
-      afterContext: flags.afterContext,
-      beforeContext: flags.beforeContext,
-    })
-    const io = new IOResult()
-    return [exitOnEmpty(matched, io), io]
+    // Seeded to 1 the way the python twin and the multi-operand branch
+    // below are: grepStream flips it to 0 on the first selected line, and
+    // seeding here means the status does not depend on the generator having
+    // been started.
+    const io = new IOResult({ exitCode: 1 })
+    return [grepStream(source, pat, streamOptionsOf(flags, io)), io]
   }
 
   const mounts = opts.ns?.mounts
@@ -303,31 +318,34 @@ export async function rgGeneric(
         }),
       ]
     }
-    const io = new IOResult()
-    const counted = nonzeroCountStream(grepStream(stream(first), pat, streamOpts))
-    return [exitOnEmpty(counted, io), io]
+    const io = new IOResult({ exitCode: 1 })
+    const counted = nonzeroCountStream(grepStream(stream(first), pat, { ...streamOpts, io }))
+    return [counted, io]
   }
 
   const pat = compilePattern(exprText, flags.ignoreCase, flags.fixedString, flags.wholeWord)
   if (paths.length > 1 || flags.withFilename) {
     const results: string[] = []
     const warnings: string[] = []
+    let selected = false
     for (const p of paths) {
       let data: Uint8Array
+      const fileIO = new IOResult({ exitCode: 1 })
       try {
-        const matched = grepStream(stream(p), pat, flags)
+        const matched = grepStream(stream(p), pat, streamOptionsOf(flags, fileIO))
         data = await materialize(label ? prefixLines(matched, p.rawPath + ':') : matched)
       } catch (error) {
         if (!isFsError(error)) throw error
         warnings.push(`rg: ${p.rawPath}: ${String(fsStrerror(error))}`)
         continue
       }
+      selected ||= fileIO.exitCode === 0
       if (data.length) results.push(DEC.decode(data))
     }
     return [
       ENC.encode(results.join('')),
       new IOResult({
-        exitCode: warnings.length ? 2 : results.length ? 0 : 1,
+        exitCode: warnings.length ? 2 : selected ? 0 : 1,
         ...(warnings.length ? { stderr: ENC.encode(warnings.join('\n') + '\n') } : {}),
       }),
     ]
@@ -345,6 +363,6 @@ export async function rgGeneric(
       }),
     ]
   }
-  const io = new IOResult()
-  return [exitOnEmpty(grepStream(stream(first), pat, flags), io), io]
+  const io = new IOResult({ exitCode: 1 })
+  return [grepStream(stream(first), pat, streamOptionsOf(flags, io)), io]
 }

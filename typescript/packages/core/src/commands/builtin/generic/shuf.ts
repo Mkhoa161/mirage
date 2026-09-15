@@ -67,6 +67,22 @@ export async function shufGeneric(
   const countValue = fl.asStr('head_count')
   const rangeValue = fl.asStr('input_range')
   const outputValue = fl.asStr('output')
+  // GNU refuses a head count it cannot read whole and quotes the WHOLE
+  // argument, not just the unparsed remainder the way expand and cut do, and
+  // never appends an out-of-range clause to it. A leading `+` is a sign and
+  // `0` is a valid count, but `-` is an invalid character rather than a sign,
+  // so `-1` is refused: shuf rejects the sign while scanning rather than
+  // range-checking a parsed negative. Pre-validated the way head/tail do it,
+  // so the parseInt below cannot hand back a prefix or NaN.
+  if (countValue !== undefined && !/^\+?\d+$/.test(countValue)) {
+    return [
+      null,
+      new IOResult({
+        exitCode: 1,
+        stderr: ENC.encode(`shuf: invalid line count: '${countValue}'\n`),
+      }),
+    ]
+  }
   const nFlag = countValue === undefined ? null : Number.parseInt(countValue, 10)
   const inputRange = rangeValue ?? null
   const output =
@@ -85,18 +101,22 @@ export async function shufGeneric(
 
   let items: string[]
   if (inputRange !== null) {
-    const match = /^(-?\d+)-(-?\d+)$/.exec(inputRange)
-    if (match === null) {
+    // `-i` takes two unsigned bounds with the low one no greater than the
+    // high one. Every other shape is one message, so a negative low bound
+    // (`-2-1`) and a decreasing range (`3-1`) are refused here rather than
+    // read as a range; shuf has no decreasing-range diagnostic of its own.
+    const match = /^(\d+)-(\d+)$/.exec(inputRange)
+    const low = Number.parseInt(match?.[1] ?? '0', 10)
+    const high = Number.parseInt(match?.[2] ?? '0', 10)
+    if (match === null || low > high) {
       return [
         null,
         new IOResult({
           exitCode: 1,
-          stderr: ENC.encode(`shuf: invalid input range: ${inputRange}\n`),
+          stderr: ENC.encode(`shuf: invalid input range: '${inputRange}'\n`),
         }),
       ]
     }
-    const low = Number.parseInt(match[1] ?? '0', 10)
-    const high = Number.parseInt(match[2] ?? '0', 10)
     items = []
     for (let value = low; value <= high; value++) items.push(String(value))
   } else if (echoMode) {
@@ -118,7 +138,9 @@ export async function shufGeneric(
     items = zeroSep ? text.split('\x00') : splitLinesNoTrailing(text)
   }
   const out = processItems(items, repeat, nFlag)
-  const result: ByteSource = ENC.encode(out.join(sep) + sep)
+  // `shuf -n 0` is valid and prints zero bytes, so the separator
+  // terminates each line rather than being appended to the join.
+  const result: ByteSource = ENC.encode(out.length === 0 ? '' : out.join(sep) + sep)
   if (output !== null) {
     await write(output, result)
     return [null, new IOResult({ writes: { [output.mountPath]: result } })]

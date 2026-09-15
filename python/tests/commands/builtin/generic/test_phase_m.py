@@ -1,6 +1,6 @@
 import pytest
 
-from mirage.commands.builtin.generic.nl import nl
+from mirage.commands.builtin.generic.nl import nl, parse_flags
 from mirage.commands.builtin.generic.rev import rev
 from mirage.commands.builtin.generic.sort import sort
 from mirage.commands.builtin.generic.tac import tac
@@ -150,6 +150,91 @@ async def test_nl_blank_lines_unnumbered_by_default():
     decoded = (await _drain(output)).decode().splitlines()
     assert any("1" in ln and "alpha" in ln for ln in decoded)
     assert any("2" in ln and "beta" in ln for ln in decoded)
+
+
+# Measured against GNU coreutils 9.4: exit 1, one stderr line, no Try line,
+# and the WHOLE argument quoted (unlike expand and cut, which quote only the
+# unparsed remainder). Each of nl's four numeric options has its own wording.
+_NL_REFUSALS = [
+    ("starting_line_number", "abc", "invalid starting line number"),
+    ("number_width", "abc", "invalid line number field width"),
+    ("line_increment", "abc", "invalid line number increment"),
+    ("join_blank_lines", "abc", "invalid line number of blank lines"),
+    ("starting_line_number", "2x", "invalid starting line number"),
+    ("number_width", "2x", "invalid line number field width"),
+]
+
+
+@pytest.mark.parametrize("dest,raw,label", _NL_REFUSALS)
+def test_nl_numeric_flag_refusal_matches_gnu(dest, raw, label):
+    with pytest.raises(ValueError) as refusal:
+        parse_flags({dest: raw})
+    assert str(refusal.value) == f"nl: {label}: '{raw}'"
+
+
+@pytest.mark.parametrize("raw", [" 5 ", "1_0", "0x10", "1e3", ""])
+def test_nl_start_is_as_strict_as_gnu(raw):
+    """`int()` reads ` 5 ` and `1_0` whole; GNU refuses both."""
+    with pytest.raises(ValueError) as refusal:
+        parse_flags({"starting_line_number": raw})
+    assert str(refusal.value) == f"nl: invalid starting line number: '{raw}'"
+
+
+@pytest.mark.parametrize("raw", ["5", "05", "-5", "+5", "0"])
+def test_nl_start_accepts_what_gnu_accepts(raw):
+    """A control: a too-strict guard would refuse a leading zero or sign.
+
+    `-v` is one of nl's two SIGNED options: GNU numbers from a negative
+    start and counts up, so `-v -5` prints `    -5`.
+    """
+    assert parse_flags({"starting_line_number": raw}).start_raw == raw
+
+
+@pytest.mark.parametrize("dest", ["starting_line_number", "line_increment"])
+@pytest.mark.parametrize("raw", ["-5", "0", "+2"])
+def test_nl_signed_options_accept_a_negative_and_zero(dest, raw):
+    """`-v` and `-i` are signed, and `-i -2` genuinely decrements."""
+    assert parse_flags({dest: raw}) is not None
+
+
+# `-w` and `-l` are nl's other camp: at least 1, and a value that PARSED
+# but fell out of range carries a third colon-clause the scan failure does
+# not. Measured on GNU coreutils 9.4 under LC_ALL=C; still no Try line.
+_NL_ERANGE = "Numerical result out of range"
+_NL_OUT_OF_RANGE = [
+    ("number_width", "-3", "invalid line number field width"),
+    ("number_width", "0", "invalid line number field width"),
+    ("join_blank_lines", "-2", "invalid line number of blank lines"),
+    ("join_blank_lines", "0", "invalid line number of blank lines"),
+]
+
+
+@pytest.mark.parametrize("dest,raw,label", _NL_OUT_OF_RANGE)
+def test_nl_positive_options_report_out_of_range(dest, raw, label):
+    with pytest.raises(ValueError) as refusal:
+        parse_flags({dest: raw})
+    assert str(refusal.value) == f"nl: {label}: '{raw}': {_NL_ERANGE}"
+
+
+@pytest.mark.parametrize(
+    "dest,label", [("number_width", "invalid line number field width"),
+                   ("join_blank_lines", "invalid line number of blank lines")])
+def test_nl_positive_options_omit_out_of_range_for_an_empty_value(dest, label):
+    """The clause attaches to a range failure, never to a scan failure.
+
+    Within one option the message shape therefore depends on WHY the
+    value failed, so the clause must not be appended unconditionally.
+    """
+    with pytest.raises(ValueError) as refusal:
+        parse_flags({dest: ""})
+    assert str(refusal.value) == f"nl: {label}: ''"
+
+
+@pytest.mark.parametrize("dest", ["number_width", "join_blank_lines"])
+def test_nl_positive_options_accept_one_and_a_leading_plus(dest):
+    """A control: 1 and `+3` are both in range."""
+    assert parse_flags({dest: "1"}) is not None
+    assert parse_flags({dest: "+3"}) is not None
 
 
 @pytest.mark.asyncio

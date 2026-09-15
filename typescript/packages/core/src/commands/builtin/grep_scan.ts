@@ -55,16 +55,25 @@ export function grepLines(
     if (!matched) continue
     count += 1
     if (!opts.countOnly && !opts.filesOnly) {
-      let text: string
       if (opts.onlyMatching && !opts.invert && reGlobal !== null) {
+        // GNU -o prints every match on the line, one per line, and prints
+        // nothing at all for an empty match; the line still counts as
+        // selected, which is what -c and the exit status read.
         reGlobal.lastIndex = 0
-        const m = reGlobal.exec(line)
-        text = m !== null ? m[0] : line
+        for (;;) {
+          const m = reGlobal.exec(line)
+          if (m === null) break
+          // A global regex that matched the empty string leaves lastIndex
+          // where it was, so exec would keep returning it.
+          if (m[0] === '') {
+            reGlobal.lastIndex += 1
+            continue
+          }
+          results.push(opts.lineNumbers ? `${String(i + 1)}:${m[0]}` : m[0])
+        }
       } else {
-        text = line
+        results.push(opts.lineNumbers ? `${String(i + 1)}:${line}` : line)
       }
-      const prefix = opts.lineNumbers ? `${String(i + 1)}:${text}` : text
-      results.push(prefix)
     }
     if (opts.maxCount !== null && count >= opts.maxCount) break
   }
@@ -112,6 +121,13 @@ export interface GrepStreamOptions {
   countOnly: boolean
   afterContext: number
   beforeContext: number
+  // The exit status follows the selected LINES, not the printed bytes: under
+  // -o a line whose only match is empty prints nothing and still exits 0, so
+  // a caller cannot derive the status from an empty stream. Given an
+  // IOResult, the generator reports selection on it the way grepInput does
+  // (1 to start, 0 as soon as a line is selected); left out, the caller
+  // keeps whatever it decides for itself.
+  io?: IOResult
 }
 
 export async function* grepStream(
@@ -126,6 +142,7 @@ export async function* grepStream(
     const allLines: string[] = []
     const iter = new AsyncLineIterator(source)
     for await (const raw of iter) allLines.push(dec.decode(raw))
+    let printed = false
     for (const chunk of grepContextLines(
       allLines,
       pat,
@@ -135,10 +152,15 @@ export async function* grepStream(
       opts.afterContext,
       opts.beforeContext,
     )) {
+      printed = true
       yield chunk
     }
+    // Context lines only ever accompany a selected line, so here emptiness
+    // and selection are the same fact.
+    if (opts.io !== undefined) opts.io.exitCode = printed ? 0 : 1
     return
   }
+  if (opts.io !== undefined) opts.io.exitCode = 1
   let matchCount = 0
   let lineNum = 0
   const reGlobal = opts.onlyMatching
@@ -151,17 +173,29 @@ export async function* grepStream(
     const found = pat.test(line)
     const hit = opts.invert ? !found : found
     if (!hit) continue
+    if (opts.io !== undefined) opts.io.exitCode = 0
     if (opts.onlyMatching && !opts.invert && reGlobal !== null) {
+      // GNU -o prints every match on the line, one per line, and prints
+      // nothing at all for an empty match; the line is still selected, so
+      // it counts once here whatever its matches looked like (-c and -m
+      // both count selected lines, as they do without -o).
       reGlobal.lastIndex = 0
+      matchCount += 1
       for (;;) {
         const m = reGlobal.exec(line)
         if (m === null) break
-        matchCount += 1
-        if (!opts.countOnly) yield enc.encode(m[0] + '\n')
-        if (opts.maxCount !== null && matchCount >= opts.maxCount) {
-          if (opts.countOnly) yield enc.encode(String(matchCount) + '\n')
-          return
+        // A global regex that matched the empty string leaves lastIndex
+        // where it was, so exec would keep returning it and this generator
+        // would never finish.
+        if (m[0] === '') {
+          reGlobal.lastIndex += 1
+          continue
         }
+        if (!opts.countOnly) yield enc.encode(m[0] + '\n')
+      }
+      if (opts.maxCount !== null && matchCount >= opts.maxCount) {
+        if (opts.countOnly) yield enc.encode(String(matchCount) + '\n')
+        return
       }
     } else {
       matchCount += 1
