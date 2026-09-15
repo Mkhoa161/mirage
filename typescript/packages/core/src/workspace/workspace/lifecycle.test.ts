@@ -466,6 +466,47 @@ describe('closeWorkspace surfaces closer failures', () => {
     expect(order).toEqual(['journal replay failed', 'later closer', 'resource'])
   }, 30_000)
 
+  it('leaves the workspace closed when a closer fails, so nothing resumes onto it', async () => {
+    const resource = new RAMResource()
+    const ws = new Workspace(
+      { '/m': [resource, MountMode.WRITE] },
+      { mode: MountMode.WRITE, shellParser: parser },
+    )
+    await ws.dispatch('stat', '/m')
+    const closers = (ws as unknown as { closers: (() => Promise<void>)[] }).closers
+    closers.push(() => Promise.reject(new Error('journal replay failed')))
+    await expect(ws.close()).rejects.toThrow('journal replay failed')
+    // The resources are already released here, and `closing` is memoized, so
+    // the terminal flag has to be set or the guards that read only `closed`
+    // would let a settled runner resolve and reopen one.
+    expect((ws as unknown as { closed: boolean }).closed).toBe(true)
+    await expect(ws.execute('echo hi')).rejects.toThrow('Workspace is closed')
+    await expect(ws.dispatch('stat', '/m')).rejects.toThrow('Workspace is closed')
+  }, 30_000)
+
+  it('keeps the closer failure when a later teardown stage fails too', async () => {
+    const resource = new RAMResource()
+    const ws = new Workspace(
+      { '/m': [resource, MountMode.WRITE] },
+      { mode: MountMode.WRITE, shellParser: parser },
+    )
+    await ws.dispatch('stat', '/m')
+    vi.spyOn(resource, 'close').mockRejectedValue(new Error('resource close failed'))
+    const closers = (ws as unknown as { closers: (() => Promise<void>)[] }).closers
+    closers.push(() => Promise.reject(new Error('journal replay failed')))
+    const err = await ws.close().then(
+      () => null,
+      (raised: unknown) => raised,
+    )
+    // The later rejection must not carry the replay failure back out of sight.
+    expect(err).toBeInstanceOf(AggregateError)
+    expect((err as AggregateError).errors.map((e: Error) => e.message)).toEqual([
+      'journal replay failed',
+      'resource close failed',
+    ])
+    expect((ws as unknown as { closed: boolean }).closed).toBe(true)
+  }, 30_000)
+
   it('aggregates when more than one closer fails', async () => {
     const { ws, order, ready } = wsWithFailingClosers(['first gone', 'second gone'])
     await ready

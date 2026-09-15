@@ -1383,18 +1383,25 @@ export class Workspace {
   private async runClose(): Promise<void> {
     await this.sessionManager.settle()
     await this.scriptPolicy.close()
-    await closeWorkspace({
-      watch: this.watchManager,
-      cache: this.cache,
-      ownsStateStore: this.ownsStateStore,
-      stateStore: this.stateStoreInternal,
-      closers: this.closers,
-      jobTable: this.jobTable,
-      registry: this.registry,
-      opened: this.opened,
-      openOrder: this.openOrder,
-      sharedResources: this.sharedResources,
-    })
-    this.closed = true
+    try {
+      await closeWorkspace({
+        watch: this.watchManager,
+        cache: this.cache,
+        ownsStateStore: this.ownsStateStore,
+        stateStore: this.stateStoreInternal,
+        closers: this.closers,
+        jobTable: this.jobTable,
+        registry: this.registry,
+        opened: this.opened,
+        openOrder: this.openOrder,
+        sharedResources: this.sharedResources,
+      })
+    } finally {
+      // Teardown has run either way, and `closing` is memoized, so it will
+      // not run again. The guards that only read `closed` are the ones that
+      // stop a settled runner resuming onto a released resource, so a
+      // teardown that raises must still close the door behind it.
+      this.closed = true
+    }
   }
 }
