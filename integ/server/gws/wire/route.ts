@@ -62,21 +62,14 @@ export interface RouteOpts {
 // route CANNOT forget the flush, because declaring `write: true` is the same
 // act as asking for one.
 //
-// The world comes from `store/cache.ts` and is only READ from the rows on a
-// miss. SQLite stays the authority across everything that is not a request --
-// the seed path, the template copy a fresh run is served from, a process that
-// starts against an existing file -- but between two requests on one run the
-// authority is the object this wrapper is holding, because nothing else can
-// have changed the rows. That module states the two boundaries which make it
-// safe; the one this file owns is the guard below.
+// The world comes from `store/cache.ts` and is only read from the rows on a
+// miss: SQLite stays the authority for everything that is not a request, but
+// between two requests on one run nothing else can have changed the rows.
 //
 // A read is not flushed, so a handler on a read route must not mutate. That is
-// true of every route today, and it is checked rather than trusted, because
-// the caching makes the consequence worse than it was: a dropped mutation used
-// to die with the request, and now it would SURVIVE in a world that never
-// reaches the file, so memory and SQLite disagree and the next template copy
-// or restart serves a different world. So a mismatch evicts as well as
-// complaining, which puts the tenant back on the rows either way.
+// true of every route today, and it is checked rather than trusted. Cached,
+// such a mutation would survive in a world that never reaches the file, so a
+// mismatch evicts as well as complaining.
 function stateful(handler: KitHandler<GwsState>, write: boolean): KitHandler<C> {
   return async (ctx: Ctx<C>): Promise<Reply> => {
     const st = await withState(ctx.db, ctx.tenant, () => loadState(ctx.db, ctx.tenant))
@@ -85,11 +78,8 @@ function stateful(handler: KitHandler<GwsState>, write: boolean): KitHandler<C> 
       const reply = await handler({ ...ctx, db: st })
       if (write) {
         await saveState(ctx.db, DMMF, ctx.tenant, st)
-        // The rows now say what this world says, so it becomes the cached one
-        // and every load still in flight is stale. Leaving the entry alone
-        // instead let a read that missed alongside this write install its
-        // older copy afterwards, and the NEXT write would then flush that
-        // copy -- erasing from SQLite the rows this one just committed.
+        // The rows now say what this world says, so it becomes the cached
+        // one and every load still in flight is stale; see `Cached`.
         installFlushed(ctx.db, ctx.tenant, st)
       } else if (fingerprint(st) !== before) {
         dropState(ctx.db, ctx.tenant)
@@ -100,10 +90,8 @@ function stateful(handler: KitHandler<GwsState>, write: boolean): KitHandler<C> 
       }
       return reply
     } catch (err: unknown) {
-      // A handler mutates the world in place, so a throw half way through
-      // leaves one that is partly applied and was never written. That used to
-      // be discarded with the request; now it IS the cache, so it has to be
-      // dropped or the next request serves a world no flush ever agreed to.
+      // A handler mutates in place, so a throw leaves a world that is partly
+      // applied and was never written. That used to die with the request.
       dropState(ctx.db, ctx.tenant)
       throw err
     }
@@ -112,20 +100,12 @@ function stateful(handler: KitHandler<GwsState>, write: boolean): KitHandler<C> 
 
 // Cheap proof that a read route left the world alone.
 //
-// The clock and the mint counters are here because a handler advances them by
-// calling `now()` or `nextId()`, which looks like nothing at the call site:
-// the request that advanced the counter still answers with the new id, and
-// only the NEXT request finds it handed out twice.
-//
-// Every map's SIZE rides along too, which the uncached version did not need --
-// anything else a read mutated was discarded either way, so the mutation was
-// invisible but also harmless. Cached it is neither. A size is O(1) per map
-// and catches the shape of mutation a read could plausibly make, an entry
-// added or removed. It cannot catch a field edited in place; nothing this
-// cheap can, and the corpus is what covers that.
-//
-// Folded rather than summed, so that a `+1` tick and a `-1` file cannot cancel
-// out into a world that looks untouched.
+// The clock and the mint counters, because a handler advances them by calling
+// `now()` or `nextId()` and the request still answers with the new id -- only
+// the NEXT one finds it handed out twice. Every map's size rides along because
+// cached, any other mutation survives too. Folded rather than summed so a `+1`
+// tick and a `-1` file cannot cancel out; it cannot catch a field edited in
+// place, and nothing this cheap can.
 function fingerprint(st: GwsState): number {
   let h = st.ticks
   for (const n of st.counters.values()) h = (h * 31 + n) | 0

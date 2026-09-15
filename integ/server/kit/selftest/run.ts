@@ -979,24 +979,18 @@ async function main(): Promise<void> {
     )
 
     process.stdout.write('\n22. afterReset fires for every reset, successful or not\n')
-    // The hook exists because /reset is answered before the router matches, so
-    // a fake that keeps its own view of a tenant's rows has no other way to
-    // hear that they were replaced. Two properties are promised and both are
-    // easy to lose: it fires on the FAILING path too (a reset that threw has
-    // already cleared rows, so a view built before it is stale either way),
-    // and it is handed the run's OWN client, which is what a cache keyed by
-    // the client depends on.
+    // Three promises, each easy to lose: it fires on both reset branches, it
+    // fires on the FAILING path too, and it is handed the run's OWN client.
     const hooked = await launch()
     try {
       const reseed = (run: string, tenant: string): ReturnType<typeof call> =>
         call(hooked, '/reset', { method: 'POST', runInPath: run, body: { tenants: [tenant] } })
       const touch = (run: string): ReturnType<typeof call> =>
         call(hooked, '/_selftest/resets', { runInPath: run, tenant: 'a1' })
-      // Two runs, because "the run's OWN client" is not testable with one. The
-      // first reset of a run necessarily precedes any request on it, so the
-      // fake cannot have learnt that run's name yet and records `unknown`;
-      // once a request has been served the later resets name it, and THAT is
-      // what distinguishes z1's client from z2's.
+      // Two runs, because "the run's OWN client" is not testable with one. A
+      // run's first reset precedes any request on it, so the fake cannot have
+      // learnt its name yet; the resets after a request are the ones that
+      // distinguish z1's client from z2's.
       await reseed('z1', 'a1')
       await reseed('z2', 'a1')
       await touch('z1')
@@ -1009,18 +1003,15 @@ async function main(): Promise<void> {
       const rows = Array.isArray(seen.json) ? seen.json : []
       const row = (r: JsonValue): Record<string, JsonValue> =>
         typeof r === 'object' && r !== null && !Array.isArray(r) ? r : {}
-      // `default` leads because `start()` seeds the default run before it
-      // listens, and that startup seed IS a reset -- a fake that cached rows
-      // during it would be holding a pre-seed world. `boom` trails because the
-      // hook fires on the failing path too.
+      // `default` leads because `start()` seeds that run before it listens,
+      // and a startup seed IS a reset. `boom` trails because the hook fires on
+      // the failing path too.
       eq(
         'it fired once per reset, in order, with the tenants each named',
         rows.map((r) => String(row(r).tenants)),
         ['default', 'a1', 'a1', 'a1', 'a1', 'boom'],
       )
-      // The three resets that followed a request on their run. A kit that
-      // handed the hook any other run's client fails here rather than
-      // silently evicting the wrong world.
+      // The three resets that followed a request on their run.
       eq(
         'and each with the client of the run being reset',
         rows.slice(3).map((r) => String(row(r).run)),

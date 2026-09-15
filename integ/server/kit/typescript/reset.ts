@@ -140,12 +140,9 @@ export async function applyReset<C extends MinimalClient>(
       st.reset(tenant, req.epoch)
       st.markSeeded(tenant)
     }
-    // There is provably nothing to forget here -- `fresh` means no client
-    // existed, so `made` is a new object and a cache keyed by the client
-    // cannot already hold a world under it. The hook fires anyway, so a fake
-    // that keys its cache some other way is not left stale by this branch
-    // alone. A template build that THREW never reaches this line, which is
-    // also right: it created no client and wrote no rows.
+    // `fresh` means no client existed, so a cache keyed by the client has
+    // nothing here to forget. Fired anyway, for a fake that keys its own some
+    // other way.
     fake.afterReset?.(made, req.tenants)
     return {
       ok: true,
@@ -175,16 +172,11 @@ export async function applyReset<C extends MinimalClient>(
       seeded,
     }
   } finally {
-    // In a `finally`, because a reseed that throws half way through has
-    // ALREADY cleared the rows: the tenant's world is gone either way, and a
-    // cache still holding the pre-reset one would serve it as real. It also
-    // has to run AFTER the seed rather than beside the clear, because a read
-    // does not join this queue and could otherwise cache the half-cleared
-    // world the seed is still filling in.
-    //
-    // Reported rather than propagated: a throw from here would replace the
-    // seed's own exception on its way to the 500 envelope, which is the one
-    // error a caller actually needs to see.
+    // In a `finally`, because a reseed that throws has ALREADY cleared the
+    // rows, and after the seed rather than beside the clear, because a read
+    // does not join this queue and could cache the half-cleared world.
+    // Reported rather than propagated: a throw here would replace the seed's
+    // own exception on its way to the 500 envelope.
     try {
       fake.afterReset?.(db, req.tenants)
     } catch (err: unknown) {

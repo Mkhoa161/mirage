@@ -54,26 +54,12 @@ export interface Fake<C extends MinimalClient> {
     epoch: string | undefined,
   ) => Promise<void>
   // What a fake has to FORGET when a /reset has replaced a tenant's rows
-  // underneath it. Only a fake that keeps its own view of those rows between
-  // requests needs one, which today is gws and its cached tenant world.
-  //
-  // It is a KIT hook rather than a gws one because there is no other door:
-  // /reset is answered inside `answer()` before the router ever matches, so a
-  // route cannot see one however it is declared.
-  //
-  // It is handed the run's CLIENT rather than the run's name because that is
-  // what such a cache is keyed by -- a world belongs to one SQLite file, and
-  // two Runtimes in one process that happen to name the same run must not be
-  // able to reach each other's.
-  //
-  // Called for every reset that reached a client, successful or not: a reset
-  // that threw half way through has already cleared rows, so a view built
-  // before it is stale either way, and forgetting one that was still good
-  // costs a reload. A template build that throws never reaches a client, and
-  // created no rows to forget.
-  //
-  // Sync on purpose: a hook that could await would put a suspension point
-  // between the row change and the eviction, which is the window it closes.
+  // underneath it -- today gws and its cached tenant world. A KIT hook because
+  // there is no other door: /reset is answered in `answer()` before the router
+  // matches, so no route can see one. It is handed the run's CLIENT because
+  // that is what such a cache is keyed by, and fires for every reset that
+  // reached one, successful or not: a reset that threw has already cleared
+  // rows, so a view built before it is stale either way.
   afterReset?: (db: C, tenants: readonly string[]) => void
   defaultTenants?: string[]
   // How this fake refuses a tenant it was never seeded with, and by being

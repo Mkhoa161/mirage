@@ -189,14 +189,10 @@ async function twoPhaseCard(ctx: Ctx<C>): Promise<Reply> {
   return { status: 201, body: cardJson(row) }
 }
 
-// What `afterReset` was handed, newest last, so a check can assert the hook
-// fired and with which tenants. A fake that caches rows between requests keys
-// that cache by the CLIENT, so the record keeps the client too and proves the
-// hook is handed the run's own, not some other run's.
+// What `afterReset` was handed, newest last.
 const RESETS: { tenants: string[]; run: string }[] = []
-// Which run each client object belongs to, so a check can assert the hook was
-// handed THIS run's client and not another run's. Keyed by the object, so it
-// holds nothing alive that the pool has let go.
+// Which run each client belongs to, so a check can assert the hook was handed
+// THIS run's. Keyed by the object, so it holds nothing the pool has let go.
 const RUN_OF = new WeakMap<C, string>()
 
 export const selftestFake: Fake<C> = {
@@ -256,9 +252,7 @@ export const selftestFake: Fake<C> = {
           },
         }),
       }),
-  // Recorded rather than acted on: the kit only promises that this fires for
-  // every reset, successful or not, and with the run's own client. gws is the
-  // caller that does something with it (it drops the tenant's cached world).
+  // Recorded rather than acted on; gws is the caller that does something.
   afterReset: (db: C, tenants: readonly string[]): void => {
     RESETS.push({ tenants: [...tenants], run: RUN_OF.get(db) ?? 'unknown' })
   },
