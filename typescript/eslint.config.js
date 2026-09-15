@@ -87,7 +87,12 @@ export default tseslint.config(
       '**/*.config.ts',
       '**/*.config.js',
       '**/*.setup.ts',
-      '**/scripts/**',
+      // Narrowed from '**/scripts/**': `packages/*/scripts/*.mjs` are
+      // build helpers, but `typescript/scripts/*.ts` generates `spec/`,
+      // which pre-commit's Spec drift step and `check_spec_parity.py` both
+      // read, so it is production code and is linted (issue #1089 item
+      // 20b).
+      'packages/*/scripts/**',
       '**/generated/**',
     ],
   },
@@ -137,7 +142,28 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/*/src/**/*.ts'],
+    // `typescript/scripts/*.ts` is production code: pre-commit runs
+    // `gen-specs.ts` and then `git diff --exit-code spec/`, and
+    // `check_spec_parity.py` reads what it emits. It was excluded from
+    // eslint by a blanket `**/scripts/**` ignore, which is why eight bare
+    // `.sort()` calls feeding `spec/**` survived the repo's own #370 rule
+    // (issue #1089 item 20b).
+    //
+    // The type-aware preset is off here, not on: these files have no
+    // package tsconfig above them, so the project service finds no program
+    // and every file parse-errors instead of linting. The syntactic rules
+    // -- the sort gate above all, plus no-unused-vars and no-empty -- are
+    // what this directory needed and they need no types. Giving it its own
+    // tsconfig and turning the type-aware layer back on is a follow-up:
+    // it reports ~120 findings, most of them in `gen-specs.ts`, and
+    // `pnpm -r typecheck` excludes the workspace root, so wiring tsc for
+    // it also needs a CI step rather than a root script.
+    ...tseslint.configs.disableTypeChecked,
+    files: ['scripts/**/*.ts'],
+    languageOptions: { parserOptions: { projectService: false } },
+  },
+  {
+    files: ['packages/*/src/**/*.ts', 'scripts/**/*.ts'],
     ignores: ['packages/*/src/**/*.test.ts'],
     rules: {
       'no-restricted-syntax': ['error', SORT_COMPARATOR_SELECTOR],
@@ -148,6 +174,36 @@ export default tseslint.config(
     ignores: ['packages/*/src/commands/**/*.test.ts', ...FLAG_BAG_EXEMPT],
     rules: {
       'no-restricted-syntax': ['error', SORT_COMPARATOR_SELECTOR, ...FLAG_BAG_SELECTORS],
+    },
+  },
+  {
+    // CLAUDE.md: code in `core` must work in both the browser and the Node
+    // runtimes. The Node half is already gated -- `tsconfig.build.json`
+    // sets `types: []`, so a `node:*` import or a bare `process`/`Buffer`
+    // fails the build. The browser half was gated by nothing: `document`,
+    // `window` and friends come from `lib.dom`, which core needs for
+    // `fetch`/`Response`/`Headers`/`CompressionStream`, so they typecheck,
+    // test and build clean and only fail at runtime inside a Node consumer
+    // of the package. Violation count when this landed was zero, so it is a
+    // pure ratchet (issue #1089 item 10).
+    files: ['packages/core/src/**/*.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...[
+          'document',
+          'window',
+          'localStorage',
+          'sessionStorage',
+          'navigator',
+          'indexedDB',
+          'alert',
+          'FileSystemDirectoryHandle',
+        ].map((name) => ({
+          name,
+          message: `${name} is browser-only; core runs in Node too. Put it in @struktoai/mirage-browser.`,
+        })),
+      ],
     },
   },
   prettierConfig,
