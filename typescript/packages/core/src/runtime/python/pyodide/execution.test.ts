@@ -13,7 +13,8 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { WorkspaceBinding } from '../../binding.ts'
-import { describe, expect, it } from 'vitest'
+import { PyodideWorkerClient } from './worker/client.ts'
+import { describe, expect, it, vi } from 'vitest'
 import { PathSpec } from '../../../types.ts'
 import { PyodideRuntime } from './runtime.ts'
 import { PrefixResolver } from '../../resolver.ts'
@@ -316,3 +317,44 @@ describe('Pyodide command cwd', { timeout: 120_000 }, () => {
     }
   })
 })
+
+it.each([false, true])(
+  'passes only the command environment (worker: %s)',
+  async (worker) => {
+    const key = 'MIRAGE_ENV_LEAK_PROBE'
+    vi.stubEnv(key, 'host-marker')
+    const execute = vi.spyOn(PyodideWorkerClient.prototype, 'execute')
+    const rt = new PyodideRuntime()
+    if (worker)
+      rt.bind(
+        new WorkspaceBinding(
+          () => Promise.reject(new Error('unexpected I/O')),
+          new PrefixResolver(() => ['/data/']),
+        ),
+      )
+    try {
+      for (const [env, expected] of [
+        [{}, '<unset>'],
+        [{ [key]: 'guest-marker' }, 'guest-marker'],
+        [{}, '<unset>'],
+      ] as const) {
+        const result = await rt.run({
+          code: `import os; print(os.environ.get('${key}', '<unset>')); os.environ['${key}'] = 'changed'`,
+          args: [],
+          env,
+          stdin: null,
+        })
+        expect(result.exitCode).toBe(0)
+        expect(new TextDecoder().decode(result.stdout)).toBe(`${expected}\n`)
+        expect(process.env[key]).toBe('host-marker')
+      }
+      if (worker) expect(execute).toHaveBeenCalled()
+      else expect(execute).not.toHaveBeenCalled()
+    } finally {
+      await rt.close()
+      execute.mockRestore()
+      vi.unstubAllEnvs()
+    }
+  },
+  120_000,
+)

@@ -135,32 +135,70 @@ function isRecoveredQuotedHeredocEnd(previous: TSNodeLike | null, error: TSNodeL
   return false
 }
 
+function missingQuote(node: TSNodeLike): string | null {
+  const stack = [node]
+  for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
+    if (current.isMissing && ["'", '"', '`'].includes(current.type)) return ''
+    stack.push(...current.children)
+  }
+  return null
+}
+
 /**
- * Locate a top-level structural syntax error in a parsed AST.
- *
- * Tree-sitter often recovers from minor anomalies (e.g. `for x in;`) by
- * producing a valid statement with an internal ERROR token. Bash accepts
- * those, so we only flag errors that surface as direct children of
- * `program` AND contain a bash keyword, a bracket / quote, a statement
- * separator, or a recovered named subtree (`isStructuralError`). A case
- * terminator outside a case item is flagged even when the tree carries no
- * ERROR at all, because the grammar accepts `;;` as a plain separator.
+ * Locate structural errors and missing tokens throughout a parsed AST.
+ * The grammar recovers an empty for-list with an ERROR containing `in`;
+ * Bash accepts that one recovery.
  *
  * Returns the offending region's text, or `null` if the AST is clean.
  */
-export function findSyntaxError(node: TSNodeLike): string | null {
+export function findSyntaxError(
+  node: TSNodeLike,
+  parse?: (command: string) => TSNodeLike,
+): string | null {
+  // Expansion and the `[` builtin own their argument grammar.
+  if (node.type === 'expansion') return null
+  if (node.type === 'test_command' && node.children[0]?.type === '[') return missingQuote(node)
+  if (node.type === 'command_substitution') {
+    const unclosed = findUnterminatedBacktick(node.text)
+    if (unclosed !== null) return unclosed
+  }
+  if (
+    node.type === 'command_substitution' &&
+    parse !== undefined &&
+    node.text.startsWith('$(') &&
+    node.text.endsWith(')')
+  ) {
+    return findSyntaxError(parse(node.text.slice(2, -1)), parse)
+  }
   const stray = strayCaseTerminator(node)
   if (stray !== null) return stray
   if (!node.hasError) return null
   let previous: TSNodeLike | null = null
   for (const child of node.children) {
+    // Bash permits unquoted spaces in associative subscripts. The grammar
+    // recovers their earlier plain words as ERROR children.
+    if (
+      node.type === 'subscript' &&
+      child.type === 'ERROR' &&
+      child.children.length > 0 &&
+      child.children.every((part) => part.type === 'word' && !part.hasError)
+    )
+      continue
     if (child.isMissing) return child.text
-    if (child.type === 'ERROR' && isStructuralError(child)) {
+    if (
+      child.type === 'ERROR' &&
+      isStructuralError(child) &&
+      !(node.type === 'for_statement' && child.text.trim() === 'in')
+    ) {
       if (isRecoveredQuotedHeredocEnd(previous, child)) {
         previous = child
         continue
       }
       return child.text
+    }
+    if (child.type !== 'ERROR') {
+      const nested = findSyntaxError(child, parse)
+      if (nested !== null) return nested
     }
     if (child.isNamed) previous = child
   }

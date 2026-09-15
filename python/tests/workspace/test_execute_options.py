@@ -18,6 +18,8 @@ import pytest
 
 from mirage import MountMode, Workspace
 from mirage.resource.ram import RAMResource
+from mirage.workspace.abort import MirageAbortError, cancellable_sleep
+from mirage.workspace.executor.builtins.sleep.sleep import handle_sleep
 
 
 def _make_ws():
@@ -210,19 +212,34 @@ async def test_cancel_between_list_stages():
 
 
 @pytest.mark.asyncio
-async def test_cancel_inside_command_substitution():
+async def test_cancel_inside_command_substitution(monkeypatch):
     ws = _make_ws()
     cancel = asyncio.Event()
+    entered = asyncio.Event()
+    exited = asyncio.Event()
 
-    async def trigger() -> None:
-        await asyncio.sleep(0.1)
+    async def tracked_sleep(seconds, event):
+        entered.set()
+        try:
+            await cancellable_sleep(seconds, event)
+        finally:
+            exited.set()
+
+    monkeypatch.setitem(handle_sleep.__globals__, "cancellable_sleep",
+                        tracked_sleep)
+    task = asyncio.create_task(
+        ws.execute('echo "$(sleep 3600)"', cancel=cancel))
+    try:
+        # Synchronize on the inner command, not parsing/runner wall time.
+        await asyncio.wait_for(entered.wait(), timeout=10)
         cancel.set()
-
-    asyncio.create_task(trigger())
-    t0 = asyncio.get_event_loop().time()
-    with pytest.raises(Exception):
-        await ws.execute('echo "$(sleep 5)"', cancel=cancel)
-    assert asyncio.get_event_loop().time() - t0 < 1.0
+        with pytest.raises(MirageAbortError):
+            await asyncio.wait_for(task, timeout=10)
+        assert exited.is_set()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await ws.close()
 
 
 @pytest.mark.asyncio

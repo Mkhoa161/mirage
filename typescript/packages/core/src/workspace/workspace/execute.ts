@@ -262,7 +262,8 @@ async function runLine(
   const root = parser.parse(command)
   // tree-sitter accepts an unclosed backtick as a complete command, so
   // the region is scanned separately.
-  const offending = findSyntaxError(root) ?? findUnterminatedBacktick(root.text)
+  const offending =
+    findSyntaxError(root, (source) => parser.parse(source)) ?? findUnterminatedBacktick(root.text)
   if (offending !== null) {
     // The gate runs before the provision branch, mirroring Python: a
     // provision run of unparseable input reports the syntax error
