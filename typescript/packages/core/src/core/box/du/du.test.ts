@@ -29,7 +29,8 @@ vi.mock('../stat.ts', async () => {
 
 import { BoxAccessor } from '../../../accessor/box.ts'
 import { FileStat, FileType, PathSpec } from '../../../types.ts'
-import type { BoxTokenManager } from '../client.ts'
+import { enoent } from '../../../utils/errors.ts'
+import { BoxApiError, type BoxTokenManager } from '../client.ts'
 import { size, entries } from './index.ts'
 import * as readdirMod from '../readdir.ts'
 import * as statMod from '../stat.ts'
@@ -43,7 +44,7 @@ function makeAccessor(): BoxAccessor {
 function mockTree(tree: Record<string, string[]>): void {
   vi.mocked(readdirMod.readdir).mockImplementation((_accessor, spec) => {
     const children = tree[spec.virtual]
-    if (children === undefined) return Promise.reject(new Error(`ENOENT: ${spec.virtual}`))
+    if (children === undefined) return Promise.reject(enoent(spec.virtual))
     return Promise.resolve(children)
   })
 }
@@ -51,7 +52,7 @@ function mockTree(tree: Record<string, string[]>): void {
 function mockStats(stats: Record<string, { size?: number }>): void {
   vi.mocked(statMod.stat).mockImplementation((_accessor, spec) => {
     const entry = stats[spec.virtual]
-    if (entry === undefined) return Promise.reject(new Error(`ENOENT: ${spec.virtual}`))
+    if (entry === undefined) return Promise.reject(enoent(spec.virtual))
     const name = spec.virtual.split('/').pop() ?? ''
     return Promise.resolve(
       new FileStat({
@@ -138,5 +139,22 @@ describe('box core du', () => {
     mockTree(TREE)
     mockStats({})
     expect(await size(makeAccessor(), ROOT)).toBe(0)
+  })
+
+  it('propagates a 5xx from stat instead of under-counting the total', async () => {
+    mockTree(TREE)
+    vi.mocked(statMod.stat).mockRejectedValue(new BoxApiError('boom', 500))
+    await expect(size(makeAccessor(), ROOT)).rejects.toMatchObject({ status: 500 })
+  })
+
+  it('propagates a throttled readdir mid-walk instead of zeroing the subtree', async () => {
+    mockStats(SIZES)
+    vi.mocked(readdirMod.readdir).mockImplementation((_accessor, spec) => {
+      if (spec.virtual === '/docs/inner') return Promise.reject(new BoxApiError('slow down', 429))
+      const children = TREE[spec.virtual]
+      if (children === undefined) return Promise.reject(enoent(spec.virtual))
+      return Promise.resolve(children)
+    })
+    await expect(size(makeAccessor(), ROOT)).rejects.toMatchObject({ status: 429 })
   })
 })
