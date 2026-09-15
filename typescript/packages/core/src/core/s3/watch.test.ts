@@ -89,10 +89,11 @@ describe('S3Walk', () => {
     const entries = await collect(new S3Walk(accessor()), root('/s3/data', 'data'))
     const files = entries.filter((e) => !e.isDir)
     expect(files.map((e) => e.virtual).sort()).toEqual(['/s3/data/a.txt', '/s3/data/b.txt'])
-    // The ETag leads, and it is the field carrying the distinction
-    // here: LastModified is constant in this mock, so the stamp and
-    // size alone would collide across files of equal size.
+    // The ETag leads the composite, which is what keeps two files of equal
+    // size apart: LastModified is constant here, so the size alone would
+    // collide across them.
     expect(files[0]?.fingerprint).toBe('etag-a|5')
+    expect(files[1]?.fingerprint).toBe('etag-b|4')
     expect(files[0]?.size).toBe(5)
   })
 

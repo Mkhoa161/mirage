@@ -20,7 +20,7 @@ describe('statFingerprint', () => {
     expect(statFingerprint('etag-1', '2026-01-01T00:00:00', 5)).toBe('etag-1|5')
   })
 
-  it('substitutes the stamp without an etag', () => {
+  it('substitutes the stamp with no native version', () => {
     expect(statFingerprint(null, '2026-01-01T00:00:00', 5)).toBe('2026-01-01T00:00:00|5')
   })
 
@@ -28,35 +28,32 @@ describe('statFingerprint', () => {
     expect(statFingerprint(null, null, null)).toBe('|None')
   })
 
-  it('does not move on a stamp change alone for a versioned backend', () => {
-    // S3's single-part ETag and Dropbox's content_hash are
-    // content-addressed: rewriting a file with identical bytes leaves
-    // them alone while the stamp moves. Folding the stamp in would
-    // report that idempotent rewrite as an UPDATE.
-    expect(statFingerprint('sha-1', '2026-01-01T00:00:00', 5)).toBe(
-      statFingerprint('sha-1', '2026-06-06T00:00:00', 5),
-    )
+  it('moves when an unchanged etag accompanies a changed size', () => {
+    // Probed on Nextcloud 30: its WebDAV ETag comes off an mtime with
+    // one-second granularity, so two writes inside the same second
+    // answer the SAME etag and the SAME stamp even though the content
+    // and its size changed. The size is the only field that moved, and
+    // returning the etag alone threw it away.
+    const before = statFingerprint('lazy-etag', '2026-09-15T16:09:51+00:00', 4)
+    const after = statFingerprint('lazy-etag', '2026-09-15T16:09:51+00:00', 11)
+    expect(before).not.toBe(after)
   })
 
-  it('moves on a size change under a stale etag', () => {
-    // Probed against Nextcloud 30: its WebDAV ETag comes off an mtime
-    // with one-second granularity, so two writes inside the same
-    // second answer the SAME etag and the SAME stamp even though the
-    // content and its size changed. Returning the etag alone reported
-    // no change at all, which is how a real update went missing
-    // whenever the machine was fast enough to do both writes in one
-    // second.
-    const stale = '8be37ae2eb0f16878c29923fa9b189ee'
-    const stamp = '2026-09-15T13:44:50+00:00'
-    expect(statFingerprint(stale, stamp, 4)).not.toBe(statFingerprint(stale, stamp, 11))
+  it('does not move when only the stamp moves on a versioned backend', () => {
+    // The mirror of the case above, and why the stamp is not folded in
+    // beside the etag. S3's single-part ETag and Dropbox's
+    // content_hash are content-addressed: rewriting a file with
+    // identical bytes leaves them alone while the stamp moves. Reading
+    // that idempotent rewrite as an UPDATE would wake every consumer
+    // for nothing, and the stamp cannot rescue the case above anyway,
+    // since a stamp coarse enough to give two writes one etag gives
+    // them one stamp.
+    const before = statFingerprint('sha-1', '2026-09-15T16:09:51+00:00', 4)
+    const after = statFingerprint('sha-1', '2026-09-15T16:30:18+00:00', 4)
+    expect(before).toBe(after)
   })
 
-  it('moves on an etag change under a stale size', () => {
-    // The mirror case, and why the etag stays in the composite: a
-    // content rewrite that keeps the byte count is invisible to the
-    // size and to a coarse stamp, and only the backend's own version
-    // carries it.
-    const stamp = '2026-09-15T13:44:50+00:00'
-    expect(statFingerprint('etag-a', stamp, 7)).not.toBe(statFingerprint('etag-b', stamp, 7))
+  it('does not confuse a zero size with an absent one', () => {
+    expect(statFingerprint('e', 'T', 0)).not.toBe(statFingerprint('e', 'T', null))
   })
 })

@@ -14,34 +14,29 @@ def test_stat_fingerprint_handles_missing_fields():
     assert stat_fingerprint(None, None, None) == "|None"
 
 
-def test_a_stamp_move_alone_is_not_an_update_for_a_versioned_backend():
-    # S3's single-part ETag and Dropbox's content_hash are
-    # content-addressed: rewriting a file with identical bytes leaves
-    # them alone while the stamp moves. Folding the stamp in would
-    # report that idempotent rewrite as an UPDATE.
-    assert stat_fingerprint("sha-1", "2026-01-01T00:00:00",
-                            5) == stat_fingerprint("sha-1",
-                                                   "2026-06-06T00:00:00", 5)
-
-
-def test_a_size_change_moves_the_fingerprint_under_a_stale_etag():
-    # Probed against Nextcloud 30: its WebDAV ETag comes off an mtime
-    # with one-second granularity, so two writes inside the same second
+def test_unchanged_etag_with_a_changed_size_moves_the_fingerprint():
+    # Probed on Nextcloud 30: its WebDAV ETag comes off an mtime with
+    # one-second granularity, so two writes inside the same second
     # answer the SAME etag and the SAME stamp even though the content
-    # and its size changed. Returning the etag alone reported no change
-    # at all, which is how a real update went missing whenever the
-    # machine was fast enough to do both writes in one second.
-    stale = "8be37ae2eb0f16878c29923fa9b189ee"
-    stamp = "2026-09-15T13:44:50+00:00"
-    assert stat_fingerprint(stale, stamp,
-                            4) != stat_fingerprint(stale, stamp, 11)
+    # and its size changed. The size is the only field that moved, and
+    # returning the etag alone threw it away.
+    before = stat_fingerprint("lazy-etag", "2026-09-15T16:09:51+00:00", 4)
+    after = stat_fingerprint("lazy-etag", "2026-09-15T16:09:51+00:00", 11)
+    assert before != after
 
 
-def test_an_etag_change_moves_the_fingerprint_under_a_stale_size():
-    # The mirror case, and why the etag stays in the composite: a
-    # content rewrite that keeps the byte count is invisible to the
-    # size and to a coarse stamp, and only the backend's own version
-    # carries it.
-    stamp = "2026-09-15T13:44:50+00:00"
-    assert stat_fingerprint("etag-a", stamp,
-                            7) != stat_fingerprint("etag-b", stamp, 7)
+def test_a_stamp_move_alone_is_not_an_update_for_a_versioned_backend():
+    # The mirror of the case above, and why the stamp is not folded in
+    # beside the etag. S3's single-part ETag and Dropbox's content_hash
+    # are content-addressed: rewriting a file with identical bytes
+    # leaves them alone while the stamp moves. Reading that idempotent
+    # rewrite as an UPDATE would wake every consumer for nothing, and
+    # the stamp cannot rescue the case above anyway, since a stamp
+    # coarse enough to give two writes one etag gives them one stamp.
+    before = stat_fingerprint("sha-1", "2026-09-15T16:09:51+00:00", 4)
+    after = stat_fingerprint("sha-1", "2026-09-15T16:30:18+00:00", 4)
+    assert before == after
+
+
+def test_a_zero_size_is_not_confused_with_an_absent_one():
+    assert stat_fingerprint("e", "T", 0) != stat_fingerprint("e", "T", None)
