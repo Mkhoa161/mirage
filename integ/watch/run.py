@@ -28,7 +28,7 @@ from mirage import MountMode, Workspace
 from mirage.accessor.nextcloud import NextcloudAccessor
 from mirage.core.disk.watch import DiskEventHook
 from mirage.resource.nextcloud import NextcloudConfig, NextcloudResource
-from mirage.types import PathSpec
+from mirage.types import FileEvent, PathSpec
 from mirage.watch import RAMWatchQueue, Watcher
 
 CASE_DIR = Path(__file__).resolve().parent
@@ -36,6 +36,8 @@ CASE_DIR = Path(__file__).resolve().parent
 ALL_MODES = ("pull", "push", "event")
 EVENT_TIMEOUT = 20.0
 ABSENT_WINDOW = 1.0
+PUMP_ATTEMPTS = 20
+PUMP_INTERVAL = 0.25
 CLASS_BY_KIND = {
     "create": "OCP\\Files\\Events\\Node\\NodeCreatedEvent",
     "update": "OCP\\Files\\Events\\Node\\NodeWrittenEvent",
@@ -284,11 +286,22 @@ class ConsumerPoller:
         self._root = root
         self._checkpoint: str | None = None
 
-    async def pump(self) -> None:
+    async def pump(self) -> tuple[FileEvent, ...]:
+        """Pull one delta, notify every change, and return them.
+
+        Returning the changes (rather than nothing) is what lets a
+        caller tell "nothing changed" from "the backend has not made
+        the change visible yet". A production loop ignores the return
+        value and just runs again on its interval.
+
+        Returns:
+            tuple[FileEvent, ...]: The changes handed to ``notify``.
+        """
         delta = await self._hook.pull(self._root, self._checkpoint)
         self._checkpoint = delta.checkpoint
         for change in delta.changes:
             await self._ws.notify(change)
+        return delta.changes
 
 
 DISK_EVENT_BY_KIND = {
@@ -323,13 +336,35 @@ def _disk_notification(expect: dict, mount: str,
 
 
 class PullTrigger:
-    """Case trigger for pull mode: pump the consumer's poller once."""
+    """Case trigger for pull mode: pump the consumer's poller until the
+    case's mutation shows up in the backend listing.
+
+    A single pump gives the case exactly one listing read, issued the
+    instant the external write returns, and the delta only reports a
+    change once the listing already differs from the checkpoint. So
+    any write-visibility lag in the backend loses that case's event
+    for good. Re-pumping on a short interval rides the lag out; the
+    bound (``PUMP_ATTEMPTS * PUMP_INTERVAL``) sits well inside
+    ``EVENT_TIMEOUT``, so an event the watcher genuinely never
+    delivers still fails on the stream's own timeout rather than here.
+
+    The loop waits for the case's own path instead of any change: a
+    nested create also creates its parent directory, and a rename
+    diffs into a DELETE plus a CREATE, so "some change appeared" can
+    be true while the change the case asserts on is still invisible.
+    """
 
     def __init__(self, poller: ConsumerPoller) -> None:
         self._poller = poller
 
     async def __call__(self, case: dict) -> None:
-        await self._poller.pump()
+        want = case["expect"]["path"]
+        for attempt in range(PUMP_ATTEMPTS):
+            changes = await self._poller.pump()
+            if any(change.path.virtual == want for change in changes):
+                return
+            if attempt + 1 < PUMP_ATTEMPTS:
+                await asyncio.sleep(PUMP_INTERVAL)
 
 
 class PushTrigger:
