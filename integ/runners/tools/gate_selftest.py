@@ -130,6 +130,19 @@ def selftest_case_validation() -> None:
 
 
 def run_main(args: list[str], env: dict) -> int:
+    return run_main_out(args, env)[0]
+
+
+def run_main_out(args: list[str], env: dict) -> tuple[int, str]:
+    """Run the python runner, keeping stdout for an equivalence check.
+
+    Args:
+        args (list[str]): runner arguments.
+        env (dict): environment overrides; an empty value unsets.
+
+    Returns:
+        tuple: exit code and stdout.
+    """
     merged = {**os.environ, **env}
     for k, v in env.items():
         if v == "":
@@ -138,7 +151,7 @@ def run_main(args: list[str], env: dict) -> int:
                           capture_output=True,
                           text=True,
                           env=merged)
-    return proc.returncode
+    return proc.returncode, proc.stdout
 
 
 def selftest_strict_exit() -> None:
@@ -176,6 +189,79 @@ def selftest_strict_exit() -> None:
         blanked)
     check("allow-skip: an unknown service name is rejected", code != 0,
           f"exit {code}")
+
+
+SHARED_SERVICES = {"discord", "github", "http", "linear", "trello"}
+
+
+def selftest_target_pool() -> None:
+    """The pool may reorder work, never output, and never a shared fake.
+
+    Three separable claims, because they fail separately. A target whose
+    fake holds one world must hold that fake's lane; a target that scopes
+    itself by run id must NOT, since serializing those would give the pool
+    nothing to do (gws carries five core targets, s3 three, and they are
+    the slow ones); and a concurrent run must print what a serial run
+    printed, which is what lets a reader diff two CI logs.
+    """
+    data = json.loads((ROOT / "targets.json").read_text())
+    services = harness.validate_services(data)
+    alone, pool = harness.plan_run(data["targets"], services)
+
+    targets = data["targets"]
+    named = [targets[i]["id"] for i in alone]
+    check("pool: only a process-global opener runs alone", named == ["opfs"],
+          f"ran alone: {named}")
+
+    lanes = {lane for _, lane in pool if not lane.startswith("solo:")}
+    check("pool: exactly the one-world fakes hold a lane",
+          lanes == SHARED_SERVICES, f"lanes: {sorted(lanes)}")
+
+    scoped = [lane for i, lane in pool if targets[i].get("service") == "gws"]
+    check("pool: a run-scoped service does not serialize its own targets",
+          len(scoped) > 1 and all(la.startswith("solo:") for la in scoped),
+          f"gws lanes: {scoped}")
+
+    # The accident this whole mechanism exists for. `github` is safe in the
+    # core facet today only because that facet holds exactly one github
+    # target, which is a property of the data and not of the code. A second
+    # one must land in the same lane rather than pool beside the first.
+    twinned = with_manifest(lambda d: d["targets"].append({
+        **next(t for t in d["targets"] if t["id"] == "github"), "id":
+        "github-twin"
+    }))
+    _, twin_pool = harness.plan_run(twinned["targets"], services)
+    twin_lanes = [
+        lane for i, lane in twin_pool
+        if twinned["targets"][i]["id"].startswith("github")
+    ]
+    check("pool: two targets on a one-world fake share its lane",
+          len(twin_lanes) == 2 and set(twin_lanes) == {"github"},
+          f"lanes: {twin_lanes}")
+
+    def unknown_key() -> None:
+        harness.validate_services(
+            with_manifest(
+                lambda d: d["services"]["trello"].update({"nosuchkey": True})))
+
+    check("services: an unknown key on a service entry is rejected",
+          *raises(unknown_key, "unknown key"))
+
+    code = run_main(["--target", "ram", "--target-jobs", "0"], {})
+    check("--target-jobs below one is refused", code == 2, f"exit {code}")
+
+    # The equivalence itself, end to end. argerr is the one multi-target
+    # facet that needs no service at all, so this costs a few seconds.
+    serial_code, serial_out = run_main_out(["--facet", "argerr", "--strict"],
+                                           {})
+    pool_code, pool_out = run_main_out(
+        ["--facet", "argerr", "--strict", "--target-jobs", "4"], {})
+    check("pool: a concurrent run exits as the serial run did",
+          serial_code == 0 and pool_code == 0,
+          f"serial {serial_code}, pool {pool_code}")
+    check("pool: a concurrent run prints what the serial run printed",
+          serial_out == pool_out and serial_out != "",
+          f"{len(serial_out)} vs {len(pool_out)} chars")
 
 
 def run_case_targets(root: Path) -> int:
@@ -259,6 +345,22 @@ def run_typescript(args: list[str], env: dict) -> tuple[int, str]:
                              (lines[-1] if lines else ""))
 
 
+def ts_stdout(args: list[str]) -> str:
+    """The typescript runner's stdout, for the pool equivalence check.
+
+    Args:
+        args (list[str]): runner arguments.
+
+    Returns:
+        str: stdout, or empty when the runner failed.
+    """
+    proc = subprocess.run([str(TSX), "runners/typescript/main.ts", *args],
+                          capture_output=True,
+                          text=True,
+                          cwd=ROOT)
+    return proc.stdout if proc.returncode == 0 else ""
+
+
 def selftest_typescript_gates(require: bool) -> None:
     """The same two exits on the typescript host, so the gate is symmetric.
 
@@ -293,11 +395,23 @@ def selftest_typescript_gates(require: bool) -> None:
     check("permissive (ts): the same run still exits 0", code == 0,
           f"exit {code}: {err}")
 
+    # The pool's two claims on this host too. The equivalence needs stdout,
+    # which run_typescript drops in favour of stderr, so it spawns its own.
+    code, err = run_typescript(["--target", "ram", "--target-jobs", "0"], {})
+    check("--target-jobs below one is refused (ts)", code == 2,
+          f"exit {code}: {err}")
+    serial = ts_stdout(["--facet", "argerr", "--strict"])
+    pooled = ts_stdout(["--facet", "argerr", "--strict", "--target-jobs", "4"])
+    check("pool (ts): a concurrent run prints what the serial run printed",
+          serial == pooled and serial != "",
+          f"{len(serial)} vs {len(pooled)} chars")
+
 
 def main() -> None:
     selftest_services_table()
     selftest_case_validation()
     selftest_strict_exit()
+    selftest_target_pool()
     selftest_case_targets()
     selftest_typescript_gates("--require-ts" in sys.argv)
     print()

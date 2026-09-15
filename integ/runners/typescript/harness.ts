@@ -64,11 +64,21 @@ export interface Mount {
 export interface ServiceEnv {
   python: string[]
   typescript: string[]
+  // The fake behind this service holds ONE world rather than a namespace per
+  // run, so two targets on it can never be in flight together. Everything
+  // else mints a fresh run id per open and is free to overlap.
+  shared?: boolean
 }
+
+const SERVICE_KEYS = new Set(['python', 'typescript', 'shared'])
 
 export interface Target {
   id: string
   hosts: string[]
+  // This target's opener touches process-global state, so it runs alone --
+  // not merely apart from its own service's other targets. opfs is the only
+  // one: it replaces `globalThis.navigator` for the length of the run.
+  exclusive?: boolean
   service?: string
   epoch?: string
   apps?: string
@@ -252,6 +262,14 @@ export function loadServices(root: string): Map<string, ServiceEnv> {
   for (const [name, hosts] of Object.entries(data.services)) {
     if (!Array.isArray(hosts.python) || !Array.isArray(hosts.typescript)) {
       throw new Error(`targets.json: service '${name}' must declare both 'python' and 'typescript'`)
+    }
+    const unknown = Object.keys(hosts)
+      .filter((k) => !SERVICE_KEYS.has(k))
+      .sort()
+    if (unknown.length) {
+      throw new Error(
+        `targets.json: service '${name}' declares unknown key(s): ${unknown.join(', ')}`,
+      )
     }
   }
   return new Map(Object.entries(data.services))
@@ -742,22 +760,86 @@ export class Report {
   passed = 0
   failed = 0
   failures: string[] = []
+  readonly lines: string[] = []
+
+  /**
+   * A concurrent run gives every target its own report and absorbs them in
+   * the order the targets were selected, so the printed lines are the serial
+   * run's lines whatever order the targets actually finished in. Streaming is
+   * the default because a serial run should still report as it goes.
+   */
+  constructor(private readonly stream = true) {}
 
   record(target: string, caseId: string, diffs: string[]): void {
+    let line: string
     if (diffs.length) {
       this.failed++
       const joined = diffs.join('; ')
       this.failures.push(`[${target}] ${caseId}: ${joined}`)
-      process.stdout.write(`FAIL [${target}] ${caseId}: ${joined}\n`)
+      line = `FAIL [${target}] ${caseId}: ${joined}`
     } else {
       this.passed++
-      process.stdout.write(`ok   [${target}] ${caseId}\n`)
+      line = `ok   [${target}] ${caseId}`
     }
+    if (this.stream) process.stdout.write(`${line}\n`)
+    else this.lines.push(line)
+  }
+
+  /** Fold one target's buffered report into the run's, printing it. */
+  absorb(other: Report): void {
+    this.passed += other.passed
+    this.failed += other.failed
+    this.failures.push(...other.failures)
+    for (const line of other.lines) process.stdout.write(`${line}\n`)
   }
 
   summary(): string {
     return `${String(this.passed)} passed, ${String(this.failed)} failed`
   }
+}
+
+/**
+ * The lane a target holds for its whole run.
+ *
+ * Two targets in one lane are never in flight together. A lane is the SERVICE
+ * only when that service is declared `shared`, because those fakes hold one
+ * world: github serves every mount the same repository under one token, and
+ * trello, discord and linear re-seed themselves from the fixture on connect.
+ * Every other service mints a namespace per open -- gws a `/_run/<id>` path,
+ * s3 a key prefix, gridfs a database, dropbox an account -- so its targets
+ * cannot see each other and get a lane of their own. That distinction is the
+ * whole speed of this: gws carries five core targets and s3 three, and they
+ * are the slow ones.
+ */
+export function targetLane(target: Target, services: Map<string, ServiceEnv>): string {
+  const service = target.service
+  if (service !== undefined && services.get(service)?.shared === true) return service
+  return `solo:${target.id}`
+}
+
+/**
+ * Split eligible targets into the ones that run alone and the pool.
+ *
+ * A lane bounds a target against its own service's other targets; an
+ * `exclusive` target is bounded against EVERY other target, because what it
+ * touches is process-global rather than server-side. Those run first, one at
+ * a time, before the pool opens.
+ *
+ * Positions rather than entries, because the caller holds one output slot per
+ * position: two `--target ram` on one line are two runs, and anything keyed by
+ * the entry would merge one slot twice.
+ */
+export function planRun(
+  targets: Target[],
+  services: Map<string, ServiceEnv>,
+): { alone: number[]; pool: { at: number; lane: string }[] } {
+  const alone: number[] = []
+  const pool: { at: number; lane: string }[] = []
+  targets.forEach((t, at) => {
+    if (t.exclusive === true) alone.push(at)
+    else pool.push({ at, lane: targetLane(t, services) })
+  })
+  return { alone, pool }
 }
 
 export { ENC }

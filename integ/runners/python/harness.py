@@ -30,6 +30,12 @@ from mirage.types import FileStat, PathSpec
 CASE_DIRS = ("unix", "bash", "crossmount", "resources", "cli", "session",
              "console", "secrets")
 
+# A service entry names the env vars each host needs, and may declare
+# ``shared``: the fake behind it holds ONE world rather than a namespace per
+# run, so two targets on it can never be in flight together. Everything else
+# mints a fresh run id per ``open_target`` and is free to overlap.
+SERVICE_KEYS = frozenset({"python", "typescript", "shared"})
+
 
 def integ_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -77,9 +83,13 @@ def validate_services(data: dict) -> dict:
         raise KeyError(f"targets.json: services entry names no target: "
                        f"{', '.join(unused)}")
     for name, hosts in services.items():
-        if set(hosts) != {"python", "typescript"}:
+        if not {"python", "typescript"} <= set(hosts):
             raise KeyError(f"targets.json: service {name!r} must declare "
                            f"both 'python' and 'typescript'")
+        unknown = sorted(set(hosts) - SERVICE_KEYS)
+        if unknown:
+            raise KeyError(f"targets.json: service {name!r} declares unknown "
+                           f"key(s): {', '.join(unknown)}")
     return services
 
 
@@ -577,16 +587,94 @@ class Report:
     passed: int = 0
     failed: int = 0
     failures: list[str] = field(default_factory=list)
+    # A concurrent run gives every target its own report and absorbs them in
+    # the order the targets were selected, so the printed lines are the serial
+    # run's lines whatever order the targets actually finished in. Streaming is
+    # the default because a serial run should still report as it goes.
+    stream: bool = True
+    lines: list[str] = field(default_factory=list)
 
     def record(self, target: str, case_id: str, diffs: list[str]) -> None:
         if diffs:
             self.failed += 1
             joined = "; ".join(diffs)
             self.failures.append(f"[{target}] {case_id}: {joined}")
-            print(f"FAIL [{target}] {case_id}: {joined}")
+            line = f"FAIL [{target}] {case_id}: {joined}"
         else:
             self.passed += 1
-            print(f"ok   [{target}] {case_id}")
+            line = f"ok   [{target}] {case_id}"
+        if self.stream:
+            print(line)
+        else:
+            self.lines.append(line)
+
+    def absorb(self, other: "Report") -> None:
+        """Fold one target's buffered report into the run's, printing it.
+
+        Args:
+            other (Report): the per-target report to merge and flush.
+        """
+        self.passed += other.passed
+        self.failed += other.failed
+        self.failures.extend(other.failures)
+        for line in other.lines:
+            print(line)
 
     def summary(self) -> str:
         return f"{self.passed} passed, {self.failed} failed"
+
+
+def target_lane(target: dict, services: dict) -> str:
+    """The lane a target holds for its whole run.
+
+    Two targets in one lane are never in flight together. A lane is the
+    SERVICE only when that service is declared ``shared``, because those
+    fakes hold one world: github serves every mount the same repository
+    under one token, and trello, discord and linear re-seed themselves
+    from the fixture on connect. Every other service mints a namespace
+    per ``open_target`` -- gws a ``/_run/<id>`` path, s3 a key prefix,
+    gridfs a database, dropbox an account -- so its targets cannot see
+    each other and get a lane of their own. That distinction is the
+    whole speed of this: gws carries five core targets and s3 three, and
+    they are the slow ones.
+
+    Args:
+        target (dict): the target manifest entry.
+        services (dict): the table from load_services.
+
+    Returns:
+        str: the lane name.
+    """
+    service = target.get("service")
+    if service is not None and services[service].get("shared"):
+        return service
+    return f"solo:{target['id']}"
+
+
+def plan_run(targets: list[dict],
+             services: dict) -> tuple[list[int], list[tuple[int, str]]]:
+    """Split eligible targets into the ones that run alone and the pool.
+
+    A lane bounds a target against its own service's other targets; an
+    ``exclusive`` target is bounded against EVERY other target, because
+    what it touches is process-global rather than server-side. opfs is
+    the only one: its opener replaces ``globalThis.navigator`` for the
+    length of the run and restores the previous descriptor afterwards,
+    which no second target may be reading across. Those run first, one
+    at a time, before the pool opens.
+
+    Args:
+        targets (list[dict]): eligible targets, in selection order.
+        services (dict): the table from load_services.
+
+    Positions rather than entries, because the caller holds one output
+    slot per position: two ``--target ram`` on one line are two runs, and
+    anything keyed by the entry would merge one slot twice.
+
+    Returns:
+        tuple: positions that run alone, and (position, lane) for the pool.
+    """
+    alone = [i for i, t in enumerate(targets) if t.get("exclusive")]
+    pool = [(i, target_lane(t, services)) for i, t in enumerate(targets)
+            if not t.get("exclusive")]
+    return alone, pool
