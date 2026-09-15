@@ -36,7 +36,7 @@ CASE_DIR = Path(__file__).resolve().parent
 ALL_MODES = ("pull", "push", "event")
 EVENT_TIMEOUT = 20.0
 ABSENT_WINDOW = 1.0
-PUMP_WINDOW = EVENT_TIMEOUT / 4
+PUMP_WINDOW = EVENT_TIMEOUT / 2
 PUMP_INTERVAL = 0.25
 CLASS_BY_KIND = {
     "create": "OCP\\Files\\Events\\Node\\NodeCreatedEvent",
@@ -372,7 +372,61 @@ def _disk_notification(expect: dict, mount: str,
     return DISK_EVENT_BY_KIND[expect["kind"]], {"src_path": base + rel}
 
 
-class PullTrigger:
+def _framed(path: str) -> str:
+    """Spell ``path`` the way ``EventStream`` compares it.
+
+    Args:
+        path (str): Virtual path as a delta or a case file spells it.
+    """
+    return "/" + path.strip("/")
+
+
+def _miss_detail(want: str, observed: tuple[FileEvent, ...],
+                 pumps: int) -> str:
+    """Describe a re-pump phase that never saw ``want``.
+
+    The three causes a give-up can have are told apart by what the
+    deltas carried, so the line names both sides of the comparison
+    that failed: the path the trigger waited for, and the paths the
+    last delta that reported anything actually carried. No paths at
+    all across several pumps is a fingerprint that never moved or a
+    backend that never published the write; paths that are all
+    unrelated to the case is visibility lag on that one object; and
+    a path that differs from ``want`` only in its framing is the
+    comparison asymmetry, which this reports and deliberately does
+    not paper over -- ``EventStream`` compares ``_framed`` paths
+    while the trigger compares the raw ``virtual``, so a trailing or
+    leading slash blinds the trigger to a change the stream would
+    have matched.
+
+    Args:
+        want (str): Virtual path the case expects.
+        observed (tuple[FileEvent, ...]): Last delta that reported
+            any change; empty when no delta reported one.
+        pumps (int): Pumps the phase issued.
+    """
+    head = (f"waited for {want!r} over {pumps} pump(s) in "
+            f"{PUMP_WINDOW}s, last delta reported ")
+    if not observed:
+        return head + "no paths"
+    paths = [change.path.virtual for change in observed]
+    tail = f"{paths}"
+    if any(_framed(path) == _framed(want) for path in paths):
+        tail += " (framed match: raw comparison missed it)"
+    return head + tail
+
+
+class CaseTrigger:
+    """The trigger protocol ``_run_case`` drives: fire this case's
+    change signal, and answer for what it did when the case then
+    fails. Only pull mode has anything to add."""
+
+    def diagnostic(self) -> str:
+        """Extra detail for a failing case, or "" when there is none."""
+        return ""
+
+
+class PullTrigger(CaseTrigger):
     """Case trigger for pull mode: pump the consumer's poller until the
     case's mutation shows up in the backend listing.
 
@@ -390,6 +444,17 @@ class PullTrigger:
     backend listing whose duration is the backend's, not ours, so a
     slow one could stretch the phase past ``EVENT_TIMEOUT`` many
     times over and swallow the timeout the case must fail on.
+
+    The relation is ``PUMP_WINDOW = EVENT_TIMEOUT / 2``: half the
+    stream's own wait, which is wide enough to ride out a backend
+    that publishes a write a few seconds after acknowledging it, and
+    still strictly shorter than the wait the undelivered-event case
+    has to fail on. A quarter of it was the stricter reading and it
+    is not the one the earlier attempt-count version had: 20 attempts
+    on a 0.25s interval spent the sleeps alone, so a listing that
+    took anything at all pushed that phase well past five seconds.
+    A window that costs nothing when a case's first pump already sees
+    the change should not be tighter than the bound it replaced.
 
     The deadline caps each listing too, not only the decision to
     start another one: every pump is handed the time left, so a
@@ -411,35 +476,55 @@ class PullTrigger:
     that unwind is the backend client's, not ours. So the phase ends
     within ``PUMP_WINDOW`` plus the cost of tearing down one
     in-flight request, not within ``PUMP_WINDOW`` flat. That is a far
-    smaller overrun than a full listing, and it leaves the rest of
-    ``EVENT_TIMEOUT`` to the stream: an event the watcher genuinely
-    never delivers fails on that timeout, not here.
+    smaller overrun than a full listing, and the stream's own
+    ``EVENT_TIMEOUT`` still runs in full after it: an event the
+    watcher genuinely never delivers fails on that timeout, not here.
 
     The loop waits for the case's own path instead of any change: a
     nested create also creates its parent directory, and a rename
     diffs into a DELETE plus a CREATE, so "some change appeared" can
     be true while the change the case asserts on is still invisible.
+
+    Giving up is recorded rather than silent, because the case that
+    follows fails on the stream timeout and that message says only
+    that no event arrived, which is true of every cause. The record
+    is built from the deltas the loop already read, on the give-up
+    path only, so a case whose first pump sees its change pays
+    nothing for it.
     """
 
     def __init__(self, poller: ConsumerPoller) -> None:
         self._poller = poller
+        self._miss = ""
+
+    def diagnostic(self) -> str:
+        """What the last re-pump phase failed to see, or "" when it
+        saw the case's path (or when no phase has run)."""
+        return self._miss
 
     async def __call__(self, case: dict) -> None:
         want = case["expect"]["path"]
         loop = asyncio.get_running_loop()
         deadline = loop.time() + PUMP_WINDOW
+        self._miss = ""
+        observed: tuple[FileEvent, ...] = ()
+        pumps = 0
         while True:
             remaining = deadline - loop.time()
             changes = await self._poller.pump(timeout=max(remaining, 0.0))
+            pumps += 1
+            if changes:
+                observed = changes
             if any(change.path.virtual == want for change in changes):
                 return
             remaining = deadline - loop.time()
             if remaining <= 0:
+                self._miss = _miss_detail(want, observed, pumps)
                 return
             await asyncio.sleep(min(PUMP_INTERVAL, remaining))
 
 
-class PushTrigger:
+class PushTrigger(CaseTrigger):
     """Case trigger for push mode: POST the webhook payload the case's
     mutation would have produced. No poller exists, so a delivered
     event can only have come from the webhook."""
@@ -456,7 +541,7 @@ class PushTrigger:
             await resp.read()
 
 
-class EventTrigger:
+class EventTrigger(CaseTrigger):
     """Case trigger for event mode: hand the backend its own service
     notification and notify whatever the event hook maps it to.
 
@@ -497,8 +582,8 @@ async def _run_check(ws: Workspace, check: dict) -> tuple[bool, str]:
     return ok, f"{check['cmd']!r} absent {check['absent']!r}"
 
 
-async def _run_case(ws: Workspace, op: object, trigger, stream: EventStream,
-                    case: dict) -> tuple[bool, str]:
+async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
+                    stream: EventStream, case: dict) -> tuple[bool, str]:
     """Run one warm -> mutate -> trigger -> event -> checks case.
 
     ``warm`` reads populate mirage's cache BEFORE the external
@@ -509,8 +594,9 @@ async def _run_case(ws: Workspace, op: object, trigger, stream: EventStream,
     Args:
         ws (Workspace): Watched workspace.
         op (object): External writer operator.
-        trigger (Callable): Awaitable firing the change signal for
-            this case (pull pump or push webhook POST).
+        trigger (CaseTrigger): Fires the change signal for this case
+            (pull pump or push webhook POST) and, when the case then
+            fails, says what it saw while doing so.
         stream (EventStream): Armed watch consumer.
         case (dict): One case from the file.
     """
@@ -522,8 +608,10 @@ async def _run_case(ws: Workspace, op: object, trigger, stream: EventStream,
     if want.get("delivered", True):
         change = await stream.expect(want["path"], want["kind"])
         if change is None:
-            return False, (f"no {want['kind']} for {want['path']} within "
-                           f"{EVENT_TIMEOUT}s")
+            detail = (f"no {want['kind']} for {want['path']} within "
+                      f"{EVENT_TIMEOUT}s")
+            hint = trigger.diagnostic()
+            return False, f"{detail}; {hint}" if hint else detail
     else:
         if not await stream.absent(want["path"]):
             return False, f"unexpected delivery for {want['path']}"
@@ -561,15 +649,15 @@ async def _seed(ws: Workspace, op: object, spec: dict) -> None:
         await op.write(f"data/{name}", b"seed")
 
 
-async def _run_battery(ws: Workspace, op: object, trigger, agen: object,
-                       cases: list[dict], label: str,
+async def _run_battery(ws: Workspace, op: object, trigger: CaseTrigger,
+                       agen: object, cases: list[dict], label: str,
                        mode: str) -> list[tuple[str, bool, str]]:
     """Run one battery of cases against one armed watch iterator.
 
     Args:
         ws (Workspace): Watched workspace.
         op (object): External writer operator.
-        trigger (Callable): Case trigger (pull pump or push POST).
+        trigger (CaseTrigger): Case trigger (pull pump or push POST).
         agen (object): The ``watch`` async iterator for this battery.
         cases (list[dict]): Cases to run in order; a case with a
             ``modes`` list runs only in those modes (a rename is a
@@ -730,8 +818,8 @@ async def _seed_nested(op: object, block: dict) -> None:
         await op.write(rel, body.encode())
 
 
-async def _nested_core(spec: dict, ws: Workspace, op: object, trigger,
-                       mode: str, results: list) -> None:
+async def _nested_core(spec: dict, ws: Workspace, op: object,
+                       trigger: CaseTrigger, mode: str, results: list) -> None:
     """Shared body of the nested-mount battery: one watch on the shared
     ancestor spans both mounts, and each event must invalidate the
     mount that owns its path (longest prefix), so post-event reads
@@ -741,7 +829,7 @@ async def _nested_core(spec: dict, ws: Workspace, op: object, trigger,
         spec (dict): Parsed case file (needs a ``nested`` block).
         ws (Workspace): Nested-mount workspace.
         op (object): External writer operator.
-        trigger (Callable): Case trigger (pull pump or push POST).
+        trigger (CaseTrigger): Case trigger (pull pump or push POST).
         mode (str): "pull" or "push".
         results (list): Result rows to append to.
     """
@@ -988,16 +1076,56 @@ def _expand(spec: dict) -> list[dict]:
     return [{**spec, "resource": name} for name in names]
 
 
+class StepSummary:
+    """Mirror the failing result lines into the job's step summary.
+
+    stdout is the only place this battery reports, and a hosted
+    runner's raw step log is not always reachable afterwards (an org
+    egress policy can block the blob host the Actions API hands out
+    for it), which leaves a red job whose check output says nothing
+    but the exit code. ``$GITHUB_STEP_SUMMARY`` is the one channel
+    that renders on the job page AND comes back through the API, so
+    every FAIL line is appended there as well.
+
+    Only failures are written, and the file is appended line by line
+    rather than once at the end, so a run the step timeout kills
+    still names the cases it had already failed. Outside Actions the
+    variable is unset and every call is a no-op.
+    """
+
+    def __init__(self) -> None:
+        value = os.environ.get("GITHUB_STEP_SUMMARY")
+        self._path = Path(value) if value else None
+        self._headed = False
+
+    def add(self, line: str) -> None:
+        """Append one failing result line.
+
+        Args:
+            line (str): The FAIL line exactly as stdout carries it.
+        """
+        if self._path is None:
+            return
+        with self._path.open("a", encoding="utf-8") as fh:
+            if not self._headed:
+                fh.write("## Watch battery failures\n\n")
+                self._headed = True
+            fh.write(f"- `{line}`\n")
+
+
 async def main() -> None:
     files = sorted(p for p in CASE_DIR.glob("*.json"))
+    summary = StepSummary()
     failed = 0
     for path in files:
         for spec in _expand(json.loads(path.read_text())):
             for case_id, ok, detail in await _run_file(spec):
                 status = "PASS" if ok else "FAIL"
-                print(f"{status} [{spec['resource']}] {case_id}: {detail}")
+                line = f"{status} [{spec['resource']}] {case_id}: {detail}"
+                print(line)
                 if not ok:
                     failed += 1
+                    summary.add(line)
     if failed:
         print(f"FAIL: {failed} watch case(s) failed", file=sys.stderr)
         sys.exit(1)
