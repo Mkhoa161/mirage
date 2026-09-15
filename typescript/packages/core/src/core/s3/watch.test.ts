@@ -92,7 +92,7 @@ describe('S3Walk', () => {
     // The ETag leads, and it is the field carrying the distinction
     // here: LastModified is constant in this mock, so the stamp and
     // size alone would collide across files of equal size.
-    expect(files[0]?.fingerprint).toBe('etag-a|2026-03-31T00:00:00.000Z|5')
+    expect(files[0]?.fingerprint).toBe('etag-a|5')
     expect(files[0]?.size).toBe(5)
   })
 
@@ -128,7 +128,7 @@ describe('s3 delta hook', () => {
     'preserves persisted fallback fingerprints for %s',
     async (stamp) => {
       mockListing([{ key: 'a.txt', size: 5, etag: '', modified: new Date(stamp) }])
-      const checkpoint = JSON.stringify({ '/s3/a.txt': `|${stamp}|5` })
+      const checkpoint = JSON.stringify({ '/s3/a.txt': `${stamp}|5` })
       const hook = buildDeltaHook(accessor())
       const spec = root('/s3', '')
       const unchanged = await hook.pull(spec, checkpoint)

@@ -192,7 +192,7 @@ export class MontyVFS {
       throw asGuestError(caught, src)
     }
     this.missing.add(src)
-    this.established(dst)
+    this.establishedTree(dst)
     return null
   }
 
@@ -311,6 +311,28 @@ export class MontyVFS {
     this.missing.delete(path)
     for (let slash = path.lastIndexOf('/'); slash > 0; slash = path.lastIndexOf('/', slash - 1)) {
       this.missing.delete(path.slice(0, slash))
+    }
+  }
+
+  /**
+   * Forget the absences a rename invalidated at its destination:
+   * everything `established` forgets, plus everything UNDER the
+   * destination.
+   *
+   * A rename is the one op here that can make a whole subtree exist at
+   * once, and a cached absence never self-heals, because the cache
+   * answers before the dispatch ever runs. So a child the guest had
+   * asked about before the move went on reading as missing after it,
+   * for the rest of the run.
+   *
+   * Args:
+   *   path: the directory that now exists, with its contents.
+   */
+  private establishedTree(path: string): void {
+    this.established(path)
+    const prefix = path.endsWith('/') ? path : path + '/'
+    for (const cached of this.missing) {
+      if (cached.startsWith(prefix)) this.missing.delete(cached)
     }
   }
 

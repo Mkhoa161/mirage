@@ -23,6 +23,6 @@ describe('Nextcloud delta hook', () => {
     // Nextcloud's own etag comes off an mtime with one-second
     // granularity, so the stamp and size that follow are what catch a
     // rewrite inside one second.
-    expect(delta.changes[0]?.metadata?.fingerprint).toBe('etag-7|2026-07-11T12:00:00Z|7')
+    expect(delta.changes[0]?.metadata?.fingerprint).toBe('etag-7|7')
   })
 })

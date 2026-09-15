@@ -314,6 +314,15 @@ function compatibilityDirect(): void {
       { timeZone: 'Asia/Kolkata', dateTime: '2026-07-01T10:00:00.123' },
       { timeZone: 'Asia/Kolkata', dateTime: '2026-07-01T10:00:00+05:30' },
     ],
+    // A zone whose historical offset carries SECONDS still renders a
+    // valid RFC3339 offset. Europe/Paris ran at +00:09:21 until 1911,
+    // which Intl reports as 9.35 minutes, and the raw value rendered
+    // `+00:9.35` -- not a timestamp, and unparseable by every client.
+    [
+      'Europe/Paris',
+      { timeZone: 'Europe/Paris', dateTime: '1900-01-01T00:00:00Z' },
+      { timeZone: 'Europe/Paris', dateTime: '1900-01-01T00:09:00+00:09' },
+    ],
   ] as const) {
     const result = formatEventTime(slot, calendarTz)
     eq('direct Calendar renders in the calendar zone', { ...result }, { ...expected })

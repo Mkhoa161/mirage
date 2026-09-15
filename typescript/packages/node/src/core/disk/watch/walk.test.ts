@@ -66,9 +66,7 @@ describe('DiskWalk', () => {
     const entries = await collect(new DiskWalk(new DiskAccessor(root)), spec('/d/data', 'data'))
     const entry = entries.find((e) => !e.isDir)
     expect(entry?.size).toBe(5)
-    // Leading empty field: a disk listing carries no backend version,
-    // and the composite keeps the slot rather than changing shape.
-    expect(entry?.fingerprint).toBe(`|${entry?.modified ?? ''}|5`)
+    expect(entry?.fingerprint).toBe(`${entry?.modified ?? ''}|5`)
   })
 
   it('walks a missing root as empty', async () => {

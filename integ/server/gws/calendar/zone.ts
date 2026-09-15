@@ -189,7 +189,17 @@ export function formatEventTime(slot: EventTime, calendarTz: string): EventTime 
 // An instant as RFC3339 in `timeZone`: seconds precision with a ±hh:mm
 // offset, which is the only dateTime shape the live API emits.
 function renderIn(instant: number, timeZone: string): string {
-  const offset = zoneOffsetMs(instant, timeZone) / 60_000
+  // Whole minutes, and the SAME rounded number on both halves below. A
+  // zone's historical offset can carry seconds -- Europe/Paris ran at
+  // +00:09:21 until 1911, which Intl reports as 9.35 minutes -- and
+  // RFC3339 has nowhere to put them: the raw value rendered `+00:9.35`,
+  // which is not a timestamp at all, and the formatter rewrites even an
+  // input that arrived with its own offset. Rounding the wall clock by
+  // the same number keeps the rendered value pointing at the instant it
+  // came from, which is what a caller reads back; only the local
+  // reading drifts, by under a minute, and only for dates old enough to
+  // predate minute-aligned zones.
+  const offset = Math.round(zoneOffsetMs(instant, timeZone) / 60_000)
   const minutes = Math.abs(offset)
   const hh = String(Math.floor(minutes / 60)).padStart(2, '0')
   const mm = String(minutes % 60).padStart(2, '0')

@@ -333,6 +333,30 @@ describe('MontyVFS negative cache', () => {
     down = false
     expect(await vfs.read('/ram/x')).toEqual(new TextEncoder().encode('back'))
   })
+
+  it('forgets the absences under a rename destination', async () => {
+    // A rename is the one op that makes a whole subtree exist at once.
+    // A cached absence never self-heals, because the cache answers
+    // before the dispatch runs, so a child the guest asked about
+    // before the move went on reading as missing for the rest of the
+    // run.
+    const live = new Set(['/ram/src/child.txt'])
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'rename') {
+        live.delete('/ram/src/child.txt')
+        live.add('/ram/dst/child.txt')
+        return Promise.resolve(null)
+      }
+      if (op === 'stat' && live.has(path)) {
+        return Promise.resolve(new FileStat({ name: path, size: 1, type: FileType.FILE }))
+      }
+      return Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+    })
+    const vfs = viewOn(dispatch)
+    expect(await vfs.stat('/ram/dst/child.txt')).toBeNull()
+    await vfs.rename('/ram/src', '/ram/dst')
+    expect(await vfs.stat('/ram/dst/child.txt')).not.toBeNull()
+  })
 })
 
 // Asked of the name plane through readlink, as python's is_link is.

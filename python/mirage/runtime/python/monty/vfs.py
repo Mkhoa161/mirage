@@ -193,6 +193,25 @@ class MontyVFS:
             self._missing.discard(virtual[:slash])
             slash = virtual.rfind("/", 0, slash)
 
+    def _established_tree(self, virtual: str) -> None:
+        """Forget the absences a rename invalidated at its destination.
+
+        Everything ``_established`` forgets, plus everything UNDER the
+        destination. A rename is the one op here that can make a whole
+        subtree exist at once, and a cached absence never self-heals,
+        because the cache answers before the dispatch ever runs. So a
+        child the guest had asked about before the move went on reading
+        as missing after it, for the rest of the run.
+
+        Args:
+            virtual (str): the directory that now exists, with its
+                contents.
+        """
+        self._established(virtual)
+        prefix = virtual.rstrip("/") + "/"
+        for cached in [p for p in self._missing if p.startswith(prefix)]:
+            self._missing.discard(cached)
+
     def write(self, virtual: str, data: bytes) -> None:
         if self._core is None:
             return
@@ -256,4 +275,4 @@ class MontyVFS:
             return
         self._core.rename(src, dst)
         self._missing.add(src)
-        self._established(dst)
+        self._established_tree(dst)

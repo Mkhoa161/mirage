@@ -16,16 +16,26 @@ import { describe, expect, it } from 'vitest'
 import { statFingerprint } from './fingerprint.ts'
 
 describe('statFingerprint', () => {
-  it('joins every field the listing carries', () => {
-    expect(statFingerprint('etag-1', '2026-01-01T00:00:00', 5)).toBe('etag-1|2026-01-01T00:00:00|5')
+  it('joins the etag and the size', () => {
+    expect(statFingerprint('etag-1', '2026-01-01T00:00:00', 5)).toBe('etag-1|5')
   })
 
-  it('composes without an etag', () => {
-    expect(statFingerprint(null, '2026-01-01T00:00:00', 5)).toBe('|2026-01-01T00:00:00|5')
+  it('substitutes the stamp without an etag', () => {
+    expect(statFingerprint(null, '2026-01-01T00:00:00', 5)).toBe('2026-01-01T00:00:00|5')
   })
 
   it('handles missing fields', () => {
-    expect(statFingerprint(null, null, null)).toBe('||None')
+    expect(statFingerprint(null, null, null)).toBe('|None')
+  })
+
+  it('does not move on a stamp change alone for a versioned backend', () => {
+    // S3's single-part ETag and Dropbox's content_hash are
+    // content-addressed: rewriting a file with identical bytes leaves
+    // them alone while the stamp moves. Folding the stamp in would
+    // report that idempotent rewrite as an UPDATE.
+    expect(statFingerprint('sha-1', '2026-01-01T00:00:00', 5)).toBe(
+      statFingerprint('sha-1', '2026-06-06T00:00:00', 5),
+    )
   })
 
   it('moves on a size change under a stale etag', () => {

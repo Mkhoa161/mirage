@@ -1,18 +1,27 @@
 from mirage.watch.fingerprint import stat_fingerprint
 
 
-def test_stat_fingerprint_joins_every_field():
-    assert stat_fingerprint("etag-1", "2026-01-01T00:00:00",
-                            5) == "etag-1|2026-01-01T00:00:00|5"
+def test_stat_fingerprint_joins_the_etag_and_the_size():
+    assert stat_fingerprint("etag-1", "2026-01-01T00:00:00", 5) == "etag-1|5"
 
 
-def test_stat_fingerprint_without_an_etag():
+def test_stat_fingerprint_substitutes_the_stamp_without_an_etag():
     assert stat_fingerprint(None, "2026-01-01T00:00:00",
-                            5) == "|2026-01-01T00:00:00|5"
+                            5) == "2026-01-01T00:00:00|5"
 
 
 def test_stat_fingerprint_handles_missing_fields():
-    assert stat_fingerprint(None, None, None) == "||None"
+    assert stat_fingerprint(None, None, None) == "|None"
+
+
+def test_a_stamp_move_alone_is_not_an_update_for_a_versioned_backend():
+    # S3's single-part ETag and Dropbox's content_hash are
+    # content-addressed: rewriting a file with identical bytes leaves
+    # them alone while the stamp moves. Folding the stamp in would
+    # report that idempotent rewrite as an UPDATE.
+    assert stat_fingerprint("sha-1", "2026-01-01T00:00:00",
+                            5) == stat_fingerprint("sha-1",
+                                                   "2026-06-06T00:00:00", 5)
 
 
 def test_a_size_change_moves_the_fingerprint_under_a_stale_etag():

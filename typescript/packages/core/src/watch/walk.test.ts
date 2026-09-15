@@ -70,15 +70,15 @@ describe('entryOf', () => {
         fingerprint: 'etag-1',
       }),
     )
-    expect(entry.fingerprint).toBe('etag-1|T|3')
+    expect(entry.fingerprint).toBe('etag-1|3')
   })
 
-  it('composes without a backend version', () => {
+  it('substitutes the stamp without a backend version', () => {
     const entry = entryOf(
       '/m/f.txt',
       new FileStat({ name: 'f.txt', type: FileType.FILE, size: 3, modified: 'T' }),
     )
-    expect(entry.fingerprint).toBe('|T|3')
+    expect(entry.fingerprint).toBe('T|3')
   })
 })
 

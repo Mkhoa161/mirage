@@ -216,6 +216,19 @@ def test_a_created_ancestor_is_forgotten_along_with_the_leaf():
     assert vfs.stat("/s3/a") is not None
 
 
+def test_a_rename_forgets_the_absences_under_its_destination():
+    # A rename is the one op that makes a whole subtree exist at once.
+    # A cached absence never self-heals, because the cache answers
+    # before the dispatch runs, so a child the guest asked about before
+    # the move went on reading as missing for the rest of the run.
+    core = CountingCore({"/s3/src/child.txt": b"x"})
+    vfs = MontyVFS(core)
+    assert vfs.stat("/s3/dst/child.txt") is None
+    core.files["/s3/dst/child.txt"] = core.files.pop("/s3/src/child.txt")
+    vfs.rename("/s3/src", "/s3/dst")
+    assert vfs.stat("/s3/dst/child.txt") is not None
+
+
 def test_a_refused_listing_is_not_read_as_an_absence():
     # A backend that will not answer has said nothing about whether the
     # path is there, so the refusal has to come out as itself. Folding
