@@ -92,22 +92,11 @@ runs:
         occ config:system:set auth.bruteforce.protection.enabled \
           --value=false --type=boolean
 
-        # password_policy is disabled only so the resetpassword below is not
-        # refused as a weak password, and it is the one app this step turns
-        # off.
-        #
-        # Three more used to follow it, purely for speed: none of them is
-        # reachable through WebDAV and each adds work to every write, since
-        # files_versions copies the old content on overwrite, files_trashbin
-        # turns DELETE into MOVE, and activity writes a row per change. They
-        # are deliberately left enabled, because disabling them broke the
-        # watch battery's pull-mode update detection: an overwrite stopped
-        # moving the fingerprint the recursive listing compares (the ETag,
-        # falling back to mtime|size), so a pull case polled 35 times in ten
-        # seconds and was told no path had changed, while create and delete
-        # in the same battery kept passing. A battery that can see an update
-        # outranks that share of the saving, which was never the dominant one
-        # anyway -- the hashing knobs above are.
+        # None of these is reachable through WebDAV, and each adds work to
+        # every write: files_versions copies the old content on overwrite,
+        # files_trashbin turns DELETE into MOVE, activity writes a row per
+        # change. password_policy is disabled only so the resetpassword below
+        # is not refused as a weak password.
         #
         # app:disable exits 0 for an app that is absent or already disabled
         # (core/Command/App/Disable.php prints "No such app enabled"), which
@@ -115,6 +104,9 @@ runs:
         # means the exit code verifies nothing: a typo here is swallowed and
         # shows up only as the battery running slowly.
         occ app:disable password_policy
+        occ app:disable files_versions
+        occ app:disable files_trashbin
+        occ app:disable activity
 
         # The admin hash was written at install time under the expensive
         # parameters, and password_verify reads its cost from the stored hash
