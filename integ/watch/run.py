@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 from functools import partial
 from pathlib import Path
 
@@ -32,6 +33,8 @@ from mirage.types import FileEvent, PathSpec
 from mirage.watch import RAMWatchQueue, Watcher
 
 CASE_DIR = Path(__file__).resolve().parent
+DEFAULT_RESULTS_FILE = (Path(tempfile.gettempdir()) /
+                        "watch-battery-results.txt")
 
 ALL_MODES = ("pull", "push", "event")
 EVENT_TIMEOUT = 20.0
@@ -1112,9 +1115,19 @@ class StepSummary:
     runner's raw step log is not always reachable afterwards (an org
     egress policy can block the blob host the Actions API hands out
     for it), which leaves a red job whose check output says nothing
-    but the exit code. ``$GITHUB_STEP_SUMMARY`` is the one channel
-    that renders on the job page AND comes back through the API, so
-    every FAIL line is appended there as well.
+    but the exit code. ``$GITHUB_STEP_SUMMARY`` renders every FAIL
+    line on the job page, so a human who can open the run reads the
+    failing case without opening the step log.
+
+    That is the whole of what it buys, and the limit matters:
+    a step summary is **not** retrievable through the API. On a
+    completed failing job the REST check-run's ``output.title``,
+    ``output.summary`` and ``output.text`` are all null, its sole
+    annotation is ``Process completed with exit code 1.``, and the
+    job's HTML page answers 403 to a token. So a reader who only has
+    the API sees nothing here, which is why ``ResultsFile`` persists
+    the same content as an uploaded artifact -- artifacts the API
+    does serve.
 
     Only failures are written, and the file is appended line by line
     rather than once at the end, so a run the step timeout kills
@@ -1142,9 +1155,56 @@ class StepSummary:
             fh.write(f"- `{line}`\n")
 
 
+class ResultsFile:
+    """Persist the result transcript to a file on disk.
+
+    This is the channel a reader outside the runner actually gets.
+    The step summary renders for a human on the job page and stops
+    there, and the raw step log is behind a blob host an org egress
+    policy can block; an artifact is served by the REST API, so the
+    workflow uploads this file with ``if: always()`` and the failing
+    case's name survives the job.
+
+    PASS lines are written too, because the list of cases that ran
+    is itself diagnostic: a battery that fell over before it reached
+    a backend and one whose every case passed both leave an empty
+    failure list, and only the transcript tells them apart.
+
+    The file is truncated on construction rather than on first write,
+    so it exists even for a run that reports no lines at all -- an
+    upload that silently finds nothing is the same hole this is
+    closing. Lines are appended as they are printed, so a run the
+    step timeout kills keeps what it had already reported.
+    ``WATCH_RESULTS_FILE`` overrides the path.
+    """
+
+    def __init__(self) -> None:
+        value = os.environ.get("WATCH_RESULTS_FILE")
+        self._path = Path(value) if value else DEFAULT_RESULTS_FILE
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text("", encoding="utf-8")
+
+    @property
+    def path(self) -> Path:
+        """Where the transcript is being written."""
+        return self._path
+
+    def add(self, line: str) -> None:
+        """Append one result line.
+
+        Args:
+            line (str): The PASS or FAIL line exactly as stdout
+                carries it.
+        """
+        with self._path.open("a", encoding="utf-8") as fh:
+            fh.write(f"{line}\n")
+
+
 async def main() -> None:
     files = sorted(p for p in CASE_DIR.glob("*.json"))
     summary = StepSummary()
+    results = ResultsFile()
+    print(f"watch battery results: {results.path}")
     failed = 0
     for path in files:
         for spec in _expand(json.loads(path.read_text())):
@@ -1152,13 +1212,18 @@ async def main() -> None:
                 status = "PASS" if ok else "FAIL"
                 line = f"{status} [{spec['resource']}] {case_id}: {detail}"
                 print(line)
+                results.add(line)
                 if not ok:
                     failed += 1
                     summary.add(line)
     if failed:
-        print(f"FAIL: {failed} watch case(s) failed", file=sys.stderr)
+        verdict = f"FAIL: {failed} watch case(s) failed"
+        results.add(verdict)
+        print(verdict, file=sys.stderr)
         sys.exit(1)
-    print("OK: all watch cases passed")
+    verdict = "OK: all watch cases passed"
+    results.add(verdict)
+    print(verdict)
 
 
 if __name__ == "__main__":
