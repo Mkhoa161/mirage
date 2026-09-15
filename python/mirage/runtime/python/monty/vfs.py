@@ -157,11 +157,32 @@ class MontyVFS:
             return False
         return True
 
+    def _established(self, virtual: str) -> None:
+        """Forget every absence a creation just invalidated.
+
+        The path itself and the ancestors it may have brought into
+        being with it. `mkdir(parents=True)` is the obvious one, but a
+        write has the same shape on a prefix store, where the key
+        materializes every directory above it. Forgetting the leaf
+        alone left an ancestor the guest had already asked about
+        cached as missing, so a later stat of it skipped the mount's
+        row and answered from monty's own tree with a synthetic mode
+        and stamp.
+
+        Args:
+            virtual (str): the path that now exists.
+        """
+        self._missing.discard(virtual)
+        slash = virtual.rfind("/")
+        while slash > 0:
+            self._missing.discard(virtual[:slash])
+            slash = virtual.rfind("/", 0, slash)
+
     def write(self, virtual: str, data: bytes) -> None:
         if self._core is None:
             return
         self._core.write(virtual, data)
-        self._missing.discard(virtual)
+        self._established(virtual)
 
     def append(self, virtual: str, data: bytes, whole: bytes) -> None:
         """Ship only `data`, falling back to writing `whole`.
@@ -174,25 +195,25 @@ class MontyVFS:
         if self._core is None:
             return
         self._core.append(virtual, data, whole)
-        self._missing.discard(virtual)
+        self._established(virtual)
 
     def create(self, virtual: str) -> None:
         if self._core is None:
             return
         self._core.create(virtual)
-        self._missing.discard(virtual)
+        self._established(virtual)
 
     def truncate(self, virtual: str) -> None:
         if self._core is None:
             return
         self._core.truncate(virtual)
-        self._missing.discard(virtual)
+        self._established(virtual)
 
     def mkdir(self, virtual: str, parents: bool) -> None:
         if self._core is None:
             return
         self._core.call("mkdir", virtual, parents=parents)
-        self._missing.discard(virtual)
+        self._established(virtual)
 
     def rmdir(self, virtual: str) -> None:
         if self._core is None:
@@ -220,4 +241,4 @@ class MontyVFS:
             return
         self._core.rename(src, dst)
         self._missing.add(src)
-        self._missing.discard(dst)
+        self._established(dst)

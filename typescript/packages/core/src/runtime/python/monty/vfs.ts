@@ -112,7 +112,7 @@ export class MontyVFS {
     } catch (caught) {
       throw asGuestError(caught, path)
     }
-    this.missing.delete(path)
+    this.established(path)
     // Characters the way python's len counts them (code points), which
     // is what pathlib's write_text returns to the guest.
     return typeof data === 'string' ? Array.from(data).length : bytes.length
@@ -125,27 +125,27 @@ export class MontyVFS {
    */
   async append(path: string, tail: Uint8Array, whole: Uint8Array): Promise<null> {
     const out = await this.mutate(path, () => this.core.append(path, tail, whole))
-    this.missing.delete(path)
+    this.established(path)
     return out
   }
 
   /** Establish an empty file, the open-time effect of 'w'/'a' on a missing path. */
   async create(path: string): Promise<null> {
     const out = await this.mutate(path, () => this.core.create(path))
-    this.missing.delete(path)
+    this.established(path)
     return out
   }
 
   /** Discard content, the open-time effect of 'w' on an existing path. */
   async truncate(path: string): Promise<null> {
     const out = await this.mutate(path, () => this.core.truncate(path))
-    this.missing.delete(path)
+    this.established(path)
     return out
   }
 
   async mkdir(path: string, parents = false): Promise<null> {
     const out = await this.mutate(path, () => this.core.mkdir(path, parents))
-    this.missing.delete(path)
+    this.established(path)
     return out
   }
 
@@ -182,7 +182,7 @@ export class MontyVFS {
       throw asGuestError(caught, src)
     }
     this.missing.add(src)
-    this.missing.delete(dst)
+    this.established(dst)
     return null
   }
 
@@ -267,6 +267,27 @@ export class MontyVFS {
     const found = entries?.find((e) => e.path === path || e.path === path + '/') ?? null
     if (found === null) this.missing.add(path)
     return found
+  }
+
+  /**
+   * Forget every absence a creation just invalidated: the path itself
+   * and the ancestors it may have brought into being with it.
+   *
+   * `mkdir(parents=true)` is the obvious one, but a write has the
+   * same shape on a prefix store, where the key materializes every
+   * directory above it. Forgetting the leaf alone left an ancestor
+   * the guest had already asked about cached as missing, so a later
+   * stat of it skipped the mount's row and answered from the scratch
+   * tree with a synthetic mode and stamp.
+   *
+   * Args:
+   *   path: the path that now exists.
+   */
+  private established(path: string): void {
+    this.missing.delete(path)
+    for (let slash = path.lastIndexOf('/'); slash > 0; slash = path.lastIndexOf('/', slash - 1)) {
+      this.missing.delete(path.slice(0, slash))
+    }
   }
 
   /**

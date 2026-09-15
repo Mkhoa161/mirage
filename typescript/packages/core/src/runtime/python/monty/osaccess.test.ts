@@ -343,6 +343,41 @@ describe('MirageOSAccess stat', () => {
     )
     expect(statOnly.mock.calls.filter(([op]) => op === 'readdir')).toHaveLength(0)
   })
+
+  it('forgets a cached ancestor absence when mkdir brings the ancestor into being', async () => {
+    // A stat that missed is remembered, and `mkdir(parents=True)` then
+    // makes the ancestor real. Forgetting only the leaf left the
+    // ancestor cached as missing, so a later stat of it skipped the
+    // mount's row and answered from the scratch tree instead: the
+    // tree's own mode and the run's own stamp, not the backend's.
+    const made = new Set<string>()
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      const bare = path.replace(/\/$/, '')
+      if (op === 'mkdir') {
+        for (let s = bare.length; s > 0; s = bare.lastIndexOf('/', s - 1)) {
+          made.add(bare.slice(0, s))
+        }
+        return Promise.resolve(null)
+      }
+      if (op === 'stat' && made.has(bare)) {
+        return Promise.resolve(
+          new FileStat({
+            name: bare,
+            type: FileType.DIRECTORY,
+            mode: 0o750,
+            modified: '2026-07-15T00:00:00Z',
+          }),
+        )
+      }
+      return Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+    })
+    const access = accessOn(dispatch)
+    await Promise.resolve(access.handle('Path.stat', ['/ram/a'])).catch(() => null)
+    await Promise.resolve(access.handle('Path.mkdir', ['/ram/a/b'], { parents: true }))
+    const row = (await Promise.resolve(access.handle('Path.stat', ['/ram/a']))) as FakeClassInstance
+    expect((row.instance as GuestStat).st_mode).toBe(0o40750)
+    expect((row.instance as GuestStat).st_mtime).toBe(1784073600)
+  })
 })
 
 describe('MirageOSAccess clock and lexical doors', () => {

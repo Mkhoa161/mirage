@@ -176,6 +176,22 @@ class RefusingCore(CountingCore):
         raise PermissionError(errno.EACCES, "denied", path)
 
 
+def test_a_created_ancestor_is_forgotten_along_with_the_leaf():
+    # `mkdir(parents=True)` brings the ancestors into being too, so a
+    # miss the guest already cached for one of them is stale the moment
+    # the call returns. Forgetting only the leaf left the ancestor
+    # cached as missing, and a later stat of it skipped the mount's row
+    # to answer from monty's own tree, with a synthetic mode and stamp
+    # in place of the backend's. A write has the same shape on a prefix
+    # store, where the key materializes every directory above it.
+    core = CountingCore({})
+    vfs = MontyVFS(core)
+    assert vfs.stat("/s3/a") is None
+    core.dirs.update({"/s3/a", "/s3/a/b"})
+    vfs.mkdir("/s3/a/b", parents=True)
+    assert vfs.stat("/s3/a") is not None
+
+
 def test_a_refused_listing_is_not_read_as_an_absence():
     # A backend that will not answer has said nothing about whether the
     # path is there, so the refusal has to come out as itself. Folding
