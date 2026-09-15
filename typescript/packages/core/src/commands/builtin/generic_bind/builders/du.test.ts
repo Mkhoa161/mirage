@@ -278,4 +278,23 @@ describe('du walk fallback under a path rule', () => {
       "du: cannot read directory '/db/sub': Permission denied\n",
     )
   })
+
+  // The refusal can arrive from `stat` rather than from `readdir`: a rule
+  // that denies the path outright refuses before the walk ever learns the
+  // entry is a directory. Skipping it silently made the subtree vanish
+  // from the total with du still exiting 0, which is the one answer a
+  // caller cannot tell from a genuinely small tree.
+  it('names a descendant whose stat is refused, and exits 1', async () => {
+    const refused: CommandIO = {
+      ...NATIVE,
+      stat: (a, p, i) =>
+        p.virtual === '/db/sub' ? Promise.reject(eacces(p.virtual)) : OPS.stat(a, p, i),
+    }
+    const [out, io] = await runScoped(refused, [PathSpec.fromStrPath('/db')])
+    expect(DEC.decode(out)).toBe('3\t/db\n')
+    expect(io.exitCode).toBe(1)
+    expect(DEC.decode(io.stderr ?? new Uint8Array())).toBe(
+      "du: cannot read directory '/db/sub': Permission denied\n",
+    )
+  })
 })

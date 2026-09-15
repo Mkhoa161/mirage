@@ -41,9 +41,9 @@ import { compareCodePoints } from '../../../../utils/sort.ts'
 class WalkBudget {
   private remaining: number | null
   hit = false
-  // Directories the walk could not open (a rule refused them below the
-  // operand), in the order it met them; the generic reports them after
-  // the walks the way GNU names an unreadable directory.
+  // Paths the walk was refused (a rule denied them below the operand), in
+  // the order it met them; the generic reports them after the walks the
+  // way GNU names an unreadable directory.
   readonly unreadable: string[] = []
 
   constructor(remaining: number | null) {
@@ -63,21 +63,34 @@ class WalkBudget {
 }
 
 /**
- * Whether `err` is a fact about the tree rather than a failure to read it.
+ * Account for an error the walk met at `path`, or rethrow it.
  *
  * Absence counts as zero, because an entry listed a moment ago can be
  * gone by the time the walk reaches it; `isMissingPath` is that set (a
  * stamped ENOENT, or a path outside every mount). A refusal counts as
- * zero too: GNU `du` skips a directory it cannot read rather than
- * abandoning the total, and says so on stderr. Everything else -- a 429,
- * a 5xx, an aborted line -- says the walk never saw that subtree, and a
- * confidently wrong size is worse than an unknown one, so it surfaces
- * instead of being summed as nothing. Python's `du.py` walker already
- * reads exactly this set (`except (FileNotFoundError, ValueError)` then
- * `except PermissionError`); this is the TypeScript side catching up.
+ * zero too, but never silently: GNU `du` skips what it cannot read,
+ * names it on stderr and exits 1, so the path is recorded here for the
+ * generic to report. Everything else -- a 429, a 5xx, an aborted line --
+ * says the walk never saw that subtree, and a confidently wrong size is
+ * worse than an unknown one, so it surfaces instead of being summed as
+ * nothing.
+ *
+ * Both of the walk's doors come through here, because a refused `stat` is
+ * the same fact as a refused `readdir`: a rule denying a path outright
+ * refuses before the walk ever learns the entry is a directory. Recording
+ * only the `readdir` one left a refused subtree missing from the total
+ * with du still exiting 0, which no caller can tell from a small tree.
+ * The reported line is `cannot read directory` either way, which is the
+ * wording GNU uses once it knows the entry is one; a refused *file* is
+ * named by a noun that does not fit it, and being named loudly is still
+ * the better half of that trade.
  */
-function absentOrRefused(err: unknown): boolean {
-  return isMissingPath(err) || isEacces(err)
+function accountForWalkError(err: unknown, path: PathSpec, budget: WalkBudget): void {
+  if (isEacces(err)) {
+    budget.unreadable.push(path.virtual)
+    return
+  }
+  if (!isMissingPath(err)) throw err
 }
 
 async function duWalk(
@@ -92,7 +105,7 @@ async function duWalk(
   try {
     info = await ops.stat(accessor, path, index)
   } catch (err) {
-    if (!absentOrRefused(err)) throw err
+    accountForWalkError(err, path, budget)
     return 0
   }
   if (info.type !== FileType.DIRECTORY) {
@@ -107,11 +120,7 @@ async function duWalk(
   try {
     children = await ops.readdir(accessor, path, index)
   } catch (err) {
-    if (isEacces(err)) {
-      budget.unreadable.push(path.virtual)
-      return 0
-    }
-    if (!isMissingPath(err)) throw err
+    accountForWalkError(err, path, budget)
     return 0
   }
   let total = 0
