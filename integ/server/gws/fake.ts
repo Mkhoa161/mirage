@@ -171,7 +171,5 @@ export const gwsFake: Fake<C> = {
   // than instead of it: afterSeed reaches the rows through `loadState` and
   // `saveState` directly, which is what keeps the seed reading the file it
   // just wrote rather than the world this drops.
-  afterReset: (db, tenants) => {
-    dropTenants(db, tenants)
-  },
+  afterReset: dropTenants,
 }

@@ -22,7 +22,7 @@ import { start } from '../kit/typescript/serve.ts'
 import { DEFAULT_RUN, DEFAULT_TENANT } from '../kit/typescript/tenant.ts'
 import type { JsonValue } from '../kit/typescript/types.ts'
 import { gwsFake } from './fake.ts'
-import { cachedState, dropState, loadToken, putState } from './store/cache.ts'
+import { cachedState, dropState, withState } from './store/cache.ts'
 import { loadState } from './store/load.ts'
 
 // The corpus exercises the SURFACES of this fake heavily -- seven vendor APIs
@@ -437,53 +437,106 @@ async function main(): Promise<void> {
       ],
     )
 
-    // ---- the cached tenant world, and the three ways it can go stale
+    // ---- the cached tenant world, and the four ways it can go stale
     //
     // Every check above already rides the cache: `stateful` loads the rows
     // once per (client, tenant) and every later request reads the object it
     // kept. What those checks cannot see is the cache going WRONG, which is
-    // three specific things, one per invalidation door.
+    // four specific things, one per invalidation door. Two of them need the
+    // fake IN THIS PROCESS, because what they assert is what the cache HOLDS
+    // rather than what a request answers -- a request answers from the world
+    // in its own hand and looks correct either way.
     const rw = `${at}/_run/rw`
     check('run rw seeds', (await reset(rw, seed)) === 200)
     await post(`${rw}/v1/documents`, 't1', { title: 'before-reset' })
-    eq('a write is in the cached world', await fileNames(rw, 't1'), [
-      'Recall Survey',
-      'before-reset',
-    ])
     // Door one: /reset replaces the rows with no route involved, so a cache
     // that did not hear about it would keep serving the pre-reset world
     // forever. This is what `Fake.afterReset` exists for.
     check('resetting run rw again', (await reset(rw, seed)) === 200)
     eq('a scoped reset drops the cached world', await fileNames(rw, 't1'), ['Recall Survey'])
-    // Door two: a write handler that THROWS has mutated the world in place and
-    // flushed nothing. Uncached that half-applied world died with the request;
-    // cached it would be served as real. `multipart/mixed` with no boundary=
-    // is the reachable case -- parseRfc822 refuses it, which the kit answers
-    // as a 500. insertGmailMessage happens to parse before it mints an id, so
-    // today nothing is mutated before the throw; this check is what fails the
-    // day those two lines swap over.
-    const before500 = await api(`${rw}/gmail/v1/users/me/messages`, 't1')
-    const headless = Buffer.from(
-      'From: a@example.com\r\nTo: b@example.com\r\nSubject: boom\r\n' +
-        'Content-Type: multipart/mixed\r\n\r\nbody\r\n',
-      'utf8',
-    )
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '')
-    const boom = await post(`${rw}/gmail/v1/users/me/messages/send`, 't1', { raw: headless })
-    check('a write route that throws is a 500', boom.status === 500, String(boom.status))
-    const after500 = await api(`${rw}/gmail/v1/users/me/messages`, 't1')
-    eq(
-      'and leaves no half-applied world behind it',
-      field(obj(after500.body).messages, 'id'),
-      field(obj(before500.body).messages, 'id'),
-    )
-    // Door three: the cache is keyed by the run's CLIENT, not by its name, so
+
+    const home = await start(gwsFake, 0)
+    try {
+      const at2 = home.endpoint
+      check('the in-process fake seeds', (await reset(at2, seed)) === 200)
+      const db = home.runtime.pool.client(DEFAULT_RUN)
+      const T = DEFAULT_TENANT
+
+      // Door two: a write handler that THROWS has mutated the world in place
+      // and flushed nothing. Uncached that half-applied world died with the
+      // request; cached it would be served as real. Asserted on the CACHE and
+      // not on a later response, because the only write route that can be made
+      // to throw from outside -- `multipart/mixed` with no boundary=, which
+      // parseRfc822 refuses -- happens to parse before it mints anything, so
+      // nothing observable changes and a response-level check would pass
+      // whether the eviction happened or not.
+      await api(`${at2}/drive/v3/files`, T)
+      check('a read left a world cached', cachedState(db, T) !== undefined)
+      const headless = Buffer.from(
+        'From: a@example.com\r\nTo: b@example.com\r\nSubject: boom\r\n' +
+          'Content-Type: multipart/mixed\r\n\r\nbody\r\n',
+        'utf8',
+      )
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      const boom = await post(`${at2}/gmail/v1/users/me/messages/send`, T, { raw: headless })
+      check('a write route that throws is a 500', boom.status === 500, String(boom.status))
+      check('and its half-applied world is evicted', cachedState(db, T) === undefined)
+
+      // Door three: a read does NOT join the run's write queue, so a read that
+      // misses can still be inside loadState's 25 queries when the world
+      // underneath it changes -- because a /reset dropped it, or because a
+      // WRITE that missed alongside it flushed its own copy. Either way the
+      // late install would put an older world over a newer one, and since the
+      // next write flushes whatever is cached, the newer rows would then be
+      // erased from SQLite as well.
+      //
+      // Driven by suspending a real load inside `withState` and doing the
+      // interfering thing from there, because the window needs one load to
+      // outlive one reset or one write, and a load is ~10ms against their
+      // ~100ms: a race fired from a client would pass whether the guards
+      // existed or not. The write arm goes through the REAL write route, so
+      // it covers `stateful` installing what it flushed and not just the
+      // cache primitive underneath it.
+      const stale = await loadState(db, T)
+      dropState(db, T)
+      const overtaken = await withState(db, T, async () => {
+        await post(`${at2}/v1/documents`, T, { title: 'overtaking-write' })
+        return stale
+      })
+      check('a load a write overtook still answers its own snapshot', overtaken === stale)
+      check('but is not what stays cached', cachedState(db, T) !== stale)
+      const named = await fileNames(at2, T)
+      check(
+        'and the write it was overtaken by survives',
+        named.includes('overtaking-write'),
+        named.join(','),
+      )
+      dropState(db, T)
+      const dropped = await loadState(db, T)
+      const raced = await withState(db, T, async () => {
+        dropState(db, T)
+        return dropped
+      })
+      check('a load a reset overtook answers its own snapshot too', raced === dropped)
+      check('and leaves the cache empty rather than stale', cachedState(db, T) === undefined)
+      // The positive control: every check above would also pass against a
+      // `withState` that simply never installed anything.
+      const fresh = await loadState(db, T)
+      check(
+        'while an uncontested load does install',
+        (await withState(db, T, async () => fresh)) === fresh && cachedState(db, T) === fresh,
+      )
+    } finally {
+      await home.close()
+    }
+
+    // Door four: the cache is keyed by the run's CLIENT, not by its name, so
     // two servers in ONE process cannot reach each other's worlds even when
     // every name matches. A module-level map keyed by `run|tenant` passes
-    // every check above and fails this one.
+    // every other check here and fails this one.
     const a = await start(gwsFake, 0)
     const b = await start(gwsFake, 0)
     try {
@@ -498,36 +551,6 @@ async function main(): Promise<void> {
     } finally {
       await a.close()
       await b.close()
-    }
-
-    // Door four: a read does NOT join the run's write queue -- Router.run
-    // chains it off whatever was queued when it started -- so a read that
-    // misses can still be inside loadState's 25 queries when a /reset clears
-    // the tenant, reseeds it and drops the entry. Reinstalling what that load
-    // read would put a pre-reset world back into the cache the reset had just
-    // emptied, and every later request would serve it.
-    //
-    // Pinned directly rather than through the HTTP surface, because the window
-    // cannot be forced from outside: it needs one load to outlive one reset,
-    // and a load is ~10ms against a reset's ~100ms, so a race fired from a
-    // client would pass whether the guard existed or not. What is testable is
-    // the contract the guard rests on, which is exactly what is checked here.
-    const c = await start(gwsFake, 0)
-    try {
-      const db = c.runtime.pool.client(DEFAULT_RUN)
-      const world = await loadState(db, DEFAULT_TENANT)
-      const stale = loadToken(db, DEFAULT_TENANT)
-      dropState(db, DEFAULT_TENANT)
-      putState(db, DEFAULT_TENANT, world, stale)
-      check(
-        'a world read before an invalidation is not installed after it',
-        cachedState(db, DEFAULT_TENANT) === undefined,
-      )
-      const current = loadToken(db, DEFAULT_TENANT)
-      putState(db, DEFAULT_TENANT, world, current)
-      check('and one read after it is', cachedState(db, DEFAULT_TENANT) === world)
-    } finally {
-      await c.close()
     }
 
     // ---- a read route must never be the only place a counter moved

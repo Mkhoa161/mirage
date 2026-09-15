@@ -177,8 +177,20 @@ export async function applyReset<C extends MinimalClient>(
   } finally {
     // In a `finally`, because a reseed that throws half way through has
     // ALREADY cleared the rows: the tenant's world is gone either way, and a
-    // cache still holding the pre-reset one would serve it as real.
-    fake.afterReset?.(db, req.tenants)
+    // cache still holding the pre-reset one would serve it as real. It also
+    // has to run AFTER the seed rather than beside the clear, because a read
+    // does not join this queue and could otherwise cache the half-cleared
+    // world the seed is still filling in.
+    //
+    // Reported rather than propagated: a throw from here would replace the
+    // seed's own exception on its way to the 500 envelope, which is the one
+    // error a caller actually needs to see.
+    try {
+      fake.afterReset?.(db, req.tenants)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`${fake.config.service} fake: afterReset: ${message}\n`)
+    }
   }
 }
 

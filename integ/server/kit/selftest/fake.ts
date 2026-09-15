@@ -193,8 +193,11 @@ async function twoPhaseCard(ctx: Ctx<C>): Promise<Reply> {
 // fired and with which tenants. A fake that caches rows between requests keys
 // that cache by the CLIENT, so the record keeps the client too and proves the
 // hook is handed the run's own, not some other run's.
-const RESETS: { tenants: string[]; sameClient: boolean }[] = []
-const CLIENTS = new Map<string, C>()
+const RESETS: { tenants: string[]; run: string }[] = []
+// Which run each client object belongs to, so a check can assert the hook was
+// handed THIS run's client and not another run's. Keyed by the object, so it
+// holds nothing alive that the pool has let go.
+const RUN_OF = new WeakMap<C, string>()
 
 export const selftestFake: Fake<C> = {
   config,
@@ -257,12 +260,13 @@ export const selftestFake: Fake<C> = {
   // every reset, successful or not, and with the run's own client. gws is the
   // caller that does something with it (it drops the tenant's cached world).
   afterReset: (db: C, tenants: readonly string[]): void => {
-    const first = CLIENTS.get(tenants.join(',')) ?? db
-    CLIENTS.set(tenants.join(','), first)
-    RESETS.push({ tenants: [...tenants], sameClient: first === db })
+    RESETS.push({ tenants: [...tenants], run: RUN_OF.get(db) ?? 'unknown' })
   },
   routes: (): KitRoute<C>[] => [
-    route('GET', '/_selftest/resets', () => ({ status: 200, body: RESETS })),
+    route('GET', '/_selftest/resets', (ctx) => {
+      RUN_OF.set(ctx.db, ctx.run)
+      return { status: 200, body: RESETS }
+    }),
     // Echoes what a HANDLER sees, which is not what the router matched on: the
     // run prefix has to be gone from ctx.url too, because handlers render this
     // pathname into responses and one fake looks rows up by it.

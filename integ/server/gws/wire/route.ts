@@ -15,7 +15,7 @@
 import { Prisma } from '../../../generated/gws/index.js'
 import { RouteError } from '../../kit/typescript/index.ts'
 import type { Ctx, Dmmf, KitHandler, KitRoute, Reply } from '../../kit/typescript/index.ts'
-import { cachedState, dropState, loadToken, putState } from '../store/cache.ts'
+import { dropState, installFlushed, withState } from '../store/cache.ts'
 import type { C } from '../store/client.ts'
 import { loadState } from '../store/load.ts'
 import { saveState } from '../store/save.ts'
@@ -79,21 +79,18 @@ export interface RouteOpts {
 // complaining, which puts the tenant back on the rows either way.
 function stateful(handler: KitHandler<GwsState>, write: boolean): KitHandler<C> {
   return async (ctx: Ctx<C>): Promise<Reply> => {
-    let st = cachedState(ctx.db, ctx.tenant)
-    if (st === undefined) {
-      // The token is taken BEFORE the load, and `putState` drops the world on
-      // the floor if an invalidation landed while those 25 queries were in
-      // flight. A read does not join the run's write queue, so a /reset can
-      // clear, reseed and drop this tenant underneath one; see `Cached.token`.
-      const token = loadToken(ctx.db, ctx.tenant)
-      st = await loadState(ctx.db, ctx.tenant)
-      putState(ctx.db, ctx.tenant, st, token)
-    }
+    const st = await withState(ctx.db, ctx.tenant, () => loadState(ctx.db, ctx.tenant))
     const before = write ? 0 : fingerprint(st)
     try {
       const reply = await handler({ ...ctx, db: st })
       if (write) {
         await saveState(ctx.db, DMMF, ctx.tenant, st)
+        // The rows now say what this world says, so it becomes the cached one
+        // and every load still in flight is stale. Leaving the entry alone
+        // instead let a read that missed alongside this write install its
+        // older copy afterwards, and the NEXT write would then flush that
+        // copy -- erasing from SQLite the rows this one just committed.
+        installFlushed(ctx.db, ctx.tenant, st)
       } else if (fingerprint(st) !== before) {
         dropState(ctx.db, ctx.tenant)
         process.stderr.write(

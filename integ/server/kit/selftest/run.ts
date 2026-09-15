@@ -988,33 +988,44 @@ async function main(): Promise<void> {
     // the client depends on.
     const hooked = await launch()
     try {
-      await call(hooked, '/reset', { method: 'POST', runInPath: 'z1', body: { tenants: ['a1'] } })
-      await call(hooked, '/reset', { method: 'POST', runInPath: 'z1', body: { tenants: ['a1'] } })
-      const failing = await call(hooked, '/reset', {
-        method: 'POST',
-        runInPath: 'z1',
-        body: { tenants: ['boom'] },
-      })
+      const reseed = (run: string, tenant: string): ReturnType<typeof call> =>
+        call(hooked, '/reset', { method: 'POST', runInPath: run, body: { tenants: [tenant] } })
+      const touch = (run: string): ReturnType<typeof call> =>
+        call(hooked, '/_selftest/resets', { runInPath: run, tenant: 'a1' })
+      // Two runs, because "the run's OWN client" is not testable with one. The
+      // first reset of a run necessarily precedes any request on it, so the
+      // fake cannot have learnt that run's name yet and records `unknown`;
+      // once a request has been served the later resets name it, and THAT is
+      // what distinguishes z1's client from z2's.
+      await reseed('z1', 'a1')
+      await reseed('z2', 'a1')
+      await touch('z1')
+      await touch('z2')
+      await reseed('z1', 'a1')
+      await reseed('z2', 'a1')
+      const failing = await reseed('z1', 'boom')
       check('the failing reset is a 500', failing.status === 500, String(failing.status))
-      const seen = await call(hooked, '/_selftest/resets', { runInPath: 'z1', tenant: 'a1' })
+      const seen = await touch('z1')
       const rows = Array.isArray(seen.json) ? seen.json : []
-      const named = rows.map((r) =>
-        typeof r === 'object' && r !== null && !Array.isArray(r) ? String(r.tenants) : '',
-      )
+      const row = (r: JsonValue): Record<string, JsonValue> =>
+        typeof r === 'object' && r !== null && !Array.isArray(r) ? r : {}
       // `default` leads because `start()` seeds the default run before it
       // listens, and that startup seed IS a reset -- a fake that cached rows
-      // during it would be holding a pre-seed world.
-      eq('it fired once per reset, in order, with the tenants each named', named, [
-        'default',
-        'a1',
-        'a1',
-        'boom',
-      ])
-      check('including the one whose seed threw', named.includes('boom'), JSON.stringify(named))
-      const sameClients = rows.every((r) =>
-        typeof r === 'object' && r !== null && !Array.isArray(r) ? r.sameClient === true : false,
+      // during it would be holding a pre-seed world. `boom` trails because the
+      // hook fires on the failing path too.
+      eq(
+        'it fired once per reset, in order, with the tenants each named',
+        rows.map((r) => String(row(r).tenants)),
+        ['default', 'a1', 'a1', 'a1', 'a1', 'boom'],
       )
-      check('and every call was handed one run one client', sameClients, JSON.stringify(rows))
+      // The three resets that followed a request on their run. A kit that
+      // handed the hook any other run's client fails here rather than
+      // silently evicting the wrong world.
+      eq(
+        'and each with the client of the run being reset',
+        rows.slice(3).map((r) => String(row(r).run)),
+        ['z1', 'z2', 'z1'],
+      )
     } finally {
       hooked.child.kill('SIGTERM')
     }

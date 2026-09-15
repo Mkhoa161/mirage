@@ -26,12 +26,13 @@ import type { GwsState } from './state.ts'
 //
 // TWO BOUNDARIES MAKE THIS SAFE, AND BOTH ARE LOAD-BEARING.
 //
-// First, the cache is the ROUTE boundary's, not the store's. `loadState` and
+// First, only `wire/route.ts` may read through here. `loadState` and
 // `saveState` stay pure functions of the rows, so the seed path still reads
 // the file: `afterSeed` loads a tenant the kit has just cleared and reseeded
 // through the client directly, and answering THAT from a cached world would
-// hand the reset back the world it was in the middle of replacing. Only
-// `stateful` reads through here. Do not move this into `loadState`.
+// hand the reset back the world it was in the middle of replacing. The module
+// lives in `store/` because what it holds is store state, keyed by the store's
+// own client; what it must never become is a layer inside `loadState`.
 //
 // Second, the key is the run's CLIENT, not its name. A world belongs to one
 // SQLite file, and the client is that file's identity in this process: a run
@@ -46,21 +47,31 @@ import type { GwsState } from './state.ts'
 // which is why gws declares `afterReset` and this module exports `dropTenants`.
 interface Cached {
   world: GwsState | undefined
-  // Every drop bumps this, and `putState` refuses a world whose token is no
-  // longer current. That is not belt-and-braces, it is the whole reason a
-  // miss is safe to fill.
+  // Bumped whenever the authoritative world changes identity -- a drop, or a
+  // write installing what it just flushed. `withState` refuses to install a
+  // world it began reading under an older generation, and that refusal is the
+  // whole reason filling a miss is safe.
   //
   // A READ does not join the run's write queue -- `Router.run` chains it off
   // whatever was queued when it started and lets it run alongside a later
-  // write. So a read that misses can be inside `loadState`, which is 25
-  // independent queries, when a /reset clears the tenant, reseeds it and drops
-  // this entry. Without the token that read would then hand `putState` the
-  // world it read BEFORE the reset, reinstalling it into the cache the reset
-  // had just emptied, and every later request would serve a pre-reset world
-  // that no flush ever wrote. The request itself still answers from its own
-  // snapshot, which is what it did before this cache existed; what must not
+  // write or reset -- so a read that misses can still be inside `loadState`,
+  // which is 25 independent queries, when the world underneath it changes.
+  // Two ways that bites, and the generation closes both:
+  //
+  //   - a /reset clears the tenant, reseeds it and drops this entry. Without
+  //     the check the read would reinstall the world it had read BEFORE the
+  //     reset, into the cache the reset had just emptied.
+  //   - a write MISSES at the same moment, loads its own copy, mutates it and
+  //     flushes it. Without the check the read's later install would replace
+  //     the flushed world with one that predates it -- and because the next
+  //     write flushes whatever is cached, that write's rows would then be
+  //     erased from SQLite as well. This is why a write installs what it
+  //     flushed rather than leaving the entry alone.
+  //
+  // In both cases the request itself still answers from its own snapshot,
+  // which is what every request did before this cache existed. What must not
   // happen is that snapshot OUTLIVING the request.
-  token: number
+  generation: number
 }
 
 const WORLDS = new WeakMap<C, Map<string, Cached>>()
@@ -73,33 +84,59 @@ function entry(db: C, tenant: string): Cached {
   }
   let row = live.get(tenant)
   if (row === undefined) {
-    row = { world: undefined, token: 0 }
+    row = { world: undefined, generation: 0 }
     live.set(tenant, row)
   }
   return row
 }
 
-export function cachedState(db: C, tenant: string): GwsState | undefined {
-  return WORLDS.get(db)?.get(tenant)?.world
-}
-
-// Taken BEFORE the load it will be handed back with, never after.
-export function loadToken(db: C, tenant: string): number {
-  return entry(db, tenant).token
-}
-
-export function putState(db: C, tenant: string, st: GwsState, token: number): void {
+// The world for this request, read from the rows only on a miss.
+//
+// Inverted rather than a `get` / `load` / `put` the caller sequences itself,
+// because the ordering IS the guard: the generation has to be read before the
+// load and compared after it, and a caller that read it afterwards would
+// compile, typecheck and silently reinstall a stale world. Holding `row`
+// across the await is safe because `entry` hands back a stable object that
+// every writer mutates in place.
+export async function withState(
+  db: C,
+  tenant: string,
+  load: () => Promise<GwsState>,
+): Promise<GwsState> {
   const row = entry(db, tenant)
-  if (row.token !== token) return
-  row.world = st
+  if (row.world !== undefined) return row.world
+  const began = row.generation
+  const world = await load()
+  if (row.generation === began) row.world = world
+  return world
 }
 
+// What a write just wrote. Unconditional, and it BUMPS: the rows now say what
+// this world says, so any load still in flight is reading an older world and
+// must not be allowed to land on top of it.
+export function installFlushed(db: C, tenant: string, st: GwsState): void {
+  const row = entry(db, tenant)
+  row.world = st
+  row.generation += 1
+}
+
+// Creates the entry when there is none, rather than the cheaper
+// `WORLDS.get(db)?.get(tenant)?`. That looks like dead weight and is not: a
+// drop on a tenant nothing has cached yet still has to advance the
+// generation, or a load already in flight on that tenant compares 0 against 0
+// and installs the world it read before this drop.
 export function dropState(db: C, tenant: string): void {
   const row = entry(db, tenant)
   row.world = undefined
-  row.token += 1
+  row.generation += 1
 }
 
 export function dropTenants(db: C, tenants: readonly string[]): void {
   for (const tenant of tenants) dropState(db, tenant)
+}
+
+// For the selftest, which has to see what a request would be handed without
+// making a request. No route reads this.
+export function cachedState(db: C, tenant: string): GwsState | undefined {
+  return WORLDS.get(db)?.get(tenant)?.world
 }

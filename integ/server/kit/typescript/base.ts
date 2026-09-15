@@ -22,7 +22,7 @@ import type { KitRoute } from './route.ts'
 import type { JsonValue, MintSharing, Reply, ResetResponse } from './types.ts'
 
 // What a service implements. Everything else in the kit is machinery around
-// these five members: there is no base class to extend and no lifecycle to
+// these members: there is no base class to extend and no lifecycle to
 // override, because a fake that can only declare things cannot drift from the
 // others in how it resets, tenants, seeds or serializes.
 export interface Fake<C extends MinimalClient> {
@@ -66,9 +66,14 @@ export interface Fake<C extends MinimalClient> {
   // two Runtimes in one process that happen to name the same run must not be
   // able to reach each other's.
   //
-  // Called for every reset, successful or not: a reset that threw half way
-  // through has already cleared rows, so a view built before it is stale
-  // either way, and forgetting one that was still good costs a reload.
+  // Called for every reset that reached a client, successful or not: a reset
+  // that threw half way through has already cleared rows, so a view built
+  // before it is stale either way, and forgetting one that was still good
+  // costs a reload. A template build that throws never reaches a client, and
+  // created no rows to forget.
+  //
+  // Sync on purpose: a hook that could await would put a suspension point
+  // between the row change and the eviction, which is the window it closes.
   afterReset?: (db: C, tenants: readonly string[]) => void
   defaultTenants?: string[]
   // How this fake refuses a tenant it was never seeded with, and by being
