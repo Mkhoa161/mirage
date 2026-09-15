@@ -7,10 +7,17 @@ permissions:
   push:
     branches: [main]
     paths:
+      # Keep in lockstep with the `changes` filter below. .gitignore is
+      # here for knip, which builds its file set through it (root `dist/`
+      # is why knip does not see built output).
       - typescript/**
       - examples/typescript/**
       - integ/**
       - conformance/**
+      # Pre-commit skips knip and integ-typecheck, so a hook definition
+      # changing there has to reach this workflow to be checked at all.
+      - .pre-commit-config.yaml
+      - .gitignore
       - .github/workflows/test_typescript.yml
       - .github/actions/setup-node-pnpm/action.yml
   pull_request:
@@ -34,11 +41,14 @@ jobs:
         id: filter
         with:
           filters: |
+            # Keep in lockstep with `push.paths` above.
             hit:
               - 'typescript/**'
               - 'examples/typescript/**'
               - 'integ/**'
               - 'conformance/**'
+              - '.pre-commit-config.yaml'
+              - '.gitignore'
               - '.github/workflows/test_typescript.yml'
               - '.github/actions/setup-node-pnpm/action.yml'
 
@@ -78,6 +88,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build TypeScript packages
+        id: build
         working-directory: typescript
         run: pnpm -r build
 
@@ -90,9 +101,12 @@ jobs:
         working-directory: integ
         run: pnpm run prisma:clients
 
+      # --no-bail: this is now the only place integ's own
+      # `tsc -p tsconfig.check.json` runs, and a bailing recursive run
+      # aborts in packages/core before ever reaching ../integ.
       - name: Typecheck
         working-directory: typescript
-        run: pnpm -r typecheck
+        run: pnpm -r --no-bail typecheck
 
       - name: Run TypeScript tests
         working-directory: typescript
@@ -139,6 +153,16 @@ jobs:
           run integ/truth/typescript/redis_browser.json
           run integ/truth/version_branching.json
           exit $bad
+
+      # Moved from Pre-commit, which went diff-scoped: knip reads the
+      # whole graph, so a changed-files list cannot make it cheaper.
+      # Last and `!cancelled()` so it and the tests cannot hide each
+      # other, but gated on the build -- without node_modules knip fails
+      # on unresolved entries, which points at the wrong step.
+      - name: Dead code (knip)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: typescript
+        run: pnpm exec knip
 
   python-fs:
     needs: changes

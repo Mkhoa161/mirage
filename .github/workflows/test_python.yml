@@ -7,10 +7,15 @@ permissions:
   push:
     branches: [main]
     paths:
+      # Keep in lockstep with the `changes` filter below.
       - python/**
       - examples/python/**
       - integ/**
       - conformance/**
+      # A hook definition changing here must reach the workflow
+      # that now runs it: Pre-commit skips it, so this is the
+      # only job left that would catch the edit.
+      - .pre-commit-config.yaml
       - .github/workflows/test_python.yml
   pull_request:
     branches: [main]
@@ -39,11 +44,13 @@ jobs:
         id: filter
         with:
           filters: |
+            # Keep in lockstep with `push.paths` above.
             hit:
               - 'python/**'
               - 'examples/python/**'
               - 'integ/**'
               - 'conformance/**'
+              - '.pre-commit-config.yaml'
               - '.github/workflows/test_python.yml'
 
   test:
@@ -101,9 +108,12 @@ jobs:
             mypy-${{ runner.os }}-py3.12-${{ hashFiles('python/uv.lock') }}-
             mypy-${{ runner.os }}-py3.12-
 
+      # Bare, not `mypy mirage`: pyproject's `[tool.mypy] packages` already
+      # names the package, and this is now the repo's only mypy run, so it
+      # is spelled exactly as the py-mypy hook spells it locally.
       - name: Type check (mypy)
         working-directory: python
-        run: uv run mypy mirage
+        run: uv run mypy
 
       - name: Run pytest (main suite, camel excluded)
         working-directory: python
