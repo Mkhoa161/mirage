@@ -85,22 +85,10 @@ runs:
 
         # The runner drives one target at a time against its own container, so
         # the DB-backed lock that guards concurrent writers guards nothing
-        # here.
-        #
-        # A local memcache is deliberately NOT configured, even though it is
-        # the usual first tuning knob. With '\OC\Memcache\APCu' as
-        # memcache.local, Nextcloud holds file metadata across requests and
-        # served a stale ETag for a file whose stored size was already
-        # current: the watch battery overwrote a 4-byte file with 11 bytes,
-        # and a backend stat then reported size=11 while the etag read
-        # identical before and after the write. Nextcloud's local storage
-        # derives that ETag by hashing the cached stat (mtime, inode, dev,
-        # size), so a cached stat is a stale validator -- and pull-mode
-        # update detection, which has nothing but the validator to compare,
-        # missed the write entirely across 36 polls in 10 seconds. The
-        # default (no configured local memcache) is slower and correct, and
-        # correctness outranks this one knob's share of the saving.
+        # here. APCu is compiled into this image with apc.enable_cli=1, so occ
+        # itself keeps working once it is the local memcache.
         occ config:system:set filelocking.enabled --value=false --type=boolean
+        occ config:system:set memcache.local --value='\OC\Memcache\APCu'
         occ config:system:set auth.bruteforce.protection.enabled \
           --value=false --type=boolean
 
