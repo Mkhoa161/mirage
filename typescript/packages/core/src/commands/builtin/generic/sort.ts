@@ -39,8 +39,8 @@ interface SortFlags extends SortGlobals {
   zeroTerminated: boolean
 }
 
-function parseFlags(flags: Record<string, FlagValue>): SortFlags | string {
-  const fl = new FlagView(flags, specOf('sort'))
+function parseFlags(bag: Record<string, FlagValue>): SortFlags | string {
+  const fl = new FlagView(bag, specOf('sort'))
   const rawCheck = fl.raw('check')
   if (
     rawCheck !== undefined &&

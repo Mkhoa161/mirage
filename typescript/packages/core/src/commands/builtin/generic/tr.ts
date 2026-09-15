@@ -90,9 +90,9 @@ async function* trStream(
   }
 }
 
-function buildOptions(texts: readonly string[], flags: Record<string, FlagValue>): TrOptions {
+function buildOptions(texts: readonly string[], bag: Record<string, FlagValue>): TrOptions {
   if (texts.length === 0) throw new Error('tr: usage: tr [-d] [-s] [-c] set1 [set2] [path]')
-  const fl = new FlagView(flags, specOf('tr'))
+  const fl = new FlagView(bag, specOf('tr'))
   const complement = fl.asBool('C') || fl.asBool('complement')
   const del = fl.asBool('delete')
   const squeeze = fl.asBool('squeeze_repeats')

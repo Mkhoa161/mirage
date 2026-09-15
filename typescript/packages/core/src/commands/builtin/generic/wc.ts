@@ -50,8 +50,8 @@ export interface WcFlags {
   total: 'auto' | 'always' | 'only' | 'never'
 }
 
-export function parseFlags(flags: Record<string, FlagValue>): WcFlags | string {
-  const fl = new FlagView(flags, specOf('wc'))
+export function parseFlags(bag: Record<string, FlagValue>): WcFlags | string {
+  const fl = new FlagView(bag, specOf('wc'))
   const rawTotal = fl.asStr('total') ?? 'auto'
   if (!['auto', 'always', 'only', 'never'].includes(rawTotal)) {
     return `wc: invalid argument '${rawTotal}' for '--total'\n`

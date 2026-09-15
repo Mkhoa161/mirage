@@ -15,6 +15,8 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import type { Linter as LinterTypes } from 'eslint'
+
 // The FlagView `no-restricted-syntax` rule was dead from the day it was
 // written: a later flat-config object set the same rule for a strictly
 // wider glob, and flat config REPLACES rule options rather than
@@ -32,18 +34,27 @@ const PLAIN_FILE = join(TS_ROOT, 'packages/core/src/utils/sort.ts')
 const EXEMPT_FILE = join(TS_ROOT, 'packages/core/src/commands/config.ts')
 const TEST_FILE = join(TS_ROOT, 'packages/core/src/commands/flag_query_names.test.ts')
 
-const PROBE = `function probe(opts, inv, xs, name, parsed) {
+// TypeScript source, parsed with typescript-eslint's parser and no type
+// information: every selector in the rule is syntactic, and a plain-JS
+// probe could not carry the type annotation the declaration rule reads,
+// which would leave the probe narrower than the rule it checks.
+const PROBE = `function takesBag(bag: Record<string, FlagValue>, flags: Record<string, FlagValue>) {
+  const copy = { ...bag }
+  copy.H = true
+  copy[bag.name] = true
+  return [bag.name, bag.show_all, bag[flags.name]]
+}
+
+function reads(opts, inv, xs, name, parsed) {
   const flags = opts.flags
   xs.sort()
-  const bag = { ...flags }
-  bag[name] = true
   return [
     opts.flags.help,
     flags.show_all,
     flags[name],
     inv.flags.json,
     parsed.showAll,
-    bag[name],
+    parsed.lines,
   ]
 }
 `
@@ -94,17 +105,36 @@ describe('no-restricted-syntax flag-bag rule', () => {
 
   it('reports every flag-bag shape the resolved options are meant to catch', async () => {
     const { Linter } = await import('eslint')
+    const tseslint = await import('typescript-eslint')
     const entries = await resolvedSelectors(COMMAND_FILE)
     const messages = new Linter().verify(PROBE, {
+      languageOptions: { parser: tseslint.parser as LinterTypes.Parser },
       rules: { [RULE]: ['error', ...entries] },
     })
     const flagged = messages.filter((m) => m.message.includes('FlagView')).map((m) => m.line)
-    // 2: `const flags = opts.flags`, the alias every read below it hid
-    // behind; 7/8/9/10: opts.flags.help, flags.show_all, flags[name],
-    // inv.flags.json. Line 5's `bag[name] = true` and line 11's
-    // `parsed.showAll` must NOT appear: a bag a wrapper builds to hand
-    // down stays writable, and a parsed flag struct is not a bag.
-    expect(flagged).toEqual([2, 7, 8, 9, 10])
-    expect(messages.filter((m) => m.message.includes('comparator')).map((m) => m.line)).toEqual([3])
+    // 4:  `bag.name` read inside a subscript ASSIGNMENT's key -- the
+    //     write is exempt, the read in it is not.
+    // 5:  `bag.name`, `bag.show_all`, `bag[flags.name]` -- a SIMPLE dest
+    //     as well as an underscored one, plus the computed read. The
+    //     simple one is what escaped before this rule was widened.
+    // 9:  `const flags = opts.flags`, the alias every read below it hid
+    //     behind. 12/13/14/15: opts.flags.help, flags.show_all,
+    //     flags[name], inv.flags.json.
+    // Not reported, all deliberate: line 3's `copy.H = true` and line 4's
+    // subscript on the left (a bag a wrapper builds to hand down stays
+    // writable, as python's regex also allows), line 5's `flags.name` (a
+    // simple dest off `flags`, which the declaration rule below forbids
+    // at its source instead), and lines 16/17's `parsed.showAll` /
+    // `parsed.lines` (a parsed flag struct is not a bag).
+    expect(flagged).toEqual([4, 5, 5, 5, 9, 12, 13, 14, 15])
+    expect(messages.filter((m) => m.message.includes('comparator')).map((m) => m.line)).toEqual([
+      10,
+    ])
+    // The declaration rule is what makes the read rules above precise:
+    // without it a new `flags`-named bag parameter would read simple
+    // dests unreported, which is the hole this probe exists to pin.
+    expect(
+      messages.filter((m) => m.message.includes('Name a raw flag bag')).map((m) => m.line),
+    ).toEqual([1])
   })
 })

@@ -43,8 +43,8 @@ interface CatDisplay {
   squeezeBlank: boolean
 }
 
-function parseFlags(flags: Record<string, FlagValue>): CatDisplay {
-  const fl = new FlagView(flags, specOf('cat'))
+function parseFlags(bag: Record<string, FlagValue>): CatDisplay {
+  const fl = new FlagView(bag, specOf('cat'))
   const showAll = fl.asBool('show_all')
   return {
     numberLines: fl.asBool('number'),

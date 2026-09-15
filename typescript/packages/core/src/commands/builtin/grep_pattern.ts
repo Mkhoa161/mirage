@@ -31,12 +31,12 @@ function escapeRegex(s: string): string {
 // list, or null when neither was supplied.
 export function patternArg(
   texts: readonly string[],
-  flags: Record<string, FlagValue>,
+  bag: Record<string, FlagValue>,
 ): string | null {
   // Spec-less, as the shared push-down helpers are: `-e` and `-f` are
   // declared by the grep, rg and zgrep specs alike, and this helper is
   // reached from all three.
-  const e = new FlagView(flags).asList('e')
+  const e = new FlagView(bag).asList('e')
   if (e.length > 0) return e.join('\n')
   if (texts.length > 0 && texts[0] !== undefined) return texts[0]
   return null
@@ -55,17 +55,17 @@ export interface PatternResolution {
 export async function resolvePattern(
   name: string,
   texts: readonly string[],
-  flags: Record<string, FlagValue>,
+  bag: Record<string, FlagValue>,
   paths: readonly PathSpec[],
   mountPrefix: string | null | undefined,
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
 ): Promise<PatternResolution> {
-  let pattern = patternArg(texts, flags)
+  let pattern = patternArg(texts, bag)
   let neverMatch = false
   // `raw` rather than `asList`, mirroring Python's `flags.raw("f")`: an
   // empty -f list still means "-f was supplied", which is what turns on the
   // NEVER_MATCH sentinel below.
-  const patternFiles = new FlagView(flags).raw('f')
+  const patternFiles = new FlagView(bag).raw('f')
   if (Array.isArray(patternFiles)) {
     const first = paths[0]
     const prefix =

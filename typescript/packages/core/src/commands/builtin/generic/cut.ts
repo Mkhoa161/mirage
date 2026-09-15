@@ -24,8 +24,8 @@ import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()
 
-function parseFlags(flags: Record<string, FlagValue>): CutOptions | string {
-  const fl = new FlagView(flags, specOf('cut'))
+function parseFlags(bag: Record<string, FlagValue>): CutOptions | string {
+  const fl = new FlagView(bag, specOf('cut'))
   const bytesRange = fl.asStr('bytes')
   const charsRange = fl.asStr('characters')
   const fieldsRange = fl.asStr('F') ?? fl.asStr('fields')

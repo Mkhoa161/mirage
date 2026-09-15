@@ -60,8 +60,8 @@ function optionalMethod(
   return normalized
 }
 
-function parseFlags(flags: Record<string, FlagValue>): UniqFlags {
-  const fl = new FlagView(flags, specOf('uniq'))
+function parseFlags(bag: Record<string, FlagValue>): UniqFlags {
+  const fl = new FlagView(bag, specOf('uniq'))
   const count = fl.asBool('count')
   const duplicatesOnly = fl.asBool('repeated')
   const uniqueOnly = fl.asBool('unique')

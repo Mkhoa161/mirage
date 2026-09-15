@@ -177,13 +177,13 @@ const PUSHDOWN_FILTER_LIST = ['include', 'exclude', 'exclude_dir'] as const
 // honors whatever that local scan implements. Everything left out of the list
 // still defers, which is what keeps the exemption honest.
 export function hasSearchShapingFlags(
-  flags: Record<string, FlagValue>,
+  bag: Record<string, FlagValue>,
   honored: readonly string[] = [],
 ): boolean {
   // Spec-less on purpose, as Python's `FlagView(flags)` is: the shared key
   // set has to work for both the grep and the rg spec, and rg simply never
   // sets the grep-only keys.
-  const fl = new FlagView(flags)
+  const fl = new FlagView(bag)
   const gated = (name: string): boolean => !honored.includes(name)
   if (PUSHDOWN_SHAPING_BOOL.some((name) => gated(name) && fl.asBool(name))) return true
   if (PUSHDOWN_SHAPING_INT.some((name) => gated(name) && fl.asInt(name) !== undefined)) return true
@@ -196,9 +196,9 @@ export function hasSearchShapingFlags(
 // list (-F with multiple -e) is a set of independent alternatives LIKE cannot
 // express, so it stays on the generic path. Backends that push a real regex
 // down (mongodb) gate on hasSearchShapingFlags alone instead.
-export function searchPushdownOk(flags: Record<string, FlagValue>, pattern: string): boolean {
+export function searchPushdownOk(bag: Record<string, FlagValue>, pattern: string): boolean {
   if (pattern.includes('\n')) return false
-  return isLiteralPattern(pattern, new FlagView(flags).asBool('F')) && !hasSearchShapingFlags(flags)
+  return isLiteralPattern(pattern, new FlagView(bag).asBool('F')) && !hasSearchShapingFlags(bag)
 }
 
 // The one operand a search push-down may answer for, or null. A push-down
@@ -224,12 +224,12 @@ export function loneOperand(paths: PathSpec[]): PathSpec | null {
 // with several -e) is a set of independent alternatives it cannot express.
 export function pushdownOperand(
   paths: PathSpec[],
-  flags: Record<string, FlagValue>,
+  bag: Record<string, FlagValue>,
   pattern: string | null,
   honored: readonly string[] = [],
 ): PathSpec | null {
   if (pattern === null || pattern.includes('\n')) return null
-  if (hasSearchShapingFlags(flags, honored)) return null
+  if (hasSearchShapingFlags(bag, honored)) return null
   return loneOperand(paths)
 }
 
@@ -239,10 +239,10 @@ export function pushdownOperand(
 // only a verbatim pattern may push down.
 export function literalPushdownOperand(
   paths: PathSpec[],
-  flags: Record<string, FlagValue>,
+  bag: Record<string, FlagValue>,
   pattern: string | null,
 ): PathSpec | null {
-  if (pattern === null || !searchPushdownOk(flags, pattern)) return null
+  if (pattern === null || !searchPushdownOk(bag, pattern)) return null
   return loneOperand(paths)
 }
 

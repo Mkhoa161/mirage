@@ -119,8 +119,8 @@ function parseNumbering(raw: string): [string, RegExp | null] {
   return [raw, null]
 }
 
-function parseOptions(flags: Record<string, FlagValue>): NlConfig {
-  const fl = new FlagView(flags, specOf('nl'))
+function parseOptions(bag: Record<string, FlagValue>): NlConfig {
+  const fl = new FlagView(bag, specOf('nl'))
   const [bodyNumbering, bodyPattern] = parseNumbering(fl.asStr('body_numbering') ?? 't')
   const [footerNumbering, footerPattern] = parseNumbering(fl.asStr('footer_numbering') ?? 'n')
   const [headerNumbering, headerPattern] = parseNumbering(fl.asStr('header_numbering') ?? 'n')

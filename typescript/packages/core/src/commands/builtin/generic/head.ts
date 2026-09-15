@@ -36,8 +36,8 @@ interface HeadFlags {
   zeroTerminated: boolean
 }
 
-function parseFlags(flags: Record<string, FlagValue>): HeadFlags | string {
-  const fl = new FlagView(flags, specOf('head'))
+function parseFlags(bag: Record<string, FlagValue>): HeadFlags | string {
+  const fl = new FlagView(bag, specOf('head'))
   const nRaw = fl.asStr('lines') ?? null
   const cRaw = fl.asStr('bytes') ?? null
   const numErr = numberFlagError('head', nRaw, cRaw)

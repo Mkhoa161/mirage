@@ -46,23 +46,46 @@ const FLAG_BAG_SELECTORS = [
     message: FLAG_BAG_MESSAGE,
   },
   {
-    // flags['x'] / flags[name] / kwargs[name]. Reads only: a wrapper still
+    // bag['x'] / flags[name] / kwargs[name]. Reads only: a wrapper still
     // builds an overridden bag to hand down (crossmount fanout does), which
     // is the same exemption Python's regex makes with its `(?!\s*=[^=])`
-    // lookahead. A parsed flag struct is never subscripted, so no struct
-    // read is caught here.
+    // lookahead.
     selector:
-      'MemberExpression[computed=true][object.name=/^(flags|flagKwargs|kwargs)$/]:not(AssignmentExpression > MemberExpression.left)',
+      'MemberExpression[computed=true][object.name=/^(bag|flags|flagKwargs|kwargs)$/]:not(AssignmentExpression > MemberExpression.left)',
     message: FLAG_BAG_MESSAGE,
   },
   {
-    // flags.show_all / flags.args_I. A spec dest is spelled the way Python
-    // spells it (snake_case, `args_*`), while a parsed flag struct's field
-    // is camelCase, so an underscore in the property is what tells a bag
-    // read from a struct read when both are named `flags`.
+    // bag.name / bag.show_all / flagKwargs.total -- ANY property, not only
+    // an underscored one. A simple dest (`name`, `count`, `total`) is as
+    // silent a miss as `show_all` when the spec renames it, so the property
+    // name cannot be the gate. What makes this precise instead is the
+    // declaration rule below: a raw bag is named `bag`, never `flags`, so
+    // an identifier named `bag` is always a bag and `flags` is always a
+    // parsed flag struct whose fields are nobody's business here.
     selector:
-      'MemberExpression[computed=false][object.name=/^(flags|flagKwargs|kwargs)$/][property.name=/_/]:not(AssignmentExpression > MemberExpression.left)',
+      'MemberExpression[computed=false][object.name=/^(bag|flagKwargs|kwargs)$/]:not(AssignmentExpression > MemberExpression.left)',
     message: FLAG_BAG_MESSAGE,
+  },
+  {
+    // The residual catch for a bag that is still spelled `flags`: a dest
+    // carries an underscore far more often than a struct field does, so
+    // this reports the obvious half of a shape the rule below forbids
+    // outright.
+    selector:
+      'MemberExpression[computed=false][object.name="flags"][property.name=/_/]:not(AssignmentExpression > MemberExpression.left)',
+    message: FLAG_BAG_MESSAGE,
+  },
+  {
+    // `function f(flags: Record<string, FlagValue>)`. The name is what
+    // makes the read rules above precise: `flags.lines` on a `WcFlags`
+    // struct and `flags.lines` on the bag are the same three tokens, so no
+    // selector can tell them apart. Naming the bag `bag` can, and this is
+    // what keeps that convention from eroding -- without it a new
+    // `flags`-named bag parameter would read simple dests unreported.
+    selector:
+      'Identifier[name="flags"][typeAnnotation.typeAnnotation.typeName.name=/^(Record|Readonly)$/]',
+    message:
+      'Name a raw flag bag `bag`, not `flags`: `flags` is a parsed flag struct, and the two read identically.',
   },
 ]
 
