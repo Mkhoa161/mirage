@@ -17,8 +17,11 @@ import json
 import os
 import sys
 import tempfile
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from datetime import datetime
 from functools import partial
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 import aiohttp
 from aiohttp import web
@@ -30,7 +33,7 @@ from mirage.accessor.nextcloud import NextcloudAccessor
 from mirage.core.disk.watch import DiskEventHook
 from mirage.resource.nextcloud import NextcloudConfig, NextcloudResource
 from mirage.types import FileEvent, PathSpec
-from mirage.watch import RAMWatchQueue, Watcher
+from mirage.watch import DeltaHook, RAMWatchQueue, Watcher
 
 CASE_DIR = Path(__file__).resolve().parent
 DEFAULT_RESULTS_FILE = (Path(tempfile.gettempdir()) /
@@ -41,12 +44,116 @@ EVENT_TIMEOUT = 20.0
 ABSENT_WINDOW = 1.0
 PUMP_WINDOW = EVENT_TIMEOUT / 2
 PUMP_INTERVAL = 0.25
+PROBE_TIMEOUT = 5.0
 CLASS_BY_KIND = {
     "create": "OCP\\Files\\Events\\Node\\NodeCreatedEvent",
     "update": "OCP\\Files\\Events\\Node\\NodeWrittenEvent",
     "delete": "OCP\\Files\\Events\\Node\\NodeDeletedEvent",
     "move": "OCP\\Files\\Events\\Node\\NodeRenamedEvent",
 }
+
+
+class ExternalWriter(Protocol):
+    """The backend-mutation surface every battery writes through.
+
+    Satisfied by the opendal operator the Nextcloud battery uses and by
+    the writers in ``backends.py`` that mirror it, so ``_mutate`` and
+    ``_seed`` need no per-backend branch.
+    """
+
+    async def create_dir(self, path: str) -> None:
+        ...
+
+    async def write(self, path: str, data: bytes) -> None:
+        ...
+
+    async def delete(self, path: str) -> None:
+        ...
+
+    async def rename(self, path: str, to: str) -> None:
+        ...
+
+    async def remove_all(self, path: str) -> None:
+        ...
+
+
+class BackendStatMetadata(Protocol):
+    """The fields a backend stat answers with, as opendal spells them.
+
+    Only the three the pull diagnostic reports are named, so the
+    protocol says what is read rather than restating opendal's whole
+    ``Metadata``.
+    """
+
+    @property
+    def etag(self) -> str | None:
+        ...
+
+    @property
+    def content_length(self) -> int:
+        ...
+
+    @property
+    def last_modified(self) -> datetime:
+        ...
+
+
+@runtime_checkable
+class BackendStatSource(Protocol):
+    """The one call the pull diagnostic's backend probe makes.
+
+    Satisfied by the opendal operator the Nextcloud battery writes
+    through, and deliberately not by ``ExternalWriter``: the other
+    writers speak through a second workspace or GitHub's contents API
+    and have no stat of their own, so the capability is a separate
+    type rather than a fourth method every writer has to grow.
+    """
+
+    async def stat(self, path: str) -> BackendStatMetadata:
+        ...
+
+
+BackendProbe = Callable[[str], Awaitable[str]]
+
+
+async def _backend_stat_line(op: BackendStatSource, key: str) -> str:
+    """Render what the backend itself holds for ``key`` right now.
+
+    This is the third fact a give-up needs and the only one that does
+    not come from mirage: the listing's fingerprint before and after
+    say what the poller saw, and this says what the backend was
+    willing to tell it. An etag that never moves while the content
+    length does is a backend that publishes a stale validator; an
+    etag that moved is a listing that did not read it.
+
+    Args:
+        op (BackendStatSource): Backend stat surface, bound by
+            ``_stat_probe``.
+        key (str): Backend-relative key, as the case's ``mutate``
+            block spells it.
+    """
+    meta = await op.stat(key)
+    return (f"etag={meta.etag} size={meta.content_length} "
+            f"modified={meta.last_modified}")
+
+
+def _stat_probe(op: ExternalWriter) -> BackendProbe | None:
+    """Bind ``op``'s stat as a probe, or None when it has none.
+
+    The probe is passed into ``PullTrigger`` already bound, so the
+    trigger takes one callable over a backend key and never sees an
+    opendal type. A writer with no stat answers None rather than a
+    probe that raises, so the diagnostic says the probe was
+    unavailable instead of reporting an ``AttributeError`` as if the
+    backend had refused.
+
+    Args:
+        op (ExternalWriter): External writer this battery mutates
+            through.
+    """
+    if not isinstance(op, BackendStatSource):
+        return None
+    return partial(_backend_stat_line, op)
 
 
 def _nextcloud_config(url: str) -> NextcloudConfig:
@@ -62,7 +169,8 @@ def _nextcloud_config(url: str) -> NextcloudConfig:
     )
 
 
-async def _build_nextcloud(spec: dict) -> tuple[Workspace, object] | None:
+async def _build_nextcloud(
+        spec: dict) -> tuple[Workspace, ExternalWriter] | None:
     """Build the watched workspace and a separate external writer.
 
     Returns None when the deployment env is absent, so a local run
@@ -82,7 +190,7 @@ async def _build_nextcloud(spec: dict) -> tuple[Workspace, object] | None:
 
 
 async def _build_nextcloud_nested(
-        spec: dict) -> tuple[Workspace, object] | None:
+        spec: dict) -> tuple[Workspace, ExternalWriter] | None:
     """Build the nested-mount battery's workspace: the outer mount at
     the account root plus a second mount, rooted at a subfolder of the
     same account, nested inside the outer mount's subtree.
@@ -134,12 +242,13 @@ def _framed_root(spec: dict) -> PathSpec:
                                   resource_path=_watch_rel(spec))
 
 
-async def _mutate(op: object, mutate: dict) -> None:
+async def _mutate(op: ExternalWriter, mutate: dict) -> None:
     """Apply one mutation directly to the backend, bypassing the
     watched workspace so its cache is genuinely stale.
 
     Args:
-        op (object): opendal operator of a separate accessor.
+        op (ExternalWriter): opendal operator of a separate
+            accessor.
         mutate (dict): {"op", "path", "body"?}.
     """
     if mutate["op"] == "write":
@@ -200,9 +309,9 @@ class EventStream:
     consuming lazily would lose events notified before the first await.
     """
 
-    def __init__(self, agen: object) -> None:
+    def __init__(self, agen: AsyncGenerator[FileEvent, None]) -> None:
         self._agen = agen
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[FileEvent] | None = None
 
     async def start(self) -> None:
         """Arm the iterator and yield to the loop so the subscriber
@@ -214,7 +323,7 @@ class EventStream:
         if self._task is None:
             self._task = asyncio.ensure_future(self._agen.__anext__())
 
-    async def expect(self, want_path: str) -> object | None:
+    async def expect(self, want_path: str) -> FileEvent | None:
         """Return the next change for ``want_path``, skipping others
         (a nested create also emits its parent dir), or None only when
         the timeout expires with no change for that path.
@@ -288,7 +397,7 @@ class ConsumerPoller:
     until that case's mutation is visible in the backend listing.
     """
 
-    def __init__(self, hook: object, ws: Workspace, root: PathSpec) -> None:
+    def __init__(self, hook: DeltaHook, ws: Workspace, root: PathSpec) -> None:
         self._hook = hook
         self._ws = ws
         self._root = root
@@ -363,6 +472,32 @@ class ConsumerPoller:
             await self._ws.notify(change)
         return delta.changes
 
+    def fingerprint_for(self, virtual: str) -> str | None:
+        """The fingerprint the kept checkpoint holds for ``virtual``.
+
+        The checkpoint is ``ListingDeltaHook``'s own snapshot, a
+        ``{virtual: fingerprint}`` JSON map, so this reads the exact
+        value the next delta will compare against rather than a
+        re-derived one. That is what makes it worth exposing: a pull
+        case that is told no path changed has one comparison to
+        inspect, and only this side of it is inside the harness.
+
+        None means the path is not in the snapshot, which is also the
+        answer before any pump has laid a checkpoint down. The two are
+        one absence to a reader and every caller here reads it after
+        the baseline pump, so they are not told apart. An entry the
+        snapshot carries with no fingerprint of its own is ``""``,
+        which is a different fact and stays distinguishable.
+
+        Args:
+            virtual (str): Workspace-virtual path, spelled as a case's
+                ``expect`` block spells it.
+        """
+        if self._checkpoint is None:
+            return None
+        snapshot: dict[str, str] = json.loads(self._checkpoint)
+        return snapshot.get(virtual)
+
 
 DISK_EVENT_BY_KIND = {
     "create": "created",
@@ -404,39 +539,78 @@ def _framed(path: str) -> str:
     return "/" + path.strip("/")
 
 
-def _miss_detail(want: str, observed: tuple[FileEvent, ...],
-                 pumps: int) -> str:
+def _render_fingerprint(value: str | None) -> str:
+    """Spell one snapshot fingerprint for the give-up line.
+
+    Absent and empty are different facts and would read the same if
+    both rendered as nothing. A path the snapshot does not carry at
+    all means the walk never reported the object; ``ListingDeltaHook``
+    stores ``""`` for an entry the walk did report with no fingerprint
+    of its own, which is a listing that saw the object and had nothing
+    to compare. So each gets its own word.
+
+    Args:
+        value (str | None): Fingerprint from
+            ``ConsumerPoller.fingerprint_for``.
+    """
+    if value is None:
+        return "<absent>"
+    if not value:
+        return "<empty>"
+    return value
+
+
+def _miss_detail(want: str, observed: tuple[FileEvent, ...], pumps: int,
+                 before: str | None, after: str | None, probed: str) -> str:
     """Describe a re-pump phase that never saw ``want``.
 
-    The three causes a give-up can have are told apart by what the
-    deltas carried, so the line names both sides of the comparison
-    that failed: the path the trigger waited for, and the paths the
-    last delta that reported anything actually carried. No paths at
-    all across several pumps is a fingerprint that never moved or a
-    backend that never published the write; paths that are all
-    unrelated to the case is visibility lag on that one object; and
-    a path that differs from ``want`` only in its framing is the
-    comparison asymmetry, which this reports and deliberately does
-    not paper over -- ``EventStream`` compares ``_framed`` paths
-    while the trigger compares the raw ``virtual``, so a trailing or
-    leading slash blinds the trigger to a change the stream would
-    have matched.
+    The line names both sides of the comparison that failed: the path
+    the trigger waited for, and the paths the last delta that reported
+    anything actually carried. Paths that are all unrelated to the
+    case is visibility lag on that one object, and a path that differs
+    from ``want`` only in its framing is the comparison asymmetry,
+    which this reports and deliberately does not paper over --
+    ``EventStream`` compares ``_framed`` paths while the trigger
+    compares the raw ``virtual``, so a trailing or leading slash
+    blinds the trigger to a change the stream would have matched.
+
+    No paths at all is the one outcome those two cannot tell apart,
+    because it is consistent with a fingerprint that never moved and
+    with a backend that never published the write. The three trailing
+    fields are what separate them, and they are the reason this takes
+    six arguments: the fingerprint the listing held for ``want``
+    before the phase and after it are the exact values the delta
+    compared, so equal ones say the listing never saw a change to
+    report, and the backend's own etag, length and mtime say whether
+    there was one to see. An etag that moved with equal fingerprints
+    is the listing; equal everywhere is the backend.
 
     Args:
         want (str): Virtual path the case expects.
         observed (tuple[FileEvent, ...]): Last delta that reported
             any change; empty when no delta reported one.
         pumps (int): Pumps the phase issued.
+        before (str | None): Snapshot fingerprint for ``want`` read
+            after the mutation and before the first pump.
+        after (str | None): The same fingerprint once the phase gave
+            up.
+        probed (str): The backend's own record of the case's key,
+            already rendered by ``_backend_stat_line`` -- or the text
+            of whatever it raised, or a note that no probe ran.
     """
     head = (f"waited for {want!r} over {pumps} pump(s) in "
             f"{PUMP_WINDOW}s, last delta reported ")
     if not observed:
-        return head + "no paths"
-    paths = [change.path.virtual for change in observed]
-    tail = f"{paths}"
-    if any(_framed(path) == _framed(want) for path in paths):
-        tail += " (framed match: raw comparison missed it)"
-    return head + tail
+        tail = "no paths"
+    else:
+        paths = [change.path.virtual for change in observed]
+        tail = f"{paths}"
+        if any(_framed(path) == _framed(want) for path in paths):
+            tail += " (framed match: raw comparison missed it)"
+    return (f"{head}{tail}; listing fingerprint "
+            f"before={_render_fingerprint(before)} "
+            f"after={_render_fingerprint(after)}; "
+            f"backend stat: {probed}")
 
 
 class CaseTrigger:
@@ -514,19 +688,92 @@ class PullTrigger(CaseTrigger):
     is built from the deltas the loop already read, on the give-up
     path only, so a case whose first pump sees its change pays
     nothing for it.
+
+    It carries two facts the deltas alone cannot: the fingerprint the
+    kept listing held for the case's path on entry (which is after
+    the mutation and before any pump, so it is the pre-write value
+    the next delta compares against) and the same fingerprint once
+    the phase gives up. A give-up that reported no paths with those
+    two equal is a listing that never moved, and the backend probe
+    then says whether there was a move to see.
     """
 
-    def __init__(self, poller: ConsumerPoller) -> None:
+    def __init__(self,
+                 poller: ConsumerPoller,
+                 probe: BackendProbe | None = None) -> None:
+        """Args:
+            poller (ConsumerPoller): The consumer's poll loop, pumped
+                once per attempt and read for its checkpoint.
+            probe (BackendProbe | None): Renders the backend's own
+                record of one backend key, for the give-up line.
+                None when the battery's writer has no stat to bind,
+                which is every backend but Nextcloud.
+        """
         self._poller = poller
+        self._probe = probe
         self._miss = ""
 
     def diagnostic(self) -> str:
         """What the last re-pump phase failed to see, or "" when it
-        saw the case's path (or when no phase has run)."""
+        saw the case's path (or when no phase has run). Carries the
+        listing fingerprints and the backend stat the phase read."""
         return self._miss
+
+    async def _probed(self, case: dict) -> str:
+        """The backend's own record of this case's key, as text.
+
+        A diagnostic must not be able to turn a case failure into a
+        crash, so the probe's exception is rendered rather than
+        raised -- it is reported, not swallowed, and a probe that
+        refuses is itself a fact about the write. The overflow
+        battery calls the trigger with an ``expect`` block and
+        nothing else, so a case with no ``mutate`` names no key and
+        is reported as unprobed rather than guessed at.
+
+        For the same reason the probe is bounded by ``PROBE_TIMEOUT``:
+        a diagnostic must not be able to outlive the failure it is
+        describing. This runs on the give-up path, after the pump
+        window is already spent and before ``_run_case`` starts the
+        ``EVENT_TIMEOUT`` wait the case has to fail on, so a slow stat
+        would add its full delay to that failure and a hung one would
+        keep the timeout from ever firing -- the battery would then
+        hang until the CI job's own default, with no case result at
+        all. The cap is its own constant rather than the remaining
+        pump window, which is zero by here, and it is far shorter than
+        ``EVENT_TIMEOUT`` so it cannot eat into it.
+
+        Only a deadline *we* imposed renders as a timeout; a
+        ``TimeoutError`` the backend client raised is re-raised into
+        the handler below and rendered as what it is, because on the
+        supported Pythons ``asyncio.TimeoutError`` *is* the builtin
+        ``TimeoutError`` and only ``cm.expired()`` can say whose clock
+        fired. ``ConsumerPoller.pump`` tells them apart the same way,
+        and for the same reason.
+
+        Args:
+            case (dict): The case the trigger was called with.
+        """
+        mutate = case.get("mutate")
+        key = mutate.get("path") if mutate else None
+        if self._probe is None:
+            return "no probe bound"
+        if key is None:
+            return "no mutate key on case"
+        try:
+            cap = asyncio.timeout(PROBE_TIMEOUT)
+            try:
+                async with cap:
+                    return await self._probe(key)
+            except TimeoutError:
+                if not cap.expired():
+                    raise
+                return f"probe timed out after {PROBE_TIMEOUT}s"
+        except Exception as exc:
+            return f"probe raised {type(exc).__name__}: {exc}"
 
     async def __call__(self, case: dict) -> None:
         want = case["expect"]["path"]
+        before = self._poller.fingerprint_for(want)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + PUMP_WINDOW
         self._miss = ""
@@ -542,7 +789,9 @@ class PullTrigger(CaseTrigger):
                 return
             remaining = deadline - loop.time()
             if remaining <= 0:
-                self._miss = _miss_detail(want, observed, pumps)
+                self._miss = _miss_detail(want, observed, pumps, before,
+                                          self._poller.fingerprint_for(want),
+                                          await self._probed(case))
                 return
             await asyncio.sleep(min(PUMP_INTERVAL, remaining))
 
@@ -605,7 +854,7 @@ async def _run_check(ws: Workspace, check: dict) -> tuple[bool, str]:
     return ok, f"{check['cmd']!r} absent {check['absent']!r}"
 
 
-async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
+async def _run_case(ws: Workspace, op: ExternalWriter, trigger: CaseTrigger,
                     stream: EventStream, case: dict) -> tuple[bool, str]:
     """Run one warm -> mutate -> trigger -> event -> checks case.
 
@@ -616,7 +865,7 @@ async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
 
     Args:
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (CaseTrigger): Fires the change signal for this case
             (pull pump or push webhook POST) and, when the case then
             fails, says what it saw while doing so.
@@ -650,7 +899,7 @@ async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
     return True, f"{want['kind']} {verdict} + {checks} checks"
 
 
-async def _seed(ws: Workspace, op: object, spec: dict) -> None:
+async def _seed(ws: Workspace, op: ExternalWriter, spec: dict) -> None:
     """Reset the watch dir and lay down the seed files.
 
     Both halves of the reset are load-bearing. The external writer
@@ -663,7 +912,7 @@ async def _seed(ws: Workspace, op: object, spec: dict) -> None:
 
     Args:
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         spec (dict): Parsed case file.
     """
     root = _watch_rel(spec) + "/"
@@ -675,16 +924,18 @@ async def _seed(ws: Workspace, op: object, spec: dict) -> None:
         await op.write(f"data/{name}", b"seed")
 
 
-async def _run_battery(ws: Workspace, op: object, trigger: CaseTrigger,
-                       agen: object, cases: list[dict], label: str,
-                       mode: str) -> list[tuple[str, bool, str]]:
+async def _run_battery(ws: Workspace, op: ExternalWriter, trigger: CaseTrigger,
+                       agen: AsyncGenerator[FileEvent,
+                                            None], cases: list[dict],
+                       label: str, mode: str) -> list[tuple[str, bool, str]]:
     """Run one battery of cases against one armed watch iterator.
 
     Args:
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (CaseTrigger): Case trigger (pull pump or push POST).
-        agen (object): The ``watch`` async iterator for this battery.
+        agen (AsyncGenerator[FileEvent, None]): The ``watch``
+            async iterator for this battery.
         cases (list[dict]): Cases to run in order; a case with a
             ``modes`` list runs only in those modes (a rename is a
             MOVE via webhook, but a DELETE + CREATE pair via diff).
@@ -709,8 +960,8 @@ async def _run_battery(ws: Workspace, op: object, trigger: CaseTrigger,
     return results
 
 
-async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
-                         mode: str, results: list) -> None:
+async def _overflow_core(spec: dict, ws: Workspace, op: ExternalWriter,
+                         trigger, mode: str, results: list) -> None:
     """Shared body of the overflow battery: many changes against a
     tiny queue must collapse into one UNKNOWN event at the watch root.
 
@@ -721,7 +972,7 @@ async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
     Args:
         spec (dict): Parsed case file (needs an ``overflow`` block).
         ws (Workspace): Overflow-dedicated workspace (tiny queue).
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (Callable): Case trigger (pull pump or push POST).
         mode (str): "pull" or "push".
         results (list): Result rows to append to.
@@ -762,7 +1013,7 @@ async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
         await stream.close()
 
 
-async def _overflow_workspace(spec: dict) -> tuple[Workspace, object]:
+async def _overflow_workspace(spec: dict) -> tuple[Workspace, ExternalWriter]:
     """Build the overflow battery's own workspace with a tiny queue.
 
     A dedicated workspace is required because the custom queue factory
@@ -795,8 +1046,9 @@ async def _run_overflow_pull(spec: dict, results: list) -> None:
         resource = ws.registry.mount_for(spec["mount"]).resource
         poller = ConsumerPoller(resource.delta_hook(), ws, _framed_root(spec))
         await poller.pump()
-        await _overflow_core(spec, ws, op, PullTrigger(poller), "pull",
-                             results)
+        await _overflow_core(spec, ws, op, PullTrigger(poller,
+                                                       _stat_probe(op)),
+                             "pull", results)
     finally:
         await ws.close()
 
@@ -831,7 +1083,7 @@ async def _run_overflow_push(spec: dict, results: list) -> None:
         await ws.close()
 
 
-async def _seed_nested(op: object, block: dict) -> None:
+async def _seed_nested(op: ExternalWriter, block: dict) -> None:
     """Reset the nested battery's subtree and lay down its seeds.
 
     Seeding goes through the external writer only: the battery's
@@ -839,7 +1091,8 @@ async def _seed_nested(op: object, block: dict) -> None:
     from inside would have to cross the nested mount boundary.
 
     Args:
-        op (object): External writer operator (outer account root).
+        op (ExternalWriter): External writer operator (outer
+            account root).
         block (dict): The ``nested`` block of the case file.
     """
     root = block["root"].strip("/") + "/"
@@ -850,7 +1103,7 @@ async def _seed_nested(op: object, block: dict) -> None:
         await op.write(rel, body.encode())
 
 
-async def _nested_core(spec: dict, ws: Workspace, op: object,
+async def _nested_core(spec: dict, ws: Workspace, op: ExternalWriter,
                        trigger: CaseTrigger, mode: str, results: list) -> None:
     """Shared body of the nested-mount battery: one watch on the shared
     ancestor spans both mounts, and each event must invalidate the
@@ -860,7 +1113,7 @@ async def _nested_core(spec: dict, ws: Workspace, op: object,
     Args:
         spec (dict): Parsed case file (needs a ``nested`` block).
         ws (Workspace): Nested-mount workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
         trigger (CaseTrigger): Case trigger (pull pump or push POST).
         mode (str): "pull" or "push".
         results (list): Result rows to append to.
@@ -901,7 +1154,8 @@ async def _run_nested_pull(spec: dict, results: list) -> None:
                                       resource_path=block["root"])
         poller = ConsumerPoller(resource.delta_hook(), ws, root)
         await poller.pump()
-        await _nested_core(spec, ws, op, PullTrigger(poller), "pull", results)
+        await _nested_core(spec, ws, op, PullTrigger(poller, _stat_probe(op)),
+                           "pull", results)
     finally:
         await ws.close()
 
@@ -941,7 +1195,7 @@ async def _run_nested_push(spec: dict, results: list) -> None:
 
 
 async def _run_pull(spec: dict, ws: Workspace,
-                    op: object) -> list[tuple[str, bool, str]]:
+                    op: ExternalWriter) -> list[tuple[str, bool, str]]:
     """Run all batteries in pull mode (consumer-owned poll loop).
 
     The poller always pulls the full watch_dir; scope filtering
@@ -951,7 +1205,7 @@ async def _run_pull(spec: dict, ws: Workspace,
     Args:
         spec (dict): Parsed case file.
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
     """
     resource = ws.registry.mount_for(spec["mount"]).resource
     hook_root = _framed_root(spec)
@@ -961,8 +1215,9 @@ async def _run_pull(spec: dict, ws: Workspace,
     agen = ws.watch(spec["watch_dir"])
     poller = ConsumerPoller(resource.delta_hook(), ws, hook_root)
     await poller.pump()
-    results.extend(await _run_battery(ws, op, PullTrigger(poller), agen,
-                                      spec["cases"], "pull", "pull"))
+    results.extend(await _run_battery(ws, op,
+                                      PullTrigger(poller, _stat_probe(op)),
+                                      agen, spec["cases"], "pull", "pull"))
 
     for scope in spec.get("scopes", []):
         # A scope whose mutation the backend has no op for (hf has no
@@ -973,8 +1228,9 @@ async def _run_pull(spec: dict, ws: Workspace,
         agen = ws.watch(scope["watch"])
         poller = ConsumerPoller(resource.delta_hook(), ws, hook_root)
         await poller.pump()
-        results.extend(await _run_battery(ws, op, PullTrigger(poller), agen,
-                                          scope["cases"],
+        results.extend(await _run_battery(ws, op,
+                                          PullTrigger(poller, _stat_probe(op)),
+                                          agen, scope["cases"],
                                           f"pull:{scope['id']}", "pull"))
     await _run_overflow_pull(spec, results)
     await _run_nested_pull(spec, results)
@@ -982,13 +1238,13 @@ async def _run_pull(spec: dict, ws: Workspace,
 
 
 async def _run_event(spec: dict, ws: Workspace,
-                     op: object) -> list[tuple[str, bool, str]]:
+                     op: ExternalWriter) -> list[tuple[str, bool, str]]:
     """Run all batteries in event mode (raw notification -> hook -> notify).
 
     Args:
         spec (dict): Parsed case file.
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
     """
     # The battery names the backend rather than asking the mount for a
     # hook: the payload it has to build is watchdog's, so the call site
@@ -1018,7 +1274,7 @@ async def _run_event(spec: dict, ws: Workspace,
 
 
 async def _run_push(spec: dict, ws: Workspace,
-                    op: object) -> list[tuple[str, bool, str]]:
+                    op: ExternalWriter) -> list[tuple[str, bool, str]]:
     """Run all batteries in push mode (webhook -> notify).
 
     Starts the sample webhook receiver a consumer would host, POSTs the
@@ -1030,7 +1286,7 @@ async def _run_push(spec: dict, ws: Workspace,
     Args:
         spec (dict): Parsed case file.
         ws (Workspace): Watched workspace.
-        op (object): External writer operator.
+        op (ExternalWriter): External writer operator.
     """
     runner = web.AppRunner(make_app(ws, _files_prefix(), spec["mount"]))
     await runner.setup()
