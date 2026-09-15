@@ -36,7 +36,7 @@ CASE_DIR = Path(__file__).resolve().parent
 ALL_MODES = ("pull", "push", "event")
 EVENT_TIMEOUT = 20.0
 ABSENT_WINDOW = 1.0
-PUMP_ATTEMPTS = 20
+PUMP_WINDOW = EVENT_TIMEOUT / 4
 PUMP_INTERVAL = 0.25
 CLASS_BY_KIND = {
     "create": "OCP\\Files\\Events\\Node\\NodeCreatedEvent",
@@ -345,10 +345,27 @@ class PullTrigger:
     instant the external write returns, and the delta only reports a
     change once the listing already differs from the checkpoint. So
     any write-visibility lag in the backend loses that case's event
-    for good. Re-pumping on a short interval rides the lag out; the
-    bound (``PUMP_ATTEMPTS * PUMP_INTERVAL``) sits well inside
-    ``EVENT_TIMEOUT``, so an event the watcher genuinely never
-    delivers still fails on the stream's own timeout rather than here.
+    for good. Re-pumping on a short interval rides the lag out.
+
+    The re-pump phase is bounded by the wall clock, not by a number
+    of attempts: ``PUMP_WINDOW`` is derived from ``EVENT_TIMEOUT`` so
+    the relationship is stated once, and past that deadline the loop
+    starts no further pump and sleeps no further interval. An attempt
+    count bounds only the sleeps, and a pump is a full recursive
+    backend listing whose duration is the backend's, not ours, so a
+    slow one could stretch the phase past ``EVENT_TIMEOUT`` many
+    times over and swallow the timeout the case must fail on.
+
+    Two limits of that bound, both deliberate. The loop always pumps
+    once before consulting the deadline, because one pump is the
+    correct behavior for a backend with no lag and the case has to
+    get it. And an in-flight listing is not cancelled at the
+    deadline, so the phase can overrun by the cost of its last pump;
+    capping a single request is the backend client's timeout to
+    enforce, not this loop's. What holds regardless is that the phase
+    ends within ``PUMP_WINDOW`` plus the cost of a single pump, which
+    leaves the rest of ``EVENT_TIMEOUT`` to the stream: an event the
+    watcher genuinely never delivers fails on that timeout, not here.
 
     The loop waits for the case's own path instead of any change: a
     nested create also creates its parent directory, and a rename
@@ -361,12 +378,16 @@ class PullTrigger:
 
     async def __call__(self, case: dict) -> None:
         want = case["expect"]["path"]
-        for attempt in range(PUMP_ATTEMPTS):
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + PUMP_WINDOW
+        while True:
             changes = await self._poller.pump()
             if any(change.path.virtual == want for change in changes):
                 return
-            if attempt + 1 < PUMP_ATTEMPTS:
-                await asyncio.sleep(PUMP_INTERVAL)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(PUMP_INTERVAL, remaining))
 
 
 class PushTrigger:
