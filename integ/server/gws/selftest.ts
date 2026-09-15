@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { spawn } from 'node:child_process'
+import { isDeepStrictEqual } from 'node:util'
 import type { ChildProcessByStdio } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import type { Readable } from 'node:stream'
@@ -159,7 +160,7 @@ function compatibilityDirect(): void {
   const st = new GwsState(Date.parse(EPOCH))
   const mime = 'application/vnd.google-apps.spreadsheet'
   const file = createDriveItem(st, "GDP2022 report and O'Brien", mime, [])
-  const tab = newTab(0, 'Sheet1')
+  let tab = newTab(0, 'Sheet1')
   tab.cells.set('0,0', 'a long headline for sizing')
   st.sheets.set(file.id, { title: file.name, tabs: [tab], nextSheetId: 1 })
   for (const [q, want] of [
@@ -167,6 +168,8 @@ function compatibilityDirect(): void {
     ["name = 'absent' or name contains 'GDP2022' and trashed = false", true],
     ["(name = 'absent' or name contains 'GDP2022') and trashed = true", false],
     ["not (trashed = true or name = 'absent')", true],
+    ["'root' in parents", true],
+    ["not ('missing' in parents) and ('root' in parents or name = 'absent')", true],
     ["name contains 'O\\'Brien' and name contains ' and '", true],
   ] as const)
     eq(`direct Drive: ${q}`, matchQuery(st, file, parseDriveQuery(q)), want)
@@ -178,6 +181,11 @@ function compatibilityDirect(): void {
     "name = 'unterminated",
     '()',
     "trashed = 'true'",
+    "parents in 'root'",
+    "name = 'absent' and parents in 'root'",
+    "not (parents in 'root')",
+    "'root' in 'parents'",
+    "'root' in name",
   ]) {
     let refused = false
     try {
@@ -194,6 +202,7 @@ function compatibilityDirect(): void {
     resize({ sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 8 }).status,
     200,
   )
+  tab = st.sheets.get(file.id)!.tabs[0]!
   check('direct Sheets sizes content', Number(tab.columnPixels?.[0]) > 100)
   eq(
     'direct Sheets leaves cells unchanged',
@@ -201,6 +210,7 @@ function compatibilityDirect(): void {
     'a long headline for sizing',
   )
   eq('direct Sheets accepts row resize', resize({ dimension: 'ROWS' }).status, 200)
+  tab = st.sheets.get(file.id)!.tabs[0]!
   for (const dimensions of [
     { sheetId: 9, dimension: 'COLUMNS' },
     { dimension: 'INVALID' },
@@ -212,6 +222,47 @@ function compatibilityDirect(): void {
     eq('direct Sheets rejects invalid dimension range', resize(dimensions).status, 400)
   }
   check('direct Sheets exposes pixel metadata', arr(gridData(tab)[0]?.columnMetadata).length === 26)
+  for (const failure of [
+    { unsupported: {} },
+    { autoResizeDimensions: { dimensions: { sheetId: 99, dimension: 'ROWS' } } },
+  ]) {
+    const before = structuredClone(st.sheets.get(file.id))
+    const modified = file.modifiedTime
+    const ticks = st.ticks
+    const failed = sheetsBatchUpdate(st, file.id, [
+      { updateSpreadsheetProperties: { properties: { title: 'must not persist' } } },
+      { addSheet: { properties: { title: 'must not exist' } } },
+      { deleteDimension: { range: { sheetId: 0, dimension: 'COLUMNS', endIndex: 1 } } },
+      { autoResizeDimensions: { dimensions: { sheetId: 0, dimension: 'COLUMNS' } } },
+      failure,
+    ])
+    eq('direct Sheets rejects entire mixed batch', failed.status, 400)
+    check(
+      'direct Sheets preserves all state on failure',
+      isDeepStrictEqual(st.sheets.get(file.id), before),
+    )
+    eq(
+      'direct Sheets preserves Drive metadata and clock',
+      [file.name, file.modifiedTime, st.ticks],
+      [before!.title, modified, ticks],
+    )
+  }
+  const added = sheetsBatchUpdate(st, file.id, [
+    { addSheet: { properties: { title: 'New tab' } } },
+    {
+      updateCells: {
+        start: { sheetId: 1 },
+        rows: [{ values: [{ userEnteredValue: { stringValue: 'new value' } }] }],
+      },
+    },
+    { autoResizeDimensions: { dimensions: { sheetId: 1, dimension: 'COLUMNS', endIndex: 1 } } },
+  ])
+  eq('direct Sheets commits dependent requests together', added.status, 200)
+  eq(
+    'direct Sheets reuses uncommitted sheet id and writes cells',
+    st.sheets.get(file.id)!.tabs[1]!.cells.get('0,0') ?? '',
+    'new value',
+  )
   for (const [timeZone, dateTime, expected] of [
     ['Etc/GMT+12', '2026-09-25T20:59:00', '2026-09-25T20:59:00-12:00'],
     ['America/Los_Angeles', '2026-07-01T10:00:00', '2026-07-01T10:00:00-07:00'],
@@ -248,6 +299,15 @@ async function compatibilityHttp(at: string): Promise<void> {
     't1',
   )
   eq('HTTP Drive validates every branch', invalid.status, 400)
+  for (const q of ["parents in 'root'", "name = 'absent' and (parents in 'root')"]) {
+    const reversed = await api(`${base}/drive/v3/files?${new URLSearchParams({ q })}`, 't1')
+    eq('HTTP Drive rejects reversed membership', reversed.status, 400)
+  }
+  const member = await api(
+    `${base}/drive/v3/files?${new URLSearchParams({ q: "'root' in parents" })}`,
+    't1',
+  )
+  eq('HTTP Drive accepts value-first membership', field(obj(member.body).files, 'id'), [id])
   const written = await api(`${base}/v4/spreadsheets/${id}/values/Sheet1!A1`, 't1', {
     method: 'PUT',
     body: JSON.stringify({ values: [['a long headline for sizing', 'untouched']] }),
@@ -272,6 +332,32 @@ async function compatibilityHttp(at: string): Promise<void> {
   eq('HTTP Sheets preserves cell contents', obj(values.body).values ?? null, [
     ['a long headline for sizing', 'untouched'],
   ])
+  const driveBefore = await api(`${base}/drive/v3/files/${id}`, 't1')
+  const failedBatch = await post(`${base}/v4/spreadsheets/${id}:batchUpdate`, 't1', {
+    requests: [
+      { updateSpreadsheetProperties: { properties: { title: 'must not persist' } } },
+      { addSheet: { properties: { title: 'must not exist' } } },
+      {
+        updateCells: {
+          start: { sheetId: 0 },
+          rows: [{ values: [{ userEnteredValue: { stringValue: 'short' } }] }],
+        },
+      },
+      { autoResizeDimensions: { dimensions: { sheetId: 0, dimension: 'COLUMNS', endIndex: 1 } } },
+      { unsupported: {} },
+    ],
+  })
+  eq('HTTP Sheets rejects a mixed batch', failedBatch.status, 400)
+  eq(
+    'HTTP Sheets does not persist failed batch changes',
+    (await api(`${base}/v4/spreadsheets/${id}?includeGridData=true`, 't1')).body,
+    read.body,
+  )
+  eq(
+    'HTTP Sheets preserves linked Drive metadata on failure',
+    (await api(`${base}/drive/v3/files/${id}`, 't1')).body,
+    driveBefore.body,
+  )
   const events = `${base}/calendar/v3/calendars/primary/events`
   const body = {
     summary: 'Deadline reminder',
@@ -296,6 +382,67 @@ async function compatibilityHttp(at: string): Promise<void> {
   for (const method of ['PUT', 'PATCH']) {
     const updated = await api(`${events}/${eventId}`, 't1', { method, body: JSON.stringify(body) })
     eq(`HTTP Calendar ${method} returns an offset`, obj(updated.body).start ?? null, expected)
+  }
+  for (const method of ['PUT', 'PATCH']) {
+    for (const status of ['tentative', 'cancelled']) {
+      const updated = await api(`${events}/${eventId}`, 't1', {
+        method,
+        body: JSON.stringify(method === 'PUT' ? { ...body, status } : { status }),
+      })
+      eq(`HTTP Calendar ${method} accepts ${status}`, updated.status, 200)
+      eq(
+        `HTTP Calendar ${method} returns supplied status`,
+        obj(updated.body).status ?? null,
+        status,
+      )
+      const fetched = await api(`${events}/${eventId}`, 't1')
+      eq(
+        `HTTP Calendar ${method} persists supplied status`,
+        obj(fetched.body).status ?? null,
+        status,
+      )
+      const visible = await api(events, 't1')
+      eq(
+        'HTTP Calendar list respects cancellation',
+        field(obj(visible.body).items, 'id'),
+        status === 'cancelled' ? [] : [eventId],
+      )
+      const deleted = await api(`${events}?showDeleted=true`, 't1')
+      eq(
+        'HTTP Calendar showDeleted includes current status',
+        field(obj(deleted.body).items, 'status'),
+        [status],
+      )
+      const freeBusy = await post(`${base}/calendar/v3/freeBusy`, 't1', {
+        timeMin: '2026-09-26T00:00:00Z',
+        timeMax: '2026-09-27T00:00:00Z',
+        items: [{ id: 'primary' }],
+      })
+      eq(
+        'HTTP Calendar freeBusy respects cancellation',
+        arr(obj(obj(obj(freeBusy.body).calendars).primary).busy).length,
+        status === 'cancelled' ? 0 : 1,
+      )
+    }
+    const before = (await api(`${events}/${eventId}`, 't1')).body
+    for (const status of ['invalid', 7]) {
+      const invalid = await api(`${events}/${eventId}`, 't1', {
+        method,
+        body: JSON.stringify({ ...body, status }),
+      })
+      eq(`HTTP Calendar ${method} rejects invalid status`, invalid.status, 400)
+      eq(
+        'HTTP Calendar invalid status preserves the event',
+        (await api(`${events}/${eventId}`, 't1')).body,
+        before,
+      )
+    }
+    const omitted = await api(`${events}/${eventId}`, 't1', { method, body: JSON.stringify(body) })
+    eq(
+      `HTTP Calendar ${method} handles omitted status`,
+      obj(omitted.body).status ?? null,
+      method === 'PUT' ? 'confirmed' : 'cancelled',
+    )
   }
 }
 

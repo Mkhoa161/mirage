@@ -107,6 +107,7 @@ class QueryReader {
     if (!Object.hasOwn(QUERY_OPERATORS, field)) throw new Error(`unsupported query field: ${field}`)
     if (
       operator.quoted ||
+      (op === 'in' && !first.quoted) ||
       (first.quoted && (last.quoted || op !== 'in')) ||
       !QUERY_OPERATORS[field]?.includes(op)
     ) {

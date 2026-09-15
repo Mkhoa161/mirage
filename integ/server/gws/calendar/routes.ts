@@ -68,10 +68,13 @@ function patchEvent(ctx: GwsCtx, replace = false): Reply {
   const body = asObj(ctx.json())
   const times = readEventTimes(body, replace ? undefined : found.ev)
   if (isReply(times)) return times
+  const status = body.status === undefined ? (replace ? 'confirmed' : found.ev.status) : body.status
+  if (status !== 'confirmed' && status !== 'tentative' && status !== 'cancelled') {
+    return googleError(400, 'Invalid event status.', 'INVALID_ARGUMENT')
+  }
   const next: CalendarEvent = {
-    ...(replace
-      ? { id: found.ev.id, status: found.ev.status, created: found.ev.created }
-      : found.ev),
+    ...(replace ? { id: found.ev.id, created: found.ev.created } : found.ev),
+    status,
     start: times.start,
     end: times.end,
     updated: ctx.db.now(),
