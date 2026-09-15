@@ -1199,10 +1199,19 @@ jobs:
             --predicate '(process == "fskitd" OR process == "fskit_agent") AND messageType == error' \
             2>/dev/null | tail -40 || true
 
+  # The suite battery is split in two: the runner, both in-process hosts and
+  # the CLI driver all take the same suite-name filter, so one leg's list
+  # drives every step that costs time. Leg A is named and leg B is whatever
+  # is left, so a new integ/runtime/*.json joins a leg instead of leaving CI.
   integ-runtime:
     needs: [changes, typescript-build]
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.core == 'true' || needs.changes.outputs.ts == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [a, b]
     services:
       redis:
         image: redis:7
@@ -1242,8 +1251,78 @@ jobs:
       # broken build download cannot silently drop wasi/quickjs/docker
       # coverage.
       INTEG_RUNTIME_STRICT: "1"
+      # cli.sh runs the two hosts concurrently and waits on both, so a leg
+      # costs max(python, typescript) rather than their sum. This list was
+      # picked off measured per-suite wall clock to halve BOTH hosts (python
+      # 50/50, typescript 48/52), so the balance holds whichever one binds on
+      # a given runner. Re-read the `suite <host>/<name> <n>s` lines cli.sh
+      # prints before moving a suite across; that step is 89% of the job's
+      # test time, and it is the only one timed per suite.
+      LEG_A_SUITES: "defaults guestops limits lines policy quickjs registry script_cli"
     steps:
       - uses: actions/checkout@v7
+
+      - name: Resolve this leg's suites
+        env:
+          LEG: ${{ matrix.leg }}
+        run: |
+          set -euo pipefail
+          # Collation for sort/comm, and for the name pattern below.
+          export LC_ALL=C
+          # Every suite json has to yield exactly one usable name here. A
+          # file this step drops or repairs instead of refusing is a file
+          # whose name reaches neither leg, so all three drivers skip it
+          # and CI passes without running any of its cases. Both halves
+          # are checked per file, verbatim, naming the file that failed:
+          # `jq -r` renders a missing key as the string "null", which is
+          # itself a legal name shape, so the emptiness check cannot be
+          # folded into the pattern check.
+          names=()
+          for f in integ/runtime/*.json; do
+            n=$(jq -r '.suite // empty' "$f")
+            if [ -z "$n" ]; then
+              echo "$f declares no .suite" >&2
+              exit 1
+            fi
+            case "$n" in
+              *[!a-z0-9_]*)
+                echo "$f: .suite '$n' is not [a-z0-9_]+" >&2
+                exit 1 ;;
+            esac
+            names+=("$n")
+          done
+          all=$(printf '%s\n' "${names[@]}" | sort -u)
+          a=$(printf '%s' "$LEG_A_SUITES" | tr ' ' '\n' | grep -v '^$' | sort -u)
+          unknown=$(comm -13 <(printf '%s\n' "$all") <(printf '%s\n' "$a"))
+          if [ -n "$unknown" ]; then
+            echo "LEG_A_SUITES names suites with no json: $unknown" >&2
+            exit 1
+          fi
+          b=$(comm -23 <(printf '%s\n' "$all") <(printf '%s\n' "$a"))
+          if [ -z "$a" ] || [ -z "$b" ]; then
+            echo "a leg is empty: every suite would run twice or not at all" >&2
+            exit 1
+          fi
+          # Exhaustive on purpose: a third matrix leg falling into an
+          # `else` would silently re-run leg B's suites and still exit 0.
+          case "$LEG" in
+            a) suites="$a" ;;
+            b) suites="$b" ;;
+            *) echo "no suite list for leg '$LEG'" >&2; exit 1 ;;
+          esac
+          echo "SUITES=$(printf '%s' "$suites" | tr '\n' ' ')" >> "$GITHUB_ENV"
+          # Provision only what this leg's suites ask for, keyed on the
+          # resolved list rather than the leg letter, so moving a suite
+          # across moves its service with it.
+          in_leg() { grep -qx "$1" <<<"$suites"; }
+          if in_leg wasi; then echo "NEEDS_WASI=1" >> "$GITHUB_ENV"; fi
+          if in_leg bridge; then echo "NEEDS_MINIO=1" >> "$GITHUB_ENV"; fi
+          if in_leg docker; then echo "NEEDS_DOCKER=1" >> "$GITHUB_ENV"; fi
+          if in_leg ssh; then echo "NEEDS_SSH=1" >> "$GITHUB_ENV"; fi
+          if in_leg docker || in_leg ssh; then
+            echo "NEEDS_SANDBOX_IMAGE=1" >> "$GITHUB_ENV"
+          fi
+          printf 'leg %s runs:\n%s\n' "$LEG" "$suites"
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -1292,6 +1371,7 @@ jobs:
             -p qjs-wasi.wasm -O /tmp/quickjs/qjs-wasi.wasm
 
       - name: Cache the CPython WASI build
+        if: env.NEEDS_WASI == '1'
         id: wasi-cache
         uses: actions/cache@v6
         with:
@@ -1299,7 +1379,7 @@ jobs:
           key: cpython-wasi-${{ env.WASI_BUILD }}
 
       - name: Download the CPython WASI build
-        if: steps.wasi-cache.outputs.cache-hit != 'true'
+        if: env.NEEDS_WASI == '1' && steps.wasi-cache.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -1309,6 +1389,7 @@ jobs:
           unzip -q /tmp/wasi-build.zip -d /tmp/cpython-wasi
 
       - name: Start MinIO
+        if: env.NEEDS_MINIO == '1'
         run: |
           for i in $(seq 1 5); do
             docker pull quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z && break
@@ -1323,6 +1404,7 @@ jobs:
           done
 
       - name: Pull the sandbox image
+        if: env.NEEDS_SANDBOX_IMAGE == '1'
         run: |
           for i in $(seq 1 5); do
             docker pull debian:trixie-slim && break
@@ -1330,9 +1412,11 @@ jobs:
           done
 
       - name: Start the docker sandbox container (user-provisioned)
+        if: env.NEEDS_DOCKER == '1'
         run: docker run -d --name "$MIRAGE_INTEG_DOCKER_CONTAINER" debian:trixie-slim sleep infinity
 
       - name: Start the ssh sandbox host (user-provisioned)
+        if: env.NEEDS_SSH == '1'
         run: |
           ssh-keygen -t ed25519 -N '' -f "$MIRAGE_INTEG_SSH_KEY"
           docker run -d --name mirage-integ-ssh-box -p 2222:22 debian:trixie-slim sleep infinity
@@ -1351,17 +1435,18 @@ jobs:
           done
 
       - name: Run every runtime through the JSON suites (python)
-        run: ./python/.venv/bin/python integ/runtime/run.py
+        run: ./python/.venv/bin/python integ/runtime/run.py $SUITES
 
       - name: Run every runtime through the JSON suites (typescript)
         working-directory: integ
-        run: pnpm exec tsx runtime/run.ts
+        run: pnpm exec tsx runtime/run.ts $SUITES
 
       - name: Run every runtime through the CLI and both daemons
         run: |
           bash integ/runtime/cli.sh \
             "python/.venv/bin/mirage" \
-            "node typescript/packages/cli/dist/bin/mirage.js"
+            "node typescript/packages/cli/dist/bin/mirage.js" \
+            $SUITES
 
   integ-observability:
     needs: [changes, typescript-build]
