@@ -20,6 +20,7 @@ import { asNum, asObj, asObjArr, asStr } from '../wire/json.ts'
 import type { JsonObj } from '../wire/json.ts'
 import { NOT_FOUND, googleError, ok } from '../wire/reply.ts'
 import {
+  autoResizeDimensions,
   deleteDimension,
   growGrid,
   insertDimension,
@@ -72,6 +73,8 @@ export function sheetsBatchUpdate(st: GwsState, id: string, requests: JsonObj[])
         sheetId: newSheetId ?? sheet.nextSheetId,
         title: asStr(r.newSheetName) ?? `Copy of ${src.title}`,
         cells: new Map(src.cells),
+        rowPixels: { ...src.rowPixels },
+        columnPixels: { ...src.columnPixels },
       }
       if (newSheetId === undefined) sheet.nextSheetId += 1
       const at = asNum(r.insertSheetIndex) ?? sheet.tabs.length
@@ -98,6 +101,10 @@ export function sheetsBatchUpdate(st: GwsState, id: string, requests: JsonObj[])
       const range = resolveDimensionRange(sheet, asObj(r.source))
       if (range === null) return googleError(400, BAD_SHEET_ID, 'INVALID_ARGUMENT')
       moveDimension(range, asNum(r.destinationIndex) ?? 0)
+      replies.push({})
+    } else if ('autoResizeDimensions' in request) {
+      const failed = autoResizeDimensions(sheet, asObj(request.autoResizeDimensions))
+      if (failed !== null) return failed
       replies.push({})
     } else if ('updateCells' in request) {
       const failed = updateCells(sheet, asObj(request.updateCells))
@@ -143,6 +150,8 @@ export function copySheetTo(
     sheetId: destination.nextSheetId,
     title: `Copy of ${tab.title}`,
     cells: new Map(tab.cells),
+    rowPixels: { ...tab.rowPixels },
+    columnPixels: { ...tab.columnPixels },
   }
   destination.nextSheetId += 1
   destination.tabs.push(copy)

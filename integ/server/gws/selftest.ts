@@ -20,6 +20,13 @@ import { fileURLToPath } from 'node:url'
 import { ANNOUNCE_RE } from '../kit/typescript/announce.ts'
 import type { JsonValue } from '../kit/typescript/types.ts'
 
+import { parseDriveQuery, matchQuery } from './drive/query.ts'
+import { createDriveItem } from './drive/item.ts'
+import { GwsState } from './store/state.ts'
+import { newTab, gridData } from './sheets/grid.ts'
+import { sheetsBatchUpdate } from './sheets/batch.ts'
+import { formatEventTime, slotMs } from './calendar/zone.ts'
+
 // The corpus exercises the SURFACES of this fake heavily -- seven vendor APIs
 // across the gdrive, gdocs, gsheets, gslides, gmail and gcal targets -- so this
 // battery deliberately does not re-test them. What it holds is everything the
@@ -148,11 +155,157 @@ const FORMS: JsonValue = [
   },
 ]
 
+function compatibilityDirect(): void {
+  const st = new GwsState(Date.parse(EPOCH))
+  const mime = 'application/vnd.google-apps.spreadsheet'
+  const file = createDriveItem(st, "GDP2022 report and O'Brien", mime, [])
+  const tab = newTab(0, 'Sheet1')
+  tab.cells.set('0,0', 'a long headline for sizing')
+  st.sheets.set(file.id, { title: file.name, tabs: [tab], nextSheetId: 1 })
+  for (const [q, want] of [
+    [`mimeType = '${mime}' and (name contains 'GDP2022' or fullText contains 'missing')`, true],
+    ["name = 'absent' or name contains 'GDP2022' and trashed = false", true],
+    ["(name = 'absent' or name contains 'GDP2022') and trashed = true", false],
+    ["not (trashed = true or name = 'absent')", true],
+    ["name contains 'O\\'Brien' and name contains ' and '", true],
+  ] as const)
+    eq(`direct Drive: ${q}`, matchQuery(st, file, parseDriveQuery(q)), want)
+  for (const q of [
+    "name = 'x' or",
+    "(name = 'x'",
+    "name = 'x')",
+    "name = 'x' or unknown = 'y'",
+    "name = 'unterminated",
+    '()',
+    "trashed = 'true'",
+  ]) {
+    let refused = false
+    try {
+      parseDriveQuery(q)
+    } catch (err) {
+      refused = err instanceof Error
+    }
+    check(`direct Drive rejects ${q}`, refused)
+  }
+  const resize = (dimensions: Obj) =>
+    sheetsBatchUpdate(st, file.id, [{ autoResizeDimensions: { dimensions } }])
+  eq(
+    'direct Sheets accepts column resize',
+    resize({ sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 8 }).status,
+    200,
+  )
+  check('direct Sheets sizes content', Number(tab.columnPixels?.[0]) > 100)
+  eq(
+    'direct Sheets leaves cells unchanged',
+    tab.cells.get('0,0') ?? '',
+    'a long headline for sizing',
+  )
+  eq('direct Sheets accepts row resize', resize({ dimension: 'ROWS' }).status, 200)
+  for (const dimensions of [
+    { sheetId: 9, dimension: 'COLUMNS' },
+    { dimension: 'INVALID' },
+    { dimension: 'COLUMNS', startIndex: -1 },
+    { dimension: 'COLUMNS', endIndex: 27 },
+    { dimension: 'COLUMNS', startIndex: 8, endIndex: 3 },
+    { dimension: 'COLUMNS', startIndex: 0.5 },
+  ]) {
+    eq('direct Sheets rejects invalid dimension range', resize(dimensions).status, 400)
+  }
+  check('direct Sheets exposes pixel metadata', arr(gridData(tab)[0]?.columnMetadata).length === 26)
+  for (const [timeZone, dateTime, expected] of [
+    ['Etc/GMT+12', '2026-09-25T20:59:00', '2026-09-25T20:59:00-12:00'],
+    ['America/Los_Angeles', '2026-07-01T10:00:00', '2026-07-01T10:00:00-07:00'],
+    ['America/Los_Angeles', '2026-01-01T10:00:00', '2026-01-01T10:00:00-08:00'],
+    ['Asia/Kolkata', '2026-07-01T10:00:00.123', '2026-07-01T10:00:00.123+05:30'],
+  ] as const) {
+    const input = { timeZone, dateTime }
+    const result = formatEventTime(input)
+    eq('direct Calendar serializes a zoned instant', result.dateTime ?? '', expected ?? '')
+    eq('direct Calendar preserves instant', slotMs(result, 'UTC'), slotMs(input, 'UTC'))
+  }
+  eq(
+    'direct Calendar leaves all-day values alone',
+    { ...formatEventTime({ date: '2026-07-01' }) },
+    { date: '2026-07-01' },
+  )
+}
+
+async function compatibilityHttp(at: string): Promise<void> {
+  const base = `${at}/_run/compat1077`
+  check('compatibility world seeds', (await reset(base, { tenants: ['t1'], epoch: EPOCH })) === 200)
+  const sheet = await post(`${base}/v4/spreadsheets`, 't1', {
+    properties: { title: 'GDP2022 report' },
+  })
+  check('HTTP creates spreadsheet', sheet.status === 200)
+  const id = String(obj(sheet.body).spreadsheetId)
+  const q =
+    "mimeType = 'application/vnd.google-apps.spreadsheet' and (name contains 'GDP2022' or fullText contains 'GDP2022')"
+  const found = await api(`${base}/drive/v3/files?${new URLSearchParams({ q })}`, 't1')
+  check('HTTP Drive accepts grouped query', found.status === 200)
+  eq('HTTP Drive returns matching spreadsheet', field(obj(found.body).files, 'id'), [id])
+  const invalid = await api(
+    `${base}/drive/v3/files?${new URLSearchParams({ q: "name='x' or invalid='y'" })}`,
+    't1',
+  )
+  eq('HTTP Drive validates every branch', invalid.status, 400)
+  const written = await api(`${base}/v4/spreadsheets/${id}/values/Sheet1!A1`, 't1', {
+    method: 'PUT',
+    body: JSON.stringify({ values: [['a long headline for sizing', 'untouched']] }),
+  })
+  eq('HTTP writes cells', written.status, 200)
+  const resized = await post(`${base}/v4/spreadsheets/${id}:batchUpdate`, 't1', {
+    requests: [
+      {
+        autoResizeDimensions: {
+          dimensions: { sheetId: 0, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 },
+        },
+      },
+    ],
+  })
+  eq('HTTP Sheets accepts resize and replies', obj(resized.body).replies ?? null, [{}])
+  const read = await api(`${base}/v4/spreadsheets/${id}?includeGridData=true`, 't1')
+  const data = obj(arr(obj(arr(obj(read.body).sheets)[0]).data)[0])
+  const metadata = arr(data.columnMetadata)
+  check('HTTP Sheets persists resized metadata', Number(obj(metadata[0]).pixelSize) > 100)
+  eq('HTTP Sheets leaves the next column alone', obj(metadata[1]).pixelSize ?? null, 100)
+  const values = await api(`${base}/v4/spreadsheets/${id}/values/Sheet1!A1:B1`, 't1')
+  eq('HTTP Sheets preserves cell contents', obj(values.body).values ?? null, [
+    ['a long headline for sizing', 'untouched'],
+  ])
+  const events = `${base}/calendar/v3/calendars/primary/events`
+  const body = {
+    summary: 'Deadline reminder',
+    start: { dateTime: '2026-09-25T20:59:00', timeZone: 'Etc/GMT+12' },
+    end: { dateTime: '2026-09-25T21:59:00', timeZone: 'Etc/GMT+12' },
+  }
+  const created = await post(events, 't1', body)
+  const eventId = String(obj(created.body).id)
+  const expected = { dateTime: '2026-09-25T20:59:00-12:00', timeZone: 'Etc/GMT+12' }
+  eq('HTTP Calendar insert returns an offset', obj(created.body).start ?? null, expected)
+  const fetched = await api(`${events}/${eventId}`, 't1')
+  eq('HTTP Calendar get returns the same offset', obj(fetched.body).start ?? null, expected)
+  const listed = await api(
+    `${events}?timeMin=2026-09-26T08:58:00Z&timeMax=2026-09-26T09:00:00Z`,
+    't1',
+  )
+  eq(
+    'HTTP Calendar list filters and returns the same instant',
+    obj(arr(obj(listed.body).items)[0]).start ?? null,
+    expected,
+  )
+  for (const method of ['PUT', 'PATCH']) {
+    const updated = await api(`${events}/${eventId}`, 't1', { method, body: JSON.stringify(body) })
+    eq(`HTTP Calendar ${method} returns an offset`, obj(updated.body).start ?? null, expected)
+  }
+}
+
 async function main(): Promise<void> {
+  compatibilityDirect()
   const fake = await launch()
   const at = fake.endpoint
   const seed = { tenants: ['t1'], epoch: EPOCH, extras: { forms: FORMS } }
   try {
+    await compatibilityHttp(at)
     // ---- the base world is fixture rows, not constructor state
     check('a bare /reset seeds', (await reset(at, { tenants: ['t1'], epoch: EPOCH })) === 200)
     const labels = await api(`${at}/gmail/v1/users/me/labels`, 't1')

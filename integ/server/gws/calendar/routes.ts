@@ -61,15 +61,17 @@ function withEvent(
   return { cal, ev, bucket }
 }
 
-function patchEvent(ctx: GwsCtx): Reply {
+function patchEvent(ctx: GwsCtx, replace = false): Reply {
   const found = withEvent(ctx)
   if (isReply(found)) return found
   if (!writable(found.cal)) return googleError(403, NEED_WRITER, 'PERMISSION_DENIED')
   const body = asObj(ctx.json())
-  const times = readEventTimes(body, found.ev)
+  const times = readEventTimes(body, replace ? undefined : found.ev)
   if (isReply(times)) return times
   const next: CalendarEvent = {
-    ...found.ev,
+    ...(replace
+      ? { id: found.ev.id, status: found.ev.status, created: found.ev.created }
+      : found.ev),
     start: times.start,
     end: times.end,
     updated: ctx.db.now(),
@@ -80,6 +82,7 @@ function patchEvent(ctx: GwsCtx): Reply {
   if (summary !== undefined) next.summary = summary
   if (description !== undefined) next.description = description
   if (location !== undefined) next.location = location
+  if (body.attendees !== undefined) next.attendees = body.attendees
   found.bucket.set(found.ev.id, next)
   return ok(fmtEvent(found.cal, next))
 }
@@ -144,6 +147,12 @@ export function calendarRoutes(): KitRoute<C>[] {
       if (isReply(found)) return found
       return ok(fmtEvent(found.cal, found.ev))
     }),
+    route(
+      'PUT',
+      '/calendar/v3/calendars/:calendarId/events/:eventId',
+      (ctx) => patchEvent(ctx, true),
+      { write: true },
+    ),
     route('PATCH', '/calendar/v3/calendars/:calendarId/events/:eventId', patchEvent, {
       write: true,
     }),

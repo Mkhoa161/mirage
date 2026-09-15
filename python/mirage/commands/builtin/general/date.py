@@ -64,6 +64,8 @@ async def date(
         dt = parsed_d
     else:
         dt = datetime.now(zone)
+    if zone is None:
+        dt = dt.astimezone()
     fmt: str | None = None
     for t in texts:
         if t.startswith("+"):
@@ -75,8 +77,6 @@ async def date(
         result = email.utils.format_datetime(dt)
     elif fmt is not None:
         result = gnu_strftime(dt, fmt)
-    elif zone is not None:
-        result = dt.strftime("%a %b %d %H:%M:%S %Z %Y")
     else:
-        result = dt.strftime("%a %b %d %H:%M:%S %Y")
+        result = dt.strftime("%a %b %d %H:%M:%S %Z %Y")
     return (result + "\n").encode(), IOResult()

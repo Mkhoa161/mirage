@@ -835,6 +835,81 @@
           }
         }
       ]
+    },
+    {
+      "id": "cpython_surface_known_gaps_1077",
+      "world": {
+        "runtimes": [
+          "monty",
+          "vfs"
+        ],
+        "mounts": {
+          "/data": {
+            "resource": "ram",
+            "files": {
+              "in.json": "{\"a\":1}"
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "command": "python3 -c 'print(len([1,2]), sum([1,2]), sorted([3,1,2]))'",
+          "expect": {
+            "exit": 0,
+            "stdout": "2 3 [1, 2, 3]\n"
+          }
+        },
+        {
+          "command": "python3 -c 'import json; print([n for n in ('\"'\"'load'\"'\"','\"'\"'loads'\"'\"','\"'\"'dump'\"'\"','\"'\"'dumps'\"'\"') if hasattr(json,n)])'",
+          "expect": {
+            "exit": 0,
+            "stdout": "['loads', 'dumps']\n"
+          }
+        },
+        {
+          "command": "python3 -c 'print(dir(list))'",
+          "expect": {
+            "exit": 1,
+            "stderr_contains": "NameError: name 'dir' is not defined"
+          }
+        },
+        {
+          "command": "python3 -c 'import json; print(dir(json))'",
+          "expect": {
+            "exit": 1,
+            "stderr_contains": "NameError: name 'dir' is not defined"
+          }
+        },
+        {
+          "command": "python3 -c 'import json; print(json.load(open('\"'\"'/data/in.json'\"'\"')))'",
+          "expect": {
+            "exit": 1,
+            "stderr_contains": "module 'json' has no attribute 'load'"
+          }
+        },
+        {
+          "command": "python3 -c 'import json; json.dump({'\"'\"'a'\"'\"': 1}, open('\"'\"'/data/out.json'\"'\"', '\"'\"'w'\"'\"'))'",
+          "expect": {
+            "exit": 1,
+            "stderr_contains": "module 'json' has no attribute 'dump'"
+          }
+        },
+        {
+          "command": "python3 -c 'import json; print(json.loads(open('\"'\"'/data/in.json'\"'\"').read())); f = open('\"'\"'/data/out.json'\"'\"', '\"'\"'w'\"'\"'); f.write(json.dumps({'\"'\"'a'\"'\"': 2})); f.close()'",
+          "expect": {
+            "exit": 0,
+            "stdout": "{'a': 1}\n"
+          }
+        },
+        {
+          "command": "cat /data/out.json",
+          "expect": {
+            "exit": 0,
+            "stdout": "{\"a\": 2}"
+          }
+        }
+      ]
     }
   ]
 }
