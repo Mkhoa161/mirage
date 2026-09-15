@@ -176,6 +176,17 @@ class RefusingCore(CountingCore):
         raise PermissionError(errno.EACCES, "denied", path)
 
 
+def test_a_refused_readlink_is_not_read_as_not_a_link():
+    # A backend that will not answer has said nothing about whether the
+    # path is a link, and False is the one answer a guest cannot tell
+    # from the truth. CPython draws the same line: `Path.is_symlink`
+    # swallows only its `_ignore_error` list and re-raises
+    # PermissionError. A bare `except OSError` here swallowed both.
+    vfs = MontyVFS(RefusingCore())
+    with pytest.raises(PermissionError):
+        vfs.is_link("/s3/x")
+
+
 def test_a_dangling_link_is_still_a_link_after_a_stat_miss():
     # `exists()` stats, the stat follows the link and misses, and the
     # door remembers the path as absent. `is_link` has to keep seeing

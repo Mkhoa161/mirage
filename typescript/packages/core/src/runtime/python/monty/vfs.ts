@@ -14,6 +14,7 @@
 
 import { CrossMountError } from '../../errors.ts'
 import type { RuntimeVFS, VFSEntry, VFSStat } from '../../vfs.ts'
+import { classify, type FsCondition } from '../../../errors/index.ts'
 import { asGuestError, guestError } from './errors.ts'
 
 // What counts as "nothing here" depends on what was asked, so there is
@@ -30,6 +31,15 @@ const ABSENT_CONTENT = new Set(['FileNotFoundError', 'IsADirectoryError', 'NotAD
 // folding that refusal into "no" reports a permission or a transport
 // failure as an absence the guest cannot tell from a real one.
 const ABSENT_PATH = new Set(['FileNotFoundError', 'NotADirectoryError'])
+// What a refused readlink is allowed to mean "no link here". EINVAL is
+// the backend saying the path is not one, and the other three are
+// CPython's own `_ignore_error` list, which is what `Path.is_symlink`
+// swallows around its lstat (EBADF has no condition here, since no
+// backend answers on a descriptor). Everything else propagates, the
+// same rule the two sets above draw and for the same reason: CPython
+// re-raises PermissionError out of `is_symlink`, and reporting a
+// refusal as "not a link" is an answer the guest cannot tell from one.
+const NOT_A_LINK = new Set<FsCondition>(['EINVAL', 'ENOENT', 'ENOTDIR', 'ELOOP'])
 
 function isAbsence(err: unknown, names: Set<string>): boolean {
   return err instanceof Error && names.has(err.name)
@@ -233,6 +243,10 @@ export class MontyVFS {
    * here would also buy a readdir plus a stat per sibling to answer
    * about one path.
    *
+   * A refusal the backend did not mean as "no link here" comes out as
+   * itself (see NOT_A_LINK), which is what CPython's own
+   * `Path.is_symlink` does with anything outside `_ignore_error`.
+   *
    * Args:
    *   path: the path to test.
    */
@@ -240,12 +254,8 @@ export class MontyVFS {
     return this.core.readlink(path).then(
       () => true,
       (caught: unknown) => {
-        // EINVAL for a path that is not a link, ENOENT for one that is
-        // not there: `is_symlink` is False either way, which is what
-        // pathlib answers for both. A broken answer is not one of
-        // those and stays a raise, the line python's `except OSError`
-        // draws too.
-        if (caught instanceof TypeError) throw caught
+        const condition = classify(caught)
+        if (condition === null || !NOT_A_LINK.has(condition)) throw asGuestError(caught, path)
         return false
       },
     )

@@ -356,6 +356,17 @@ describe('MontyVFS.isLink', () => {
     expect(await viewOn(dispatch).isLink('/ram/gone/l')).toBe(false)
   })
 
+  it('carries a refused readlink out instead of answering "not a link"', async () => {
+    // A backend that will not answer has said nothing about whether
+    // the path is a link, and False is the one answer a guest cannot
+    // tell from the truth. CPython draws the same line: `is_symlink`
+    // swallows its `_ignore_error` list and re-raises PermissionError.
+    const denied = vi.fn<BridgeDispatchFn>((_op, path) =>
+      Promise.reject(Object.assign(new Error(`denied: ${path}`), { code: 'EACCES' })),
+    )
+    await expect(viewOn(denied).isLink('/ram/x')).rejects.toThrow('[Errno 13] Permission denied')
+  })
+
   it('still sees a dangling link the guest already stat-missed', async () => {
     // The stat follows the link and misses, which remembers the path
     // as absent. Reading the mark off the parent went through that

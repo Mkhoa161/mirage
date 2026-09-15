@@ -12,6 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import errno
 from typing import Callable, TypeVar
 
 from mirage.runtime.types import VFSEntry, VFSStat
@@ -38,6 +39,17 @@ ABSENT_PATH = (FileNotFoundError, NotADirectoryError)
 # a pydantic ValidationError from a malformed row is a ValueError, and
 # reporting it as "the path is not there" hides it behind an answer
 # the guest cannot tell from a real miss.
+
+# What a refused readlink is allowed to mean "no link here". EINVAL is
+# the backend saying the path is not one, and the other three are
+# CPython's own `_ignore_error` list, which is what `Path.is_symlink`
+# swallows around its lstat (EBADF is left out: no backend here answers
+# on a descriptor). Everything else propagates, the same rule the two
+# tuples above draw and for the same reason: CPython re-raises
+# PermissionError out of `is_symlink`, and reporting a refusal as "not
+# a link" is an answer the guest cannot tell from one. A bare
+# `except OSError` swallowed all of them.
+NOT_A_LINK = (errno.EINVAL, errno.ENOENT, errno.ENOTDIR, errno.ELOOP)
 
 
 class MontyVFS:
@@ -154,10 +166,9 @@ class MontyVFS:
             return False
         try:
             self._core.readlink(virtual)
-        except OSError:
-            # EINVAL for a path that is not a link, ENOENT for one that
-            # is not there: `is_symlink` is False either way, which is
-            # what pathlib answers for both.
+        except OSError as caught:
+            if caught.errno not in NOT_A_LINK:
+                raise
             return False
         return True
 
