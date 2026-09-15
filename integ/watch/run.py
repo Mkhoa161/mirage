@@ -211,14 +211,19 @@ class EventStream:
         if self._task is None:
             self._task = asyncio.ensure_future(self._agen.__anext__())
 
-    async def expect(self, want_path: str, want_kind: str) -> object | None:
+    async def expect(self, want_path: str) -> object | None:
         """Return the next change for ``want_path``, skipping others
-        (a nested create also emits its parent dir), or None on
-        timeout or kind mismatch.
+        (a nested create also emits its parent dir), or None only when
+        the timeout expires with no change for that path.
+
+        The kind is deliberately not checked here. Returning None for
+        a kind mismatch too made the two outcomes indistinguishable to
+        the caller, which rendered both as a timeout -- so a wrong-kind
+        event delivered immediately was reported as a wait that never
+        happened. The caller compares kinds on the change it gets back.
 
         Args:
             want_path (str): Virtual path the case expects.
-            want_kind (str): FileChangeKind value the case expects.
         """
         deadline = asyncio.get_running_loop().time() + EVENT_TIMEOUT
         while True:
@@ -233,8 +238,6 @@ class EventStream:
             self._task = None
             if change.path.virtual != want_path:
                 continue
-            if change.kind.value != want_kind:
-                return None
             return change
 
     async def absent(self, path: str) -> bool:
@@ -307,14 +310,21 @@ class ConsumerPoller:
         again -- the delta is computed against the new checkpoint, so
         no later pump rediscovers them. That is a lost event, the
         failure this poller exists to catch, and it is not worth
-        trading for a tidier bound. A timed-out pull is reported as
-        "no changes observed" rather than raised, because that is the
-        same thing the caller does about it: pump again. On the
-        supported Pythons ``asyncio.TimeoutError`` is the builtin
-        ``TimeoutError``, so a timeout the backend client raises from
-        inside the pull is caught here too. It is not distinguished
-        because it says the same thing on another clock -- the
-        listing did not finish -- and the answer to it is the same.
+        trading for a tidier bound. Only a deadline *we* imposed is
+        reported as "no changes observed" rather than raised, because
+        that is the same thing the caller does about it: pump again.
+        A ``TimeoutError`` out of the backend client is re-raised,
+        and telling the two apart is why this uses
+        ``asyncio.timeout`` instead of the file's ``asyncio.wait_for``
+        idiom: on the supported Pythons ``asyncio.TimeoutError`` *is*
+        the builtin ``TimeoutError``, so the exception type alone
+        cannot say whose clock fired, and only ``cm.expired()`` can.
+        Catching both was silent data loss: a backend timeout during
+        an uncapped baseline pump left ``_checkpoint`` at None, so the
+        harness laid down no baseline, the first trigger pull was
+        diffed as a fresh baseline (which by construction reports
+        nothing), and that case's event was swallowed for good --
+        exactly the swallowed exception CLAUDE.md forbids.
 
         The notify loop is left uncapped deliberately: it touches only
         process memory (cache eviction against the RAM index and file
@@ -328,13 +338,23 @@ class ConsumerPoller:
 
         Returns:
             tuple[FileEvent, ...]: The changes handed to ``notify``;
-                empty when the listing ran out of time.
+                empty when *our* deadline cut the listing short.
+
+        Raises:
+            TimeoutError: Propagated when the backend client raised it
+                rather than our own deadline expiring.
         """
-        try:
-            delta = await asyncio.wait_for(
-                self._hook.pull(self._root, self._checkpoint), timeout)
-        except asyncio.TimeoutError:
-            return ()
+        if timeout is None:
+            delta = await self._hook.pull(self._root, self._checkpoint)
+        else:
+            cap = asyncio.timeout(timeout)
+            try:
+                async with cap:
+                    delta = await self._hook.pull(self._root, self._checkpoint)
+            except TimeoutError:
+                if not cap.expired():
+                    raise
+                return ()
         self._checkpoint = delta.checkpoint
         for change in delta.changes:
             await self._ws.notify(change)
@@ -606,12 +626,15 @@ async def _run_case(ws: Workspace, op: object, trigger: CaseTrigger,
     await _mutate(op, case["mutate"])
     await trigger(case)
     if want.get("delivered", True):
-        change = await stream.expect(want["path"], want["kind"])
+        change = await stream.expect(want["path"])
         if change is None:
-            detail = (f"no {want['kind']} for {want['path']} within "
+            detail = (f"no change for {want['path']} within "
                       f"{EVENT_TIMEOUT}s")
             hint = trigger.diagnostic()
             return False, f"{detail}; {hint}" if hint else detail
+        if change.kind.value != want["kind"]:
+            return False, (f"{want['path']} delivered as "
+                           f"{change.kind.value}, expected {want['kind']}")
     else:
         if not await stream.absent(want["path"]):
             return False, f"unexpected delivery for {want['path']}"
@@ -713,10 +736,16 @@ async def _overflow_core(spec: dict, ws: Workspace, op: object, trigger,
                     "path": spec["mount"] + "/" + path,
                 }
             })
-        change = await stream.expect(spec["watch_dir"], "unknown")
+        change = await stream.expect(spec["watch_dir"])
         if change is None:
             results.append((f"{mode}:overflow:collapse", False,
-                            "no unknown event at watch root"))
+                            "no event at watch root within "
+                            f"{EVENT_TIMEOUT}s"))
+            return
+        if change.kind.value != "unknown":
+            results.append((f"{mode}:overflow:collapse", False,
+                            f"{spec['watch_dir']} delivered as "
+                            f"{change.kind.value}, expected unknown"))
             return
         ok = True
         detail = "unknown collapse + fresh reads"
