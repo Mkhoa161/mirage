@@ -1200,9 +1200,64 @@ class ResultsFile:
             fh.write(f"{line}\n")
 
 
+def _escape_annotation(message: str) -> str:
+    """Percent-encode one line for an Actions workflow command.
+
+    Args:
+        message (str): The line as stdout carries it.
+
+    Returns:
+        str: The line with ``%``, CR and LF encoded, in the order the
+            runner's own escaping applies them -- ``%`` first, so the
+            escapes it writes are not re-escaped.
+    """
+    return message.replace("%", "%25").replace("\r",
+                                               "%0D").replace("\n", "%0A")
+
+
+class Annotations:
+    """Emit each failing result line as an Actions error annotation.
+
+    This is the failure channel a reader holding only the REST API
+    can actually read. A step summary is not served by the API at
+    all, and the raw step log and an artifact's *content* both
+    redirect to a blob host an org egress policy can block, which
+    leaves the artifact listed and undownloadable. Check-run
+    annotations are served
+    (``GET /repos/{owner}/{repo}/check-runs/{id}/annotations``), so a
+    line emitted here survives for a reader who can open nothing else
+    about the run.
+
+    Without it the only annotation on a red job is the runner's own
+    ``Process completed with exit code 1.``, which names neither the
+    failing case nor the want-vs-observed detail its FAIL line
+    carries.
+
+    Only failures are annotated, and each is printed as it is
+    reported rather than batched at the end, so a run the step
+    timeout kills still annotates the cases it had already failed.
+    Outside Actions ``GITHUB_ACTIONS`` is unset and every call is a
+    no-op, so a local run's stdout is unchanged.
+    """
+
+    def __init__(self) -> None:
+        self._active = os.environ.get("GITHUB_ACTIONS") == "true"
+
+    def add(self, line: str) -> None:
+        """Emit one failing result line as an error annotation.
+
+        Args:
+            line (str): The FAIL line exactly as stdout carries it.
+        """
+        if not self._active:
+            return
+        print(f"::error title=Watch case failed::{_escape_annotation(line)}")
+
+
 async def main() -> None:
     files = sorted(p for p in CASE_DIR.glob("*.json"))
     summary = StepSummary()
+    annotations = Annotations()
     results = ResultsFile()
     print(f"watch battery results: {results.path}")
     failed = 0
@@ -1216,6 +1271,7 @@ async def main() -> None:
                 if not ok:
                     failed += 1
                     summary.add(line)
+                    annotations.add(line)
     if failed:
         verdict = f"FAIL: {failed} watch case(s) failed"
         results.add(verdict)
