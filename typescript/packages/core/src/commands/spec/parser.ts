@@ -22,7 +22,7 @@ import {
   NUMERIC_SHORT,
 } from './constants.ts'
 import { expandOldStyle } from './oldstyle.ts'
-import { type CommandSpec, type ValueType, type FlagValue } from './types.ts'
+import { type CommandSpec, type ValueType, type FlagValue, VALUE_OCCURRENCES_KEY } from './types.ts'
 
 export interface ParsedArgsInit {
   flags: Record<string, FlagValue>
@@ -55,6 +55,18 @@ export interface ParsedArgsInit {
    * invisible there, a typed one is not.
    */
   typedDests?: string[]
+  /**
+   * Every scalar value-flag occurrence the line carried, as [dest, raw
+   * value] in scan order. The flag bag keeps one value per scalar dest,
+   * so a repeated option throws the earlier value away; this is where it
+   * survives, for a command that must answer for a value the bag no
+   * longer holds (nl refuses the LEFTMOST invalid one, which is the
+   * order GNU validates in). Parser bookkeeping, not grammar: no spec
+   * field switches it on, an accumulating (`multiple`) option is absent
+   * because its own list already is the record, and every command is
+   * free to ignore it — all of them but nl do.
+   */
+  valueOccurrences?: [string, string][]
   oldOptionNeedsValue?: string | null
 }
 
@@ -82,11 +94,16 @@ export class ParsedArgs {
   // options (canonical spelling).
   readonly invalidOptions: string[]
   readonly ambiguousOptions: [string, readonly string[]][]
-  // "invalid" / "ambiguous" tags in scan encounter order, so the refusal
-  // names the FIRST offending token like GNU (grep --c --bogus reports
-  // --c; reversed reports --bogus). needsValue is absent by construction:
-  // it only fires on the line's final token, so it can never precede
-  // another scan error.
+  // "invalid" / "unexpected_value" / "ambiguous" tags in scan encounter
+  // order, so the refusal names the FIRST offending token like GNU (grep
+  // --c --bogus reports --c; reversed reports --bogus). needsValue is
+  // absent by construction: it only fires on the line's final token, so it
+  // can never precede another scan error. "unexpected_value" is a boolean
+  // long handed a value, which getopt_long refuses in its own words rather
+  // than as an unrecognized option; its entry in invalidOptions is the
+  // option's canonical spelling with the typed value ("--byte-offset=2"),
+  // so the two tags share one list and the renderer tells them apart by
+  // the tag.
   readonly optionErrorKinds: string[]
   readonly needsValueOptions: string[]
   readonly invalidValueOptions: [string, string, readonly string[]][]
@@ -95,6 +112,10 @@ export class ParsedArgs {
   readonly missingRequiredOptions: string[]
   readonly missingRequiredOperands: string[]
   readonly typedDests: string[]
+  // Every scalar value-flag occurrence the line carried, as [dest, raw
+  // value] in scan order; see ParsedArgsInit above for why the bag is
+  // not enough on its own.
+  readonly valueOccurrences: [string, string][]
   // The old-style cluster letter whose argument ran off the end of the
   // line (`tar xzf` with no archive). Its own report because GNU tar
   // words it differently and exits differently from every getopt refusal
@@ -123,6 +144,7 @@ export class ParsedArgs {
     this.missingRequiredOptions = init.missingRequiredOptions ?? []
     this.missingRequiredOperands = init.missingRequiredOperands ?? []
     this.typedDests = init.typedDests ?? []
+    this.valueOccurrences = init.valueOccurrences ?? []
     this.oldOptionNeedsValue = init.oldOptionNeedsValue ?? null
   }
 
@@ -151,8 +173,15 @@ export class ParsedArgs {
 // regardless of spelling (GNU: `cp --update=all -u` is `--update=older`)
 // and `multiple` options accumulate in true command-line order
 // (`sort -k1 --key=2` is `[1, 2]`).
+//
+// Last-wins is where the bag loses information, so the scalar branch also
+// appends to `occurrences`: the value it drops is the one GNU already
+// validated and refused (`nl -w abc -w 3`), and nothing else on the parse
+// result remembers it. An accumulating dest needs no entry — its list
+// already is the per-occurrence record.
 function setValueFlag(
   flags: Record<string, FlagValue>,
+  occurrences: [string, string][],
   cs: CompiledSpec,
   spelling: string,
   value: string,
@@ -166,6 +195,7 @@ function setValueFlag(
       flags[name] = [value]
     }
   } else {
+    occurrences.push([name, value])
     Reflect.deleteProperty(flags, name)
     flags[name] = value
   }
@@ -280,6 +310,10 @@ export function parseCommand(
   }
 
   const flags: Record<string, FlagValue> = {}
+  // Every scalar value-flag occurrence, in scan order, beside the bag that
+  // keeps only the last of each. Appended to by setValueFlag and read by
+  // nobody here: it leaves on the parse result.
+  const occurrences: [string, string][] = []
   const rawArgs: string[] = []
   // rawIndices[k] = argv position of rawArgs[k]
   const rawIndices: number[] = []
@@ -377,15 +411,15 @@ export function parseCommand(
       } else if (isPair && eqPos === -1 && i + 2 < filteredArgv.length) {
         // Two tokens, both recorded under the one dest, so the command
         // reads the accumulated list in twos.
-        setValueFlag(flags, cs, spelling, filteredArgv[i + 1] ?? '')
-        setValueFlag(flags, cs, spelling, filteredArgv[i + 2] ?? '')
+        setValueFlag(flags, occurrences, cs, spelling, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, occurrences, cs, spelling, filteredArgv[i + 2] ?? '')
         // The first token names the value and is always textual; the
         // option's own kind describes the second.
         wordKinds[origIndices[i + 1] ?? -1] = 'str'
         wordKinds[origIndices[i + 2] ?? -1] = cs.kindOf.get(spelling) ?? null
         i += 3
       } else if (!isPair && cs.longValueSpellings.has(etok) && i + 1 < filteredArgv.length) {
-        setValueFlag(flags, cs, etok, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, occurrences, cs, etok, filteredArgv[i + 1] ?? '')
         wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(etok) ?? null
         if (cs.destOf(etok) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
         base = rebase(flags, cs, etok, filteredArgv[i + 1] ?? '', base)
@@ -405,7 +439,7 @@ export function parseCommand(
           eqPos !== -1 &&
           (cs.longValueSpellings.has(spelling) || cs.longOptionalSpellings.has(spelling))
         ) {
-          setValueFlag(flags, cs, spelling, tok.slice(eqPos + 1))
+          setValueFlag(flags, occurrences, cs, spelling, tok.slice(eqPos + 1))
           base = rebase(flags, cs, spelling, tok.slice(eqPos + 1), base)
         } else if (cs.longValueSpellings.has(etok)) {
           // Declared value flag at end of line with no argument.
@@ -414,6 +448,18 @@ export function parseCommand(
           rawArgs.push(tok)
           rawIndices.push(origIndices[i] ?? -1)
           rawBases.push(base)
+        } else if (eqPos !== -1 && cs.longBoolSpellings.has(spelling)) {
+          // A boolean long handed a value. getopt_long knows the option, so
+          // it refuses the VALUE and names the option without it, which is a
+          // different message from the unrecognized one below (`grep
+          // --byte-offset=2` is "option '--byte-offset' doesn't allow an
+          // argument", not "unrecognized option '--byte-offset=2'"). Reported
+          // as the CANONICAL spelling plus the typed value, because GNU names
+          // the canonical one even for an abbreviation -- `grep --byte=2`
+          // answers for --byte-offset -- and because the programs that word
+          // this as an unknown option quote the value along with it.
+          invalidOptions.push(spelling + tok.slice(eqPos))
+          optionErrorKinds.push('unexpected_value')
         } else {
           invalidOptions.push(tok)
           optionErrorKinds.push('invalid')
@@ -432,7 +478,7 @@ export function parseCommand(
       let matchedOptional = false
       for (const vf of cs.attachSpellings) {
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, cs, vf, tok.slice(vf.length))
+          setValueFlag(flags, occurrences, cs, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedOptional = true
@@ -443,7 +489,7 @@ export function parseCommand(
       let matchedValue = false
       for (const vf of cs.valueSpellings) {
         if (tok === vf && i + 1 < filteredArgv.length) {
-          setValueFlag(flags, cs, vf, filteredArgv[i + 1] ?? '')
+          setValueFlag(flags, occurrences, cs, vf, filteredArgv[i + 1] ?? '')
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(vf) ?? null
           if (cs.destOf(vf) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
           base = rebase(flags, cs, vf, filteredArgv[i + 1] ?? '', base)
@@ -452,7 +498,7 @@ export function parseCommand(
           break
         }
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, cs, vf, tok.slice(vf.length))
+          setValueFlag(flags, occurrences, cs, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedValue = true
@@ -486,14 +532,14 @@ export function parseCommand(
       if (mixed !== null) {
         if (mixed.attached !== null) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, cs, mixed.valueFlag, mixed.attached)
+          setValueFlag(flags, occurrences, cs, mixed.valueFlag, mixed.attached)
           base = rebase(flags, cs, mixed.valueFlag, mixed.attached, base)
           i += 1
           continue
         }
         if (i + 1 < filteredArgv.length) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, cs, mixed.valueFlag, filteredArgv[i + 1] ?? '')
+          setValueFlag(flags, occurrences, cs, mixed.valueFlag, filteredArgv[i + 1] ?? '')
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(mixed.valueFlag) ?? null
           if (cs.destOf(mixed.valueFlag) === cs.baseDest) {
             wordBases[origIndices[i + 1] ?? -1] = base
@@ -710,10 +756,41 @@ export function parseCommand(
     missingRequiredOptions,
     missingRequiredOperands,
     typedDests,
+    valueOccurrences: occurrences,
     oldOptionNeedsValue: old !== null ? old.needsValue : null,
     wordKinds,
     wordBases,
   })
+}
+
+/**
+ * The occurrence record to carry in the kwargs bag, or null.
+ *
+ * The bag is a faithful record of a line that typed each scalar option at
+ * most once: one value per dest, in scan order. Only a repeat makes it lie
+ * — the earlier value is gone and the dest's position is the later
+ * occurrence's — so only a repeat needs the record carried alongside, and
+ * every other command line's bag stays exactly what it was. Flattened to
+ * [dest, value, ...] because a bag value is a string, a boolean, a number
+ * or an array of string, which is the same reason a `pair` option flattens
+ * its (name, value) list. Mirrors Python's `_shadowed_occurrences`.
+ */
+function shadowedOccurrences(occurrences: readonly [string, string][]): string[] | null {
+  const seen = new Set<string>()
+  let repeated = false
+  for (const [dest] of occurrences) {
+    if (seen.has(dest)) {
+      repeated = true
+      break
+    }
+    seen.add(dest)
+  }
+  if (!repeated) return null
+  const flat: string[] = []
+  for (const [dest, value] of occurrences) {
+    flat.push(flagKwargName(dest), value)
+  }
+  return flat
 }
 
 export function parseToKwargs(parsed: ParsedArgs): Record<string, FlagValue> {
@@ -721,5 +798,7 @@ export function parseToKwargs(parsed: ParsedArgs): Record<string, FlagValue> {
   for (const [key, value] of Object.entries(parsed.flags)) {
     result[flagKwargName(key)] = value
   }
+  const shadowed = shadowedOccurrences(parsed.valueOccurrences)
+  if (shadowed !== null) result[VALUE_OCCURRENCES_KEY] = shadowed
   return result
 }

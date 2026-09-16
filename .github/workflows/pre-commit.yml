@@ -179,6 +179,17 @@ jobs:
       - name: Case target coverage
         run: ./python/.venv/bin/python integ/runners/tools/check_case_targets.py --strict
 
+      # Two paths that differ only by case or Unicode form are ONE file on
+      # macOS and Windows: a checkout writes whichever lands last, the tree
+      # reads as dirty, and one file's bytes stand in for the other's. CI
+      # runs on Linux, where both exist, so nothing else here can see it.
+      # --selftest first, for the same reason the rename gate has one: the
+      # fold is what the gate trusts.
+      - name: Path collisions
+        run: |
+          ./python/.venv/bin/python scripts/check_path_collisions.py --selftest
+          ./python/.venv/bin/python scripts/check_path_collisions.py
+
       # knip cannot police core's barrel: its project root is typescript/, so
       # the barrel's real consumers (examples, docs, integ) sit outside its
       # graph, and core's `./*` exports map makes every module an entry.

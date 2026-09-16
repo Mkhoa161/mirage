@@ -3,12 +3,19 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass
 
 from mirage.commands.builtin.utils.stream import resolve_source
+from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import CommandName, FlagValue
-from mirage.commands.spec.usage import extra_operand_error
+from mirage.commands.spec.usage import argmatch_error, extra_operand_error
 from mirage.io.types import ByteSource, IOResult, materialize
 from mirage.types import PathSpec
+
+# GNU's `delimit_method_string` and `grouping_method_string`, in
+# declaration order, which is what each option lists back. No aliases in
+# either, so one candidate per line.
+ALL_REPEATED_ARGS = ("none", "prepend", "separate")
+GROUP_ARGS = ("prepend", "append", "separate", "both")
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,13 +52,13 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> UniqFlags:
         all_repeated = "none"
     elif isinstance(raw_all, str):
         all_repeated = raw_all
-    if all_repeated not in (None, "none", "prepend", "separate"):
-        raise ValueError(
-            f"uniq: invalid argument '{all_repeated}' for '--all-repeated'")
+    if all_repeated is not None and all_repeated not in ALL_REPEATED_ARGS:
+        raise argmatch_error("uniq", "--all-repeated", all_repeated,
+                             ALL_REPEATED_ARGS)
     raw_group = fl.raw("group")
     group = "separate" if raw_group is True else raw_group
-    if group not in (None, "separate", "prepend", "append", "both"):
-        raise ValueError(f"uniq: invalid argument '{group}' for '--group'")
+    if group is not None and group not in GROUP_ARGS:
+        raise argmatch_error("uniq", "--group", str(group), GROUP_ARGS)
     count = fl.as_bool("count")
     duplicates_only = fl.as_bool("repeated")
     unique_only = fl.as_bool("unique")
@@ -198,6 +205,9 @@ async def uniq(
             ignore_case=ignore_case,
             check_chars=_parse_count(check_chars),
         )
+    except UsageError as exc:
+        return None, IOResult(exit_code=exc.exit_code,
+                              stderr=(str(exc) + "\n").encode())
     except ValueError as exc:
         return None, IOResult(exit_code=1, stderr=(str(exc) + "\n").encode())
     cache: list[str] = []

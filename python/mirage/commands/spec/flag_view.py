@@ -15,7 +15,8 @@
 from collections.abc import Mapping
 
 from mirage.commands.spec.constants import flag_kwarg_name
-from mirage.commands.spec.types import CommandSpec, FlagValue
+from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
+                                        FlagValue)
 from mirage.types import PathSpec
 
 
@@ -64,6 +65,47 @@ class FlagView:
         """
         wanted = {self._key(n) for n in names}
         return [k for k in self._flags if k in wanted]
+
+    def value_occurrences(self, *names: str) -> list[tuple[str, str]]:
+        """The named options' occurrences, in the order the line typed them.
+
+        ``typed_order`` can only answer out of the bag, which keeps one
+        value per scalar option -- the LAST occurrence of a repeated
+        one. GNU validates each value the moment getopt hands it over,
+        so a command that has to answer for the leftmost bad value
+        (``nl -w abc -w 3`` refuses ``abc``) needs the occurrences the
+        bag threw away. The parser records every scalar value-flag
+        occurrence as it scans, and ``parse_to_kwargs`` carries that
+        record in the bag under ``VALUE_OCCURRENCES_KEY`` -- but only
+        when the bag actually lost something, i.e. when one dest was
+        typed twice. When it is absent the bag IS the record: every dest
+        occurred once, so its bag position is that occurrence and
+        ``typed_order`` reproduces the line exactly.
+
+        Args:
+            names (str): flag names to report the occurrences of.
+
+        Returns:
+            list[tuple[str, str]]: (name, raw value) pairs in scan
+                order, for the named options the line carried. Values
+                are raw argv text: a PATH-typed option's value is the
+                word as typed, not the resolved path, and the bare
+                boolean form of an optional-value flag carries no value
+                and so does not appear.
+        """
+        wanted = {self._key(n) for n in names}
+        packed = self._flags.get(VALUE_OCCURRENCES_KEY)
+        if isinstance(packed, list):
+            return [(dest, value)
+                    for dest, value in zip(packed[0::2], packed[1::2])
+                    if isinstance(dest, str) and isinstance(value, str)
+                    and dest in wanted]
+        recorded: list[tuple[str, str]] = []
+        for dest in self.typed_order(*names):
+            value = self._flags.get(dest)
+            if isinstance(value, str):
+                recorded.append((dest, value))
+        return recorded
 
     def as_bool(self, name: str) -> bool:
         value = self._flags.get(self._key(name))
