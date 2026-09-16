@@ -89,6 +89,6 @@ export function quoteWord(view: string): string {
 export function quoteText(text: string): string {
   const raw = encodeText(text)
   let view = ''
-  for (let i = 0; i < raw.length; i += 1) view += String.fromCharCode(raw[i] ?? 0)
+  for (const byte of raw) view += String.fromCharCode(byte)
   return quoteWord(view)
 }

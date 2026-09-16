@@ -119,6 +119,39 @@ function followOpts(
   return opts({ follow: true, sleep_interval: '0.02', ...extra }, abort.signal)
 }
 
+describe('tail -f -s inf', () => {
+  // GNU accepts `-s inf` (xstrtod passes and `0 <= inf`), so the value is
+  // legal and the wait has to be genuinely indefinite. `setTimeout` holds a
+  // 32-bit signed delay, so an unguarded `inf * 1000` makes Node warn and
+  // clamp to 1ms, which polls the backend continuously and picks the growth
+  // up -- the opposite of waiting. Python's `asyncio.sleep(inf)` waits, and
+  // `test_follow_infinite_interval_never_polls` is its guard.
+  it('never polls, so growth is not picked up, and aborts cleanly', async () => {
+    const fs = new Growing(new Map())
+    fs.set('/d/log', 'l1\nl2\n')
+    const abort = new AbortController()
+    const result = await tailGeneric(
+      [spec('/d/log')],
+      [],
+      followOpts(abort, { sleep_interval: 'inf' }),
+      fs.stream,
+      fs.stat,
+      fs.readRange,
+    )
+    const [stream, io] = result as [AsyncIterable<Uint8Array>, IOResult]
+    const grower = (async () => {
+      await sleep(40)
+      fs.append('/d/log', 'l3\n')
+      await sleep(40)
+      fs.append('/d/log', 'l4\n')
+    })()
+    const text = await drainFor(stream, 250, abort)
+    await grower
+    expect(text).toBe('l1\nl2\n')
+    expect(io.exitCode ?? 0).toBe(0)
+  })
+})
+
 describe('tail -f', () => {
   it('prints what a file gains and notes truncation', async () => {
     const fs = new Growing(new Map())
@@ -699,7 +732,6 @@ describe('tail quotes the word it names', () => {
     )
   })
 })
-
 
 // An EMPTY ARGMATCH value is `ambiguous`, not `invalid`: gnulib's argmatch
 // matches on a prefix and `''` is a prefix of every candidate. Measured on

@@ -30,6 +30,7 @@ function stubWrite(): Promise<void> {
 }
 
 async function* stdinOf(text: string): AsyncIterable<Uint8Array> {
+  await Promise.resolve()
   yield ENC.encode(text)
 }
 

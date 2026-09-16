@@ -373,7 +373,7 @@ export function invalidArgumentError(
 ): [Uint8Array, number] {
   const line = `${argmatchLine(cmdName, option, value)}\n${argmatchValidBlock(choices)}\n`
   const hint = `Try '${cmdName} --help' for more information.\n`
-  const code = exitCode === undefined ? usageExitCode(cmdName) : exitCode
+  const code = exitCode ?? usageExitCode(cmdName)
   return [new TextEncoder().encode(line + hint), code]
 }
 

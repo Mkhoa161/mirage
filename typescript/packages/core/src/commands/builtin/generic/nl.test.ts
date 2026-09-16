@@ -28,6 +28,7 @@ function stubStream(): AsyncIterable<Uint8Array> {
 }
 
 async function* stdinOf(text: string): AsyncIterable<Uint8Array> {
+  await Promise.resolve()
   yield ENC.encode(text)
 }
 
@@ -944,7 +945,7 @@ const INTMAX_MAX_TXT = '9223372036854775807'
 
 describe('nl line number overflow is deferred', () => {
   async function numbered(start: string, count: number, flags = {}) {
-    const stdin = Array.from({ length: count }, (_, i) => `l${i}\n`).join('')
+    const stdin = Array.from({ length: count }, (_, i) => `l${String(i)}\n`).join('')
     const opts = {
       stdin: stdinOf(stdin),
       flags: { starting_line_number: start, ...flags },

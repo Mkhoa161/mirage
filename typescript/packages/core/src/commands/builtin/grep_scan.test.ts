@@ -52,6 +52,7 @@ describe('grepFilesOnly', () => {
 const DEC = new TextDecoder()
 
 async function* bytesOf(text: string): AsyncIterable<Uint8Array> {
+  await Promise.resolve()
   yield ENC.encode(text)
 }
 
@@ -323,6 +324,7 @@ describe('-b through the select and stream paths', () => {
 
 // A source of raw bytes, for the cases whose input is not valid UTF-8.
 async function* rawOf(bytes: number[]): AsyncIterable<Uint8Array> {
+  await Promise.resolve()
   yield new Uint8Array(bytes)
 }
 

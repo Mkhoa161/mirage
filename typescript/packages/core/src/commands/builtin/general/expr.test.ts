@@ -605,7 +605,7 @@ describe('expr error wording', () => {
     // Printable ASCII passes through, including the ones a shell would
     // care about and the double quote gnulib leaves alone.
     [['1', 'a b'], "unexpected argument 'a b'"],
-    [['1', 'a\"b'], "unexpected argument 'a\"b'"],
+    [['1', 'a"b'], `unexpected argument 'a"b'`],
     [['1', 'a$b'], "unexpected argument 'a$b'"],
     [['1', 'a`b'], "unexpected argument 'a`b'"],
     [['1', '~^:!%*'], "unexpected argument '~^:!%*'"],

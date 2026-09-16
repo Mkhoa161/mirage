@@ -148,10 +148,10 @@ function intervalToken(body: string): string {
   if (low > RE_DUP_MAX || (high !== null && high > RE_DUP_MAX)) {
     throw new BreError(TOO_BIG)
   }
-  if (high === null) return `{${low},}`
+  if (high === null) return `{${String(low)},}`
   if (high < low) throw new BreError(BAD_BRACE_CONTENT)
-  if (bare) return `{${low}}`
-  return `{${low},${high}}`
+  if (bare) return `{${String(low)}}`
+  return `{${String(low)},${String(high)}}`
 }
 
 // One member of a bracket expression, read at `i`. Answers the index just

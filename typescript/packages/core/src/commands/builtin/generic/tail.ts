@@ -101,6 +101,18 @@ function aborted(signal: AbortSignal | undefined): boolean {
 async function pause(seconds: number, signal: AbortSignal | undefined): Promise<void> {
   if (aborted(signal)) return
   await new Promise<void>((resolve) => {
+    // An infinite interval waits on the abort signal alone, never on a
+    // timer. `setTimeout` holds a 32-bit signed delay, so Node warns
+    // (`TimeoutOverflowWarning`) and clamps `Infinity` to 1ms, which
+    // would poll the backend continuously where python's
+    // `asyncio.sleep(inf)` waits. GNU accepts `-s inf` (measured,
+    // coreutils 9.4), so the acceptance is right and only the wait was
+    // wrong. With no signal there is nothing to wake on, which is the
+    // indefinite wait python performs.
+    if (!Number.isFinite(seconds)) {
+      signal?.addEventListener('abort', () => resolve(), { once: true })
+      return
+    }
     const onAbort = (): void => {
       clearTimeout(timer)
       resolve()

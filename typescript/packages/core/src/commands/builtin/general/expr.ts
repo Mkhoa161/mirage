@@ -63,7 +63,7 @@ const MISSING_OPERAND = "expr: missing operand\nTry 'expr --help' for more infor
 // well inside CPython's default recursion limit on the python side (eight
 // frames per level) and is far past any expression written by hand.
 const MAX_NESTING = 64
-const NESTING_TOO_DEEP = `expr: expression nesting too deep (limit ${MAX_NESTING})`
+const NESTING_TOO_DEEP = `expr: expression nesting too deep (limit ${String(MAX_NESTING)})`
 
 // An operand or operation GNU expr refuses, worded as GNU words it.
 export class ExprError extends Error {}
@@ -138,7 +138,7 @@ function parseIntOperand(s: string): bigint {
 function toByteView(text: string): string {
   const raw = encodeText(text)
   let view = ''
-  for (let i = 0; i < raw.length; i += 1) view += String.fromCharCode(raw[i] ?? 0)
+  for (const byte of raw) view += String.fromCharCode(byte)
   return view
 }
 

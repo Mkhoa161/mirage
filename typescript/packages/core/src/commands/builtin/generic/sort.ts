@@ -48,10 +48,7 @@ function flagList(flags: Record<string, FlagValue>, name: string): string[] {
 
 // `check_args` as gnulib's `argmatch_valid` prints it: `quiet` and
 // `silent` map to the same value, so they share one `  - ` line.
-const CHECK_ARGS: readonly (readonly string[])[] = [
-  ['quiet', 'silent'],
-  ['diagnose-first'],
-]
+const CHECK_ARGS: readonly (readonly string[])[] = [['quiet', 'silent'], ['diagnose-first']]
 
 function parseFlags(flags: Record<string, FlagValue>): SortFlags | string {
   const rawCheck = flags.check

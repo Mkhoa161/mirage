@@ -960,7 +960,6 @@ describe('cp quotes the word its argument clauses name', () => {
   })
 })
 
-
 // GNU 9.4's `--update` candidates are `all none older`; `none-fail` arrived
 // in 9.5. mirage still ACCEPTS `none-fail` (cp implements its `not
 // replacing` refusal and mv's --exchange conflict names it), so the

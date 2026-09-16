@@ -184,7 +184,6 @@ export async function* grepStream(
   opts: GrepStreamOptions,
 ): AsyncIterable<Uint8Array> {
   const enc = new TextEncoder()
-  const dec = new TextDecoder('utf-8', { fatal: false })
   if (opts.maxCount === 0) {
     // GNU selects no line at all, context and all, and prints nothing for
     // it: `grep -m0 -c a f` is zero bytes and exit 1, not `0`. Read before

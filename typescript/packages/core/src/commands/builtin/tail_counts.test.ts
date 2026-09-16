@@ -153,7 +153,6 @@ describe('the count clauses quote the word they name', () => {
   })
 })
 
-
 // `parseSeconds` is C `strtod` as `xstrtod` reads it. Every row below is a
 // measured GNU coreutils 9.4 answer for `tail -s <v> f` under `LC_ALL=C`
 // with a raw `bytes` argv: a number means the grammar took the value,
