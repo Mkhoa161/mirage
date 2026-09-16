@@ -26,6 +26,7 @@ import {
 } from '../sort_keys.ts'
 import { splitLines } from '../utils/lines.ts'
 import { readStdinAsync } from '../utils/stream.ts'
+import { argmatchError } from '../../spec/usage.ts'
 import { FlagView, type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
@@ -39,6 +40,10 @@ interface SortFlags extends SortGlobals {
   zeroTerminated: boolean
 }
 
+// `check_args` as gnulib's `argmatch_valid` prints it: `quiet` and
+// `silent` map to the same value, so they share one `  - ` line.
+const CHECK_ARGS: readonly (readonly string[])[] = [['quiet', 'silent'], ['diagnose-first']]
+
 function parseFlags(bag: Record<string, FlagValue>): SortFlags | string {
   const fl = new FlagView(bag, specOf('sort'))
   const rawCheck = fl.raw('check')
@@ -49,7 +54,7 @@ function parseFlags(bag: Record<string, FlagValue>): SortFlags | string {
     rawCheck !== 'quiet' &&
     rawCheck !== 'silent'
   ) {
-    return `sort: invalid argument '${String(rawCheck)}' for '--check'\n`
+    return argmatchError('sort', '--check', String(rawCheck), CHECK_ARGS, 1).message + '\n'
   }
   return {
     reverse: fl.asBool('reverse'),
@@ -106,7 +111,9 @@ export async function sortGeneric(
 ): Promise<CommandFnResult> {
   const parsed = parseFlags(opts.flags)
   if (typeof parsed === 'string') {
-    return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(parsed) })]
+    // gnulib's argmatch dies with EXIT_FAILURE, so `--check=x` is 1 where
+    // sort's other usage errors are 2.
+    return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }
   let cfg: SortConfig
   try {
