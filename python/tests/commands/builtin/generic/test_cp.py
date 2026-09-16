@@ -14,7 +14,10 @@
 
 import pytest
 
-from mirage.commands.builtin.generic.cp import CpFlags, cp
+from mirage.commands.builtin.generic.cp import CpFlags, cp, update_mode
+from mirage.commands.errors import UsageError
+from mirage.commands.spec import SPECS
+from mirage.commands.spec.flag_view import FlagView
 from mirage.types import (ContentType, FileStat, FileType, NativeCopy,
                           PathSpec, PrimitiveCopy)
 from mirage.utils.errors import enotsup
@@ -759,57 +762,48 @@ def test_backup_clause_quotes_the_word(value, escaped):
     assert exc.value.exit_code == 1
 
 
-# GNU 9.4's `--update` candidates are `all none older`; `none-fail`
-# arrived in 9.5. mirage still ACCEPTS `none-fail` (cp implements its
-# `not replacing` refusal and mv's --exchange conflict names it), so the
-# accepted set is 9.5's while the list printed back is 9.4's.
-def test_update_lists_gnu_94_candidates():
-    from mirage.commands.builtin.generic.cp import parse_flags
-    from mirage.commands.errors import UsageError
-    from mirage.commands.spec import SPECS
-    from mirage.commands.spec.flag_view import FlagView
-
+# Measured against GNU coreutils 9.7 on debian:stable-slim, LC_ALL=C.
+@pytest.mark.parametrize("command", ["cp", "mv"])
+@pytest.mark.parametrize("value,kind", [("x", "invalid"), ("", "ambiguous")])
+def test_update_lists_gnu_candidates(command, value, kind):
     with pytest.raises(UsageError) as exc:
-        parse_flags(FlagView({"update": "x"}, spec=SPECS["cp"]))
-    assert str(exc.value) == ("cp: invalid argument 'x' for '--update'\n"
-                              "Valid arguments are:\n"
-                              "  - 'all'\n  - 'none'\n  - 'older'\n"
-                              "Try 'cp --help' for more information.")
-    assert exc.value.exit_code == 1
-    assert parse_flags(FlagView({"update": "none-fail"},
-                                spec=SPECS["cp"])).update == "none-fail"
-
-
-def test_an_empty_update_is_ambiguous():
-    """`cp --update=` is `ambiguous argument ''`, exit 1 (measured)."""
-    from mirage.commands.builtin.generic.cp import parse_flags
-    from mirage.commands.errors import UsageError
-    from mirage.commands.spec import SPECS
-    from mirage.commands.spec.flag_view import FlagView
-
-    with pytest.raises(UsageError) as exc:
-        parse_flags(FlagView({"update": ""}, spec=SPECS["cp"]))
+        update_mode(command, FlagView({"update": value}, spec=SPECS[command]))
     assert str(
-        exc.value).startswith("cp: ambiguous argument '' for '--update'\n")
+        exc.value) == (f"{command}: {kind} argument '{value}' for '--update'\n"
+                       "Valid arguments are:\n"
+                       "  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\n"
+                       f"Try '{command} --help' for more information.")
     assert exc.value.exit_code == 1
 
 
-# `cp --update=al`, `=n` and `=o` all exit 0 (measured, coreutils 9.4).
-# The prefix is matched against the 9.4 table mirage prints back, so `n`
-# is `none` rather than an ambiguity with the 9.5-only `none-fail`, which
-# only an exact word reaches.
-@pytest.mark.parametrize("value,mode", [
-    ("al", "all"),
-    ("a", "all"),
-    ("n", "none"),
-    ("no", "none"),
-    ("o", "older"),
-    ("none-fail", "none-fail"),
-])
-def test_update_accepts_an_unambiguous_prefix(value, mode):
-    from mirage.commands.builtin.generic.cp import parse_flags
-    from mirage.commands.spec import SPECS
-    from mirage.commands.spec.flag_view import FlagView
+@pytest.mark.parametrize("command", ["cp", "mv"])
+@pytest.mark.parametrize("value", ["all", "none", "none-fail", "older"])
+def test_update_accepts_each_advertised_candidate(command, value):
+    assert update_mode(command, FlagView({"update": value},
+                                         spec=SPECS[command])) == value
 
-    assert parse_flags(FlagView({"update": value},
-                                spec=SPECS["cp"])).update == mode
+
+# Measured against GNU coreutils 9.7 on debian:stable-slim, LC_ALL=C.
+@pytest.mark.parametrize("command", ["cp", "mv"])
+@pytest.mark.parametrize("value,mode", [
+    ("a", "all"),
+    ("al", "all"),
+    ("o", "older"),
+    ("old", "older"),
+    ("none-", "none-fail"),
+])
+def test_update_accepts_an_unambiguous_prefix(command, value, mode):
+    assert update_mode(command, FlagView({"update": value},
+                                         spec=SPECS[command])) == mode
+
+
+# `n` is a prefix of `none` and of `none-fail`, which are two values, so
+# 9.7 refuses it rather than reading it as `none`.
+@pytest.mark.parametrize("command", ["cp", "mv"])
+@pytest.mark.parametrize("value", ["n", "no", "non"])
+def test_update_refuses_a_prefix_spanning_two_values(command, value):
+    with pytest.raises(UsageError) as exc:
+        update_mode(command, FlagView({"update": value}, spec=SPECS[command]))
+    assert str(exc.value).startswith(
+        f"{command}: ambiguous argument '{value}' for '--update'\n")
+    assert exc.value.exit_code == 1

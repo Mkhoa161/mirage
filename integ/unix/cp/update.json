@@ -134,7 +134,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "cp: invalid argument 'bogus' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'older'\nTry 'cp --help' for more information.\n"
+        "stderr": "cp: invalid argument 'bogus' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\nTry 'cp --help' for more information.\n"
       },
       "flags": [
         "update"
@@ -284,6 +284,41 @@
       ]
     },
     {
+      "id": "cp_update_empty_argument",
+      "seq": 613300,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "cp --update= /data/a.txt /data/b.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "cp: ambiguous argument '' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\nTry 'cp --help' for more information.\n"
+      },
+      "flags": [
+        "update"
+      ]
+    },
+    {
       "id": "cp_update_prefix_resolves_all",
       "seq": 991021,
       "targets": [
@@ -319,7 +354,7 @@
       ]
     },
     {
-      "id": "cp_update_prefix_resolves_none",
+      "id": "cp_update_prefix_resolves_none_fail",
       "seq": 991022,
       "targets": [
         "ram",
@@ -343,18 +378,18 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "mkdir -p /data/cpu9 && printf 'new\\n' > /data/cpu9/src.txt && printf 'old\\n' > /data/cpu9/dst.txt && touch -d '2024-01-01T00:00:00' /data/cpu9/src.txt && touch -d '2020-01-01T00:00:00' /data/cpu9/dst.txt && cp --update=n /data/cpu9/src.txt /data/cpu9/dst.txt && cat /data/cpu9/dst.txt",
+      "command": "mkdir -p /data/cpu9 && printf 'a\\n' > /data/cpu9/src.txt && printf 'b\\n' > /data/cpu9/dst.txt && cp --update=none- /data/cpu9/src.txt /data/cpu9/dst.txt",
       "expect": {
-        "exit": 0,
-        "stdout": "old\n",
-        "stderr": ""
+        "exit": 1,
+        "stdout": "",
+        "stderr": "cp: not replacing '/data/cpu9/dst.txt'\n"
       },
       "flags": [
         "update"
       ]
     },
     {
-      "id": "cp_update_empty_value_is_ambiguous",
+      "id": "cp_update_prefix_ambiguous_none",
       "seq": 991023,
       "targets": [
         "ram",
@@ -378,11 +413,11 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "cp --update= /data/a.txt /data/b.txt",
+      "command": "cp --update=n /data/a.txt /data/b.txt",
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "cp: ambiguous argument '' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'older'\nTry 'cp --help' for more information.\n"
+        "stderr": "cp: ambiguous argument 'n' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\nTry 'cp --help' for more information.\n"
       },
       "flags": [
         "update"

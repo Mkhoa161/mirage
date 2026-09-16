@@ -35,13 +35,6 @@ from mirage.utils.key_prefix import mounted_path, rekey
 from mirage.utils.path import norm, parent
 
 UPDATE_MODES = ("all", "none", "none-fail", "older")
-# What GNU 9.4 lists back for `--update=x`, which is what every
-# expectation in this change is measured against. `none-fail` is a 9.5
-# addition; mirage accepts it (cp implements its `not replacing` refusal
-# and mv's --exchange conflict names it), so the accepted set is 9.5's
-# while the list printed is 9.4's. Move it into this tuple the day the
-# rest of the repo is re-pinned to 9.5.
-UPDATE_ARGS = ("all", "none", "older")
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,17 +105,11 @@ def update_mode(cmd_name: str, fl: FlagView) -> str | None:
         return None
     if value is True:
         return "older"
-    # An exact word is taken against the accepted set (9.5's), a prefix
-    # against the printed one (9.4's, which is the table this is
-    # measured on): `cp --update=n` is `none` and exits 0 there, and it
-    # only becomes ambiguous the day `none-fail` joins the table.
-    if isinstance(value, str) and value in UPDATE_MODES:
-        return value
     word = str(value)
-    match = argmatch(word, UPDATE_ARGS)
+    match = argmatch(word, UPDATE_MODES)
     if isinstance(match, ArgmatchMatch):
         return match.word
-    raise argmatch_error(cmd_name, "--update", word, UPDATE_ARGS, 1,
+    raise argmatch_error(cmd_name, "--update", word, UPDATE_MODES, 1,
                          match.kind)
 
 

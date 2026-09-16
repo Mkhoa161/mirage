@@ -40,6 +40,16 @@ dirs for ssh.
 
 ## Running locally
 
+The `unix/cp` and `unix/mv` cases use GNU coreutils 9.7 as their transfer
+reference (`debian:stable-slim`, `LC_ALL=C LANG=C TZ=UTC`). In particular,
+`--update` accepts and advertises `all`, `none`, `none-fail`, and `older`;
+the three-candidate diagnostic from 9.4 is no longer the reference.
+The remeasurement used image
+`debian@sha256:04634311a8d5fc442b6eb06d792293c4f3e2268652ca7634e00ce8ef5cc0a28a`.
+One existing environment difference remains: for a missing exchange target,
+this image reports `Unknown error -1`; the `mv_exchange_missing_side` golden
+retains `No such file or directory`.
+
 ```bash
 cd integ && npx tsx server/launcher/main.ts --config ci/fakes.json
 # export the NAME_URL lines it prints, then:
