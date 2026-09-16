@@ -48,13 +48,6 @@ import { compareCodePoints } from '../../../utils/sort.ts'
 const ENC = new TextEncoder()
 
 const UPDATE_MODES = ['all', 'none', 'none-fail', 'older'] as const
-// What GNU 9.4 lists back for `--update=x`, which is what every
-// expectation in this change is measured against. `none-fail` is a 9.5
-// addition; mirage accepts it (cp implements its `not replacing` refusal
-// and mv's --exchange conflict names it), so the accepted set is 9.5's
-// while the list printed is 9.4's. Move it into this tuple the day the
-// rest of the repo is re-pinned to 9.5.
-const UPDATE_ARGS = ['all', 'none', 'older'] as const
 
 export interface CpFlags {
   recursive: boolean
@@ -117,7 +110,7 @@ export function updateMode(cmdName: string, fl: FlagView): string | null {
     return value
   }
   const shown = typeof value === 'string' ? value : ''
-  throw argmatchError(cmdName, '--update', shown, UPDATE_ARGS, 1)
+  throw argmatchError(cmdName, '--update', shown, UPDATE_MODES, 1)
 }
 
 // The --suffix value, an empty one reading as absent: GNU 9.7

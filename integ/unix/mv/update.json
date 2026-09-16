@@ -139,6 +139,111 @@
         "gdrive-folder",
         "box"
       ]
+    },
+    {
+      "id": "mv_update_invalid_argument",
+      "seq": 613301,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mv --update=bogus /data/a.txt /data/b.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "mv: invalid argument 'bogus' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\nTry 'mv --help' for more information.\n"
+      },
+      "flags": [
+        "update"
+      ]
+    },
+    {
+      "id": "mv_update_empty_argument",
+      "seq": 613302,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mv --update= /data/a.txt /data/b.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "mv: ambiguous argument '' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\nTry 'mv --help' for more information.\n"
+      },
+      "flags": [
+        "update"
+      ]
+    },
+    {
+      "id": "mv_update_none_fail",
+      "seq": 613303,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mkdir -p /data/mvu4 && printf 'S\\n' > /data/mvu4/src.txt && printf 'D\\n' > /data/mvu4/dst.txt && mv --update=none-fail /data/mvu4/src.txt /data/mvu4/dst.txt; status=$?; cat /data/mvu4/src.txt /data/mvu4/dst.txt; exit $status",
+      "expect": {
+        "exit": 1,
+        "stdout": "S\nD\n",
+        "stderr": "mv: not replacing '/data/mvu4/dst.txt'\n"
+      },
+      "flags": [
+        "update"
+      ]
     }
   ]
 }

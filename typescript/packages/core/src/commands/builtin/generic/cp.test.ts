@@ -961,40 +961,28 @@ describe('cp quotes the word its argument clauses name', () => {
   })
 })
 
-// GNU 9.4's `--update` candidates are `all none older`; `none-fail` arrived
-// in 9.5. mirage still ACCEPTS `none-fail` (cp implements its `not
-// replacing` refusal and mv's --exchange conflict names it), so the
-// accepted set is 9.5's while the list printed back is 9.4's. Mirrors
-// test_cp.py.
-describe('cp --update lists GNU 9.4 candidates', () => {
-  it('lists all/none/older and still accepts none-fail', () => {
+// Measured against GNU coreutils 9.7 on debian:stable-slim, LC_ALL=C.
+describe.each(['cp', 'mv'])('%s --update candidates', (command) => {
+  it.each([
+    ['x', 'invalid'],
+    ['', 'ambiguous'],
+  ])('lists every mode for %j', (value, kind) => {
     let caught: unknown = null
     try {
-      updateMode('cp', new FlagView({ update: 'x' }, specOf('cp')))
+      updateMode(command, new FlagView({ update: value }, specOf(command)))
     } catch (error) {
       caught = error
     }
     expect(caught).toBeInstanceOf(UsageError)
     expect((caught as UsageError).message).toBe(
-      "cp: invalid argument 'x' for '--update'\n" +
-        "Valid arguments are:\n  - 'all'\n  - 'none'\n  - 'older'\n" +
-        "Try 'cp --help' for more information.",
+      `${command}: ${kind} argument '${value}' for '--update'\n` +
+        "Valid arguments are:\n  - 'all'\n  - 'none'\n  - 'none-fail'\n  - 'older'\n" +
+        `Try '${command} --help' for more information.`,
     )
     expect((caught as UsageError).exitCode).toBe(1)
-    expect(updateMode('cp', new FlagView({ update: 'none-fail' }, specOf('cp')))).toBe('none-fail')
   })
 
-  it('words an empty --update as ambiguous', () => {
-    let caught: unknown = null
-    try {
-      updateMode('cp', new FlagView({ update: '' }, specOf('cp')))
-    } catch (error) {
-      caught = error
-    }
-    expect(caught).toBeInstanceOf(UsageError)
-    expect(
-      (caught as UsageError).message.startsWith("cp: ambiguous argument '' for '--update'\n"),
-    ).toBe(true)
-    expect((caught as UsageError).exitCode).toBe(1)
+  it.each(['all', 'none', 'none-fail', 'older'])('accepts the advertised mode %s', (value) => {
+    expect(updateMode(command, new FlagView({ update: value }, specOf(command)))).toBe(value)
   })
 })
