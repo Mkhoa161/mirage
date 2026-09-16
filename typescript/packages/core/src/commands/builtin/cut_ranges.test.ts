@@ -142,3 +142,38 @@ describe('cut reports a refused range with GNU exit status', () => {
     })
   })
 })
+
+// The refused remainder is rendered through gnulib `quote()`, the same rule
+// every other coreutils diagnostic uses -- derived from all 255 reachable
+// bytes in `cut` itself and found identical to `nl`, `expand`, `shuf` and
+// `expr` (ground truth NL3-A). Before this, cut interpolated the raw string,
+// so `cut -f 2-3é` emitted the character where GNU emits two octal escapes.
+describe('cut quotes the remainder through gnulib', () => {
+  const MODES: readonly (readonly ['fields' | 'bytes' | 'characters', string])[] = [
+    ['fields', 'invalid field value'],
+    ['bytes', 'invalid byte/character position'],
+    ['characters', 'invalid byte/character position'],
+  ]
+  for (const [mode, label] of MODES) {
+    it.each([
+      ['2-3\u00e9', '\\303\\251'],
+      ['1,\u00e9', '\\303\\251'],
+      ['x\u00e9', 'x\\303\\251'],
+      ['1,2\\x', '\\\\x'],
+      ["1,2'x", "\\'x"],
+      ['1,2\tx', 'x'],
+      ['1,2\nx', '\\nx'],
+      ['x\x01y', 'x\\001y'],
+      ['\u{1f600}', '\\360\\237\\230\\200'],
+    ] as [string, string][])(`${mode} %j`, (spec, quoted) => {
+      const got = parseRanges(spec, mode)
+      expect(typeof got).toBe('string')
+      expect(String(got).split('\n')[0]).toBe(`cut: ${label} '${quoted}'`)
+    })
+  }
+
+  // A control: the quoting change must not move what parses.
+  it.each(['1-3', '1,2,3', '1-', '-3', '2'])('still accepts %s', (spec) => {
+    expect(typeof parseRanges(spec, 'fields')).not.toBe('string')
+  })
+})

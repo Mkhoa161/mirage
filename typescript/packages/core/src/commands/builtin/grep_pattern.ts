@@ -12,7 +12,8 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { breToRegExp } from '../../utils/bre.ts'
+import { BreError, translateBre } from './utils/bre.ts'
+import { UsageError } from '../errors.ts'
 import { mountKey, mountPrefixOf } from '../../utils/key_prefix.ts'
 import { materialize } from '../../io/types.ts'
 import { PathSpec } from '../../types.ts'
@@ -99,10 +100,29 @@ export function mergePatternList(
   return parts.join('\n')
 }
 
+// One basic expression as grep reads it, or grep's refusal. The shared
+// translator that `expr` and `nl` compile their patterns with, asked for
+// grep's dialect: the two GNU dialects agree on every construct measured
+// except an inverted range, which grep refuses (`grep '[z-a]'` is `Invalid
+// range end`) where the other two read it as an empty set.
+//
+// A refusal is glibc's `regerror` string verbatim, which is what GNU prints,
+// and exits 2 as grep does rather than letting the host engine's own wording
+// out (`Invalid regular expression: /(/: Unterminated group` was what
+// `grep '\('` used to say).
+export function breSource(part: string): string {
+  try {
+    return translateBre(part, true)[0]
+  } catch (err) {
+    if (err instanceof BreError) throw new UsageError(`grep: ${err.message}`)
+    throw err
+  }
+}
+
 // One pattern's regex source, in the syntax it was written in.
 function sourceOf(part: string, fixedString: boolean, basic: boolean): string {
   if (fixedString) return escapeRegex(part)
-  return basic ? breToRegExp(part) : part
+  return basic ? breSource(part) : part
 }
 
 // Build a regex source string from a POSIX pattern list. `basic` says the

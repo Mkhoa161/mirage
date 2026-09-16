@@ -4,6 +4,7 @@ from functools import partial
 
 from mirage.cache.read_through import (cache_aware_bound_bytes,
                                        cache_aware_bound_stream)
+from mirage.commands.builtin.grep_offsets import decode_line
 from mirage.commands.builtin.grep_pattern import (  # yapf: disable
     compile_pattern, resolve_pattern)
 from mirage.commands.builtin.grep_scan import (exit_code_for,
@@ -36,6 +37,7 @@ class RgFlags:
     ignore_case: bool
     invert: bool
     line_numbers: bool
+    byte_offsets: bool
     count_only: bool
     files_only: bool
     whole_word: bool
@@ -71,6 +73,7 @@ def parse_flags(fl: FlagView, never_match: bool) -> RgFlags:
         ignore_case=fl.as_bool("i"),
         invert=fl.as_bool("v"),
         line_numbers=fl.as_bool("n"),
+        byte_offsets=fl.as_bool("byte_offset"),
         count_only=fl.as_bool("c"),
         files_only=fl.as_bool("args_l"),
         whole_word=fl.as_bool("w"),
@@ -168,6 +171,11 @@ async def rg(
         if needs_full:
             warnings_f: list[str] = []
             results: list[str] = []
+            # Status comes from selection, not from the printed lines:
+            # under -o a zero-width match selects the line and prints
+            # nothing, so an empty `results` is not "nothing matched".
+            # `grep -r` reads its status the same way.
+            full_io = IOResult(exit_code=1)
             for p in paths:
                 hits_full = await rg_full(
                     rd,
@@ -192,10 +200,13 @@ async def rg(
                     warnings=warnings_f,
                     file_prefix=p.raw_path if label else None,
                     no_filename=f.no_filename,
+                    byte_offsets=f.byte_offsets,
+                    io=full_io,
                 )
                 results.extend(respell_raw(hits_full, p.virtual, p.raw_path))
             stderr = format_optional_records(warnings_f)
-            code = exit_code_for(bool(results), bool(warnings_f), False)
+            code = exit_code_for(full_io.exit_code == 0, bool(warnings_f),
+                                 False)
             if not results:
                 return b"", IOResult(exit_code=code, stderr=stderr)
             return format_records(results), IOResult(exit_code=code,
@@ -221,11 +232,18 @@ async def rg(
                     # searching the rest.
                     warnings.append(f"rg: {p.raw_path}: {fs_strerror(exc)}")
                     continue
-                data = split_lines(raw.decode(errors="replace"))
+                # `decode_line`, not a replacing decode: `grep_lines`
+                # counts its -b offsets back out of this text, and one
+                # invalid byte read as U+FFFD is three bytes wide there,
+                # so `rg -b a f1 f2` over `\xff\na\n` answered 4 where
+                # GNU and the single-operand path (which counts raw
+                # bytes in `grep_stream`) both say 2.
+                data = split_lines(decode_line(raw))
                 file_io = IOResult(exit_code=1)
                 hits = grep_lines(p.raw_path, data, pat, f.invert,
                                   f.line_numbers, f.count_only, f.files_only,
-                                  f.only_matching, f.max_count, file_io)
+                                  f.only_matching, f.max_count, file_io,
+                                  f.byte_offsets)
                 matched = matched or file_io.exit_code == 0
                 if f.count_only:
                     if grep_count_has_matches(hits):
@@ -267,6 +285,7 @@ async def rg(
             max_count=f.max_count,
             count_only=f.count_only,
             io=io,
+            byte_offsets=f.byte_offsets,
         )
         if f.count_only:
             stream = nonzero_count_stream(stream)
@@ -286,6 +305,7 @@ async def rg(
         max_count=f.max_count,
         count_only=f.count_only,
         io=io,
+        byte_offsets=f.byte_offsets,
     )
     if f.count_only:
         stream = nonzero_count_stream(stream)

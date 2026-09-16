@@ -170,3 +170,37 @@ class TestSplitRecords:
 
     def test_zero_terminated(self):
         assert _split_records(b"a\x00b\x00", True) == [b"a", b"b"]
+
+
+# The refused remainder is rendered through gnulib `quote()`, the same
+# rule every other coreutils diagnostic uses -- derived from all 255
+# reachable bytes in `cut` itself and found identical to `nl`, `expand`,
+# `shuf` and `expr` (ground truth NL3-A). Before this, cut interpolated
+# the raw bytes, so `cut -f 2-3<e-acute>` emitted the character where GNU
+# emits two octal escapes.
+@pytest.mark.parametrize("mode,label", [
+    ("fields", "invalid field value"),
+    ("bytes", "invalid byte/character position"),
+    ("characters", "invalid byte/character position"),
+])
+@pytest.mark.parametrize("spec,quoted", [
+    ("2-3é", r"\303\251"),
+    ("1,é", r"\303\251"),
+    ("xé", r"x\303\251"),
+    ("1,2\\x", r"\\x"),
+    ("1,2'x", r"\'x"),
+    ("1,2\tx", "x"),
+    ("1,2\nx", r"\nx"),
+    ("x\x01y", r"x\001y"),
+    ("\U0001f600", r"\360\237\230\200"),
+])
+def test_cut_quotes_the_remainder_through_gnulib(mode, label, spec, quoted):
+    with pytest.raises(ValueError) as refusal:
+        parse_ranges(spec, mode)
+    assert str(refusal.value).splitlines()[0] == f"cut: {label} '{quoted}'"
+
+
+@pytest.mark.parametrize("spec", ["1-3", "1,2,3", "1-", "-3", "2"])
+def test_cut_accepts_every_list_it_accepted_before(spec):
+    """A control: the quoting change must not move what parses."""
+    assert parse_ranges(spec, "fields")

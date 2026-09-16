@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { materialize } from '../../io/types.ts'
+import { quoteText } from '../quote.ts'
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder('utf-8', { fatal: false })
@@ -109,7 +110,12 @@ export function parseRanges(spec: string, mode: CutOptions['mode']): [number, nu
       digits = false
       continue
     }
-    if (char === '' || char === ',' || char === ' ' || char === '\t' || char === '\n') {
+    // What closes the position being read: a comma, a space, a TAB, or the
+    // end of the string. NOT a newline, which is an invalid character here --
+    // `cut -f $'1\n2'` is refused and quotes `'\n2'`, where `-f '1\t2'`
+    // selects fields 1 and 2. Probed over all 255 bytes: the only separators
+    // are 0x09, 0x20 and 0x2c. Ground truth NL3-G.
+    if (char === '' || char === ',' || char === ' ' || char === '\t') {
       if (dashFound) {
         const hi = digits ? value : OPEN_END
         if (hi < lo) return cutError('invalid decreasing range')
@@ -124,7 +130,7 @@ export function parseRanges(spec: string, mode: CutOptions['mode']): [number, nu
       if (char === '') return ranges
       continue
     }
-    return cutError(`${words.value} '${spec.slice(index)}'`)
+    return cutError(`${words.value} '${quoteText(spec.slice(index))}'`)
   }
 }
 

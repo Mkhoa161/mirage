@@ -17,7 +17,9 @@ import { type ByteSource, type IOResult, materialize } from '../../../io/types.t
 import { FileStat, FileType, PathSpec } from '../../../types.ts'
 import type { CommandOpts } from '../../config.ts'
 import { mountKey } from '../../../utils/key_prefix.ts'
-import { tailGeneric } from './tail.ts'
+import { followFlags, tailGeneric } from './tail.ts'
+import { specOf } from '../../spec/builtins.ts'
+import { FlagView } from '../../spec/types.ts'
 import { runWithCacheManager } from '../../../cache/context.ts'
 import { RAMFileCacheStore } from '../../../cache/file/ram.ts'
 import { CacheManager } from '../../../cache/manager.ts'
@@ -659,5 +661,111 @@ describe('tail -f', () => {
     expect(stream).toBeNull()
     expect(io.exitCode).toBe(1)
     expect(DEC.decode(io.stderr as Uint8Array)).toBe(stderr)
+  })
+})
+
+// Both of tail's own flag refusals name the refused word through gnulib's
+// quote(), so a byte outside 0x20-0x7e comes back escaped rather than
+// interpolated raw. Every row measured against GNU coreutils 9.4 under
+// `LC_ALL=C` with a raw `bytes` argv (`tail --follow=<w>`, `tail -s <w>`).
+// Mirrors test_tail.py.
+const QUOTED_WORDS: [string, string][] = [
+  ['xé', 'x\\303\\251'],
+  ['x\r', 'x\\r'],
+  ['x\x01', 'x\\001'],
+  ['x\x7f', 'x\\177'],
+  ["x'", "x\\'"],
+  ['x\\', 'x\\\\'],
+]
+
+describe('tail quotes the word it names', () => {
+  it.each(QUOTED_WORDS)('escapes %j in the --follow clause', (value, escaped) => {
+    expect(followFlags(new FlagView({ follow: value }, specOf('tail')))).toBe(
+      `tail: invalid argument '${escaped}' for '--follow'\n` +
+        "Valid arguments are:\n  - 'descriptor'\n  - 'name'\n" +
+        "Try 'tail --help' for more information.\n",
+    )
+  })
+
+  it.each(QUOTED_WORDS)('escapes %j in the -s clause', (value, escaped) => {
+    expect(followFlags(new FlagView({ sleep_interval: `1${value}` }, specOf('tail')))).toBe(
+      `tail: invalid number of seconds: '1${escaped}'\n`,
+    )
+  })
+
+  it('quotes an empty -s value as the empty word', () => {
+    expect(followFlags(new FlagView({ sleep_interval: '' }, specOf('tail')))).toBe(
+      "tail: invalid number of seconds: ''\n",
+    )
+  })
+})
+
+
+// An EMPTY ARGMATCH value is `ambiguous`, not `invalid`: gnulib's argmatch
+// matches on a prefix and `''` is a prefix of every candidate. Measured on
+// coreutils 9.4: `tail --follow=` is
+// `tail: ambiguous argument '' for '--follow'`, exit 1. Mirrors
+// test_tail.py.
+describe('tail --follow= is ambiguous, not invalid', () => {
+  it('words the empty value as ambiguous', () => {
+    const answer = followFlags(new FlagView({ follow: '' }, specOf('tail')))
+    expect(typeof answer === 'string' ? answer.split('\n')[0] : answer).toBe(
+      "tail: ambiguous argument '' for '--follow'",
+    )
+  })
+})
+
+// `-s` is `xstrtod` plus `0 <= s`, and the two halves answer separately.
+// Every row measured on GNU coreutils 9.4 with a raw `bytes` argv
+// (`tail -s <v> f`). Mirrors test_tail.py.
+describe('tail -s reads exactly what strtod reads', () => {
+  it.each([
+    ' 1',
+    '\r1',
+    '\t1',
+    '+1',
+    '.5',
+    '1.',
+    '1e2',
+    '+.5e1',
+    '0x10',
+    '0x1p4',
+    '0x.8p1',
+    '0x10.8',
+    'inf',
+    'infinity',
+    'INF',
+    '00',
+  ])('accepts %j', (value) => {
+    const answer = followFlags(new FlagView({ sleep_interval: value }, specOf('tail')))
+    expect(typeof answer).not.toBe('string')
+  })
+
+  // TRAILING whitespace is not strtod's, and `0 <= nan` is false. Both
+  // hosts accepted `tail -s $'1\r'` before this, because `Number()` and
+  // python's `float()` strip trailing whitespace where `xstrtod` demands
+  // the whole string be consumed.
+  it.each([
+    '1\r',
+    '1 ',
+    '1\t',
+    '',
+    '1_0',
+    '1x',
+    '0x',
+    '1e',
+    '1e+',
+    '1,5',
+    '.',
+    '1.5.5',
+    '0xp1',
+    'inf inity',
+    '-1',
+    'nan',
+    'NAN',
+    'nan(x)',
+  ])('refuses %j', (value) => {
+    const answer = followFlags(new FlagView({ sleep_interval: value }, specOf('tail')))
+    expect(typeof answer).toBe('string')
   })
 })

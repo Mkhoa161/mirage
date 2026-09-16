@@ -16,12 +16,19 @@ import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from mirage.commands.quote import quote_text
 from mirage.commands.spec.usage import usage_hint
 
 _OPEN_END = 2**31 - 1
 _BLANKS = re.compile(r"[ \t]+")
 _CUT_TRY = usage_hint("cut")
-_TERMINATORS = ("", ",", " ", "\t", "\n")
+# What closes the position being read: a comma, a space, a TAB, or the
+# end of the string (the empty sentinel). NOT a newline, which is an
+# invalid character here -- `cut -f $'1\n2'` is refused and quotes
+# `'\n2'`, where `-f '1\t2'` selects fields 1 and 2. Probed over all 255
+# bytes: the only separators are 0x09, 0x20 and 0x2c, and every other
+# non-digit non-dash byte is an invalid field value. Ground truth NL3-G.
+_TERMINATORS = ("", ",", " ", "\t")
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +119,7 @@ def parse_ranges(spec: str, mode: str) -> list[tuple[int, int]]:
             if char == "":
                 return ranges
             continue
-        raise _cut_error(f"{words.value} '{spec[index:]}'")
+        raise _cut_error(f"{words.value} '{quote_text(spec[index:])}'")
     return ranges
 
 

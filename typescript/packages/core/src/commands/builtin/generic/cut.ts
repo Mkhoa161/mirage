@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { quoteText } from '../../quote.ts'
 import { asyncChain } from '../../../io/stream.ts'
 import { IOResult, type ByteSource } from '../../../io/types.ts'
 import type { PathSpec } from '../../../types.ts'
@@ -49,7 +50,9 @@ function parseFlags(flags: Record<string, FlagValue>): CutOptions | string {
     whitespace = 'default'
   } else if (typeof rawWhitespace === 'string') {
     if (rawWhitespace !== 'trimmed') {
-      return `cut: invalid argument '${rawWhitespace}' for '--whitespace-delimited'\n`
+      return (
+        `cut: invalid argument '${quoteText(rawWhitespace)}' for ` + "'--whitespace-delimited'\n"
+      )
     }
     whitespace = 'trimmed'
   }

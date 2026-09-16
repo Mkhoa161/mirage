@@ -5,8 +5,16 @@
       "id": "shuf_n_invalid_word",
       "cmd": "shuf -n abc",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -19,8 +27,16 @@
       "id": "shuf_n_trailing_garbage_quotes_whole_arg",
       "cmd": "shuf -n 2x",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -33,8 +49,16 @@
       "id": "shuf_n_valid_one",
       "cmd": "shuf -n 1",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -47,8 +71,16 @@
       "id": "shuf_n_minus_is_an_invalid_character",
       "cmd": "shuf -n -1",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -61,8 +93,16 @@
       "id": "shuf_n_zero_prints_nothing",
       "cmd": "shuf -n 0",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -75,8 +115,16 @@
       "id": "shuf_n_empty_is_refused",
       "cmd": "shuf -n ''",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -89,8 +137,16 @@
       "id": "shuf_i_nonnumeric_high_bound",
       "cmd": "shuf -i 1-x",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -103,8 +159,16 @@
       "id": "shuf_i_nonnumeric_low_bound",
       "cmd": "shuf -i x-3",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -117,8 +181,16 @@
       "id": "shuf_i_decreasing_range_has_no_diagnostic_of_its_own",
       "cmd": "shuf -i 3-1",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -131,8 +203,16 @@
       "id": "shuf_i_negative_low_bound",
       "cmd": "shuf -i -2-1",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -145,8 +225,16 @@
       "id": "shuf_i_missing_dash",
       "cmd": "shuf -i 1",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -159,8 +247,16 @@
       "id": "shuf_i_empty_is_refused",
       "cmd": "shuf -i ''",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
@@ -173,14 +269,110 @@
       "id": "shuf_i_single_element_range_is_valid",
       "cmd": "shuf -i 2-2",
       "matrix": {
-        "python": ["ram", "disk", "redis"],
-        "typescript": ["ram", "disk", "redis"]
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
       },
       "stdin_text": "x\n",
       "expect": {
         "exit": 0,
         "stdout_text": "2\n",
         "stderr_text": ""
+      }
+    },
+    {
+      "id": "shuf_n_a_trailing_newline_is_refused",
+      "cmd": "shuf -n $'2\\n'",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "stdin_text": "a\nb\nc\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "shuf: invalid line count: '2\\n'\n"
+      }
+    },
+    {
+      "id": "shuf_n_an_interior_newline_is_refused",
+      "cmd": "shuf -n $'1\\n2'",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "stdin_text": "a\nb\nc\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "shuf: invalid line count: '1\\n2'\n"
+      }
+    },
+    {
+      "id": "shuf_i_a_trailing_newline_is_refused",
+      "cmd": "shuf -i $'1-3\\n'",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "stdin_text": "a\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "shuf: invalid input range: '1-3\\n'\n"
+      }
+    },
+    {
+      "id": "shuf_i_an_interior_newline_is_refused",
+      "cmd": "shuf -i $'1-3\\n5'",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "stdin_text": "a\n",
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "shuf: invalid input range: '1-3\\n5'\n"
       }
     }
   ]

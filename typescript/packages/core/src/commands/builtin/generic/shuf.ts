@@ -13,7 +13,8 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { quoteText } from '../../quote.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
 import { PathSpec } from '../../../types.ts'
 import { mountKey } from '../../../utils/key_prefix.ts'
@@ -56,6 +57,88 @@ function processItems(items: string[], repeat: boolean, nFlag: number | null): s
   return items
 }
 
+// GNU accepts a leading `+` and reads `+2` as 2, and `0` is a valid head
+// count. A `-` is not a sign here but an invalid character, so `-1` is refused
+// and quoted whole with no out-of-range clause: shuf rejects the sign while
+// scanning rather than range-checking a parsed negative. Anchored at both ends
+// so a trailing newline (`shuf -n $'2\n'`) is refused, which is what the
+// python twin's `fullmatch` answers.
+//
+// The leading run of C whitespace is `strtoumax`'s own skip and is real GNU
+// behavior: `shuf -n ' 2'`, `$'\t2'`, `$'\n2'` and `' +2'` are all accepted
+// while `'2 '` is refused. The class is spelled out rather than written `\s`
+// because it is C `isspace`, and JavaScript's `\s` also matches every Unicode
+// space. Measured, ground truth NL3-C.
+const C_SPACE = '[ \\t\\n\\v\\f\\r]*'
+const LINE_COUNT = new RegExp(`^${C_SPACE}\\+?[0-9]+$`)
+
+// One `-i` bound, scanned on its own. See parseInputRange.
+const BOUND = new RegExp(`^${C_SPACE}\\+?[0-9]+$`)
+
+// GNU's `-i LO-HI`, read the way GNU reads it.
+//
+// Split at the FIRST dash and scan each side on its own, which is what
+// `strchr(optarg, '-')` plus two `strtoumax` calls amount to. Doing it as one
+// regex over the whole argument gets three shapes wrong: `-i +1-3` and
+// `-i 1-+3` carry a `+` on either bound independently, `-i '1- 3'` puts the
+// blank on the HIGH bound's prefix and is accepted, and `-i '1 -3'` is refused
+// because that same blank is trailing garbage on the LOW one.
+//
+// A `-` is never a sign here, so an empty low bound (`-i -1-3`, where the
+// first dash is at index 0) and a negative high bound (`-i 1--3`) are both
+// refused, as is a second dash anywhere (`-i 1-2-3`). Returns null when GNU
+// refuses the argument -- including when the range decreases, since shuf has
+// only the one message for all of it. Measured, ground truth NL3-D.
+//
+// `parse_input_range` in shuf.py is the twin.
+export function parseInputRange(raw: string): [number, number] | null {
+  const dash = raw.indexOf('-')
+  if (dash < 0) return null
+  const lowRaw = raw.slice(0, dash)
+  const highRaw = raw.slice(dash + 1)
+  if (!BOUND.test(lowRaw) || !BOUND.test(highRaw)) return null
+  const low = Number.parseInt(lowRaw, 10)
+  const high = Number.parseInt(highRaw, 10)
+  if (low > high) return null
+  return [low, high]
+}
+
+export interface ShufFlags {
+  readonly count: number | null
+  readonly echo: boolean
+  readonly zeroTerminated: boolean
+  readonly withReplacement: boolean
+  readonly inputRange: string | null
+  // The raw `-o` word. The python executor promotes a PATH-typed flag to a
+  // PathSpec and reads it with as_paths; this bag carries the resolved
+  // virtual-path string, so asStr is the twin and the PathSpec is built at
+  // the call site.
+  readonly output: string | null
+}
+
+// Read shuf's flags once, refusing a head count GNU refuses.
+//
+// GNU quotes the WHOLE `-n` argument, not just the unparsed remainder the way
+// expand and cut do, and never appends an out-of-range clause to it.
+// Pre-validated the way head/tail do it, so the parseInt below cannot hand
+// back a prefix or NaN. Returns the stderr text instead of the struct when
+// GNU refuses the line, the shape every sibling generic's parseFlags uses.
+export function parseFlags(flags: Record<string, FlagValue>): ShufFlags | string {
+  const fl = new FlagView(flags, specOf('shuf'))
+  const countValue = fl.asStr('head_count')
+  if (countValue !== undefined && !LINE_COUNT.test(countValue)) {
+    return `shuf: invalid line count: '${quoteText(countValue)}'\n`
+  }
+  return {
+    count: countValue === undefined ? null : Number.parseInt(countValue, 10),
+    echo: fl.asBool('echo'),
+    zeroTerminated: fl.asBool('zero_terminated'),
+    withReplacement: fl.asBool('repeat'),
+    inputRange: fl.asStr('input_range') ?? null,
+    output: fl.asStr('output') ?? null,
+  }
+}
+
 export async function shufGeneric(
   paths: PathSpec[],
   texts: string[],
@@ -63,40 +146,21 @@ export async function shufGeneric(
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
   write: (p: PathSpec, data: Uint8Array) => Promise<void>,
 ): Promise<CommandFnResult> {
-  const fl = new FlagView(opts.flags, specOf('shuf'))
-  const countValue = fl.asStr('head_count')
-  const rangeValue = fl.asStr('input_range')
-  const outputValue = fl.asStr('output')
-  // GNU refuses a head count it cannot read whole and quotes the WHOLE
-  // argument, not just the unparsed remainder the way expand and cut do, and
-  // never appends an out-of-range clause to it. A leading `+` is a sign and
-  // `0` is a valid count, but `-` is an invalid character rather than a sign,
-  // so `-1` is refused: shuf rejects the sign while scanning rather than
-  // range-checking a parsed negative. Pre-validated the way head/tail do it,
-  // so the parseInt below cannot hand back a prefix or NaN.
-  if (countValue !== undefined && !/^\+?\d+$/.test(countValue)) {
-    return [
-      null,
-      new IOResult({
-        exitCode: 1,
-        stderr: ENC.encode(`shuf: invalid line count: '${countValue}'\n`),
-      }),
-    ]
+  const parsed = parseFlags(opts.flags)
+  if (typeof parsed === 'string') {
+    return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }
-  const nFlag = countValue === undefined ? null : Number.parseInt(countValue, 10)
-  const inputRange = rangeValue ?? null
+  const { count: nFlag, inputRange, echo: echoMode, zeroTerminated: zeroSep } = parsed
+  const repeat = parsed.withReplacement
   const output =
-    outputValue === undefined
+    parsed.output === null
       ? null
       : new PathSpec({
-          virtual: outputValue,
-          directory: outputValue,
-          resourcePath: mountKey(outputValue, opts.mountPrefix ?? ''),
+          virtual: parsed.output,
+          directory: parsed.output,
+          resourcePath: mountKey(parsed.output, opts.mountPrefix ?? ''),
           resolved: true,
         })
-  const echoMode = fl.asBool('echo')
-  const zeroSep = fl.asBool('zero_terminated')
-  const repeat = fl.asBool('repeat')
   const sep = zeroSep ? '\x00' : '\n'
 
   let items: string[]
@@ -105,20 +169,18 @@ export async function shufGeneric(
     // high one. Every other shape is one message, so a negative low bound
     // (`-2-1`) and a decreasing range (`3-1`) are refused here rather than
     // read as a range; shuf has no decreasing-range diagnostic of its own.
-    const match = /^(\d+)-(\d+)$/.exec(inputRange)
-    const low = Number.parseInt(match?.[1] ?? '0', 10)
-    const high = Number.parseInt(match?.[2] ?? '0', 10)
-    if (match === null || low > high) {
+    const bounds = parseInputRange(inputRange)
+    if (bounds === null) {
       return [
         null,
         new IOResult({
           exitCode: 1,
-          stderr: ENC.encode(`shuf: invalid input range: '${inputRange}'\n`),
+          stderr: ENC.encode(`shuf: invalid input range: '${quoteText(inputRange)}'\n`),
         }),
       ]
     }
     items = []
-    for (let value = low; value <= high; value++) items.push(String(value))
+    for (let value = bounds[0]; value <= bounds[1]; value++) items.push(String(value))
   } else if (echoMode) {
     const base = paths.length > 0 ? paths.map((p) => p.mountPath) : [...texts]
     items = base

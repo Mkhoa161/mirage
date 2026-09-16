@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from mirage.commands.builtin.utils.lines import split_lines
 from mirage.commands.builtin.utils.stream import read_stdin_async
+from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.types import FlagValue, FlagView
 from mirage.io.types import ByteSource, IOResult
@@ -14,13 +15,41 @@ from mirage.types import PathSpec
 # count. A `-` is not a sign here but an invalid character, so `-1` is
 # refused and quoted whole with no out-of-range clause: shuf rejects the
 # sign while scanning rather than range-checking a parsed negative.
-_LINE_COUNT = re.compile(r"^\+?[0-9]+$")
+#
+# Matched with `fullmatch`, never `match`: python's `$` also matches
+# immediately BEFORE a trailing newline, so `^...$` with `match` reads
+# `shuf -n $'2\n'` as the valid count 2. GNU's scanner stops at the
+# first non-digit and refuses it, as does the TypeScript twin.
+#
+# The leading run of C whitespace is `strtoumax`'s own skip and is real
+# GNU behavior: `shuf -n ' 2'`, `$'\t2'`, `$'\n2'` and `' +2'` are all
+# accepted while `'2 '` is refused. The class is spelled out rather than
+# written `\s` because it is C `isspace`, and python's `\s` also matches
+# 0x1c-0x1f, which GNU refuses. Measured, ground truth NL3-C.
+# A `-o` reached a backend wired without a write op, which is a wiring
+# fault rather than anything the command line did wrong. The TypeScript
+# twin throws a bare `Error` for it where it RETURNS an IOResult for
+# every user-facing refusal, so the builder's local catch has to let
+# this one through; naming it here is what keeps the two in step.
+NO_WRITE_OP = "shuf: backend provides no write op"
+
+_C_SPACE = r"[ \t\n\v\f\r]*"
+_LINE_COUNT = re.compile(rf"{_C_SPACE}\+?[0-9]+")
+
+# One `-i` bound. GNU splits the argument at the FIRST dash and hands
+# each side to `strtoumax`, so each bound carries its own leading
+# whitespace and optional `+`: `-i +1-3`, `-i 1-+3` and `-i '1- 3'` are
+# all accepted (the blank belongs to the HIGH bound), while `-i '1 -3'`
+# is refused because the blank is trailing garbage on the low one. A `-`
+# is never a sign here, which is why `-i -1-3` (an empty low bound) and
+# `-i 1--3` (a negative high bound) are both refused, and why there is
+# no separate decreasing-range message. Measured, ground truth NL3-D.
+_BOUND = re.compile(rf"{_C_SPACE}\+?[0-9]+")
 
 # `-i` takes two unsigned bounds with the low one no greater than the
 # high one. Every other shape is one message, so a negative low bound
-# (`-2-1`) and a decreasing range (`3-1`) are refused here rather than
-# read as a range; shuf has no decreasing-range diagnostic of its own.
-_INPUT_RANGE = re.compile(r"^([0-9]+)-([0-9]+)$")
+# (`-2-1`) and a decreasing range (`3-1`) are refused with the same
+# wording; shuf has no decreasing-range diagnostic of its own.
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +60,44 @@ class ShufFlags:
     with_replacement: bool = False
     input_range: str | None = None
     output: PathSpec | None = None
+
+
+def parse_input_range(raw: str) -> tuple[int, int] | None:
+    """GNU's ``-i LO-HI``, read the way GNU reads it.
+
+    Split at the FIRST dash and scan each side on its own, which is what
+    ``strchr(optarg, '-')`` plus two ``strtoumax`` calls amount to. Doing
+    it as one regex over the whole argument gets three shapes wrong:
+    ``-i +1-3`` and ``-i 1-+3`` carry a ``+`` on either bound
+    independently, ``-i '1- 3'`` puts the blank on the HIGH bound's
+    prefix and is accepted, and ``-i '1 -3'`` is refused because that
+    same blank is trailing garbage on the LOW one.
+
+    A ``-`` is never a sign here, so an empty low bound (``-i -1-3``,
+    where the first dash is at index 0) and a negative high bound
+    (``-i 1--3``) are both refused, as is a second dash anywhere
+    (``-i 1-2-3``). Measured, ground truth NL3-D.
+
+    Args:
+        raw (str): the raw ``-i`` value.
+
+    Returns:
+        tuple[int, int] | None: the inclusive bounds, or None when GNU
+            refuses the argument -- including when the range decreases,
+            since shuf has only the one message for all of it.
+    """
+    dash = raw.find("-")
+    if dash < 0:
+        return None
+    if _BOUND.fullmatch(raw[:dash]) is None:
+        return None
+    if _BOUND.fullmatch(raw[dash + 1:]) is None:
+        return None
+    low = int(raw[:dash])
+    high = int(raw[dash + 1:])
+    if low > high:
+        return None
+    return low, high
 
 
 def parse_flags(flags: Mapping[str, FlagValue]) -> ShufFlags:
@@ -49,8 +116,9 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> ShufFlags:
     """
     fl = FlagView(flags, spec=SPECS["shuf"])
     count_raw = fl.as_str("head_count")
-    if count_raw is not None and _LINE_COUNT.match(count_raw) is None:
-        raise ValueError(f"shuf: invalid line count: '{count_raw}'")
+    if count_raw is not None and _LINE_COUNT.fullmatch(count_raw) is None:
+        raise ValueError(
+            f"shuf: invalid line count: '{quote_text(count_raw)}'")
     outputs = fl.as_paths("output")
     return ShufFlags(
         count=int(count_raw) if count_raw is not None else None,
@@ -109,13 +177,11 @@ async def shuf(
     sep = "\x00" if zero_terminated else "\n"
 
     if input_range is not None:
-        bounds = _INPUT_RANGE.match(input_range)
-        if bounds is None or int(bounds.group(1)) > int(bounds.group(2)):
-            raise ValueError(f"shuf: invalid input range: '{input_range}'")
-        items = [
-            str(value) for value in range(int(bounds.group(1)),
-                                          int(bounds.group(2)) + 1)
-        ]
+        bounds = parse_input_range(input_range)
+        if bounds is None:
+            raise ValueError(
+                f"shuf: invalid input range: '{quote_text(input_range)}'")
+        items = [str(value) for value in range(bounds[0], bounds[1] + 1)]
         result = _sample(items, count, with_replacement)
         rendered = _render(result, sep)
     elif echo:
@@ -142,10 +208,12 @@ async def shuf(
         rendered = _render(result, sep)
     if output is not None:
         if write_bytes is None:
-            raise ValueError("shuf: backend provides no write op")
+            raise ValueError(NO_WRITE_OP)
         await write_bytes(output, rendered)
         return None, IOResult(writes={output.mount_path: rendered})
     return rendered, IOResult()
 
 
-__all__ = ["ShufFlags", "parse_flags", "shuf"]
+__all__ = [
+    "NO_WRITE_OP", "ShufFlags", "parse_flags", "parse_input_range", "shuf"
+]

@@ -519,3 +519,253 @@ class TestOnlyMatchingEmptyMatches:
         out, io = await _run_stream(b"ab\n", "[0-9]", only_matching=True)
         assert out == b""
         assert io.exit_code == 1
+
+
+class TestByteOffsetsInTheSelectPaths:
+    """-b through grep_lines and grep_stream (GNU grep 3.11, section Q)."""
+
+    def test_lines_print_the_line_start_offset(self):
+        hits = grep_lines("/f.txt", ["abc", "defabc", "abc abc"],
+                          compile_pattern("abc"), False, False, False, False,
+                          False, None, None, True)
+        assert hits == ["0:abc", "4:defabc", "11:abc abc"]
+
+    def test_lines_print_the_match_offset_under_only_matching(self):
+        hits = grep_lines("/f.txt", ["abc", "defabc", "abc abc"],
+                          compile_pattern("abc"), False, False, False, False,
+                          True, None, None, True)
+        assert hits == ["0:abc", "7:abc", "11:abc", "15:abc"]
+
+    def test_lines_keep_gnu_field_order_whatever_the_flags(self):
+        hits = grep_lines("/f.txt", ["abc", "defabc"], compile_pattern("abc"),
+                          False, True, False, False, False, None, None, True)
+        assert hits == ["1:0:abc", "2:4:defabc"]
+
+    def test_lines_count_bytes_not_characters(self):
+        # `caf` + U+00E9 (two bytes) + a space is six bytes.
+        hits = grep_lines("/f.txt", ["café abc", "xéy abc"],
+                          compile_pattern("abc"), False, False, False, False,
+                          True, None, None, True)
+        assert hits == ["6:abc", "15:abc"]
+
+    def test_lines_leave_a_count_and_a_file_list_alone(self):
+        counted = grep_lines("/f.txt", ["abc", "defabc"],
+                             compile_pattern("abc"), False, False, True, False,
+                             False, None, None, True)
+        listed = grep_lines("/f.txt", ["abc"], compile_pattern("abc"), False,
+                            False, False, True, False, None, None, True)
+        assert (counted, listed) == (["2"], ["/f.txt"])
+
+    def test_lines_print_the_offsets_of_the_lines_v_selected(self):
+        hits = grep_lines("/f.txt",
+                          ["one", "two abc", "three", "four abc", "five"],
+                          compile_pattern("abc"), True, False, False, False,
+                          False, None, None, True)
+        assert hits == ["0:one", "12:three", "27:five"]
+
+    @pytest.mark.anyio
+    async def test_stream_prints_the_line_start_offset(self):
+        out, io = await _run_stream(b"abc\ndefabc\nabc abc\n",
+                                    "abc",
+                                    byte_offsets=True)
+        assert (out, io.exit_code) == (b"0:abc\n4:defabc\n11:abc abc\n", 0)
+
+    @pytest.mark.anyio
+    async def test_stream_prints_the_match_offset_under_only_matching(self):
+        out, _ = await _run_stream(b"abc\ndefabc\nabc abc\n",
+                                   "abc",
+                                   only_matching=True,
+                                   byte_offsets=True)
+        assert out == b"0:abc\n7:abc\n11:abc\n15:abc\n"
+
+    @pytest.mark.anyio
+    async def test_stream_keeps_gnu_field_order(self):
+        out, _ = await _run_stream(b"abc\ndefabc\n",
+                                   "abc",
+                                   line_numbers=True,
+                                   byte_offsets=True)
+        assert out == b"1:0:abc\n2:4:defabc\n"
+
+    @pytest.mark.anyio
+    async def test_stream_counts_bytes_not_characters(self):
+        out, _ = await _run_stream("café abc\nxéy abc\n".encode(),
+                                   "abc",
+                                   only_matching=True,
+                                   byte_offsets=True)
+        assert out == b"6:abc\n15:abc\n"
+
+    @pytest.mark.anyio
+    async def test_stream_does_not_double_count_a_missing_final_newline(self):
+        out, _ = await _run_stream(b"abc\nno-newline-abc",
+                                   "abc",
+                                   only_matching=True,
+                                   byte_offsets=True)
+        assert out == b"0:abc\n15:abc\n"
+
+    @pytest.mark.anyio
+    async def test_stream_prints_nothing_for_an_empty_match_under_ob(self):
+        out, io = await _run_stream(b"ab\n",
+                                    "[0-9]*",
+                                    only_matching=True,
+                                    byte_offsets=True)
+        assert (out, io.exit_code) == (b"", 0)
+
+    @pytest.mark.anyio
+    async def test_stream_context_lines_take_the_dash_separator(self):
+        out, _ = await _run_stream(b"one\ntwo abc\nthree\nfour abc\nfive\n",
+                                   "abc",
+                                   line_numbers=True,
+                                   byte_offsets=True,
+                                   after_context=1,
+                                   before_context=1)
+        assert out == (b"1-0-one\n2:4:two abc\n3-12-three\n"
+                       b"4:18:four abc\n5-27-five\n")
+
+    @pytest.mark.anyio
+    async def test_stream_leaves_a_count_alone(self):
+        out, _ = await _run_stream(b"abc\ndefabc\n",
+                                   "abc",
+                                   count_only=True,
+                                   byte_offsets=True)
+        assert out == b"2\n"
+
+
+class TestMaxCountZeroSelectsNothing:
+    """`-m 0` selects no line at all, which is what GNU does.
+
+    Measured on GNU grep 3.11: `grep -m0 a f`, `grep -m0 -c a f`,
+    `grep -m0 -v a f` and `grep -m0 -l a f` all print zero bytes and exit
+    1. Reading the limit only after a line was printed let the first
+    selected line out first, because `count >= 0` is already true.
+    """
+
+    def test_lines_print_nothing(self):
+        assert _only(["a", "ab", "b"], "a", max_count=0) == []
+
+    def test_lines_count_prints_nothing(self):
+        # Not `["0"]`: `grep_recursive` renders `<file>:<count>` from
+        # whatever comes back, and GNU prints no per-file zeros under -m0.
+        assert _only(["a", "ab", "b"], "a", max_count=0, count_only=True) == []
+
+    def test_lines_name_no_file(self):
+        assert _only(["a", "ab", "b"], "a", max_count=0, files_only=True) == []
+
+    def test_lines_report_no_selection(self):
+        io = IOResult(exit_code=1)
+        _only(["a", "ab", "b"], "a", max_count=0, io=io)
+        assert io.exit_code == 1
+
+    @pytest.mark.anyio
+    async def test_stream_prints_nothing(self):
+        out, io = await _run_stream(b"a\nab\nb\n", "a", max_count=0)
+        assert (out, io.exit_code) == (b"", 1)
+
+    @pytest.mark.anyio
+    async def test_stream_counts_nothing(self):
+        # Zero bytes, not `0\n` -- GNU prints nothing for `grep -m0 -c`,
+        # and `grep_input` answers the same way.
+        out, io = await _run_stream(b"a\nab\nb\n",
+                                    "a",
+                                    max_count=0,
+                                    count_only=True)
+        assert (out, io.exit_code) == (b"", 1)
+
+    @pytest.mark.anyio
+    async def test_stream_still_prints_a_genuine_zero(self):
+        # The mirror: without -m0 a real zero is still `0`.
+        out, io = await _run_stream(b"a\nb\n", "zzz", count_only=True)
+        assert (out, io.exit_code) == (b"0\n", 1)
+
+    @pytest.mark.anyio
+    async def test_stream_prints_no_context(self):
+        out, io = await _run_stream(b"a\nab\nb\n",
+                                    "a",
+                                    max_count=0,
+                                    after_context=1,
+                                    before_context=1)
+        assert (out, io.exit_code) == (b"", 1)
+
+
+class TestOnlyMatchingWithInvertPrintsNothing:
+    """`-o -v` prints nothing, because an unselected pattern has no match.
+
+    Measured on GNU grep 3.11 over `abc\\ndef\\n`: `grep -ov abc` is zero
+    bytes and exit 0, `grep -ovc abc` is `1`, and `grep -ovl abc` names the
+    file. ripgrep prints the whole line instead; GNU is the reference the
+    rest of this family already follows for -o.
+    """
+
+    def test_lines_print_nothing(self):
+        assert _only(["abc", "def"], "abc", invert=True) == []
+
+    def test_lines_still_count_the_selected_line(self):
+        assert _only(["abc", "def"], "abc", invert=True,
+                     count_only=True) == ["1"]
+
+    def test_lines_still_name_the_file(self):
+        assert _only(["abc", "def"], "abc", invert=True,
+                     files_only=True) == ["/f.txt"]
+
+    def test_lines_still_report_selection(self):
+        io = IOResult(exit_code=1)
+        _only(["abc", "def"], "abc", invert=True, io=io)
+        assert io.exit_code == 0
+
+    @pytest.mark.anyio
+    async def test_stream_prints_nothing(self):
+        out, io = await _run_stream(b"abc\ndef\n",
+                                    "abc",
+                                    only_matching=True,
+                                    invert=True)
+        assert (out, io.exit_code) == (b"", 0)
+
+    @pytest.mark.anyio
+    async def test_stream_still_counts_the_selected_line(self):
+        out, io = await _run_stream(b"abc\ndef\n",
+                                    "abc",
+                                    only_matching=True,
+                                    invert=True,
+                                    count_only=True)
+        assert (out, io.exit_code) == (b"1\n", 0)
+
+
+class TestOffsetsOverSmuggledBytes:
+    """A byte offset counts bytes, and an invalid byte is one byte.
+
+    `grep -bo a` over `\\xffa\\n` is `1:a` on GNU grep 3.11, and
+    `grep -b a` over `\\xff\\na\\n` is `2:a`. A replacing decode read the
+    invalid byte as U+FFFD, three bytes wide, so both answers ran ahead.
+    """
+
+    @pytest.mark.anyio
+    async def test_stream_match_offset_counts_one_byte(self):
+        out, _ = await _run_stream(b"\xffa\n",
+                                   "a",
+                                   only_matching=True,
+                                   byte_offsets=True)
+        assert out == b"1:a\n"
+
+    @pytest.mark.anyio
+    async def test_stream_line_offset_counts_one_byte(self):
+        out, _ = await _run_stream(b"\xff\na\n", "a", byte_offsets=True)
+        assert out == b"2:a\n"
+
+    @pytest.mark.anyio
+    async def test_stream_prints_the_raw_byte_back(self):
+        # The line prints as GNU prints it rather than as U+FFFD, because
+        # the stream encodes through `encode_line`.
+        out, _ = await _run_stream(b"\xffa\n", ".", byte_offsets=True)
+        assert out == b"0:\xffa\n"
+
+    def test_lines_count_a_smuggled_byte_as_one(self):
+        rows = grep_lines("/f.txt", ["\udcffa"], compile_pattern("a"), False,
+                          False, False, False, True, None, None, True)
+        assert rows == ["1:a"]
+
+    def test_lines_replace_a_smuggled_byte_on_the_way_out(self):
+        # A list-returning scan hands its lines to `format_records`, which
+        # encodes strictly, so the byte comes back as U+FFFD -- exactly what
+        # a replacing decode used to give, with the offset now right.
+        rows = grep_lines("/f.txt", ["\udcffa"], compile_pattern("a"), False,
+                          False, False, False, False, None, None, True)
+        assert rows == ["0:\ufffda"]
