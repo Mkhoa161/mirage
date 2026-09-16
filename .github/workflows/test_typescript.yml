@@ -73,7 +73,7 @@ jobs:
         # node -> server -> opencode is free because its tail is cheap.
         # The selections themselves live in typescript/package.json as
         # `test:leg:*`, so one command reproduces a leg locally; this list and
-        # those scripts are held in step by scripts/check_ci_test_legs.py.
+        # those scripts are held in step by scripts/ci_test_legs/check.py.
         leg: [core, cli, rest]
         include:
           - leg: cli
