@@ -100,10 +100,10 @@ def covering_job(path: Path, command: str) -> str | None:
     Returns:
         str | None: The job's key, or None when no step runs it.
     """
-    workflow = yaml.safe_load(path.read_text())
+    workflow: dict[str, Any] = yaml.safe_load(path.read_text())
     for name, job in workflow.get("jobs", {}).items():
         if any(runs_command(step, command) for step in job.get("steps", [])):
-            return name
+            return str(name)
     return None
 
 
