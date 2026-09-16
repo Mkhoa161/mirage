@@ -217,10 +217,11 @@ async def test_scoped_mount_may_not_touch_a_link_on_hidden_turf():
     # write the namespace table directly, at a layer no session view
     # covers. Creation was closed by routing through the op door;
     # removal stayed open until unlink stopped calling the table too.
-    # The two refusals differ by design: symlink is a create, which
-    # answers EACCES because "does not exist" is nonsense as the answer
-    # to a name the caller spelled out, while every other op on a
-    # hidden path answers ENOENT under the no-name-leak rule.
+    # Both refuse as ENOENT: symlink is a create, and a create under a
+    # hidden directory answers as every read of that directory does
+    # (only a hidden name under a visible directory keeps EACCES),
+    # while every other op on a hidden path is ENOENT under the
+    # no-name-leak rule.
     ws = Workspace({
         "/data/": RAMResource(),
         "/extra/": RAMResource()

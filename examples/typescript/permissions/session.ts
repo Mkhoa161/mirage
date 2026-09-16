@@ -18,7 +18,11 @@ import {
   Workspace,
   parseSessionProfile,
 } from "@struktoai/mirage-node";
-import type { Ops } from "@struktoai/mirage-node";
+import type {
+  Ops,
+  SessionExecuteOptions,
+  SessionHandle,
+} from "@struktoai/mirage-node";
 
 // One agent, one handle. `ws.session(id, { profile })` creates a session
 // under a role and hands back its two doors bound together: `execute`
@@ -79,9 +83,12 @@ function codeOf(err: unknown): string {
   return String((err as { code?: string }).code ?? err);
 }
 
+type PlainExecute = SessionExecuteOptions & { provision?: false };
+
 interface Doors {
   execute(
     cmd: string,
+    options?: PlainExecute,
   ): Promise<{
     stdout: Uint8Array | null;
     stderr: Uint8Array | null;
@@ -95,8 +102,9 @@ async function line(
   handle: Doors,
   cmd: string,
   note: string,
+  options: PlainExecute = {},
 ): Promise<void> {
-  const res = await handle.execute(cmd);
+  const res = await handle.execute(cmd, options);
   const out = res.stdout === null ? "" : dec.decode(res.stdout);
   const err = res.stderr === null ? "" : dec.decode(res.stderr);
   show(role, "execute", cmd, shell(out, err, res.exitCode), note);
@@ -150,12 +158,15 @@ async function main(): Promise<void> {
   );
   for (const seed of SEED) await ws.execute(seed);
 
-  const reviewer = await ws.session("reviewer", {
+  const reviewer: SessionHandle = await ws.session("reviewer", {
     profile: "reviewer",
     mounts: { "/repo": "read" },
   });
   const editor = await ws.session("editor", { profile: "editor" });
-  const host: Doors = { execute: (cmd) => ws.execute(cmd), fs: ws.fs };
+  const host: Doors = {
+    execute: (cmd, options) => ws.execute(cmd, options),
+    fs: ws.fs,
+  };
 
   await line(
     "reviewer",

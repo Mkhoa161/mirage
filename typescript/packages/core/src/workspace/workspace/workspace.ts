@@ -70,6 +70,7 @@ import {
   runWithSession,
 } from '../../context/session_context.ts'
 import { namespaceViewOf } from '../executor/command/run.ts'
+import { asyncContextIsolatesTasks } from '../../utils/async_context.ts'
 import { sessionView, envSnapshot } from '../session/state.ts'
 import type { BridgeDispatchFn } from '../../runtime/types.ts'
 import { MontyUnavailableError } from '../../runtime/python/monty/index.ts'
@@ -1053,9 +1054,16 @@ export class Workspace {
    * runs as the session it asked for, judged by this workspace's own
    * profile. Otherwise the named session is bound the way `execute`
    * binds it.
+   *
+   * On the fallback storage (no task isolation) the newest live frame
+   * may be another task's, so a facade that names its session binds it
+   * rather than trusting an ambient one; only the unnamed door (`ws.fs`,
+   * `ws.dispatch`) keeps whatever is bound there, which is what a
+   * command's runtime reaching it relies on.
    */
   private async bindSession<T>(sessionId: string | null, run: () => Promise<T>): Promise<T> {
-    if (getCurrentSessionUnlessForeign(this.sessionManager) !== null) return run()
+    const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
+    if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return run()
     await this.sessionManager.ensureLoaded()
     const session = this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
     return runWithSession(session, run, this.sessionManager)
