@@ -291,5 +291,6 @@
   ],
   "rest": {
     "type": "str"
-  }
+  },
+  "usage": "dirname [OPTION] NAME..."
 }

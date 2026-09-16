@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import type { IndexCacheStore } from '@struktoai/mirage-core/cache/index/store'
-import { rgGeneric } from '@struktoai/mirage-core/commands/builtin/generic/rg'
+import { RG_NO_PATTERN, rgGeneric } from '@struktoai/mirage-core/commands/builtin/generic/rg'
 import { resolveGlobOf } from '@struktoai/mirage-core/commands/builtin/generic_bind/index'
 import { compilePattern, patternArg } from '@struktoai/mirage-core/commands/builtin/grep_pattern'
 import { pushdownOperand, searchQuery } from '@struktoai/mirage-core/commands/builtin/grep_pushdown'
@@ -56,10 +56,7 @@ async function rgCommand(
 ): Promise<CommandFnResult> {
   const pattern = patternArg(texts, opts.flags)
   if (pattern === null) {
-    return [
-      null,
-      new IOResult({ exitCode: 2, stderr: ENC.encode('rg: usage: rg [flags] pattern [path]\n') }),
-    ]
+    return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${RG_NO_PATTERN}\n`) })]
   }
   const fl = new FlagView(opts.flags, specOf('rg'))
   // -l is short-only, so it lands on the disambiguated `args_l` dest

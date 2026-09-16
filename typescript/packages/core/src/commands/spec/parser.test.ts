@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { specOf } from './builtins.ts'
 import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
-import { CommandSpec, Operand, Option, VALUE_OCCURRENCES_KEY } from './types.ts'
+import { CommandSpec, Operand, Option } from './types.ts'
 import { FlagView } from './flag_view.ts'
 
 describe('parseCommand — bool short flags', () => {
@@ -485,9 +485,9 @@ describe('parseCommand — value occurrences', () => {
   it('records every scalar occurrence in scan order', () => {
     const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-v', 'xyz', '-w', '3'], '/')
     expect(parsed.valueOccurrences).toEqual([
-      ['--number-width', 'abc'],
-      ['--starting-line-number', 'xyz'],
-      ['--number-width', '3'],
+      ['number_width', 'abc'],
+      ['starting_line_number', 'xyz'],
+      ['number_width', '3'],
     ])
     // The bag is untouched: still one value per dest, still last-wins.
     expect(parsed.flags['--number-width']).toBe('3')
@@ -496,8 +496,8 @@ describe('parseCommand — value occurrences', () => {
   it('folds both spellings of one option onto one dest', () => {
     const parsed = parseCommand(specOf('nl'), ['--number-width=abc', '-w', '3'], '/')
     expect(parsed.valueOccurrences).toEqual([
-      ['--number-width', 'abc'],
-      ['--number-width', '3'],
+      ['number_width', 'abc'],
+      ['number_width', '3'],
     ])
   })
 
@@ -516,22 +516,19 @@ describe('parseCommand — value occurrences', () => {
   // key would land in every handler's flag bag. A line that typed each
   // scalar option once has lost nothing: the bag is already the record, in
   // scan order.
-  it('leaves the kwargs bag unchanged when no scalar option repeats', () => {
-    const parsed = parseCommand(specOf('nl'), ['-w', '3', '-v', '5'], '/')
-    expect(parseToKwargs(parsed)).toEqual({ number_width: '3', starting_line_number: '5' })
-  })
-
-  it('carries the record in the kwargs bag once a scalar repeats', () => {
+  it('never carries the record in the kwargs bag', () => {
+    // The record is a typed field of its own, not a key in the bag: every
+    // command parses through this machinery, so a key would land in every
+    // handler's flag bag, untyped and unreadable through a spec-bound
+    // FlagView. The bag stays exactly the line's options, one value per
+    // scalar dest.
     const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-w', '3'], '/')
-    expect(parseToKwargs(parsed)).toEqual({
-      number_width: '3',
-      [VALUE_OCCURRENCES_KEY]: ['number_width', 'abc', 'number_width', '3'],
-    })
+    expect(parseToKwargs(parsed)).toEqual({ number_width: '3' })
   })
 
   it('reads the record back as typed pairs', () => {
     const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-v', 'xyz', '-w', '3'], '/')
-    const fl = new FlagView(parseToKwargs(parsed), specOf('nl'))
+    const fl = new FlagView(parseToKwargs(parsed), specOf('nl'), parsed.valueOccurrences)
     expect(fl.valueOccurrences('number_width', 'starting_line_number')).toEqual([
       ['number_width', 'abc'],
       ['starting_line_number', 'xyz'],
@@ -541,11 +538,9 @@ describe('parseCommand — value occurrences', () => {
     expect(fl.valueOccurrences('starting_line_number')).toEqual([['starting_line_number', 'xyz']])
   })
 
-  it('falls back to the bag when nothing repeated', () => {
+  it('falls back to the bag without a record', () => {
     const parsed = parseCommand(specOf('nl'), ['-v', 'xyz', '-w', 'abc'], '/')
-    const kwargs = parseToKwargs(parsed)
-    expect(VALUE_OCCURRENCES_KEY in kwargs).toBe(false)
-    const fl = new FlagView(kwargs, specOf('nl'))
+    const fl = new FlagView(parseToKwargs(parsed), specOf('nl'))
     expect(fl.valueOccurrences('number_width', 'starting_line_number')).toEqual([
       ['starting_line_number', 'xyz'],
       ['number_width', 'abc'],
@@ -561,7 +556,10 @@ describe('parseCommand — value occurrences', () => {
     const kwargs = parseToKwargs(parsed)
     expect(kwargs.e).toEqual(['a', 'b'])
     expect(kwargs.m).toBe('2')
-    expect(kwargs[VALUE_OCCURRENCES_KEY]).toEqual(['m', '1', 'm', '2'])
+    expect(parsed.valueOccurrences).toEqual([
+      ['m', '1'],
+      ['m', '2'],
+    ])
   })
 })
 

@@ -106,8 +106,11 @@ def usage_line(name: str, spec: CommandSpec, subcommands: SubcommandRows,
                style: UsageStyle) -> str:
     """The ``Usage:`` line, in the dialect the CLI declares.
 
-    clap spells the option placeholder ``[OPTIONS]`` and the subcommand
-    slot ``<COMMAND>``, and names each operand; the default spells them
+    A spec that carries its own ``usage`` answers with that synopsis
+    whatever the dialect, since it is the imitated program's own line.
+    Otherwise clap spells the option placeholder ``[OPTIONS]`` and the
+    subcommand slot ``<COMMAND>``, and names each operand; the default
+    spells them
     ``[flags]``, ``<command> [<args>]`` and a generic ``<path>``/
     ``<text>`` per slot.
 
@@ -117,6 +120,8 @@ def usage_line(name: str, spec: CommandSpec, subcommands: SubcommandRows,
         subcommands (SubcommandRows): child rows, empty for a leaf.
         style (UsageStyle): the dialect.
     """
+    if spec.usage is not None:
+        return "Usage: " + spec.usage
     clap = style is UsageStyle.CLAP
     bits = [name]
     if spec.options:

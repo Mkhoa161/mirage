@@ -65,8 +65,8 @@ async def split(ops: CommandIO, accessor: Accessor, paths: list[PathSpec],
                         if lines_value is not None else 0),
         byte_limit=(parse_bytes_value(bytes_value)
                     if bytes_value is not None else 0),
-        n_chunks=(parse_chunks_value(number_value)
-                  if number_value is not None else 0),
+        chunks=(parse_chunks_value(number_value)
+                if number_value is not None else None),
         suffix_len=suffix_len,
         suffix_auto=suffix_auto,
         numeric_suffix=numeric_value is not None,

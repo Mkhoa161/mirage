@@ -19,6 +19,7 @@ SPECS: dict[str, CommandSpec] = {
     CommandSpec(rest=Operand(type="path")),
     'diff':
     CommandSpec(
+        usage="diff [OPTION]... FILES",
         options=(
             Option(short="-i"),
             Option(short="-w"),
@@ -35,6 +36,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'base64':
     CommandSpec(
+        usage="base64 [OPTION]... [FILE]",
         options=(
             Option(short="-d", long="--decode"),
             Option(short="-D"),
@@ -45,6 +47,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'md5sum':
     CommandSpec(
+        usage="md5sum [OPTION]... [FILE]...",
         options=(
             Option(short="-c", long="--check"),
             Option(short="-b", long="--binary"),
@@ -61,6 +64,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sha1sum':
     CommandSpec(
+        usage="sha1sum [OPTION]... [FILE]...",
         options=(
             Option(short="-c", long="--check"),
             Option(short="-b", long="--binary"),
@@ -77,6 +81,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sha256sum':
     CommandSpec(
+        usage="sha256sum [OPTION]... [FILE]...",
         options=(
             Option(short="-c", long="--check"),
             Option(short="-b", long="--binary"),
@@ -93,6 +98,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sha384sum':
     CommandSpec(
+        usage="sha384sum [OPTION]... [FILE]...",
         options=(
             Option(short="-c", long="--check"),
             Option(short="-b", long="--binary"),
@@ -109,6 +115,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sha512sum':
     CommandSpec(
+        usage="sha512sum [OPTION]... [FILE]...",
         options=(
             Option(short="-c", long="--check"),
             Option(short="-b", long="--binary"),
@@ -154,6 +161,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'cmp':
     CommandSpec(
+        usage="cmp [OPTION]... FILE1 [FILE2 [SKIP1 [SKIP2]]]",
         options=(
             Option(short="-l"),
             Option(short="-s"),
@@ -168,6 +176,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'iconv':
     CommandSpec(
+        usage="iconv [OPTION...] [FILE...]",
         options=(
             Option(short="-f", type="str"),
             Option(short="-t", type="str"),

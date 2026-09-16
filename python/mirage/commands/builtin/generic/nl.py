@@ -1,5 +1,5 @@
 import re
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from mirage.commands.builtin.constants import C_SPACE
@@ -289,8 +289,11 @@ def _option_errors(fl: FlagView) -> str | None:
     return None
 
 
-def parse_flags(flags: Mapping[str, FlagValue]) -> NlFlags:
-    fl = FlagView(flags, spec=SPECS["nl"])
+def parse_flags(
+    flags: Mapping[str, FlagValue],
+    occurrences: Sequence[tuple[str, str]] | None = None,
+) -> NlFlags:
+    fl = FlagView(flags, spec=SPECS["nl"], occurrences=occurrences)
     error = _option_errors(fl)
     if error is not None:
         raise ValueError(error)
@@ -625,7 +628,7 @@ async def nl_generic(
             ``stream(path)``.
     """
     try:
-        parsed = parse_flags(opts.flags)
+        parsed = parse_flags(opts.flags, opts.value_occurrences)
     except ValueError as exc:
         return None, IOResult(exit_code=1, stderr=f"{exc}\n".encode())
     readable, err = await split_readable(paths, stat, "nl")

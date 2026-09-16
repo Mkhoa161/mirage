@@ -16,6 +16,7 @@ import { CommandSpec, Operand, Option } from '../types.ts'
 
 export const SPECS: Record<string, CommandSpec> = {
   basename: new CommandSpec({
+    usage: 'basename NAME [SUFFIX]',
     options: [
       new Option({ short: '-a', long: '--multiple' }),
       new Option({ short: '-s', long: '--suffix', type: 'str' }),
@@ -24,6 +25,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   chgrp: new CommandSpec({
+    usage: 'chgrp [OPTION]... GROUP FILE...',
     options: [
       new Option({ short: '-R' }),
       new Option({ short: '-v' }),
@@ -34,6 +36,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   chmod: new CommandSpec({
+    usage: 'chmod [OPTION]... MODE[,MODE]... FILE...',
     options: [
       new Option({ short: '-R' }),
       new Option({ short: '-v' }),
@@ -43,6 +46,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   chown: new CommandSpec({
+    usage: 'chown [OPTION]... [OWNER][:[GROUP]] FILE...',
     options: [
       new Option({ short: '-R' }),
       new Option({ short: '-v' }),
@@ -53,6 +57,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   cp: new CommandSpec({
+    usage: 'cp [OPTION]... [-T] SOURCE DEST',
     options: [
       new Option({ short: '-r' }),
       new Option({ short: '-R', long: '--recursive' }),
@@ -90,6 +95,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   dirname: new CommandSpec({
+    usage: 'dirname [OPTION] NAME...',
     options: [new Option({ short: '-z', long: '--zero' })],
     rest: new Operand({ type: 'str' }),
   }),
@@ -97,6 +103,7 @@ export const SPECS: Record<string, CommandSpec> = {
   // state, a "hard link" is a byte copy through the op door), so this spec
   // is its grammar authority and no builder binds it.
   ln: new CommandSpec({
+    usage: 'ln [OPTION]... [-T] TARGET LINK_NAME',
     options: [
       new Option({ short: '-s', long: '--symbolic' }),
       new Option({ short: '-f', long: '--force' }),
@@ -123,6 +130,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   mkdir: new CommandSpec({
+    usage: 'mkdir [OPTION]... DIRECTORY...',
     options: [
       new Option({ short: '-p', long: '--parents' }),
       new Option({ short: '-v', long: '--verbose' }),
@@ -137,6 +145,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   mv: new CommandSpec({
+    usage: 'mv [OPTION]... [-T] SOURCE DEST',
     options: [
       // Non-interactive control plane (rm precedent): -f/-i are accepted
       // no-ops — there is no prompt, and an overwrite proceeds unless
@@ -175,6 +184,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   readlink: new CommandSpec({
+    usage: 'readlink [OPTION]... FILE...',
     options: [
       new Option({ short: '-f' }),
       new Option({ short: '-e' }),
@@ -184,10 +194,12 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   realpath: new CommandSpec({
+    usage: 'realpath [OPTION]... FILE...',
     options: [new Option({ short: '-e' }), new Option({ short: '-m' })],
     rest: new Operand({ type: 'path' }),
   }),
   rm: new CommandSpec({
+    usage: 'rm [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-r' }),
       new Option({ short: '-R' }),
@@ -209,10 +221,12 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   rmdir: new CommandSpec({
+    usage: 'rmdir [OPTION]... DIRECTORY...',
     options: [new Option({ short: '-v' })],
     rest: new Operand({ type: 'path' }),
   }),
   touch: new CommandSpec({
+    usage: 'touch [OPTION]... FILE...',
     options: [
       new Option({ short: '-c' }),
       new Option({ short: '-r', type: 'path' }),
@@ -221,8 +235,9 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   truncate: new CommandSpec({
+    usage: 'truncate OPTION... FILE...',
     options: [new Option({ short: '-s', long: '--size', type: 'str' })],
     rest: new Operand({ type: 'path' }),
   }),
-  unlink: new CommandSpec({ rest: new Operand({ type: 'path' }) }),
+  unlink: new CommandSpec({ usage: 'unlink FILE', rest: new Operand({ type: 'path' }) }),
 }

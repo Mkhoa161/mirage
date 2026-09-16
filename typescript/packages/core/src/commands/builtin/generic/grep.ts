@@ -30,8 +30,12 @@ import { grepInput, type FlagSet } from '../grep_binary.ts'
 import { fileAdmitted, dirAdmitted, parseFileGlobs } from '../grep_select.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { UsageError } from '../../errors.ts'
+import { usageHint } from '../../spec/usage.ts'
 
 const ENC = new TextEncoder()
+// GNU grep with no pattern prints its synopsis and the help hint, exit 2
+// (grep 3.11; the same two lines follow `option requires an argument`).
+const GREP_NO_PATTERN = `Usage: ${specOf('grep').usage ?? ''}\n${usageHint('grep')}`
 type Stat = (p: PathSpec) => Promise<FileStat>
 type Readdir = (p: PathSpec) => Promise<string[]>
 type Stream = (p: PathSpec) => AsyncIterable<Uint8Array>
@@ -66,6 +70,18 @@ function contextLength(fl: FlagView, name: string): number | undefined {
 }
 
 /** The winning filename flag: true for -H, false for -h, null for neither. */
+// [-l, -L]: which file-listing mode wins, the later one on the line. GNU's
+// -l and -L set one variable (`list_files`) so the last typed wins: `grep -l
+// -L` lists the files WITHOUT a match and `grep -L -l` the ones with one
+// (measured on grep 3.11).
+export function listingMode(fl: FlagView): [boolean, boolean] {
+  let winner: string | null = null
+  for (const name of fl.typedOrder('args_l', 'files_without_match')) {
+    if (fl.asBool(name)) winner = name
+  }
+  return [winner === 'args_l', winner === 'files_without_match']
+}
+
 export function filenameMode(fl: FlagView): boolean | null {
   let mode: boolean | null = null
   for (const name of fl.typedOrder('H', 'h')) {
@@ -92,6 +108,7 @@ function reason(error: unknown): string {
 export function parseFlags(fl: FlagView): FlagSet {
   const mode = binaryMode(fl)
   const filename = filenameMode(fl)
+  const [filesOnly, filesWithoutMatch] = listingMode(fl)
   // GNU checks each context option as it is read, so the first bad one on
   // the line is the one named.
   const contexts = new Map<string, number | undefined>()
@@ -112,7 +129,8 @@ export function parseFlags(fl: FlagView): FlagSet {
     lineNumbers: fl.asBool('n'),
     byteOffsets: fl.asBool('byte_offset'),
     countOnly: fl.asBool('c'),
-    filesOnly: fl.asBool('args_l'),
+    filesOnly,
+    filesWithoutMatch,
     wholeWord: fl.asBool('w'),
     fixedString: fl.asBool('F'),
     // grep reads a basic expression unless -E says otherwise; -G asks for the
@@ -155,7 +173,7 @@ export async function grepGeneric(
       null,
       new IOResult({
         exitCode: 2,
-        stderr: ENC.encode(resolution.error ?? `${name}: usage: ${name} [flags] pattern [path]\n`),
+        stderr: ENC.encode(resolution.error ?? `${GREP_NO_PATTERN}\n`),
       }),
     ]
   let f: FlagSet
@@ -177,10 +195,7 @@ export async function grepGeneric(
   const first = paths[0]
   if (first === undefined) {
     try {
-      const source = guardInput(
-        resolveSource(opts.stdin, `${name}: usage: ${name} [flags] pattern [path]`),
-        opts,
-      )
+      const source = guardInput(resolveSource(opts.stdin, GREP_NO_PATTERN), opts)
       return [
         grepInput(source, pat, f, '(standard input)', f.withFilename && !f.noFilename, io),
         io,
@@ -194,7 +209,7 @@ export async function grepGeneric(
   const mounts = opts.ns?.mounts
   const rd = mountParentReaddir((p: string) => readdir(makeSpec(p, first)), mounts)
   const st = mountParentStat((p: string) => stat(makeSpec(p, first)), mounts)
-  if (!f.recursive && paths.length === 1 && !(f.filesOnly || f.quiet)) {
+  if (!f.recursive && paths.length === 1 && !(f.filesOnly || f.quiet || f.filesWithoutMatch)) {
     try {
       const info = await st(first.virtual)
       if (info.type === FileType.DIRECTORY)
@@ -240,6 +255,9 @@ export async function grepGeneric(
       if (info.type === FileType.DIRECTORY) {
         if (!f.recursive) {
           warn(`${name}: ${p.rawPath}: Is a directory`)
+          // GNU 3.11 still lists it under -L: nothing was read from it, so
+          // nothing in it matched.
+          if (f.filesWithoutMatch) yield ENC.encode(p.rawPath + '\n')
           return
         }
         for (const entry of await rd(p.virtual)) {

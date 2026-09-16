@@ -306,5 +306,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "fold [OPTION]... [FILE]..."
 }

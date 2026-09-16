@@ -93,6 +93,7 @@ function usageLine(
   subcommands: readonly [string, string][],
   style: UsageStyle,
 ): string {
+  if (spec.usage !== null) return `Usage: ${spec.usage}`
   const clap = style === UsageStyle.CLAP
   const bits = [name]
   if (spec.options.length > 0) bits.push(clap ? '[OPTIONS]' : '[flags]')

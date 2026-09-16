@@ -16,6 +16,7 @@ import { CommandSpec, Operand, Option } from '../types.ts'
 
 export const SPECS: Record<string, CommandSpec> = {
   gunzip: new CommandSpec({
+    usage: 'gunzip [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-k' }),
       new Option({ short: '-f' }),
@@ -25,6 +26,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   gzip: new CommandSpec({
+    usage: 'gzip [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-d' }),
       new Option({ short: '-k' }),
@@ -43,6 +45,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   tar: new CommandSpec({
+    usage: 'tar [OPTION...] [FILE]...',
     options: [
       new Option({ short: '-c' }),
       new Option({ short: '-x' }),
@@ -89,7 +92,10 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' })],
     rest: new Operand({ type: 'str' }),
   }),
-  zcat: new CommandSpec({ rest: new Operand({ type: 'path' }) }),
+  zcat: new CommandSpec({
+    usage: 'zcat [OPTION]... [FILE]...',
+    rest: new Operand({ type: 'path' }),
+  }),
   zip: new CommandSpec({
     options: [
       new Option({ short: '-r' }),

@@ -641,6 +641,7 @@ class MountEntry:
                 stat_path=stat_path,
                 readdir_path=context.readdir_path,
                 session_view=context.session_view,
+                value_occurrences=context.value_occurrences,
             )
 
             recording_token = push_mount_context(mount_prefix, self.mount_id)

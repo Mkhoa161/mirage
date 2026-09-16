@@ -87,3 +87,28 @@ def test_zgrep_stdin_h_labels_standard_input():
     stdout, io = _run_raw(ws, "zgrep -H bar", stdin=compressed)
     assert _bytes(stdout) == b"(standard input):bar\n"
     assert io.exit_code == 0
+
+
+def test_zgrep_b_prefixes_byte_offsets_in_grep_field_order():
+    ws, _ = _ws()
+    _run_raw(ws, "tee /data/m.gz", stdin=gzip.compress(b"hello\nworld\n"))
+    stdout, _ = _run_raw(ws, "zgrep -b o /data/m.gz")
+    assert _bytes(stdout) == b"0:hello\n6:world\n"
+    stdout, _ = _run_raw(ws, "zgrep -bn world /data/m.gz")
+    assert _bytes(stdout) == b"2:6:world\n"
+    stdout, _ = _run_raw(ws, "zgrep -bo o /data/m.gz")
+    assert _bytes(stdout) == b"4:o\n7:o\n"
+
+
+def test_zgrep_L_lists_the_matchless_archive_with_grep_status():
+    ws, _ = _ws()
+    _run_raw(ws, "tee /data/m.gz", stdin=gzip.compress(b"hello\n"))
+    _run_raw(ws, "tee /data/o.gz", stdin=gzip.compress(b"foo\n"))
+    stdout, io = _run_raw(ws, "zgrep -L hello /data/m.gz /data/o.gz")
+    assert _bytes(stdout) == b"/data/o.gz\n"
+    assert io.exit_code == 0
+    stdout, io = _run_raw(ws, "zgrep -L hello /data/o.gz")
+    assert _bytes(stdout) == b"/data/o.gz\n"
+    assert io.exit_code == 1
+    stdout, io = _run_raw(ws, "zgrep -L -l hello /data/m.gz /data/o.gz")
+    assert _bytes(stdout) == b"/data/m.gz\n"

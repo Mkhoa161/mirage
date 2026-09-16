@@ -18,6 +18,7 @@ from mirage.accessor.discord import DiscordAccessor
 from mirage.commands.builtin.discord.grep import (SEARCH_HONORED,
                                                   SEARCH_MAX_RESULTS)
 from mirage.commands.builtin.discord.io import resolve_glob
+from mirage.commands.builtin.generic.rg import RG_NO_PATTERN
 from mirage.commands.builtin.generic.rg import rg as generic_rg
 from mirage.commands.builtin.generic_bind.adapter import bound_op
 from mirage.commands.builtin.grep_pattern import pattern_arg
@@ -50,7 +51,7 @@ async def rg(accessor: DiscordAccessor, paths: list[PathSpec],
     fl = FlagView(opts.flags, spec=SPECS["rg"])
     pattern_str = pattern_arg(texts, fl)
     if pattern_str is None:
-        raise UsageError("rg: usage: rg [flags] pattern [path]")
+        raise UsageError(RG_NO_PATTERN)
 
     pushdown_warnings: list[str] = []
     # Output-shaping flags, a glob operand and a multi-operand line all need

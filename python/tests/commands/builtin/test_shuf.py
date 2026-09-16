@@ -552,3 +552,36 @@ def test_shuf_input_range_overflow_reaches_the_shell_with_its_clause():
     assert not _bytes(stdout)
     assert io.stderr == (b"shuf: invalid input range: '1-18446744073709551616'"
                          b": Value too large for defined data type\n")
+
+
+# GNU validates options as getopt hands them over, so the first bad one on
+# the line speaks, and a repeated -i or a second, different -o is its own
+# refusal. Measured on coreutils 9.7; mirrored in shuf.test.ts.
+@pytest.mark.parametrize("line,stderr", [
+    ("shuf -i 1-x -n abc", "shuf: invalid input range: '1-x'\n"),
+    ("shuf -n abc -i 1-x", "shuf: invalid line count: 'abc'\n"),
+    ("shuf -i 1-2 -i 3-4", "shuf: multiple -i options specified\n"),
+    ("shuf -i 1-2 -i 1-2", "shuf: multiple -i options specified\n"),
+    ("shuf -i 1-x -i 2-3", "shuf: invalid input range: '1-x'\n"),
+    ("shuf -i 1-2 -n abc -i 3-4", "shuf: invalid line count: 'abc'\n"),
+    ("shuf -i 1-2 -o /data/a -o /data/b",
+     "shuf: multiple output files specified\n"),
+    ("shuf -e a -i 1-2", "shuf: cannot combine -e and -i options\n"
+     "Try 'shuf --help' for more information.\n"),
+    ("shuf -i 1-2 /data/f", "shuf: extra operand '/data/f'\n"
+     "Try 'shuf --help' for more information.\n"),
+])
+def test_shuf_refuses_in_command_line_order(line, stderr):
+    ws, _ = _ws()
+    stdout, io = _run_raw(ws, line, cwd="/data")
+    assert io.exit_code == 1
+    assert io.stderr == stderr.encode()
+    assert not stdout
+
+
+def test_shuf_accepts_the_same_output_twice():
+    ws, _ = _ws()
+    _, io = _run_raw(ws, "shuf -i 1-1 -o /data/o -o /data/o", cwd="/data")
+    assert io.exit_code == 0
+    stdout, _ = _run_raw(ws, "cat /data/o")
+    assert _bytes(stdout) == b"1\n"

@@ -17,6 +17,7 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'grep':
     CommandSpec(
+        usage="grep [OPTION]... PATTERNS [FILE]...",
         options=(
             Option(short="-r"),
             Option(short="-R"),
@@ -27,6 +28,7 @@ SPECS: dict[str, CommandSpec] = {
             Option(short="-b", long="--byte-offset"),
             Option(short="-c"),
             Option(short="-l"),
+            Option(short="-L", long="--files-without-match"),
             Option(short="-w"),
             Option(short="-F"),
             Option(short="-E"),
@@ -76,6 +78,8 @@ SPECS: dict[str, CommandSpec] = {
             Option(short="-b", long="--byte-offset"),
             Option(short="-c"),
             Option(short="-l"),
+            # ripgrep spells this long only: its -L is --follow.
+            Option(long="--files-without-match"),
             Option(short="-w"),
             Option(short="-F"),
             Option(short="-o"),
@@ -98,6 +102,8 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sed':
     CommandSpec(
+        usage=
+        "sed [OPTION]... {script-only-if-no-other-script} [input-file]...",
         options=(
             Option(short="-i"),
             # -e takes a script and may repeat; joined with newlines.
@@ -225,10 +231,13 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'zgrep':
     CommandSpec(
+        usage="zgrep [OPTION]... [-e] PATTERN [FILE]...",
         options=(
             Option(short="-i"),
+            Option(short="-b", long="--byte-offset"),
             Option(short="-c"),
             Option(short="-l"),
+            Option(short="-L", long="--files-without-match"),
             Option(short="-n"),
             Option(short="-v"),
             Option(short="-e", type="str", multiple=True),

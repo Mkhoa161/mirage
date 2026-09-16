@@ -32,5 +32,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "chown [OPTION]... [OWNER][:[GROUP]] FILE..."
 }

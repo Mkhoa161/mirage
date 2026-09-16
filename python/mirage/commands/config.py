@@ -13,7 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import functools
-from collections.abc import Awaitable, Mapping
+from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Protocol, cast
 
@@ -86,6 +86,7 @@ class ExecContext:
     stat_path: StatPath | None = None
     readdir_path: ReaddirPath | None = None
     session_view: SessionView | None = None
+    value_occurrences: Sequence[tuple[str, str]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +147,13 @@ class CommandOpts:
         session_view (SessionView | None): The session plane's live,
             gated handle (reads and gate-cleared writes); ``env`` above
             stays the frozen process-view snapshot.
+        value_occurrences (Sequence[tuple[str, str]] | None): The
+            parser's record of every scalar value-flag occurrence the
+            line carried, as (kwarg name, raw value) in scan order. The
+            flag bag keeps one value per dest, so this is where a
+            repeated option's earlier value survives; a handler reads it
+            through ``FlagView(opts.flags, spec, opts.value_occurrences)``.
+            None outside a dispatch, where the bag is the record.
     """
 
     stdin: ByteSource | None = None
@@ -167,6 +175,7 @@ class CommandOpts:
     stat_path: StatPath | None = None
     readdir_path: ReaddirPath | None = None
     session_view: SessionView | None = None
+    value_occurrences: Sequence[tuple[str, str]] | None = None
 
 
 CommandFnResult = tuple[ByteSource | None, IOResult] | None

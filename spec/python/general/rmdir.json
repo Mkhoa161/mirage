@@ -108,5 +108,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "rmdir [OPTION]... DIRECTORY..."
 }

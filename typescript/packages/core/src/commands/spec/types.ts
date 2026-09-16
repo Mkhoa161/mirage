@@ -289,6 +289,7 @@ export interface CommandSpecInit {
   ignoreTokens?: Iterable<string>
   description?: string | null
   epilog?: string | null
+  usage?: string | null
   oldOptionStyle?: boolean
   operandBase?: string | null
 }
@@ -300,6 +301,13 @@ export class CommandSpec {
   readonly ignoreTokens: ReadonlySet<string>
   readonly description: string | null
   readonly epilog: string | null
+  // argparse's `usage`: the synopsis printed after `Usage: ` in place of the
+  // one synthesized from the slots, so a command that mimics a real program
+  // answers `--help` with that program's own first line (`grep [OPTION]...
+  // PATTERNS [FILE]...`, measured as the first line of `grep --help` on GNU
+  // grep 3.11). Bare, with no `Usage:` prefix, because the prefix belongs to
+  // the renderer.
+  readonly usage: string | null
   // tar's old option style: a first word with no leading dash is a
   // cluster of option letters whose arguments follow as separate words
   // (`tar xzf a.tgz`). Expanded by expandOldStyle before any other
@@ -326,6 +334,7 @@ export class CommandSpec {
     this.ignoreTokens = new ImmutableSet(init.ignoreTokens ?? [])
     this.description = init.description ?? null
     this.epilog = init.epilog ?? null
+    this.usage = init.usage ?? null
     this.oldOptionStyle = init.oldOptionStyle ?? false
     this.operandBase = init.operandBase ?? null
     // A subclass (CLISpec) still has its own fields to assign, so only
@@ -335,15 +344,3 @@ export class CommandSpec {
 }
 
 export type FlagValue = string | boolean | number | string[]
-
-/**
- * The one key in a flag bag that is not an option's dest: the parser's
- * per-occurrence record of the scalar value flags the line carried,
- * flattened to [dest, value, dest, value, ...] the way a `pair` option's
- * list is. `parseToKwargs` writes it, and only when the bag lost
- * something (one dest typed twice); `FlagView.valueOccurrences` is the
- * one reader. The leading dashes make it unspellable as a dest —
- * `flagKwargName` strips them off every real one — so no option can ever
- * collide with it. Mirrors Python's `VALUE_OCCURRENCES_KEY`.
- */
-export const VALUE_OCCURRENCES_KEY = '--value-occurrences'

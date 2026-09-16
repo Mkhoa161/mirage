@@ -86,6 +86,14 @@ export const MEMORY_EXHAUSTED = 'shuf: memory exhausted'
 // emits this one. Measured, ground truth SH1.
 export const OVERFLOW_CLAUSE = ': Value too large for defined data type'
 
+export const MULTIPLE_RANGES = 'shuf: multiple -i options specified'
+
+export const MULTIPLE_OUTPUTS = 'shuf: multiple output files specified'
+
+const TRY_HELP = "\nTry 'shuf --help' for more information."
+
+export const ECHO_WITH_RANGE = `shuf: cannot combine -e and -i options${TRY_HELP}`
+
 export const UINTMAX_MAX = 18446744073709551615n
 export const SIZE_MAX = 18446744073709551615n
 
@@ -282,12 +290,41 @@ export interface ShufFlags {
 // what `-i` does with the same overflow: `xstrtoumax` answering
 // LONGINT_OVERFLOW is fatal for `-i` and is quietly read as SIZE_MAX for `-n`,
 // so `shuf -n 99999999999999999999999999` exits 0. Measured, ground truth SH6.
-export function parseFlags(bag: Record<string, FlagValue>): ShufFlags | string {
-  const fl = new FlagView(bag, specOf('shuf'))
-  const countValue = fl.asStr('head_count')
-  if (countValue !== undefined && !UNSIGNED.test(countValue)) {
-    return `shuf: invalid line count: '${quoteText(countValue)}'\n`
+// Read shuf's flags once, refusing what GNU refuses in GNU's order.
+//
+// GNU validates each option as getopt hands it over, so the refusal that
+// wins is the first bad option ON THE LINE: `shuf -i 1-x -n abc` names the
+// range and `shuf -n abc -i 1-x` names the count (measured on coreutils
+// 9.7). That is why the three value options are walked as
+// `valueOccurrences` rather than read out of the bag, and it is also what
+// makes a repeat visible: a second `-i` is refused outright (`multiple -i
+// options specified`, even for the same range), and a second `-o` is
+// refused unless it spells the same word. `-e` with `-i` is checked after
+// the scan, so any per-option refusal outranks it. Mirrors `parse_flags`
+// in shuf.py.
+export function parseFlags(
+  bag: Record<string, FlagValue>,
+  occurrences?: readonly (readonly [string, string])[],
+): ShufFlags | string {
+  const fl = new FlagView(bag, specOf('shuf'), occurrences)
+  let inputRangeRaw: string | null = null
+  let outputRaw: string | null = null
+  for (const [dest, raw] of fl.valueOccurrences('head_count', 'input_range', 'output')) {
+    if (dest === 'head_count') {
+      if (!UNSIGNED.test(raw)) return `shuf: invalid line count: '${quoteText(raw)}'\n`
+    } else if (dest === 'input_range') {
+      if (inputRangeRaw !== null) return `${MULTIPLE_RANGES}\n`
+      const bounds = parseInputRange(raw)
+      if (typeof bounds === 'string') return rangeError(raw, bounds)
+      inputRangeRaw = raw
+    } else if (outputRaw !== null && outputRaw !== raw) {
+      return `${MULTIPLE_OUTPUTS}\n`
+    } else {
+      outputRaw = raw
+    }
   }
+  if (fl.asBool('echo') && inputRangeRaw !== null) return `${ECHO_WITH_RANGE}\n`
+  const countValue = fl.asStr('head_count')
   const count = countValue === undefined ? null : BigInt(countValue)
   return {
     count: count === null || count <= SIZE_MAX ? count : SIZE_MAX,
@@ -306,7 +343,7 @@ export async function shufGeneric(
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
   write: (p: PathSpec, data: Uint8Array) => Promise<void>,
 ): Promise<CommandFnResult> {
-  const parsed = parseFlags(opts.flags)
+  const parsed = parseFlags(opts.flags, opts.valueOccurrences)
   if (typeof parsed === 'string') {
     return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }
@@ -328,6 +365,18 @@ export async function shufGeneric(
   // range it names can hold 2**64 values (SH5).
   let out: string[] | null = null
   if (inputRange !== null) {
+    const extra = paths[0]
+    if (extra !== undefined) {
+      // GNU: -i names the input, so a file operand is one too many.
+      const word = extra.rawPath !== '' ? extra.rawPath : extra.virtual
+      return [
+        null,
+        new IOResult({
+          exitCode: 1,
+          stderr: ENC.encode(`shuf: extra operand '${quoteText(word)}'${TRY_HELP}\n`),
+        }),
+      ]
+    }
     // `-i` takes two unsigned bounds with the low one no greater than the
     // high one. Every other shape is one message, so a negative low bound
     // (`-2-1`) and a decreasing range (`3-1`) are refused here rather than

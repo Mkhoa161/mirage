@@ -18,8 +18,9 @@ from mirage.commands.builtin.generic import split as split_generic
 from mirage.commands.errors import UsageError
 
 from mirage.commands.builtin.generic.split import (  # isort: skip
-    parse_bytes_value, parse_chunks_value, parse_lines_value, parse_separator,
-    parse_suffix_length, parse_suffix_start)
+    ChunkKind, ChunkSpec, chunk_parts, parse_bytes_value, parse_chunks_value,
+    parse_lines_value, parse_separator, parse_suffix_length,
+    parse_suffix_start)
 
 _TRY = "\nTry 'split --help' for more information."
 _ALPHA_SUFFIXES = split_generic._ALPHA_SUFFIXES
@@ -51,7 +52,7 @@ def test_counts_accept_one_leading_plus_and_whitespace():
     assert parse_bytes_value(" 10") == 10
     assert parse_bytes_value("+10K") == 10240
     assert parse_lines_value("+2") == 2
-    assert parse_chunks_value("l/+2") == 2
+    assert parse_chunks_value("l/+2").count == 2
     assert parse_suffix_length("+2") == 2
     # -a is the one count GNU lets be zero, signed or not.
     assert parse_suffix_length("+0") == 0
@@ -95,8 +96,8 @@ def test_lines_rejects_junk_zero_and_suffixes():
 
 
 def test_chunks_quotes_only_the_count_of_a_spec():
-    assert parse_chunks_value("4") == 4
-    assert parse_chunks_value("l/4") == 4
+    assert parse_chunks_value("4").count == 4
+    assert parse_chunks_value("l/4").count == 4
     with pytest.raises(UsageError) as exc:
         parse_chunks_value("l/abc")
     assert str(exc.value) == "split: invalid number of chunks: 'abc'"
@@ -109,9 +110,9 @@ def test_chunks_validates_the_head_components():
     # The head takes an l/r kind letter or a signed K, never a signed kind:
     # `+2/3` and `l/+2/3` parse, while `+l/2` and `x/3` quote the whole
     # spec (pinned against coreutils 9.4).
-    assert parse_chunks_value("2/3") == 3
-    assert parse_chunks_value("+2/3") == 3
-    assert parse_chunks_value("l/+2/3") == 3
+    assert parse_chunks_value("2/3").count == 3
+    assert parse_chunks_value("+2/3").count == 3
+    assert parse_chunks_value("l/+2/3").count == 3
     with pytest.raises(UsageError) as exc:
         parse_chunks_value("+l/2")
     assert str(exc.value) == "split: invalid number of chunks: '+l/2'"
@@ -170,7 +171,7 @@ def test_chunks_names_the_component_gnu_names(value, named):
     ("r/2/4", 4),
 ])
 def test_chunks_accepts_the_shapes_gnu_accepts(value, count):
-    assert parse_chunks_value(value) == count
+    assert parse_chunks_value(value).count == count
 
 
 def test_suffix_length_rejects_junk_but_allows_zero():
@@ -382,3 +383,84 @@ def test_hex_suffix_start_clause_quotes_the_word(value, escaped):
         f"split: '{escaped}': invalid start value for hexadecimal suffix" +
         _TRY)
     assert exc.value.exit_code == 1
+
+
+# Every row measured on coreutils 9.7 (debian:stable-slim). Mirrored in
+# split.test.ts.
+_LINES = b"line1\nline2\nline3\nline4\nline5\n"
+
+
+def test_chunk_spec_reads_k_of_n():
+    assert parse_chunks_value("2/4") == ChunkSpec(ChunkKind.BYTES, 4, 2)
+    assert parse_chunks_value("+2/3") == ChunkSpec(ChunkKind.BYTES, 3, 2)
+    assert parse_chunks_value("l/2/4") == ChunkSpec(ChunkKind.LINES, 4, 2)
+    assert parse_chunks_value("r/2/4") == ChunkSpec(ChunkKind.ROUND_ROBIN, 4,
+                                                    2)
+    assert parse_chunks_value("l/4") == ChunkSpec(ChunkKind.LINES, 4)
+
+
+@pytest.mark.parametrize("value,message", [
+    ("4/3", "split: invalid chunk number: '4'"),
+    ("0/3", "split: invalid chunk number: '0'"),
+    ("l/0/3", "split: invalid chunk number: '0'"),
+    ("3/0", "split: invalid number of chunks: '0'"),
+])
+def test_chunk_number_is_range_checked_after_n(value, message):
+    with pytest.raises(UsageError) as exc:
+        parse_chunks_value(value)
+    assert str(exc.value) == message
+    assert exc.value.exit_code == 1
+
+
+def test_byte_chunks_spread_the_remainder_over_the_first_chunks():
+    assert chunk_parts(b"abcdefg", parse_chunks_value("3"),
+                       b"\n") == [b"abc", b"de", b"fg"]
+    assert chunk_parts(b"ab", parse_chunks_value("5"),
+                       b"\n") == [b"a", b"b", b"", b"", b""]
+    assert chunk_parts(b"", parse_chunks_value("3"), b"\n") == [b"", b"", b""]
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("l/2", [b"line1\nline2\nline3\n", b"line4\nline5\n"]),
+    ("l/3", [b"line1\nline2\n", b"line3\nline4\n", b"line5\n"]),
+    ("l/4", [b"line1\nline2\n", b"line3\n", b"line4\n", b"line5\n"]),
+    ("l/7",
+     [b"line1\n", b"line2\n", b"line3\n", b"", b"line4\n", b"line5\n", b""]),
+])
+def test_line_chunks_keep_records_whole(value, expected):
+    assert chunk_parts(_LINES, parse_chunks_value(value), b"\n") == expected
+
+
+def test_line_chunks_leave_a_swallowed_chunk_empty():
+    assert chunk_parts(b"aaaaaa\nb\n", parse_chunks_value("l/3"),
+                       b"\n") == [b"aaaaaa\n", b"", b"b\n"]
+    assert chunk_parts(b"aaaaa\nbb\n", parse_chunks_value("l/3"),
+                       b"\n") == [b"aaaaa\n", b"", b"bb\n"]
+    assert chunk_parts(b"aaaa\nb\nc\nd\n", parse_chunks_value("l/2"),
+                       b"\n") == [b"aaaa\nb\n", b"c\nd\n"]
+
+
+def test_line_chunks_give_an_unterminated_tail_to_its_chunk():
+    assert chunk_parts(b"aa\nbb\ncc", parse_chunks_value("l/2"),
+                       b"\n") == [b"aa\nbb\n", b"cc"]
+    assert chunk_parts(b"ab", parse_chunks_value("l/3"),
+                       b"\n") == [b"ab", b"", b""]
+
+
+def test_round_robin_deals_records_in_turn():
+    assert chunk_parts(_LINES, parse_chunks_value("r/3"), b"\n") == [
+        b"line1\nline4\n", b"line2\nline5\n", b"line3\n"
+    ]
+
+
+def test_hex_start_values_are_lower_case_only():
+    with pytest.raises(UsageError) as exc:
+        parse_suffix_start("A", True, 2)
+    assert str(exc.value) == ("split: 'A': invalid start value for "
+                              "hexadecimal suffix" + _TRY)
+    assert parse_suffix_start("a", True, 2) == 10
+
+
+def test_an_empty_numeric_start_is_zero_with_the_width_pinned():
+    assert parse_suffix_start("", False, 2) == 0
+    assert parse_suffix_start("", True, 2) == 0

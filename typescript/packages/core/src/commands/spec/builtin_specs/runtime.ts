@@ -145,6 +145,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   date: new CommandSpec({
+    usage: 'date [OPTION]... [+FORMAT]',
     description: 'Print or set the system date and time.',
     options: [
       new Option({
@@ -159,6 +160,7 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'str' })],
   }),
   expr: new CommandSpec({
+    usage: 'expr EXPRESSION',
     description: 'Evaluate expressions.',
     rest: new Operand({ type: 'str' }),
   }),
@@ -211,6 +213,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str', remainder: true }),
   }),
   mktemp: new CommandSpec({
+    usage: 'mktemp [OPTION]... [TEMPLATE]',
     options: [
       new Option({ short: '-d', long: '--directory' }),
       new Option({ short: '-p', type: 'path' }),
@@ -256,6 +259,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str', remainder: true }),
   }),
   sleep: new CommandSpec({
+    usage: 'sleep NUMBER[SUFFIX]...',
     description: 'Delay for a specified amount of time.',
     rest: new Operand({ type: 'str' }),
   }),

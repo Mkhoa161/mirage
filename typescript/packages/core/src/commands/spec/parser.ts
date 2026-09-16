@@ -22,7 +22,7 @@ import {
   NUMERIC_SHORT,
 } from './constants.ts'
 import { expandOldStyle } from './oldstyle.ts'
-import { type CommandSpec, type ValueType, type FlagValue, VALUE_OCCURRENCES_KEY } from './types.ts'
+import type { CommandSpec, ValueType, FlagValue } from './types.ts'
 
 export interface ParsedArgsInit {
   flags: Record<string, FlagValue>
@@ -195,7 +195,7 @@ function setValueFlag(
       flags[name] = [value]
     }
   } else {
-    occurrences.push([name, value])
+    occurrences.push([flagKwargName(name), value])
     Reflect.deleteProperty(flags, name)
     flags[name] = value
   }
@@ -763,42 +763,10 @@ export function parseCommand(
   })
 }
 
-/**
- * The occurrence record to carry in the kwargs bag, or null.
- *
- * The bag is a faithful record of a line that typed each scalar option at
- * most once: one value per dest, in scan order. Only a repeat makes it lie
- * — the earlier value is gone and the dest's position is the later
- * occurrence's — so only a repeat needs the record carried alongside, and
- * every other command line's bag stays exactly what it was. Flattened to
- * [dest, value, ...] because a bag value is a string, a boolean, a number
- * or an array of string, which is the same reason a `pair` option flattens
- * its (name, value) list. Mirrors Python's `_shadowed_occurrences`.
- */
-function shadowedOccurrences(occurrences: readonly [string, string][]): string[] | null {
-  const seen = new Set<string>()
-  let repeated = false
-  for (const [dest] of occurrences) {
-    if (seen.has(dest)) {
-      repeated = true
-      break
-    }
-    seen.add(dest)
-  }
-  if (!repeated) return null
-  const flat: string[] = []
-  for (const [dest, value] of occurrences) {
-    flat.push(flagKwargName(dest), value)
-  }
-  return flat
-}
-
 export function parseToKwargs(parsed: ParsedArgs): Record<string, FlagValue> {
   const result: Record<string, FlagValue> = {}
   for (const [key, value] of Object.entries(parsed.flags)) {
     result[flagKwargName(key)] = value
   }
-  const shadowed = shadowedOccurrences(parsed.valueOccurrences)
-  if (shadowed !== null) result[VALUE_OCCURRENCES_KEY] = shadowed
   return result
 }

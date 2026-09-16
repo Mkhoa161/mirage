@@ -345,5 +345,6 @@
     {
       "type": "path"
     }
-  ]
+  ],
+  "usage": "uniq [OPTION]... [INPUT [OUTPUT]]"
 }

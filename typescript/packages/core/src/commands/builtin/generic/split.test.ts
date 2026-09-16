@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { CommandOpts } from '../../config.ts'
 import { UsageError } from '../../errors.ts'
-import { splitGeneric } from './split.ts'
+import { chunkParts, parseChunksValue, splitGeneric } from './split.ts'
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
@@ -149,7 +149,6 @@ describe('split flag values', () => {
     [{ bytes: ' 3' }, 'spaced bytes'],
     [{ lines: '+1' }, 'signed lines'],
     [{ number: 'l/+2' }, 'signed chunk spec'],
-    [{ number: '+2/3' }, 'signed chunk K'],
     [{ suffix_length: '+3', lines: '1' }, 'signed suffix length'],
   ] as [CommandOpts['flags'], string][])('accepts %j (%s)', async (flags) => {
     const written = await runSplit(flags, 'ab\ncd\n')
@@ -252,12 +251,137 @@ describe('split -n names the component GNU names', () => {
     )
   })
 
-  it.each([['4'], ['l/4'], ['r/4'], ['2/4'], ['l/2/4'], ['r/2/4']])(
-    'accepts the shape %j',
-    async (value) => {
-      expect(Object.keys(await runSplit({ number: value })).length).toBeGreaterThan(0)
-    },
-  )
+  it.each([['4'], ['l/4'], ['r/4']])('accepts the shape %j', async (value) => {
+    expect(Object.keys(await runSplit({ number: value })).length).toBe(4)
+  })
+
+  it.each([
+    ['2/4', { kind: 'bytes', count: 4, only: 2 }],
+    ['+2/3', { kind: 'bytes', count: 3, only: 2 }],
+    ['l/2/4', { kind: 'l', count: 4, only: 2 }],
+    ['r/2/4', { kind: 'r', count: 4, only: 2 }],
+  ])('reads %j as chunk K of N', (value, spec) => {
+    expect(parseChunksValue(value)).toEqual(spec)
+  })
+
+  // coreutils 9.7: `4/3` and `0/3` name K, `3/0` names N.
+  it.each([
+    ['4/3', "split: invalid chunk number: '4'"],
+    ['0/3', "split: invalid chunk number: '0'"],
+    ['l/0/3', "split: invalid chunk number: '0'"],
+    ['3/0', "split: invalid number of chunks: '0'"],
+  ])('refuses %j as %s', (value, message) => {
+    expect(() => parseChunksValue(value)).toThrow(new UsageError(message, 1))
+  })
+})
+
+// Every row measured on coreutils 9.7 (debian:stable-slim).
+describe('split -n cuts the way GNU cuts', () => {
+  const LINES = ENC.encode('line1\nline2\nline3\nline4\nline5\n')
+  const text = (parts: Uint8Array[]): string[] => parts.map((p) => DEC.decode(p))
+
+  it('spreads the byte remainder over the first chunks', () => {
+    expect(text(chunkParts(ENC.encode('abcdefg'), parseChunksValue('3'), 0x0a))).toEqual([
+      'abc',
+      'de',
+      'fg',
+    ])
+  })
+
+  it('leaves the tail chunks empty when the input is shorter than N', () => {
+    expect(text(chunkParts(ENC.encode('ab'), parseChunksValue('5'), 0x0a))).toEqual([
+      'a',
+      'b',
+      '',
+      '',
+      '',
+    ])
+    expect(text(chunkParts(new Uint8Array(0), parseChunksValue('3'), 0x0a))).toEqual(['', '', ''])
+  })
+
+  it.each([
+    ['l/2', ['line1\nline2\nline3\n', 'line4\nline5\n']],
+    ['l/3', ['line1\nline2\n', 'line3\nline4\n', 'line5\n']],
+    ['l/4', ['line1\nline2\n', 'line3\n', 'line4\n', 'line5\n']],
+    ['l/7', ['line1\n', 'line2\n', 'line3\n', '', 'line4\n', 'line5\n', '']],
+  ])('keeps records whole under %j', (value, expected) => {
+    expect(text(chunkParts(LINES, parseChunksValue(value), 0x0a))).toEqual(expected)
+  })
+
+  it('leaves a chunk a long record swallowed whole empty', () => {
+    expect(text(chunkParts(ENC.encode('aaaaaa\nb\n'), parseChunksValue('l/3'), 0x0a))).toEqual([
+      'aaaaaa\n',
+      '',
+      'b\n',
+    ])
+    expect(text(chunkParts(ENC.encode('aaaaa\nbb\n'), parseChunksValue('l/3'), 0x0a))).toEqual([
+      'aaaaa\n',
+      '',
+      'bb\n',
+    ])
+    expect(text(chunkParts(ENC.encode('aaaa\nb\nc\nd\n'), parseChunksValue('l/2'), 0x0a))).toEqual([
+      'aaaa\nb\n',
+      'c\nd\n',
+    ])
+  })
+
+  it('gives an unterminated tail to the chunk it started in', () => {
+    expect(text(chunkParts(ENC.encode('aa\nbb\ncc'), parseChunksValue('l/2'), 0x0a))).toEqual([
+      'aa\nbb\n',
+      'cc',
+    ])
+    expect(text(chunkParts(ENC.encode('ab'), parseChunksValue('l/3'), 0x0a))).toEqual([
+      'ab',
+      '',
+      '',
+    ])
+  })
+
+  it('deals records round robin', () => {
+    expect(text(chunkParts(LINES, parseChunksValue('r/3'), 0x0a))).toEqual([
+      'line1\nline4\n',
+      'line2\nline5\n',
+      'line3\n',
+    ])
+  })
+
+  it('writes chunk K of N to stdout and no file', async () => {
+    const written: Record<string, string> = {}
+    const opts = {
+      stdin: ENC.encode('line1\nline2\nline3\nline4\nline5\n'),
+      flags: { number: 'l/2/3' },
+      filetypeFns: null,
+      cwd: '/',
+    } as CommandOpts
+    const result = await splitGeneric(
+      [],
+      opts,
+      () => {
+        throw new Error('stdin only')
+      },
+      (p, data) => {
+        written[p.mountPath] = DEC.decode(data)
+        return Promise.resolve()
+      },
+    )
+    expect(result).not.toBeNull()
+    const [stdout] = result as [Uint8Array, unknown]
+    expect(DEC.decode(stdout)).toBe('line3\nline4\n')
+    expect(written).toEqual({})
+  })
+})
+
+describe('split suffix starts follow GNU', () => {
+  it('refuses an upper-case hex start value', async () => {
+    await expect(runSplit({ bytes: '2', hex_suffixes: 'A' }, 'abcdef\n')).rejects.toThrow(
+      new UsageError("split: 'A': invalid start value for hexadecimal suffix" + TRY, 1),
+    )
+  })
+
+  it('reads an empty numeric start as 0 with the width pinned', async () => {
+    const written = await runSplit({ bytes: '3', numeric_suffixes: '' }, 'abcdef\n')
+    expect(Object.keys(written).sort()).toEqual(['x00', 'x01', 'x02'])
+  })
 })
 
 // All four of split's count clauses name the refused word through gnulib's

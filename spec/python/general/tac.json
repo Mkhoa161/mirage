@@ -301,5 +301,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "tac [OPTION]... [FILE]..."
 }

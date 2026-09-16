@@ -366,5 +366,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "ls [OPTION]... [FILE]..."
 }

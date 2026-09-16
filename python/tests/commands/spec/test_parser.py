@@ -17,8 +17,7 @@ import pytest
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
-from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
-                                        Operand, Option)
+from mirage.commands.spec.types import CommandSpec, Operand, Option
 
 
 def test_grep_positional_pattern_then_path():
@@ -817,22 +816,24 @@ def test_js_flags_before_the_first_operand_are_still_the_interpreters():
 
 # The per-occurrence record beside the bag. It exists because last-wins
 # throws a value away, and GNU validates every value as getopt hands it
-# over, so a command refusing the leftmost bad one (nl) needs the value
-# the bag dropped.
+# over, so a command refusing the leftmost bad one (nl) or refusing a
+# repeat outright (shuf -i) needs the value the bag dropped. It rides
+# CommandOpts as a typed field, never the bag, and is keyed the way the
+# bag is (kwarg names) so a FlagView can filter it by the same names.
 def test_value_occurrences_record_every_scalar_occurrence_in_scan_order():
     parsed = parse_command(SPECS["nl"], ["-w", "abc", "-v", "xyz", "-w", "3"],
                            "/")
-    assert parsed.value_occurrences == [("--number-width", "abc"),
-                                        ("--starting-line-number", "xyz"),
-                                        ("--number-width", "3")]
+    assert parsed.value_occurrences == [("number_width", "abc"),
+                                        ("starting_line_number", "xyz"),
+                                        ("number_width", "3")]
     # The bag is untouched: still one value per dest, still last-wins.
     assert parsed.flags["--number-width"] == "3"
 
 
 def test_value_occurrences_fold_both_spellings_onto_one_dest():
     parsed = parse_command(SPECS["nl"], ["--number-width=abc", "-w", "3"], "/")
-    assert parsed.value_occurrences == [("--number-width", "abc"),
-                                        ("--number-width", "3")]
+    assert parsed.value_occurrences == [("number_width", "abc"),
+                                        ("number_width", "3")]
 
 
 def test_value_occurrences_skip_an_accumulating_option():
@@ -848,33 +849,24 @@ def test_value_occurrences_skip_boolean_flags():
     assert parsed.value_occurrences == []
 
 
-def test_the_kwargs_bag_is_unchanged_when_no_scalar_option_repeats():
-    """The record rides the bag only when the bag lost something.
+def test_the_kwargs_bag_never_carries_the_record():
+    """The record is a typed field of its own, not a key in the bag.
 
-    Every command parses through this machinery, so an unconditional
-    extra key would land in every handler's flag bag. A line that typed
-    each scalar option once has lost nothing: the bag is already the
-    record, in scan order.
+    Every command parses through this machinery, so a key in the bag
+    would land in every handler's flag bag, untyped and unreadable
+    through a spec-bound FlagView (no spec declares it as a dest). The
+    bag stays exactly the line's options, one value per scalar dest.
     """
-    parsed = parse_command(SPECS["nl"], ["-w", "3", "-v", "5"], "/")
-    assert parse_to_kwargs(parsed) == {
-        "number_width": "3",
-        "starting_line_number": "5",
-    }
-
-
-def test_the_kwargs_bag_carries_the_record_once_a_scalar_repeats():
     parsed = parse_command(SPECS["nl"], ["-w", "abc", "-w", "3"], "/")
-    assert parse_to_kwargs(parsed) == {
-        "number_width": "3",
-        VALUE_OCCURRENCES_KEY: ["number_width", "abc", "number_width", "3"],
-    }
+    assert parse_to_kwargs(parsed) == {"number_width": "3"}
 
 
-def test_the_record_in_the_bag_is_read_back_as_typed_pairs():
+def test_the_record_is_read_back_as_typed_pairs():
     parsed = parse_command(SPECS["nl"], ["-w", "abc", "-v", "xyz", "-w", "3"],
                            "/")
-    fl = FlagView(parse_to_kwargs(parsed), spec=SPECS["nl"])
+    fl = FlagView(parse_to_kwargs(parsed),
+                  spec=SPECS["nl"],
+                  occurrences=parsed.value_occurrences)
     assert fl.value_occurrences("number_width", "starting_line_number") == [
         ("number_width", "abc"),
         ("starting_line_number", "xyz"),
@@ -886,12 +878,10 @@ def test_the_record_in_the_bag_is_read_back_as_typed_pairs():
     ]
 
 
-def test_occurrences_fall_back_to_the_bag_when_nothing_repeated():
-    """Without a repeat each dest sits at its own occurrence's position."""
+def test_occurrences_fall_back_to_the_bag_without_a_record():
+    """A view built from a bag alone reads each dest at its own position."""
     parsed = parse_command(SPECS["nl"], ["-v", "xyz", "-w", "abc"], "/")
-    kwargs = parse_to_kwargs(parsed)
-    assert VALUE_OCCURRENCES_KEY not in kwargs
-    fl = FlagView(kwargs, spec=SPECS["nl"])
+    fl = FlagView(parse_to_kwargs(parsed), spec=SPECS["nl"])
     assert fl.value_occurrences("number_width", "starting_line_number") == [
         ("starting_line_number", "xyz"),
         ("number_width", "abc"),
@@ -899,14 +889,14 @@ def test_occurrences_fall_back_to_the_bag_when_nothing_repeated():
 
 
 def test_a_repeat_elsewhere_does_not_disturb_another_option_family():
-    """grep's accumulating options are untouched by the record's arrival."""
+    """grep's accumulating options are untouched by the record."""
     parsed = parse_command(SPECS["grep"],
                            ["-e", "a", "-e", "b", "-m", "1", "-m", "2", "x"],
                            "/")
     kwargs = parse_to_kwargs(parsed)
     assert kwargs["e"] == ["a", "b"]
     assert kwargs["m"] == "2"
-    assert kwargs[VALUE_OCCURRENCES_KEY] == ["m", "1", "m", "2"]
+    assert parsed.value_occurrences == [("m", "1"), ("m", "2")]
 
 
 # A boolean long handed a value is reported as its own kind, not as an

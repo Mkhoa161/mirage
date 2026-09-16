@@ -484,17 +484,19 @@ async def handle_command(
             node.stderr = warn_bytes + (node.stderr or b"")
         return stdout, io, node
 
-    stdout, io = await run_on_mount(registry,
-                                    session,
-                                    dispatch,
-                                    namespace,
-                                    cmd_name,
-                                    paths,
-                                    texts,
-                                    flag_kwargs,
-                                    stdin=stdin,
-                                    mount=mount,
-                                    routing_decision=routing_decision)
+    stdout, io = await run_on_mount(
+        registry,
+        session,
+        dispatch,
+        namespace,
+        cmd_name,
+        paths,
+        texts,
+        flag_kwargs,
+        stdin=stdin,
+        mount=mount,
+        routing_decision=routing_decision,
+        value_occurrences=single_parsed.value_occurrences)
     if cmd_name == "find":
         stdout = await _finish_find(stdout,
                                     io,

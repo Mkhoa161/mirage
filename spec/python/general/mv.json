@@ -165,5 +165,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "mv [OPTION]... [-T] SOURCE DEST"
 }

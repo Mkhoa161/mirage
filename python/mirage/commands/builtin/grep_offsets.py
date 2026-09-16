@@ -45,24 +45,6 @@ def encode_line(text: str) -> bytes:
     return text.encode("utf-8", errors="surrogateescape")
 
 
-def printable(text: str) -> str:
-    """One output line, with every smuggled byte back to U+FFFD.
-
-    A scan that answers in ``list[str]`` hands its lines to
-    ``format_records``, which encodes strictly, so a surrogate escape
-    would raise there rather than print. This is the one place the
-    round-trip is deliberately given up, and it gives up exactly what
-    ``errors="replace"`` used to give up, so what reaches stdout is
-    unchanged; only the offsets computed before it are now right. A
-    streaming path never needs it, because it encodes with
-    ``encode_line`` and prints the bytes GNU prints.
-
-    Args:
-        text (str): a rendered output line.
-    """
-    return encode_line(text).decode("utf-8", errors="replace")
-
-
 def line_offsets(lines: Sequence[str]) -> list[int]:
     """Byte offset of each line's own first byte within the whole input.
 

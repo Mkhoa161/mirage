@@ -13,6 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 from mirage.accessor.gmail import GmailAccessor
+from mirage.commands.builtin.generic.rg import RG_NO_PATTERN
 from mirage.commands.builtin.generic.rg import rg as generic_rg
 from mirage.commands.builtin.generic_bind.adapter import bound_op
 from mirage.commands.builtin.gmail.grep import (SEARCH_HONORED,
@@ -42,7 +43,7 @@ async def rg(accessor: GmailAccessor, paths: list[PathSpec], texts: list[str],
     fl = FlagView(opts.flags, spec=SPECS["rg"])
     pattern_str = pattern_arg(texts, fl)
     if pattern_str is None:
-        raise UsageError("rg: usage: rg [flags] pattern [path]")
+        raise UsageError(RG_NO_PATTERN)
     # Same gate as gmail grep, from the same table: only a lone concrete
     # operand with no reshaping flag may be answered by the search API.
     operand = pushdown_operand(paths, opts.flags, pattern_str, SEARCH_HONORED)

@@ -490,12 +490,12 @@ describe('offsets over a smuggled byte', () => {
     expect(grepLines('/f.txt', ['\udcffa'], /a/, lineOpts({ byteOffsets: true }))).toEqual(['1:a'])
   })
 
-  it('replaces a smuggled byte on the way out of a list-returning scan', () => {
-    // A list-returning scan hands its lines to `formatRecords`, so the byte
-    // comes back as U+FFFD -- exactly what a replacing decode used to give,
-    // with the offset now right.
+  it('keeps a smuggled byte on the way out of a list-returning scan', () => {
+    // A list-returning scan hands its lines to `formatRecords`, which puts a
+    // sentinel back as the byte it stands for, so the line keeps it: GNU
+    // grep and ripgrep both print the byte raw.
     expect(
       grepLines('/f.txt', ['\udcffa'], /a/, lineOpts({ onlyMatching: false, byteOffsets: true })),
-    ).toEqual(['0:�a'])
+    ).toEqual(['0:\udcffa'])
   })
 })

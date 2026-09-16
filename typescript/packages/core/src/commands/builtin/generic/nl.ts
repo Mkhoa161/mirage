@@ -465,8 +465,11 @@ export interface NlFlags {
 //
 // Returns the stderr text instead of the struct when GNU refuses the line,
 // the shape every sibling generic's parseFlags uses.
-export function parseFlags(bag: Record<string, FlagValue>): NlFlags | string {
-  const fl = new FlagView(bag, specOf('nl'))
+export function parseFlags(
+  bag: Record<string, FlagValue>,
+  occurrences?: readonly (readonly [string, string])[],
+): NlFlags | string {
+  const fl = new FlagView(bag, specOf('nl'), occurrences)
   const optionErr = optionErrors(fl)
   if (optionErr !== null) return optionErr
   const rawDelimiter = fl.asStr('section_delimiter')
@@ -515,7 +518,7 @@ export async function nlGeneric(
   opts: CommandOpts,
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
 ): Promise<CommandFnResult> {
-  const parsed = parseFlags(opts.flags)
+  const parsed = parseFlags(opts.flags, opts.valueOccurrences)
   if (typeof parsed === 'string') {
     return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }

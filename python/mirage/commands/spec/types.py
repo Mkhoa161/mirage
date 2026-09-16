@@ -102,16 +102,6 @@ ParsedFlagValue: TypeAlias = str | bool | int | list[str]
 FlagValue: TypeAlias = (ParsedFlagValue | PathSpec | list[PathSpec]
                         | list[str | PathSpec])
 
-# The one key in a flag bag that is not an option's dest: the parser's
-# per-occurrence record of the scalar value flags the line carried,
-# flattened to [dest, value, dest, value, ...] the way a ``pair``
-# option's list is. ``parse_to_kwargs`` writes it and only when the bag
-# lost something (one dest typed twice); ``FlagView.value_occurrences``
-# is the one reader. The leading dashes make it unspellable as a dest --
-# ``flag_kwarg_name`` strips them off every real one -- so no option can
-# ever collide with it.
-VALUE_OCCURRENCES_KEY = "--value-occurrences"
-
 
 @dataclass(frozen=True)
 class Option:
@@ -265,6 +255,13 @@ class CommandSpec:
     ignore_tokens: frozenset[str] = frozenset()
     description: str | None = None
     epilog: str | None = None
+    # argparse's ``usage``: the synopsis printed after ``Usage: `` in
+    # place of the one synthesized from the slots, so a command that
+    # mimics a real program answers ``--help`` with that program's own
+    # first line (``grep [OPTION]... PATTERNS [FILE]...``, measured as
+    # the first line of ``grep --help`` on GNU grep 3.11). Bare, with
+    # no ``Usage:`` prefix, because the prefix belongs to the renderer.
+    usage: str | None = None
     # tar's old option style: a first word with no leading dash is a
     # cluster of option letters whose arguments follow as separate words
     # (`tar xzf a.tgz`). Expanded by expand_old_style before any other

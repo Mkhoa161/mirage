@@ -16,6 +16,7 @@ import { CommandSpec, Operand, Option } from '../types.ts'
 
 export const SPECS: Record<string, CommandSpec> = {
   df: new CommandSpec({
+    usage: 'df [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-h' }),
       new Option({ short: '-H' }),
@@ -29,6 +30,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   du: new CommandSpec({
+    usage: 'du [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-h' }),
       new Option({ short: '-s' }),
@@ -51,6 +53,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   find: new CommandSpec({
+    usage: 'find [-H] [-L] [-P] [-Olevel] [-D debugopts] [path...] [expression]',
     options: [
       new Option({ short: '-name', type: 'str', multiple: true }),
       new Option({ short: '-type', type: 'str', multiple: true }),
@@ -94,6 +97,7 @@ export const SPECS: Record<string, CommandSpec> = {
     ignoreTokens: ['(', ')', '!'],
   }),
   ls: new CommandSpec({
+    usage: 'ls [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-l' }),
       new Option({ short: '-a', long: '--all' }),
@@ -133,6 +137,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   stat: new CommandSpec({
+    usage: 'stat [OPTION]... FILE...',
     options: [
       new Option({ short: '-c', type: 'str' }),
       new Option({ short: '-f', type: 'str' }),

@@ -16,7 +16,6 @@ import { describe, expect, it } from 'vitest'
 import { materialize } from '../../../io/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { parseCommand, parseToKwargs } from '../../spec/parser.ts'
-import type { FlagValue } from '../../spec/types.ts'
 import type { CommandOpts } from '../../config.ts'
 import { nlGeneric, parseFlags } from './nl.ts'
 
@@ -32,12 +31,10 @@ async function* stdinOf(text: string): AsyncIterable<Uint8Array> {
   yield ENC.encode(text)
 }
 
-async function run(
-  flags: Record<string, FlagValue>,
-): Promise<{ exit: number; stdout: string; stderr: string }> {
+async function run(line: Line): Promise<{ exit: number; stdout: string; stderr: string }> {
   const opts = {
     stdin: stdinOf('x\n'),
-    flags,
+    ...line,
     filetypeFns: null,
     cwd: '/',
     resource: { kind: 'ram' } as never,
@@ -60,8 +57,18 @@ async function run(
 // hand-written record would be assuming the very thing under test; these
 // cases go through the spec parser so the bag carries whatever order the
 // parser actually preserves.
-function nlBag(...argv: string[]): Record<string, FlagValue> {
-  return parseToKwargs(parseCommand(specOf('nl'), argv, '/'))
+// The record rides beside the bag the way the dispatcher hands it to the
+// handler (`CommandOpts.valueOccurrences`), so a repeated option's earlier
+// value reaches the generic here exactly as it does in a workspace.
+type Line = Pick<CommandOpts, 'flags' | 'valueOccurrences'>
+
+function parseLine(line: Line): ReturnType<typeof parseFlags> {
+  return parseFlags(line.flags, line.valueOccurrences)
+}
+
+function nlBag(...argv: string[]): Line {
+  const parsed = parseCommand(specOf('nl'), argv, '/')
+  return { flags: parseToKwargs(parsed), valueOccurrences: parsed.valueOccurrences }
 }
 
 describe('nl refuses a numeric option it cannot read whole', () => {
@@ -77,7 +84,7 @@ describe('nl refuses a numeric option it cannot read whole', () => {
     ['number_width', '2x', "nl: invalid line number field width: '2x'\n"],
     ['join_blank_lines', 'abc', "nl: invalid line number of blank lines: 'abc'\n"],
   ])('refuses %s=%s before numbering anything', async (dest, value, message) => {
-    const got = await run({ [dest]: value })
+    const got = await run({ flags: { [dest]: value } })
     expect(got.exit).toBe(1)
     expect(got.stdout).toBe('')
     expect(got.stderr).toBe(message)
@@ -85,7 +92,7 @@ describe('nl refuses a numeric option it cannot read whole', () => {
 
   // GNU `printf 'x\n' | nl -v 5` prints 5 spaces, '5', a TAB and 'x'.
   it('still numbers with a valid starting line number', async () => {
-    const got = await run({ starting_line_number: '5' })
+    const got = await run({ flags: { starting_line_number: '5' } })
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('     5\tx\n')
     expect(got.stderr).toBe('')
@@ -99,7 +106,7 @@ describe('nl refuses a numeric option it cannot read whole', () => {
     ['line_increment', '+2', '     1\tx\n'],
     ['join_blank_lines', '+2', '     1\tx\n'],
   ])('accepts %s=%s as a sign', async (dest, value, stdout) => {
-    const got = await run({ [dest]: value })
+    const got = await run({ flags: { [dest]: value } })
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe(stdout)
     expect(got.stderr).toBe('')
@@ -112,14 +119,14 @@ describe('nl -v and -i are signed', () => {
   // GNU numbers from a negative start and counts UP, and `-i -2` genuinely
   // decrements, so neither a negative nor a zero is an error.
   it('numbers from a negative start', async () => {
-    const got = await run({ starting_line_number: '-5' })
+    const got = await run({ flags: { starting_line_number: '-5' } })
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('    -5\tx\n')
     expect(got.stderr).toBe('')
   })
 
   it('accepts a zero increment', async () => {
-    const got = await run({ line_increment: '0' })
+    const got = await run({ flags: { line_increment: '0' } })
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('     1\tx\n')
     expect(got.stderr).toBe('')
@@ -151,7 +158,7 @@ describe('nl -w and -l require at least 1', () => {
       "nl: invalid line number of blank lines: '0': Numerical result out of range\n",
     ],
   ])('refuses %s=%s as out of range', async (dest, value, message) => {
-    const got = await run({ [dest]: value })
+    const got = await run({ flags: { [dest]: value } })
     expect(got.exit).toBe(1)
     expect(got.stdout).toBe('')
     expect(got.stderr).toBe(message)
@@ -164,7 +171,7 @@ describe('nl -w and -l require at least 1', () => {
     ['number_width', "nl: invalid line number field width: ''\n"],
     ['join_blank_lines', "nl: invalid line number of blank lines: ''\n"],
   ])('refuses an empty %s without the range clause', async (dest, message) => {
-    const got = await run({ [dest]: '' })
+    const got = await run({ flags: { [dest]: '' } })
     expect(got.exit).toBe(1)
     expect(got.stdout).toBe('')
     expect(got.stderr).toBe(message)
@@ -550,7 +557,7 @@ describe('nl -b p<re> compiles a POSIX BRE, not this engine s dialect', () => {
   ])('numbers the line glibc numbers for %j', async (pattern, subject) => {
     const opts = {
       stdin: stdinOf(`${subject}\n`),
-      flags: nlBag('-b', 'p' + pattern),
+      ...nlBag('-b', 'p' + pattern),
       filetypeFns: null,
       cwd: '/',
       resource: { kind: 'ram' } as never,
@@ -646,7 +653,7 @@ describe('nl pads an unnumbered line over the separator', () => {
   it('pads a blank line the same way', async () => {
     const opts = {
       stdin: stdinOf('a\n\nb\n'),
-      flags: nlBag(),
+      ...nlBag(),
       filetypeFns: null,
       cwd: '/',
       resource: { kind: 'ram' } as never,
@@ -694,7 +701,7 @@ describe('nl refuses a trailing newline in a numeric value', () => {
       ['3\x0b', '3\\v'],
       ['3\x01', '3\\001'],
     ] as [string, string][])(`${dest} = %j`, async (value, quoted) => {
-      const got = await run({ [dest]: value })
+      const got = await run({ flags: { [dest]: value } })
       expect(got.exit).toBe(1)
       expect(got.stdout).toBe('')
       expect(got.stderr).toBe(`nl: ${label}: '${quoted}'\n`)
@@ -730,7 +737,7 @@ describe('nl skips leading C whitespace on a numeric value', () => {
     ['\x1c3', '\\0343'],
     ['\u00a03', '\\302\\2403'],
   ] as [string, string][])('refuses number_width = %j', async (value, quoted) => {
-    const got = await run({ number_width: value })
+    const got = await run({ flags: { number_width: value } })
     expect(got.exit).toBe(1)
     expect(got.stderr).toBe(`nl: invalid line number field width: '${quoted}'\n`)
   })
@@ -761,7 +768,7 @@ describe('nl reports a value too large for the type', () => {
     ['line_increment', '9223372036854775808', 'invalid line number increment'],
     ['line_increment', '-9223372036854775809', 'invalid line number increment'],
   ])('%s = %s', async (dest, value, label) => {
-    const got = await run({ [dest]: value })
+    const got = await run({ flags: { [dest]: value } })
     expect(got.exit).toBe(1)
     expect(got.stdout).toBe('')
     expect(got.stderr).toBe(`nl: ${label}: '${value}': ${EOVERFLOW_TEXT}\n`)
@@ -792,9 +799,9 @@ describe('nl reports a value too large for the type', () => {
     ['number_width', 'invalid line number field width'],
     ['join_blank_lines', 'invalid line number of blank lines'],
   ])('%s switches wording at the overflow floor', async (dest, label) => {
-    const inside = await run({ [dest]: '-1073741824' })
+    const inside = await run({ flags: { [dest]: '-1073741824' } })
     expect(inside.stderr).toBe(`nl: ${label}: '-1073741824': ${ERANGE_TEXT}\n`)
-    const below = await run({ [dest]: '-1073741825' })
+    const below = await run({ flags: { [dest]: '-1073741825' } })
     expect(below.stderr).toBe(`nl: ${label}: '-1073741825': ${EOVERFLOW_TEXT}\n`)
   })
 
@@ -811,13 +818,13 @@ describe('nl reports a value too large for the type', () => {
 // read the empty string as absent, so these are the parity anchors.
 describe('nl reads an empty -d as disabling delimiters', () => {
   it('keeps an empty delimiter empty', () => {
-    const parsed = parseFlags(nlBag('-d', ''))
+    const parsed = parseLine(nlBag('-d', ''))
     if (typeof parsed === 'string') throw new Error(`refused: ${parsed}`)
     expect(parsed.delimiter).toBe('')
   })
 
   it('takes the default when -d is absent', () => {
-    const parsed = parseFlags(nlBag())
+    const parsed = parseLine(nlBag())
     if (typeof parsed === 'string') throw new Error(`refused: ${parsed}`)
     expect(parsed.delimiter).toBe('\\:')
   })
@@ -825,7 +832,7 @@ describe('nl reads an empty -d as disabling delimiters', () => {
   it('numbers the delimiter lines as ordinary text', async () => {
     const opts = {
       stdin: stdinOf('\\:\\:\\:\nH\n\\:\\:\nB\n'),
-      flags: nlBag('-d', ''),
+      ...nlBag('-d', ''),
       filetypeFns: null,
       cwd: '/',
       resource: { kind: 'ram' } as never,
@@ -843,7 +850,7 @@ describe('nl reads an empty -d as disabling delimiters', () => {
   it('consumes the delimiter lines under the default', async () => {
     const opts = {
       stdin: stdinOf('\\:\\:\\:\nH\n\\:\\:\nB\n'),
-      flags: nlBag(),
+      ...nlBag(),
       filetypeFns: null,
       cwd: '/',
       resource: { kind: 'ram' } as never,
@@ -866,7 +873,7 @@ describe('nl pads a delimiter only when it is one byte', () => {
   async function render(delimiter: string, text: string): Promise<string> {
     const opts = {
       stdin: stdinOf(text),
-      flags: nlBag('-d', delimiter),
+      ...nlBag('-d', delimiter),
       filetypeFns: null,
       cwd: '/',
       resource: { kind: 'ram' } as never,
@@ -910,7 +917,7 @@ describe('nl pads a delimiter only when it is one byte', () => {
 // rather than being what the flag read returns.
 describe('nl parseFlags returns the raw option words', () => {
   it('carries every word the line typed', () => {
-    const parsed = parseFlags(
+    const parsed = parseLine(
       nlBag('-b', 'a', '-v', '5', '-i', '2', '-w', '3', '-s', '::', '-n', 'rz', '-d', '!', '-p'),
     )
     if (typeof parsed === 'string') throw new Error(`refused: ${parsed}`)
@@ -930,7 +937,7 @@ describe('nl parseFlags returns the raw option words', () => {
   })
 
   it('returns the stderr text for a line GNU refuses', () => {
-    expect(parseFlags(nlBag('-w', 'abc'))).toBe("nl: invalid line number field width: 'abc'\n")
+    expect(parseLine(nlBag('-w', 'abc'))).toBe("nl: invalid line number field width: 'abc'\n")
   })
 })
 

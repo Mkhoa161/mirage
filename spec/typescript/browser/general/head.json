@@ -267,5 +267,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "head [OPTION]... [FILE]..."
 }

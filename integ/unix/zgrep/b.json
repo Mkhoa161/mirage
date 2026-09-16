@@ -1,0 +1,105 @@
+{
+  "cases": [
+    {
+      "id": "zgrep_b_prefixes_the_line_offset",
+      "seq": 991026,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zb && printf 'hello\\nworld\\n' | gzip > /data/zb/m.gz && zgrep -b o /data/zb/m.gz",
+      "expect": {
+        "exit": 0,
+        "stdout": "0:hello\n6:world\n",
+        "stderr": ""
+      },
+      "flags": [
+        "b"
+      ]
+    },
+    {
+      "id": "zgrep_bn_orders_line_then_byte",
+      "seq": 991027,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zb2 && printf 'hello\\nworld\\n' | gzip > /data/zb2/m.gz && zgrep -bn world /data/zb2/m.gz",
+      "expect": {
+        "exit": 0,
+        "stdout": "2:6:world\n",
+        "stderr": ""
+      },
+      "flags": [
+        "b",
+        "n"
+      ]
+    },
+    {
+      "id": "zgrep_bo_offsets_the_match",
+      "seq": 991028,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zb3 && printf 'hello\\nworld\\n' | gzip > /data/zb3/m.gz && printf 'foo\\n' | gzip > /data/zb3/o.gz && zgrep -bo o /data/zb3/m.gz /data/zb3/o.gz",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/zb3/m.gz:4:o\n/data/zb3/m.gz:7:o\n/data/zb3/o.gz:1:o\n/data/zb3/o.gz:2:o\n",
+        "stderr": ""
+      },
+      "flags": [
+        "b",
+        "o"
+      ]
+    }
+  ]
+}

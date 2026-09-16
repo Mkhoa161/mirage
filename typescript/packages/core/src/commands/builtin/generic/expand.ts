@@ -207,10 +207,13 @@ export function parseTabStops(occurrences: readonly string[]): TabStops | string
 }
 
 // Read expand's flags once, refusing a tab list GNU refuses.
-export function parseFlags(bag: Record<string, FlagValue>): ExpandFlags | string {
-  const fl = new FlagView(bag, specOf('expand'))
-  const occurrences = fl.valueOccurrences('tabs').map(([, raw]) => raw)
-  const tabs = parseTabStops(occurrences)
+export function parseFlags(
+  bag: Record<string, FlagValue>,
+  occurrences?: readonly (readonly [string, string])[],
+): ExpandFlags | string {
+  const fl = new FlagView(bag, specOf('expand'), occurrences)
+  const raws = fl.valueOccurrences('tabs').map(([, raw]) => raw)
+  const tabs = parseTabStops(raws)
   if (typeof tabs === 'string') return tabs
   return { tabs, initialOnly: fl.asBool('initial') }
 }
@@ -307,7 +310,7 @@ export async function expandGeneric(
   opts: CommandOpts,
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
 ): Promise<CommandFnResult> {
-  const parsed = parseFlags(opts.flags)
+  const parsed = parseFlags(opts.flags, opts.valueOccurrences)
   if (typeof parsed === 'string') {
     return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }

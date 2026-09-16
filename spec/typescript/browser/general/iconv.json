@@ -99,5 +99,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "iconv [OPTION...] [FILE...]"
 }

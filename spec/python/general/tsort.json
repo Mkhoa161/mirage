@@ -286,5 +286,6 @@
     {
       "type": "path"
     }
-  ]
+  ],
+  "usage": "tsort [OPTION] [FILE]"
 }

@@ -284,5 +284,6 @@
   },
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "zcat [OPTION]... [FILE]..."
 }

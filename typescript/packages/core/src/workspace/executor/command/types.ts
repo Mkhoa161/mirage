@@ -47,4 +47,8 @@ export interface ParsedCommand {
   // dialect, which is why they carry names and order at all.
   missingRequiredOperands: readonly string[]
   typedDests: readonly string[]
+  // The parser's per-occurrence record of the scalar value flags, as
+  // [kwarg name, raw value] in scan order, handed to the handler as
+  // `CommandOpts.valueOccurrences`.
+  valueOccurrences: readonly (readonly [string, string])[]
 }

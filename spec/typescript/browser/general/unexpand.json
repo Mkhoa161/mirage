@@ -244,5 +244,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "unexpand [OPTION]... [FILE]..."
 }

@@ -30,6 +30,7 @@ export interface FlagSet {
   byteOffsets: boolean
   countOnly: boolean
   filesOnly: boolean
+  filesWithoutMatch: boolean
   wholeWord: boolean
   fixedString: boolean
   basicRegexp: boolean
@@ -155,7 +156,10 @@ export async function* grepInput(
     // cannot answer from the count here. Measured on GNU grep 3.11 across
     // `-m0`, `-m 0` and `--max-count=0`.
     // Nothing is read, but the backend already opened the source.
+    // -L is the one flag that still speaks: nothing selected means the
+    // file is listed (`grep -m0 -L a f` prints f, exit 1).
     await closeQuietly(source)
+    if (f.filesWithoutMatch && !f.quiet) yield ENC.encode(path + '\n')
     return
   }
   let number = 0
@@ -182,6 +186,9 @@ export async function* grepInput(
           yield ENC.encode(path + '\n')
           return
         }
+        // A selected line is all -L needs to know: the file is not listed,
+        // and the status still says it matched.
+        if (f.filesWithoutMatch) return
       }
       if (f.countOnly) {
         if (f.maxCount !== null && count >= f.maxCount) break
@@ -256,6 +263,12 @@ export async function* grepInput(
     io.exitCode = 1
   }
 
+  // -L lists the file once it is known to hold no selected line, and
+  // outranks -c (GNU 3.11: `grep -L -c hello m o` prints only `o`).
+  if (f.filesWithoutMatch && !f.quiet) {
+    yield ENC.encode(path + '\n')
+    return
+  }
   if (f.countOnly && !(f.quiet || f.filesOnly))
     yield ENC.encode((showFilename ? path + ':' : '') + String(count) + '\n')
 }

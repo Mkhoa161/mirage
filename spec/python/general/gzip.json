@@ -163,5 +163,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "gzip [OPTION]... [FILE]..."
 }

@@ -275,5 +275,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "sha384sum [OPTION]... [FILE]..."
 }

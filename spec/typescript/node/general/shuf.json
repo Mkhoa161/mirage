@@ -316,5 +316,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "shuf [OPTION]... [FILE]"
 }

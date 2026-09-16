@@ -17,12 +17,14 @@ import type { PathSpec } from '../../../types.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { interpretEscapes } from '../utils/escapes.ts'
 import { resolveSource } from '../utils/stream.ts'
-import { extraOperandError } from '../../spec/usage.ts'
+import { extraOperandError, usageHint } from '../../spec/usage.ts'
+import { quoteText } from '../../quote.ts'
 import { CommandName, type FlagValue } from '../../spec/types.ts'
 import { FlagView } from '../../spec/flag_view.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()
+const TRY_HELP = `\n${usageHint('tr')}`
 const DEC = new TextDecoder('utf-8', { fatal: false })
 
 function expandRanges(s: string): string {
@@ -92,7 +94,7 @@ async function* trStream(
 }
 
 function buildOptions(texts: readonly string[], bag: Record<string, FlagValue>): TrOptions {
-  if (texts.length === 0) throw new Error('tr: usage: tr [-d] [-s] [-c] set1 [set2] [path]')
+  if (texts.length === 0) throw new Error(`tr: missing operand${TRY_HELP}`)
   const fl = new FlagView(bag, specOf('tr'))
   const complement = fl.asBool('C') || fl.asBool('complement')
   const del = fl.asBool('delete')
@@ -123,7 +125,16 @@ function buildOptions(texts: readonly string[], bag: Record<string, FlagValue>):
       if (from !== undefined && to !== undefined) table.set(from, to)
     }
   } else if (!del && set2 === '' && !squeeze) {
-    throw new Error('tr: usage: tr set1 set2')
+    throw new Error(
+      `tr: missing operand after '${quoteText(texts[0] ?? '')}'\n` +
+        `Two strings must be given when translating.${TRY_HELP}`,
+    )
+  }
+  if (del && !squeeze && texts.length >= 2) {
+    throw new Error(
+      `tr: extra operand '${quoteText(texts[1] ?? '')}'\n` +
+        `Only one string may be given when deleting without squeezing repeats.${TRY_HELP}`,
+    )
   }
   return { set1, set2, del, squeeze, table }
 }

@@ -593,6 +593,7 @@ export async function handleCommand(
     stdin,
     mount,
     resolveHint: routingScopes[0] ?? null,
+    valueOccurrences: parsedLine.valueOccurrences,
   })
   let stdout = rawStdout
   if (cmdName === 'find') {

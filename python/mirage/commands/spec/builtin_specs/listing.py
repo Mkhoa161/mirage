@@ -17,6 +17,7 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'ls':
     CommandSpec(
+        usage="ls [OPTION]... [FILE]...",
         options=(
             Option(short="-l"),
             Option(short="-a", long="--all"),
@@ -53,6 +54,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'stat':
     CommandSpec(
+        usage="stat [OPTION]... FILE...",
         options=(
             Option(short="-c", type="str"),
             Option(short="-f", type="str"),
@@ -70,6 +72,8 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'find':
     CommandSpec(
+        usage=
+        "find [-H] [-L] [-P] [-Olevel] [-D debugopts] [path...] [expression]",
         options=(
             Option(short="-name", type="str", multiple=True),
             Option(short="-type", type="str", multiple=True),
@@ -125,6 +129,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'du':
     CommandSpec(
+        usage="du [OPTION]... [FILE]...",
         options=(
             Option(short="-h"),
             Option(short="-s"),
@@ -139,6 +144,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'df':
     CommandSpec(
+        usage="df [OPTION]... [FILE]...",
         options=(
             Option(short="-h"),
             Option(short="-H"),

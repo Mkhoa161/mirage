@@ -1,0 +1,103 @@
+{
+  "cases": [
+    {
+      "id": "zgrep_L_lists_the_matchless_archive",
+      "seq": 991023,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zl && printf 'hello\\nworld\\n' | gzip > /data/zl/m.gz && printf 'foo\\n' | gzip > /data/zl/o.gz && zgrep -L hello /data/zl/m.gz /data/zl/o.gz",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/zl/o.gz\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "zgrep_L_matching_archive_exit_0",
+      "seq": 991024,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zl2 && printf 'hello\\n' | gzip > /data/zl2/m.gz && zgrep -L hello /data/zl2/m.gz",
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "zgrep_L_matchless_archive_exit_1",
+      "seq": 991025,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zl3 && printf 'foo\\n' | gzip > /data/zl3/o.gz && zgrep -L hello /data/zl3/o.gz",
+      "expect": {
+        "exit": 1,
+        "stdout": "/data/zl3/o.gz\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    }
+  ]
+}

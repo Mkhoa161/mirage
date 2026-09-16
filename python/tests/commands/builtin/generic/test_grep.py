@@ -880,3 +880,55 @@ async def test_grep_recursive_separates_context_groups_between_files():
     assert (
         await
         _drain_async(output)) == b"/d/f1:a\n/d/f1-b\n--\n/d/f2:a\n/d/f2-y\n"
+
+
+# grep -L / --files-without-match, measured on GNU grep 3.11: the listing
+# is inverted but the exit status is not, -l and -L are one mode the later
+# one wins, -L outranks -c, and -m0 lists the file since nothing was
+# selected. Mirrored in grep_binary.test.ts.
+async def _grep_lines(files, argv, flags):
+    readdir, stat, rb, rs = _make_backend(files)
+    output, io = await grep([_spec(p) for p in argv], ["hello"],
+                            CommandOpts(flags=flags),
+                            readdir=readdir,
+                            stat=stat,
+                            read_bytes=rb,
+                            read_stream=rs)
+    return (await _drain_async(output)).decode(), io.exit_code
+
+
+_L_FILES = {"/m.txt": b"hello\nworld\n", "/o.txt": b"foo\n"}
+
+
+@pytest.mark.asyncio
+async def test_grep_L_lists_the_matchless_file_and_keeps_the_match_status():
+    assert await _grep_lines(_L_FILES, ["/m.txt"],
+                             {"files_without_match": True}) == ("", 0)
+    assert await _grep_lines(_L_FILES, ["/o.txt"],
+                             {"files_without_match": True}) == ("/o.txt\n", 1)
+    assert await _grep_lines(_L_FILES, ["/m.txt", "/o.txt"],
+                             {"files_without_match": True}) == ("/o.txt\n", 0)
+
+
+@pytest.mark.asyncio
+async def test_grep_L_outranks_c_and_m0_lists_the_file():
+    assert await _grep_lines(_L_FILES, ["/m.txt", "/o.txt"], {
+        "files_without_match": True,
+        "c": True
+    }) == ("/o.txt\n", 0)
+    assert await _grep_lines(_L_FILES, ["/m.txt"], {
+        "files_without_match": True,
+        "m": "0"
+    }) == ("/m.txt\n", 1)
+
+
+@pytest.mark.asyncio
+async def test_grep_l_and_L_are_one_mode_the_later_wins():
+    assert await _grep_lines(_L_FILES, ["/m.txt", "/o.txt"], {
+        "args_l": True,
+        "files_without_match": True
+    }) == ("/o.txt\n", 0)
+    assert await _grep_lines(_L_FILES, ["/m.txt", "/o.txt"], {
+        "files_without_match": True,
+        "args_l": True
+    }) == ("/m.txt\n", 0)

@@ -25,6 +25,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   grep: new CommandSpec({
+    usage: 'grep [OPTION]... PATTERNS [FILE]...',
     options: [
       new Option({ short: '-r' }),
       new Option({ short: '-R' }),
@@ -35,6 +36,7 @@ export const SPECS: Record<string, CommandSpec> = {
       new Option({ short: '-b', long: '--byte-offset' }),
       new Option({ short: '-c' }),
       new Option({ short: '-l' }),
+      new Option({ short: '-L', long: '--files-without-match' }),
       new Option({ short: '-w' }),
       new Option({ short: '-F' }),
       new Option({ short: '-E' }),
@@ -182,6 +184,8 @@ export const SPECS: Record<string, CommandSpec> = {
       new Option({ short: '-b', long: '--byte-offset' }),
       new Option({ short: '-c' }),
       new Option({ short: '-l' }),
+      // ripgrep spells this long only: its -L is --follow.
+      new Option({ long: '--files-without-match' }),
       new Option({ short: '-w' }),
       new Option({ short: '-F' }),
       new Option({ short: '-o' }),
@@ -212,6 +216,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   sed: new CommandSpec({
+    usage: 'sed [OPTION]... {script-only-if-no-other-script} [input-file]...',
     options: [
       new Option({ short: '-i' }),
       // -e takes a script and may repeat; multiple -e are joined with newlines.
@@ -236,10 +241,13 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   zgrep: new CommandSpec({
+    usage: 'zgrep [OPTION]... [-e] PATTERN [FILE]...',
     options: [
       new Option({ short: '-i' }),
+      new Option({ short: '-b', long: '--byte-offset' }),
       new Option({ short: '-c' }),
       new Option({ short: '-l' }),
+      new Option({ short: '-L', long: '--files-without-match' }),
       new Option({ short: '-n' }),
       new Option({ short: '-v' }),
       new Option({ short: '-e', type: 'str', multiple: true }),

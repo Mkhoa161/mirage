@@ -246,6 +246,7 @@ function specFields(spec: CommandSpec): Record<string, unknown> {
   return {
     description: spec.description,
     epilog: spec.epilog,
+    usage: spec.usage,
     ignore_tokens: [...spec.ignoreTokens].sort(compareCodePoints),
     old_option_style: spec.oldOptionStyle,
     operand_base: spec.operandBase,

@@ -17,6 +17,7 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'cat':
     CommandSpec(
+        usage="cat [OPTION]... [FILE]...",
         options=(
             Option(short="-n", long="--number"),
             Option(short="-b", long="--number-nonblank"),
@@ -33,6 +34,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'head':
     CommandSpec(
+        usage="head [OPTION]... [FILE]...",
         options=(
             Option(short="-n",
                    long="--lines",
@@ -48,6 +50,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'tail':
     CommandSpec(
+        usage="tail [OPTION]... [FILE]...",
         options=(
             Option(short="-n", type="str", numeric_shorthand=True),
             Option(short="-c", type="str"),
@@ -68,6 +71,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'nl':
     CommandSpec(
+        usage="nl [OPTION]... [FILE]...",
         options=(
             Option(short="-b", long="--body-numbering", type="str"),
             Option(short="-d", long="--section-delimiter", type="str"),
@@ -85,6 +89,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'tac':
     CommandSpec(
+        usage="tac [OPTION]... [FILE]...",
         options=(
             Option(short="-b", long="--before"),
             Option(short="-r", long="--regex"),
@@ -103,6 +108,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'fold':
     CommandSpec(
+        usage="fold [OPTION]... [FILE]...",
         options=(
             Option(short="-w", long="--width", type="str"),
             Option(short="-s", long="--spaces"),
@@ -113,6 +119,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'fmt':
     CommandSpec(
+        usage="fmt [-WIDTH] [OPTION]... [FILE]...",
         options=(
             Option(short="-w", long="--width", type="str"),
             Option(short="-g", long="--goal", type="str"),
@@ -128,6 +135,7 @@ SPECS: dict[str, CommandSpec] = {
     CommandSpec(rest=Operand(type="path")),
     'expand':
     CommandSpec(
+        usage="expand [OPTION]... [FILE]...",
         options=(
             Option(short="-t", long="--tabs", type="str"),
             Option(short="-i", long="--initial"),
@@ -136,6 +144,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'unexpand':
     CommandSpec(
+        usage="unexpand [OPTION]... [FILE]...",
         options=(
             Option(short="-t", long="--tabs", type="str"),
             Option(short="-a", long="--all"),
@@ -153,6 +162,7 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'od':
     CommandSpec(
+        usage="od [OPTION]... [FILE]...",
         options=(
             Option(short="-A", long="--address-radix", type="str"),
             Option(short="-j", long="--skip-bytes", type="str"),

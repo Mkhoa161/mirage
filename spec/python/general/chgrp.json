@@ -32,5 +32,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "chgrp [OPTION]... GROUP FILE..."
 }

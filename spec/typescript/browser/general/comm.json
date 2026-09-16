@@ -268,5 +268,6 @@
     {
       "type": "path"
     }
-  ]
+  ],
+  "usage": "comm [OPTION]... FILE1 FILE2"
 }

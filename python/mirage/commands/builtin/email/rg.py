@@ -15,6 +15,7 @@
 from mirage.accessor.email import EmailAccessor
 from mirage.commands.builtin.email.grep import SEARCH_HONORED
 from mirage.commands.builtin.email.io import resolve_glob
+from mirage.commands.builtin.generic.rg import RG_NO_PATTERN
 from mirage.commands.builtin.generic.rg import rg as generic_rg
 from mirage.commands.builtin.generic_bind.adapter import bound_op
 from mirage.commands.builtin.grep_pattern import compile_pattern, pattern_arg
@@ -45,7 +46,7 @@ async def rg(accessor: EmailAccessor, paths: list[PathSpec], texts: list[str],
     fl = FlagView(opts.flags, spec=SPECS["rg"])
     pattern_str = pattern_arg(texts, fl)
     if pattern_str is None:
-        raise UsageError("rg: usage: rg [flags] pattern [path]")
+        raise UsageError(RG_NO_PATTERN)
     i = fl.as_bool("i")
     n = fl.as_bool("n")
     args_l = fl.as_bool("args_l")

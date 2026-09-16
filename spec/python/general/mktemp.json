@@ -145,5 +145,6 @@
     {
       "type": "str"
     }
-  ]
+  ],
+  "usage": "mktemp [OPTION]... [TEMPLATE]"
 }

@@ -245,5 +245,6 @@
   ],
   "rest": {
     "type": "str"
-  }
+  },
+  "usage": "basename NAME [SUFFIX]"
 }

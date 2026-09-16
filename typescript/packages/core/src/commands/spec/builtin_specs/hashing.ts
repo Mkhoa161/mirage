@@ -16,6 +16,7 @@ import { CommandSpec, Operand, Option } from '../types.ts'
 
 export const SPECS: Record<string, CommandSpec> = {
   base64: new CommandSpec({
+    usage: 'base64 [OPTION]... [FILE]',
     options: [
       new Option({ short: '-d', long: '--decode' }),
       new Option({ short: '-D' }),
@@ -25,6 +26,7 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' })],
   }),
   cmp: new CommandSpec({
+    usage: 'cmp [OPTION]... FILE1 [FILE2 [SKIP1 [SKIP2]]]',
     options: [
       new Option({ short: '-l' }),
       new Option({ short: '-s' }),
@@ -35,6 +37,7 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   diff: new CommandSpec({
+    usage: 'diff [OPTION]... FILES',
     options: [
       new Option({ short: '-i' }),
       new Option({ short: '-w' }),
@@ -47,6 +50,7 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   iconv: new CommandSpec({
+    usage: 'iconv [OPTION...] [FILE...]',
     options: [
       new Option({ short: '-f', type: 'str' }),
       new Option({ short: '-t', type: 'str' }),
@@ -57,6 +61,7 @@ export const SPECS: Record<string, CommandSpec> = {
   }),
   md5: new CommandSpec({ rest: new Operand({ type: 'path' }) }),
   md5sum: new CommandSpec({
+    usage: 'md5sum [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-c', long: '--check' }),
       new Option({ short: '-b', long: '--binary' }),
@@ -81,6 +86,7 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   sha1sum: new CommandSpec({
+    usage: 'sha1sum [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-c', long: '--check' }),
       new Option({ short: '-b', long: '--binary' }),
@@ -96,6 +102,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   sha256sum: new CommandSpec({
+    usage: 'sha256sum [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-c', long: '--check' }),
       new Option({ short: '-b', long: '--binary' }),
@@ -111,6 +118,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   sha384sum: new CommandSpec({
+    usage: 'sha384sum [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-c', long: '--check' }),
       new Option({ short: '-b', long: '--binary' }),
@@ -126,6 +134,7 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   sha512sum: new CommandSpec({
+    usage: 'sha512sum [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-c', long: '--check' }),
       new Option({ short: '-b', long: '--binary' }),

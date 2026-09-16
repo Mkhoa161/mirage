@@ -272,6 +272,11 @@
       "type": "bool"
     },
     {
+      "long": "--files-without-match",
+      "short": "-L",
+      "type": "bool"
+    },
+    {
       "short": "-w",
       "type": "bool"
     },
@@ -379,5 +384,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "grep [OPTION]... PATTERNS [FILE]..."
 }

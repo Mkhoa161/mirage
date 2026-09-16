@@ -305,5 +305,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "stat [OPTION]... FILE..."
 }

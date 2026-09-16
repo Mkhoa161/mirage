@@ -320,5 +320,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "du [OPTION]... [FILE]..."
 }

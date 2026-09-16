@@ -245,5 +245,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "paste [OPTION]... [FILE]..."
 }

@@ -13,6 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import functools
+from collections.abc import Sequence
 
 from mirage.commands.config import ExecContext
 from mirage.commands.errors import CommandTimeoutError, UsageError
@@ -347,6 +348,7 @@ async def run_on_mount(
     resolve_hint: PathSpec | None = None,
     mount: MountEntry | None = None,
     routing_decision: RouteDecision | None = None,
+    value_occurrences: Sequence[tuple[str, str]] | None = None,
 ) -> tuple[ByteSource | None, IOResult]:
     """Run one already-parsed command on the mount that owns its paths.
 
@@ -367,6 +369,9 @@ async def run_on_mount(
             the mount wrapper expands them natively).
         texts (list[str]): Positional text operands.
         flag_kwargs (dict): Parsed flags forwarded to the mount command.
+        value_occurrences (Sequence[tuple[str, str]] | None): The
+            parser's per-occurrence record of the scalar value flags,
+            handed to the handler as ``CommandOpts.value_occurrences``.
         stdin (ByteSource | None): Standard input for the command.
         resolve_hint (PathSpec | None): Mount-resolution path when ``paths``
             is empty (a stream command running in stdin mode).
@@ -429,6 +434,7 @@ async def run_on_mount(
                 ns=ns,
                 stat_path=stat_path,
                 readdir_path=readdir_path,
+                value_occurrences=value_occurrences,
             ),
         )
     except UsageError as exc:

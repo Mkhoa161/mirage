@@ -22,8 +22,7 @@ from mirage.commands.spec.constants import (ARG_PLACEHOLDER, FLOAT_VALUE,
                                             INT_VALUE, NUMERIC_SHORT,
                                             flag_kwarg_name)
 from mirage.commands.spec.oldstyle import expand_old_style
-from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
-                                        ParsedFlagValue, ValueType)
+from mirage.commands.spec.types import CommandSpec, ParsedFlagValue, ValueType
 from mirage.utils.path import resolve_path
 
 
@@ -80,15 +79,18 @@ class ParsedArgs:
     # what was supplied (clap's) needs exactly this distinction: a
     # defaulted option is invisible there, a typed one is not.
     typed_dests: list[str] = field(default_factory=list)
-    # Every scalar value-flag occurrence the line carried, as (dest, raw
-    # value) in scan order. The bag above keeps one value per scalar
-    # dest, so a repeated option throws the earlier value away; this is
-    # where it survives, for a command that must answer for a value the
-    # bag no longer holds (nl refuses the LEFTMOST invalid one, which is
-    # the order GNU validates in). Parser bookkeeping, not grammar: no
-    # spec field switches it on, an accumulating (``multiple``) option
-    # is absent because its own list already is the record, and every
-    # command is free to ignore it -- all of them but nl do.
+    # Every scalar value-flag occurrence the line carried, as (kwarg
+    # name, raw value) in scan order. The bag above keeps one value per
+    # scalar dest, so a repeated option throws the earlier value away;
+    # this is where it survives, for a command that must answer for a
+    # value the bag no longer holds (nl refuses the LEFTMOST invalid
+    # one, which is the order GNU validates in) or that must refuse a
+    # repeat outright (shuf's second -i). It rides the dispatcher's
+    # CommandOpts as a typed field of its own, never the flag bag, and a
+    # FlagView reads it through ``value_occurrences``. Parser
+    # bookkeeping, not grammar: no spec field switches it on, an
+    # accumulating (``multiple``) option is absent because its own list
+    # already is the record, and every command is free to ignore it.
     value_occurrences: list[tuple[str, str]] = field(default_factory=list)
     # The old-style cluster letter whose argument ran off the end of the
     # line (`tar xzf` with no archive). Its own report because GNU tar
@@ -126,9 +128,10 @@ def _set_value_flag(
     command-line order (``sort -k1 --key=2`` is ``[1, 2]``).
 
     Last-wins is where the bag loses information, so the scalar branch
-    also appends to ``occurrences``: the value it drops is the one GNU
-    already validated and refused (``nl -w abc -w 3``), and nothing else
-    on the parse result remembers it. An accumulating dest needs no
+    also appends to ``occurrences`` under the kwarg name the bag uses:
+    the value it drops is the one GNU already validated and refused
+    (``nl -w abc -w 3``), and nothing else on the parse result
+    remembers it. An accumulating dest needs no
     entry -- its list already is the per-occurrence record.
 
     Args:
@@ -147,7 +150,7 @@ def _set_value_flag(
         else:
             flags[name] = [value]
     else:
-        occurrences.append((name, value))
+        occurrences.append((flag_kwarg_name(name), value))
         flags.pop(name, None)
         flags[name] = value
 
@@ -727,45 +730,8 @@ def parse_command(
     )
 
 
-def _shadowed_occurrences(
-        occurrences: list[tuple[str, str]]) -> list[str] | None:
-    """The occurrence record to carry in the kwargs bag, or None.
-
-    The bag is a faithful record of a line that typed each scalar option
-    at most once: one value per dest, in scan order. Only a repeat makes
-    it lie -- the earlier value is gone and the dest's position is the
-    later occurrence's -- so only a repeat needs the record carried
-    alongside, and every other command line's bag stays exactly what it
-    was. Flattened to [dest, value, ...] because a bag value is a str, a
-    bool, an int or a list of str, which is the same reason a ``pair``
-    option flattens its (name, value) list.
-
-    Args:
-        occurrences (list): (dest, raw value) pairs in scan order.
-
-    Returns:
-        list[str] | None: the flattened record when one dest occurred
-            more than once, else None.
-    """
-    seen: set[str] = set()
-    for dest, _ in occurrences:
-        if dest in seen:
-            break
-        seen.add(dest)
-    else:
-        return None
-    flat: list[str] = []
-    for dest, value in occurrences:
-        flat.append(flag_kwarg_name(dest))
-        flat.append(value)
-    return flat
-
-
 def parse_to_kwargs(parsed: ParsedArgs) -> dict[str, ParsedFlagValue]:
     result: dict[str, ParsedFlagValue] = {}
     for key, value in parsed.flags.items():
         result[flag_kwarg_name(key)] = value
-    shadowed = _shadowed_occurrences(parsed.value_occurrences)
-    if shadowed is not None:
-        result[VALUE_OCCURRENCES_KEY] = shadowed
     return result

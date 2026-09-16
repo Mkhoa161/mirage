@@ -22,11 +22,16 @@ from mirage.commands.errors import UsageError
 from mirage.commands.resolve import get_extension
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.usage import usage_hint
 from mirage.io.types import ByteSource, IOResult, materialize
 from mirage.types import FileStat, FileType, PathSpec
 from mirage.utils.errors import WALK_ERRORS, fs_strerror
 from mirage.utils.key_prefix import mount_key, mount_prefix_of
 from mirage.utils.path import respell_one
+
+# GNU grep with no pattern prints its synopsis and the help hint, exit 2
+# (grep 3.11; the same two lines follow `option requires an argument`).
+GREP_NO_PATTERN = (f"Usage: {SPECS['grep'].usage}\n" + usage_hint("grep"))
 
 
 def binary_mode(fl: FlagView) -> str:
@@ -61,6 +66,23 @@ def context_length(fl: FlagView, name: str) -> int | None:
         shown = raw if raw is not None else str(value)
         raise UsageError(f"grep: {shown}: invalid context length argument")
     return value
+
+
+def listing_mode(fl: FlagView) -> tuple[bool, bool]:
+    """(-l, -L): which file-listing mode wins, the later one on the line.
+
+    GNU's `-l` and `-L` set one variable (``list_files``) so the last
+    typed wins: ``grep -l -L`` lists the files WITHOUT a match and
+    ``grep -L -l`` the ones with one (measured on grep 3.11).
+
+    Args:
+        fl (FlagView): spec-validated view over the raw flag kwargs.
+    """
+    winner: str | None = None
+    for name in fl.typed_order("args_l", "files_without_match"):
+        if fl.as_bool(name):
+            winner = name
+    return winner == "args_l", winner == "files_without_match"
 
 
 def filename_mode(fl: FlagView) -> bool | None:
@@ -102,6 +124,7 @@ def parse_flags(fl: FlagView, never_match: bool) -> GrepFlags:
     """
     mode = binary_mode(fl)
     filename = filename_mode(fl)
+    files_only, files_without_match = listing_mode(fl)
     # GNU checks each context option as it is read, so the first bad one
     # on the line is the one named.
     contexts = {
@@ -117,7 +140,8 @@ def parse_flags(fl: FlagView, never_match: bool) -> GrepFlags:
         line_numbers=fl.as_bool("n"),
         byte_offsets=fl.as_bool("byte_offset"),
         count_only=fl.as_bool("c"),
-        files_only=fl.as_bool("args_l"),
+        files_only=files_only,
+        files_without_match=files_without_match,
         whole_word=fl.as_bool("w"),
         fixed_string=fl.as_bool("F") and not never_match,
         # grep reads a basic expression unless -E says
@@ -153,16 +177,14 @@ async def grep(
     if read_stream is not None:
         read_stream = cache_aware_bound_stream(read_stream)
     fl = FlagView(opts.flags, spec=SPECS["grep"])
-    pattern, never_match = await resolve_pattern(
-        texts, fl, read_bytes, "grep: usage: grep [flags] pattern [path]")
+    pattern, never_match = await resolve_pattern(texts, fl, read_bytes,
+                                                 GREP_NO_PATTERN)
     f = parse_flags(fl, never_match)
     pat = compile_pattern(pattern, f.ignore_case, f.fixed_string, f.whole_word,
                           f.basic_regexp)
     io = IOResult(exit_code=1)
     if not paths:
-        source = resolve_source(stdin,
-                                "grep: usage: grep [flags] pattern [path]",
-                                error_cls=UsageError)
+        source = resolve_source(stdin, GREP_NO_PATTERN, error_cls=UsageError)
         return grep_input(source, pat, f, "(standard input)", f.with_filename
                           and not f.no_filename, io), io
 
@@ -172,7 +194,8 @@ async def grep(
                               mounts)
     st = mount_parent_stat(partial(call_stat, stat, prefix=prefix), mounts)
     rb = partial(call_read_bytes, read_bytes, prefix=prefix)
-    if not f.recursive and len(paths) == 1 and not (f.files_only or f.quiet):
+    if not f.recursive and len(paths) == 1 and not (f.files_only or f.quiet
+                                                    or f.files_without_match):
         p = paths[0]
         try:
             info = await st(p.virtual)
@@ -209,6 +232,10 @@ async def grep(
             if info.type == FileType.DIRECTORY:
                 if not f.recursive:
                     warn(f"grep: {p.raw_path}: Is a directory")
+                    # GNU 3.11 still lists it under -L: nothing was read
+                    # from it, so nothing in it matched.
+                    if f.files_without_match:
+                        yield p.raw_path.encode() + b"\n"
                     return
                 for entry in await rd(p.virtual):
                     child = PathSpec(virtual=entry,

@@ -413,5 +413,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "find [-H] [-L] [-P] [-Olevel] [-D debugopts] [path...] [expression]"
 }

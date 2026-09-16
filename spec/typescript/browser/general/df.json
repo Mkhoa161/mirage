@@ -43,5 +43,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "df [OPTION]... [FILE]..."
 }

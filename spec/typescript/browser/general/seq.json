@@ -42,5 +42,6 @@
     {
       "type": "str"
     }
-  ]
+  ],
+  "usage": "seq [OPTION]... LAST"
 }

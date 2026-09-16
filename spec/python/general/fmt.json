@@ -321,5 +321,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "fmt [-WIDTH] [OPTION]... [FILE]..."
 }

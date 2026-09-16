@@ -28,5 +28,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "chmod [OPTION]... MODE[,MODE]... FILE..."
 }

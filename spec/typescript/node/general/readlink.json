@@ -302,5 +302,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "readlink [OPTION]... FILE..."
 }

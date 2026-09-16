@@ -1,4 +1,6 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
+from enum import Enum
 from functools import partial
 
 from mirage.commands.builtin.constants import (SPLIT_BYTE_SUFFIXES,
@@ -15,7 +17,33 @@ from mirage.io.async_line_iterator import AsyncLineIterator
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
 
-_CHUNK_KIND_PREFIXES = ("l/", "r/")
+
+class ChunkKind(Enum):
+    """The three ``-n`` modes: byte chunks, record chunks, round robin."""
+
+    BYTES = "bytes"
+    LINES = "l"
+    ROUND_ROBIN = "r"
+
+
+_CHUNK_KIND_PREFIXES = (("l/", ChunkKind.LINES), ("r/", ChunkKind.ROUND_ROBIN))
+
+
+@dataclass(frozen=True, slots=True)
+class ChunkSpec:
+    """A parsed ``-n`` value.
+
+    Args:
+        kind (ChunkKind): how the input is cut.
+        count (int): N, the number of chunks.
+        only (int | None): K of ``K/N``: the one chunk written to stdout,
+            with no output file created at all; None writes every chunk
+            to its own file.
+    """
+
+    kind: ChunkKind
+    count: int
+    only: int | None = None
 
 
 def parse_bytes_value(value: str) -> int:
@@ -44,8 +72,9 @@ def parse_lines_value(value: str) -> int:
     return int(value)
 
 
-def parse_chunks_value(value: str) -> int:
-    """GNU ``split -n`` chunk count for ``N`` and ``KIND/K/N`` specs.
+def parse_chunks_value(value: str) -> ChunkSpec:
+    """GNU ``split -n``: ``N``, ``K/N``, ``l/N``, ``l/K/N``, ``r/N``, ``r/K/N``
+    (``KIND/K/N`` selects one chunk).
 
     Args:
         value (str): the raw flag value, e.g. ``4``, ``l/4``, ``2/3``.
@@ -60,19 +89,32 @@ def parse_chunks_value(value: str) -> int:
     # mirage used to name the whole spec for every malformed head and
     # credited that to 9.7; 9.4 disagrees, and so does the accepted set
     # -- a third component is N's problem, not a head component.
-    spec = next(
-        (value[len(prefix):]
-         for prefix in _CHUNK_KIND_PREFIXES if value.startswith(prefix)),
-        value)
+    # A K that parses but is 0 or past N is its own refusal, `invalid
+    # chunk number`, checked after N (coreutils 9.7: `4/3` and `0/3`
+    # name K, `3/0` names N).
+    kind = ChunkKind.BYTES
+    spec = value
+    for prefix, prefixed_kind in _CHUNK_KIND_PREFIXES:
+        if value.startswith(prefix):
+            kind = prefixed_kind
+            spec = value[len(prefix):]
+            break
     head, slash, tail = spec.partition("/")
     if slash and SPLIT_COUNT_PATTERN.fullmatch(head) is None:
         raise UsageError(
             f"split: invalid number of chunks: '{quote_text(spec)}'", 1)
-    count = tail if slash else head
-    if SPLIT_COUNT_PATTERN.fullmatch(count) is None or int(count) == 0:
+    count_raw = tail if slash else head
+    if SPLIT_COUNT_PATTERN.fullmatch(count_raw) is None or int(count_raw) == 0:
         raise UsageError(
-            f"split: invalid number of chunks: '{quote_text(count)}'", 1)
-    return int(count)
+            f"split: invalid number of chunks: '{quote_text(count_raw)}'", 1)
+    count = int(count_raw)
+    only: int | None = None
+    if slash:
+        only = int(head)
+        if only == 0 or only > count:
+            raise UsageError(
+                f"split: invalid chunk number: '{quote_text(head)}'", 1)
+    return ChunkSpec(kind, count, only)
 
 
 def parse_suffix_length(value: str) -> int:
@@ -105,11 +147,19 @@ def parse_suffix_start(value: str, hex_mode: bool, suffix_len: int) -> int:
     ``split: 'x\\303\\251': invalid start value for numerical
     suffix``).
 
+    Hex digits are lower case only, as GNU's own suffixes are:
+    ``--hex-suffixes=A`` is refused (coreutils 9.7).
+
     Args:
         value (str): the raw start value; hex digits when ``hex_mode``.
         hex_mode (bool): parse base 16 (``--hex-suffixes``) or base 10.
         suffix_len (int): the effective suffix width the start must fit.
     """
+    # An empty value (`--numeric-suffixes=`) is a start of 0 that still
+    # pins the width, since GNU checks `strspn` over an empty string and
+    # keeps the pointer; only an absent value auto-lengthens.
+    if value == "":
+        return 0
     pattern = SPLIT_HEX_DIGITS if hex_mode else SPLIT_DIGITS
     if pattern.fullmatch(value) is None:
         kind = "hexadecimal" if hex_mode else "numerical"
@@ -151,6 +201,111 @@ def parse_separator(value: str | None) -> bytes:
     if len(encoded) > 1:
         raise UsageError(f"split: multi-character separator '{value}'", 1)
     return encoded
+
+
+def _byte_chunks(data: bytes, count: int) -> list[bytes]:
+    """Cut ``data`` into ``count`` byte chunks the way GNU sizes them.
+
+    ``size // count`` bytes each, with the remainder spread one byte at
+    a time over the FIRST chunks: 7 bytes in 3 are 3, 2, 2 (coreutils
+    9.7), and an input shorter than the count leaves the tail chunks
+    empty rather than absent.
+
+    Args:
+        data (bytes): the whole input.
+        count (int): N.
+    """
+    base, rem = divmod(len(data), count)
+    chunks: list[bytes] = []
+    pos = 0
+    for index in range(count):
+        size = base + (1 if index < rem else 0)
+        chunks.append(data[pos:pos + size])
+        pos += size
+    return chunks
+
+
+def _line_chunks(data: bytes, count: int, eol: bytes) -> list[bytes]:
+    """Cut ``data`` into ``count`` chunks without cutting a record.
+
+    GNU's ``lines_chunk_split``: the byte boundaries are those of
+    ``_byte_chunks`` over ``max(size, count)``, and a chunk runs to the
+    first terminator at or after its own last byte, so a record that
+    straddles a boundary goes whole to the chunk it started in. A
+    record long enough to cover a whole later chunk leaves that chunk
+    empty, and a chunk that begins exactly where the previous one ended
+    takes the next record. Measured on coreutils 9.7 (``-n l/7`` over
+    five 6-byte lines is line1, line2, line3, empty, line4, line5,
+    empty).
+
+    Args:
+        data (bytes): the whole input.
+        count (int): N.
+        eol (bytes): the one-byte record terminator.
+    """
+    size = max(len(data), count)
+    base, rem = divmod(size, count)
+    ends: list[int] = []
+    acc = 0
+    for index in range(1, count + 1):
+        acc += base + (1 if index <= rem else 0)
+        ends.append(acc)
+    chunks = [bytearray() for _ in range(count)]
+    pos = 0
+    chunk = 0
+    while pos < len(data) and chunk < count:
+        start = max(pos, ends[chunk] - 1)
+        found = data.find(eol, start) if start < len(data) else -1
+        end, terminated = (found + 1, True) if found >= 0 else (len(data),
+                                                                False)
+        chunks[chunk] += data[pos:end]
+        pos = end
+        while terminated or ends[chunk] <= pos:
+            if not terminated and pos >= len(data):
+                break
+            chunk += 1
+            if chunk >= count:
+                break
+            if ends[chunk] > pos:
+                terminated = False
+    return [bytes(chunk_bytes) for chunk_bytes in chunks]
+
+
+def _round_robin_chunks(data: bytes, count: int, eol: bytes) -> list[bytes]:
+    """Deal the records of ``data`` over ``count`` chunks in turn.
+
+    Args:
+        data (bytes): the whole input.
+        count (int): N.
+        eol (bytes): the one-byte record terminator; a final record
+            without one is dealt too.
+    """
+    chunks = [bytearray() for _ in range(count)]
+    pos = 0
+    index = 0
+    while pos < len(data):
+        found = data.find(eol, pos)
+        end = found + 1 if found >= 0 else len(data)
+        chunks[index % count] += data[pos:end]
+        pos = end
+        index += 1
+    return [bytes(chunk_bytes) for chunk_bytes in chunks]
+
+
+def chunk_parts(data: bytes, chunks: ChunkSpec,
+                separator: bytes) -> list[bytes]:
+    """Every chunk of ``data`` under one ``-n`` spec, in order.
+
+    Args:
+        data (bytes): the whole input.
+        chunks (ChunkSpec): the parsed ``-n`` value.
+        separator (bytes): the record terminator (``-t``).
+    """
+    if chunks.kind is ChunkKind.LINES:
+        return _line_chunks(data, chunks.count, separator)
+    if chunks.kind is ChunkKind.ROUND_ROBIN:
+        return _round_robin_chunks(data, chunks.count, separator)
+    return _byte_chunks(data, chunks.count)
 
 
 _ALPHA_SUFFIXES = "abcdefghijklmnopqrstuvwxyz"
@@ -212,7 +367,7 @@ async def split(
     stdin: ByteSource | None = None,
     lines_per_file: int = 0,
     byte_limit: int = 0,
-    n_chunks: int = 0,
+    chunks: ChunkSpec | None = None,
     suffix_len: int = 2,
     suffix_auto: bool = True,
     numeric_suffix: bool = False,
@@ -225,7 +380,7 @@ async def split(
         raise extra_operand_error(CommandName.SPLIT, paths[2].raw_path
                                   or paths[2].virtual)
     prefix_name = paths[1].mount_path if len(paths) >= 2 else "x"
-    if lines_per_file == 0 and byte_limit == 0 and n_chunks == 0:
+    if lines_per_file == 0 and byte_limit == 0 and chunks is None:
         lines_per_file = 1000
     suffix_fn = partial(
         _suffix_name,
@@ -243,21 +398,18 @@ async def split(
     writes: dict[str, ByteSource] = {}
     file_idx = 0
 
-    if n_chunks > 0:
-        all_data = bytearray()
-        async for chunk in source:
-            all_data.extend(chunk)
-        total = len(all_data)
-        chunk_size = max(1, (total + n_chunks - 1) // n_chunks)
-        offset = 0
-        for i in range(n_chunks):
-            part = bytes(all_data[offset:offset + chunk_size])
-            if not part:
-                break
+    if chunks is not None:
+        all_data = b"".join([chunk async for chunk in source])
+        parts = chunk_parts(all_data, chunks, separator)
+        if chunks.only is not None:
+            # `K/N` writes the one chunk to stdout and no file at all.
+            return parts[chunks.only - 1], IOResult()
+        # Every chunk gets its file, an empty one included: GNU creates
+        # N files for `-n N` however short the input is.
+        for i, part in enumerate(parts):
             out_path = (prefix_name + suffix_fn(i) + additional_suffix)
             await write_bytes(PathSpec.from_str_path(out_path), part)
             writes[out_path] = part
-            offset += chunk_size
     elif byte_limit > 0:
         buf = bytearray()
         async for chunk in source:
@@ -313,4 +465,4 @@ async def _record_iterator(data: bytes,
         yield record
 
 
-__all__ = ["split"]
+__all__ = ["ChunkKind", "ChunkSpec", "chunk_parts", "split"]

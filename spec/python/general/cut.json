@@ -346,5 +346,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "cut OPTION... [FILE]..."
 }

@@ -341,5 +341,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "nl [OPTION]... [FILE]..."
 }

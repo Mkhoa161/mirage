@@ -345,5 +345,6 @@
     {
       "type": "path"
     }
-  ]
+  ],
+  "usage": "join [OPTION]... FILE1 FILE2"
 }

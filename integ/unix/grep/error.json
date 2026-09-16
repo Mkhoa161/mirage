@@ -142,7 +142,7 @@
       "expect": {
         "exit": 2,
         "stdout": "",
-        "stderr": "grep: usage: grep [flags] pattern [path]\n"
+        "stderr": "Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.\n"
       }
     },
     {
@@ -176,7 +176,7 @@
       "expect": {
         "exit": 2,
         "stdout": "",
-        "stderr": "grep: usage: grep [flags] pattern [path]\n"
+        "stderr": "Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.\n"
       }
     },
     {
@@ -210,7 +210,7 @@
       "expect": {
         "exit": 2,
         "stdout": "",
-        "stderr": "grep: usage: grep [flags] pattern [path]\n"
+        "stderr": "Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.\n"
       }
     },
     {

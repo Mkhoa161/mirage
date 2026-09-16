@@ -143,5 +143,6 @@
       "-t"
     ],
     "type": "path"
-  }
+  },
+  "usage": "tar [OPTION...] [FILE]..."
 }

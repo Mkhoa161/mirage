@@ -3,12 +3,15 @@ from dataclasses import dataclass
 
 from mirage.commands.builtin.utils.escapes import interpret_escapes
 from mirage.commands.builtin.utils.stream import resolve_source
+from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import CommandName, FlagValue
-from mirage.commands.spec.usage import extra_operand_error
+from mirage.commands.spec.usage import extra_operand_error, usage_hint
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
+
+_TRY_HELP = "\n" + usage_hint("tr")
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +89,7 @@ async def tr(
     if len(texts) > 2:
         raise extra_operand_error(CommandName.TR, texts[2])
     if not texts:
-        raise ValueError("tr: usage: tr [-d] [-s] [-c] set1 [set2] [path]")
+        raise ValueError("tr: missing operand" + _TRY_HELP)
     parsed = parse_flags(flags or {})
     set1 = _expand_ranges(interpret_escapes(texts[0]))
     if parsed.complement:
@@ -104,7 +107,13 @@ async def tr(
     if not parsed.delete and set2:
         table = str.maketrans(set1, set2)
     elif not parsed.delete and not set2 and not parsed.squeeze:
-        raise ValueError("tr: usage: tr set1 set2")
+        raise ValueError(
+            f"tr: missing operand after '{quote_text(texts[0])}'\n"
+            "Two strings must be given when translating." + _TRY_HELP)
+    if parsed.delete and not parsed.squeeze and len(texts) >= 2:
+        raise ValueError(f"tr: extra operand '{quote_text(texts[1])}'\n"
+                         "Only one string may be given when deleting without "
+                         "squeezing repeats." + _TRY_HELP)
 
     cache: list[str] = []
     if paths:

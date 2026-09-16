@@ -322,5 +322,6 @@
   ],
   "rest": {
     "type": "path"
-  }
+  },
+  "usage": "wc [OPTION]... [FILE]..."
 }
