@@ -18,7 +18,7 @@ import type { PathSpec } from '../../../types.ts'
 import { command, type CommandFnResult, type CommandOpts } from '../../config.ts'
 import type { RegisteredCommand } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { requireOp } from '../generic_bind/adapter.ts'
 import { resolveGlobOf, type CommandIO } from '../generic_bind/index.ts'
 

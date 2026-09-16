@@ -18,7 +18,8 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { fsErrorLine, isEnoent, isFsError } from '../../../utils/errors.ts'
 import { readStdinAsync } from '../utils/stream.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 
 const ENC = new TextEncoder()
 

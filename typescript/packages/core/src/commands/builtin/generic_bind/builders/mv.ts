@@ -17,7 +17,7 @@ import { mvGeneric, parseFlags } from '../../generic/mv.ts'
 import type { Builder } from '../adapter.ts'
 import { refuseReveal, resolveGlobOf } from '../adapter.ts'
 import { overlayableStat } from './cp.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { specOf } from '../../../spec/builtins.ts'
 
 export const MV_BUILDER: Builder = {

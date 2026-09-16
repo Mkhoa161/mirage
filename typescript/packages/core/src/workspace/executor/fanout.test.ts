@@ -27,7 +27,7 @@ import { basename } from '../../core/ram/utils.ts'
 import { OpsRegistry } from '../../ops/registry.ts'
 import { getTestParser, stdoutStr } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
-import { specFlagNames } from '../../commands/spec/types.ts'
+import { specFlagNames } from '../../commands/spec/flag_view.ts'
 import { specOf } from '../../commands/spec/builtins.ts'
 
 const NEVER_EXECUTE: ExecuteNodeFn = () => {

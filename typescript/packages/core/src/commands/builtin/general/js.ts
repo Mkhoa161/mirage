@@ -20,7 +20,7 @@ import { command, type CommandFnResult, type CommandOpts } from '../../config.ts
 import { LanguageRuntime } from '../../../runtime/language.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { resolveScript } from '../utils/operands.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { runtimeVersion, STDIN_OPERAND } from './interpreter.ts'
 
 const ENC = new TextEncoder()

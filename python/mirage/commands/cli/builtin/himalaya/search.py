@@ -19,7 +19,7 @@ from mirage.commands.cli.builtin.himalaya.query import (page_slice,
                                                         sort_headers,
                                                         uid_budget)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.email.client import fetch_headers, list_message_uids
 from mirage.core.email.config import EmailConfig
 from mirage.core.email.render import envelopes_json_bytes

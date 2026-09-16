@@ -40,7 +40,7 @@ import {
   toJsonBytes,
   type NormalizedProjectIssue,
 } from '../../../../core/linear/normalize.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { IOResult } from '../../../../io/types.ts'
 import { enoent } from '../../../../utils/errors.ts'
 import type { CommandFnResult } from '../../../config.ts'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { specOf } from '../spec/builtins.ts'
-import { FlagView } from '../spec/types.ts'
+import { FlagView } from '../spec/flag_view.ts'
 import { IOResult, materialize } from '../../io/types.ts'
 import { parseFlags } from './generic/grep.ts'
 import { grepInput, PROBE_BLOCK_BYTES } from './grep_binary.ts'

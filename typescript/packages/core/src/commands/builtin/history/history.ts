@@ -19,7 +19,7 @@ import { type PathSpec } from '../../../types.ts'
 import { command } from '../../config.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { ResourceName } from '../../../types.ts'
 
 const ENC = new TextEncoder()

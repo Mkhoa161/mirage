@@ -23,7 +23,7 @@ import { specOf } from '../../spec/builtins.ts'
 import { patternArg } from '../grep_pattern.ts'
 import { grepGeneric, labelled } from '../generic/grep.ts'
 import { narrowScope } from './pushdown.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 async function grepCommand(
   accessor: DropboxAccessor,

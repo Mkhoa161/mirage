@@ -24,7 +24,7 @@ from mirage.commands.builtin.utils.slash_links import (is_slashed_link,
 from mirage.commands.builtin.utils.verbose import removal_lines
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import FileType, PathSpec
 from mirage.utils.errors import (FS_ERRORS, error_path, fs_strerror,

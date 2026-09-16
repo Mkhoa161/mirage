@@ -14,7 +14,7 @@
 
 import { IOResult } from '../../../../io/types.ts'
 import type { CommandFnResult } from '../../../config.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import type { CLIInvocation } from '../../types.ts'
 import { DELETED, headEntries, MODIFIED, workChanges } from './changes.ts'
 import {

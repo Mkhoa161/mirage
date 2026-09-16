@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from typing import Any, Literal
 
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.io.types import ByteSource, materialize
 
 SourceMode = Literal["reply", "forward"]

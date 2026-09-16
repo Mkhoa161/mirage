@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { FlagView } from '../../../../spec/types.ts'
+import { FlagView } from '../../../../spec/flag_view.ts'
 import { getPage, getPageMarkdown } from '../../../../../core/notion/pages.ts'
 import { extractTitle } from '../../../../../core/notion/normalize.ts'
 import { IOResult } from '../../../../../io/types.ts'

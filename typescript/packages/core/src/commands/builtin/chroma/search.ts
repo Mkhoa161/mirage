@@ -24,7 +24,7 @@ import { rstripSlash } from '../../../utils/slash.ts'
 import { command, type CommandFnResult, type CommandOpts } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { defaultPaths } from '../utils/operands.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const resolveGlob = resolveGlobOf(CHROMA_IO)
 

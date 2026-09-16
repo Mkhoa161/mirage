@@ -16,7 +16,7 @@ from typing import Any
 
 from mirage.commands.cli.builtin.ntn.util import notion_config, pretty_json
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.notion.config import NotionConfig
 from mirage.core.notion.pages import get_self
 from mirage.io.stream import yield_bytes

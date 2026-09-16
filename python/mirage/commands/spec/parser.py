@@ -13,6 +13,8 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any
 
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
@@ -21,8 +23,92 @@ from mirage.commands.spec.constants import (ARG_PLACEHOLDER, FLOAT_VALUE,
                                             flag_kwarg_name)
 from mirage.commands.spec.oldstyle import expand_old_style
 from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
-                                        ParsedArgs, ParsedFlagValue, ValueType)
+                                        ParsedFlagValue, ValueType)
 from mirage.utils.path import resolve_path
+
+
+@dataclass
+class ParsedArgs:
+    flags: dict[str, ParsedFlagValue]
+    args: list[tuple[str, ValueType]]
+    cache_paths: list[str] = field(default_factory=list)
+    path_flag_values: list[str] = field(default_factory=list)
+    raw_operands: list[tuple[str, ValueType]] = field(default_factory=list)
+    text_flag_values: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    word_kinds: list[ValueType | None] = field(default_factory=list)
+    # Per-position base directory, aligned with word_kinds: the absolute
+    # path a word resolves against when an operand_base option (tar's -C)
+    # moved it, and None when the session cwd still applies. Only a spec
+    # declaring operand_base ever fills this.
+    word_bases: list[str | None] = field(default_factory=list)
+    # GNU-shaped option errors, reported (never raised) by the parser:
+    # undeclared options ('--bogus' or the offending cluster char 'Y'),
+    # abbreviated longs matching several options (typed prefix, matched
+    # spellings in declaration order), declared value flags that ran out
+    # of line ('--max-depth', 'm'), values outside a declared choices set
+    # (canonical spelling, value, allowed values), non-integer values on
+    # int-typed options (canonical spelling, value), and absent required
+    # options (canonical spelling).
+    invalid_options: list[str] = field(default_factory=list)
+    ambiguous_options: list[tuple[str,
+                                  tuple[str,
+                                        ...]]] = field(default_factory=list)
+    # "invalid" / "unexpected_value" / "ambiguous" tags in scan encounter
+    # order, so the refusal names the FIRST offending token like GNU (grep
+    # --c --bogus reports --c; reversed reports --bogus). needs_value is
+    # absent by construction: it only fires on the line's final token, so
+    # it can never precede another scan error. "unexpected_value" is a
+    # boolean long handed a value, which getopt_long refuses in its own
+    # words rather than as an unrecognized option; its entry in
+    # invalid_options is the option's canonical spelling with the typed
+    # value ("--byte-offset=2"), so the two tags share one list and the
+    # renderer tells them apart by the tag.
+    option_error_kinds: list[str] = field(default_factory=list)
+    needs_value_options: list[str] = field(default_factory=list)
+    invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = field(
+        default_factory=list)
+    invalid_int_options: list[tuple[str, str]] = field(default_factory=list)
+    invalid_float_options: list[tuple[str, str]] = field(default_factory=list)
+    missing_required_options: list[str] = field(default_factory=list)
+    # Display names of required operand slots the line left empty, in
+    # declaration order. Reported rather than raised, like every other
+    # entry here, so the dialect that words it is the caller's choice.
+    missing_required_operands: list[str] = field(default_factory=list)
+    # Dests the line actually carried, in scan order, excluding the ones
+    # a declared default filled in afterwards. A usage line that echoes
+    # what was supplied (clap's) needs exactly this distinction: a
+    # defaulted option is invisible there, a typed one is not.
+    typed_dests: list[str] = field(default_factory=list)
+    # Every scalar value-flag occurrence the line carried, as (dest, raw
+    # value) in scan order. The bag above keeps one value per scalar
+    # dest, so a repeated option throws the earlier value away; this is
+    # where it survives, for a command that must answer for a value the
+    # bag no longer holds (nl refuses the LEFTMOST invalid one, which is
+    # the order GNU validates in). Parser bookkeeping, not grammar: no
+    # spec field switches it on, an accumulating (``multiple``) option
+    # is absent because its own list already is the record, and every
+    # command is free to ignore it -- all of them but nl do.
+    value_occurrences: list[tuple[str, str]] = field(default_factory=list)
+    # The old-style cluster letter whose argument ran off the end of the
+    # line (`tar xzf` with no archive). Its own report because GNU tar
+    # words it differently and exits differently from every getopt
+    # refusal above, and because it outranks all of them: tar counts the
+    # cluster's argument needs before argp ever validates a letter, so
+    # `tar Qf` and `tar fQ` both name f, not Q.
+    old_option_needs_value: str | None = None
+
+    def paths(self) -> list[str]:
+        return [v for v, k in self.args if k == "path"]
+
+    def routing_paths(self) -> list[str]:
+        return self.paths() + self.path_flag_values
+
+    def texts(self) -> list[str]:
+        return [v for v, k in self.args if k != "path"]
+
+    def flag(self, name: str, default: Any = None) -> Any:
+        return self.flags.get(name, default)
 
 
 def _set_value_flag(

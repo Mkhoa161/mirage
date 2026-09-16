@@ -25,7 +25,7 @@ import { prefixAggregate } from '../aggregators.ts'
 import { patternArg } from '../grep_pattern.ts'
 import { grepGeneric, labelled } from '../generic/grep.ts'
 import { narrowScope } from './pushdown.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 

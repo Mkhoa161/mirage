@@ -21,7 +21,7 @@ from mirage.commands.cli.builtin.hf.accessor import (hub_for, repo_type_of,
 from mirage.commands.cli.builtin.hf.download import refuse_variadic
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.hf_hub.admin import create_repo
 from mirage.core.hf_hub.client import repo_url
 from mirage.core.hf_hub.commit import Addition, commit

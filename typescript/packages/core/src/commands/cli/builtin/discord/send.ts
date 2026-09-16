@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { sendMessage } from '../../../../core/discord/post.ts'
 import { IOResult, type ByteSource } from '../../../../io/types.ts'
 import type { CommandFnResult } from '../../../config.ts'

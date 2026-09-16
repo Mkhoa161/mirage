@@ -16,7 +16,8 @@ import type { MountRegistry } from '../../../../workspace/mount/registry.ts'
 import type { PathSpec } from '../../../../types.ts'
 import { CROSS_MOUNT_COMMANDS, RELAY_COMMANDS, STREAM_COMMANDS } from './constants.ts'
 import { Cmd, Strategy } from './types.ts'
-import { FlagView, type FlagValue } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
+import { type FlagValue } from '../../../spec/types.ts'
 import { specOf } from '../../../spec/builtins.ts'
 
 // Pick the combine strategy for one cross-mount command invocation. Flags can

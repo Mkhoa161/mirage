@@ -18,7 +18,8 @@ from collections.abc import Mapping, Sequence
 from mirage.commands.builtin.constants import PatternType
 from mirage.commands.builtin.grep_pattern import bre_source
 from mirage.commands.builtin.utils.paths import has_unresolved_glob
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.types import PathSpec
 
 

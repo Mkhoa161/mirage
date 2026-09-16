@@ -17,7 +17,8 @@ import json
 from mirage.accessor.trello import TrelloAccessor
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
-from mirage.commands.spec.types import CommandSpec, FlagView, Option
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import CommandSpec, Option
 from mirage.context import require_mount_writable
 from mirage.core.trello.client import card_move
 from mirage.core.trello.normalize import normalize_card

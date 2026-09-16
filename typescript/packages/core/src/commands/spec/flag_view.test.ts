@@ -15,7 +15,8 @@
 import { describe, expect, it } from 'vitest'
 import { specOf } from './builtins.ts'
 import { flagKwargName } from './constants.ts'
-import { CommandSpec, FlagView, Option, specFlagNames } from './types.ts'
+import { CommandSpec, Option } from './types.ts'
+import { FlagView, specFlagNames } from './flag_view.ts'
 
 // Mirrors python/tests/commands/spec/test_types.py.
 

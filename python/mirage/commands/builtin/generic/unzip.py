@@ -9,7 +9,8 @@ from mirage.commands.builtin.generic.archive.extract import (ensure_dir,
 from mirage.commands.builtin.generic.archive.walk import StatFn
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
 from mirage.utils.key_prefix import mount_prefix_of

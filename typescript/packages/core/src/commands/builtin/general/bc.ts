@@ -19,7 +19,7 @@ import { command, type CommandFnResult, type CommandOpts } from '../../config.ts
 import { specOf } from '../../spec/builtins.ts'
 import { readStdinAsync } from '../utils/stream.ts'
 import { pureProvision } from '../generic_bind/provision.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()

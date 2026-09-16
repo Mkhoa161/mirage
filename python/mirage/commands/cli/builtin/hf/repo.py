@@ -17,7 +17,7 @@ from mirage.commands.cli.builtin.hf.accessor import (repo_type_of,
                                                      require_token, text_out)
 from mirage.commands.cli.types import CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.hf_hub.admin import create_repo, create_tag
 from mirage.core.hf_hub.admin import delete_tag as delete_tag_api
 from mirage.core.hf_hub.admin import list_tags

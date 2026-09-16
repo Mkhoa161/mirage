@@ -15,7 +15,7 @@
 import git from 'isomorphic-git'
 import { HEAD } from './constants.ts'
 
-import type { FlagView } from '../../../spec/types.ts'
+import type { FlagView } from '../../../spec/flag_view.ts'
 import { isoTimestamp } from '../../../../utils/dates.ts'
 import { BadDateError, UnrecognizedArgumentError } from './errors.ts'
 import { MEDIUM, parsePretty, type CommitFacts, type LogFormat } from './format.ts'

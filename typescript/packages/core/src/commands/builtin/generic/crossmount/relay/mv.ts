@@ -18,7 +18,7 @@ import { mvGeneric, parseFlags } from '../../mv.ts'
 import type { CrossResult, DispatchFn } from '../types.ts'
 import { flatten, readBytesOp, readdirOp, statOp } from '../utils.ts'
 import type { FlagValue } from '../../../../spec/types.ts'
-import { FlagView } from '../../../../spec/types.ts'
+import { FlagView } from '../../../../spec/flag_view.ts'
 import { specOf } from '../../../../spec/builtins.ts'
 
 // Move operands that span mounts via the shared generic mv. Pure wiring:

@@ -22,7 +22,7 @@ from mirage.commands.cli.builtin.hf.accessor import (hub_for, repo_type_of,
                                                      text_out)
 from mirage.commands.cli.types import CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.concurrency.limiter import ConcurrencyLimiter
 from mirage.core.hf_hub.cache import (blob_path, cache_root, etag_of,
                                       link_target, ref_path, repo_folder_name,

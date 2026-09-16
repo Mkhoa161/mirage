@@ -22,7 +22,7 @@ import { command, type CommandFnResult, type CommandOpts, type ProvisionFn } fro
 import { exactZeroProvision } from '../generic_bind/provision.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { defaultPaths } from '../utils/operands.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 

@@ -1,7 +1,7 @@
 import { odGeneric, parseCount } from '../../generic/od.ts'
 import { resolveSource } from '../../utils/stream.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { type Builder, resolveGlobOf } from '../adapter.ts'
 
 async function* concatSources(sources: AsyncIterable<Uint8Array>[]): AsyncIterable<Uint8Array> {

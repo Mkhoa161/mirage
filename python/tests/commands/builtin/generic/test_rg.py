@@ -2,7 +2,7 @@ import pytest
 
 from mirage.commands.builtin.generic.rg import parse_flags, rg
 from mirage.commands.config import CommandOpts
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.types import ContentType, FileStat, FileType, PathSpec
 from mirage.utils.key_prefix import mount_key
 

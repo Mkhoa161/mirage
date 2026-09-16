@@ -30,7 +30,7 @@ import { SEARCH_HONORED, SEARCH_MAX_RESULTS } from './grep.ts'
 import { command, type CommandFnResult, type CommandOpts } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { rgGeneric } from '../generic/rg.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const resolveGlob = resolveGlobOf(GMAIL_IO)
 

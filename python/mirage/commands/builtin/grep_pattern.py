@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from mirage.commands.builtin.utils.bre import BreError, translate_bre
 from mirage.commands.builtin.utils.wrap import call_read_bytes
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.types import PathSpec
 from mirage.utils.key_prefix import mount_prefix_of
 
