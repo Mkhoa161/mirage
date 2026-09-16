@@ -565,7 +565,7 @@ def test_parse_cp_flags_conflicts_and_grammar():
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.errors import UsageError
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     def view(bag):
         return FlagView(bag, spec=SPECS["cp"])

@@ -17,7 +17,8 @@ from mirage.commands.builtin.generic.crossmount.utils import \
     transfer_primitives
 from mirage.commands.builtin.generic.unzip import unzip
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.runtime.types import DispatchFn
 from mirage.types import PathSpec
 

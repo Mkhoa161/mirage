@@ -24,7 +24,7 @@ import {
   type RegisteredCommand,
 } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { resolveGlobOf, type CommandIO } from '../generic_bind/index.ts'
 import { withWriteGuards } from '../generic_bind/adapter.ts'
 import { formatRecords } from '../utils/output.ts'

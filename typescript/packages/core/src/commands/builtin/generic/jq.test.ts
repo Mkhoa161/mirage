@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { jqOptions } from '../../../core/jq/index.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { assembleInputs, exitCode, namedArgs, parseFlags, positionalArgs } from './jq.ts'
 
 const ENC = new TextEncoder()

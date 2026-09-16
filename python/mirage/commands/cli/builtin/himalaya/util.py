@@ -23,7 +23,7 @@ from mirage.commands.cli.builtin.himalaya.builder import (Attachment, Compose,
 from mirage.commands.cli.builtin.himalaya.deliver import (deliver,
                                                           save_sent_copy)
 from mirage.commands.cli.types import CLIDoors
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.email.config import EmailConfig
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource, IOResult

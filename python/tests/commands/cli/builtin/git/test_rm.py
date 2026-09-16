@@ -22,7 +22,7 @@ from mirage.commands.cli.builtin.git.errors import (NotRecursiveError,
 from mirage.commands.cli.builtin.git.rm import (RmFlags, parse_flags, select,
                                                 shadowed)
 from mirage.commands.cli.builtin.git.types import RepoLocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 
 LOCATION = RepoLocation(gitdir="/repo/.git",
                         commondir="/repo/.git",

@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { fnmatch } from '../../utils/fnmatch.ts'
-import type { FlagView } from '../spec/types.ts'
+import type { FlagView } from '../spec/flag_view.ts'
 
 /**
  * GNU's file-selection flags, threaded as one value.

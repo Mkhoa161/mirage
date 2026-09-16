@@ -15,7 +15,7 @@
 from mirage.commands.cli.builtin.linear.util import (first_text, resolve_issue,
                                                      text_or_stdin)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.linear.client import comment_create
 from mirage.core.linear.config import LinearConfig
 from mirage.core.linear.normalize import normalize_comment, to_json_bytes

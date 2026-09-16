@@ -20,7 +20,7 @@ from mirage.commands.cli.builtin.ntn.util import (first_text, notion_config,
                                                   property_cell)
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.notion.client import NotionAPIError
 from mirage.core.notion.config import NotionConfig
 from mirage.core.notion.pages import (get_data_source, get_database,

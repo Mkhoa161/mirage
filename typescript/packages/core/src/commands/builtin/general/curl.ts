@@ -28,7 +28,7 @@ import {
 import { UsageError } from '../../errors.ts'
 import { gnuStrerror, isFsError } from '../../../utils/errors.ts'
 import { rstripSlash, stripSlash } from '../../../utils/slash.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 

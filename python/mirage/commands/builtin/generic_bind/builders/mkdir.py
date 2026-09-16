@@ -18,7 +18,7 @@ from mirage.commands.builtin.generic_bind.adapter import (Builder, CommandIO,
 from mirage.commands.builtin.utils.slash_links import mkdir_link_refusal
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.context import DEFAULT_UMASK, session_umask
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec

@@ -16,7 +16,8 @@ import { breToRegExp } from '../../utils/bre.ts'
 import { mountKey, mountPrefixOf } from '../../utils/key_prefix.ts'
 import { materialize } from '../../io/types.ts'
 import { PathSpec } from '../../types.ts'
-import { FlagView, type FlagValue } from '../spec/types.ts'
+import { FlagView } from '../spec/flag_view.ts'
+import { type FlagValue } from '../spec/types.ts'
 
 export const NEVER_MATCH = '(?!)'
 

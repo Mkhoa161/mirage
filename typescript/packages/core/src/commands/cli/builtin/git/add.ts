@@ -18,7 +18,7 @@ import { IOResult } from '../../../../io/types.ts'
 import type { StatPath } from '../../../../ops/types.ts'
 import { FileType, type FileStat } from '../../../../types.ts'
 import type { CommandFnResult } from '../../../config.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import type { CLIInvocation } from '../../types.ts'
 import {
   GitError,

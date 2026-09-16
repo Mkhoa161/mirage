@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { cacheAwareStreamEager } from '../../../cache/read_through.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
 import { FileType, type FileStat, type PathSpec } from '../../../types.ts'

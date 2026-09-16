@@ -15,7 +15,7 @@
 from mirage.accessor.trello import TrelloAccessor
 from mirage.commands.builtin.utils.stream import \
     resolve_text_input as _resolve_text_input
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.trello.read import read
 from mirage.io.types import ByteSource
 from mirage.types import PathSpec

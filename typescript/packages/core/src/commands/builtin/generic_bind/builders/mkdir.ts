@@ -22,7 +22,7 @@ import {
 import { DEFAULT_DIR_MODE, parseChmod } from '../../../../utils/mode.ts'
 import { DEFAULT_UMASK, sessionUmask } from '../../../../context/session_context.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { mkdirLinkRefusal } from '../../utils/slash_links.ts'
 import { type Builder, resolveGlobOf } from '../adapter.ts'
 

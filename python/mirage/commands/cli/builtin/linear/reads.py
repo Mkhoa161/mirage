@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 
 from mirage.commands.cli.builtin.linear.util import first_text, resolve_issue
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.linear.client import (get_issue, list_issue_comments,
                                        list_team_cycles, list_team_documents,
                                        list_team_issues, list_team_labels,

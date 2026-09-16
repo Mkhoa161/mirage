@@ -16,7 +16,7 @@ import json
 
 from mirage.commands.cli.builtin.himalaya.deliver import deliver
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.email.config import EmailConfig
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource, IOResult, materialize

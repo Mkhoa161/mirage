@@ -23,7 +23,7 @@ import { specOf } from '../../spec/builtins.ts'
 import { patternArg } from '../grep_pattern.ts'
 import { rgGeneric } from '../generic/rg.ts'
 import { narrowScope } from './pushdown.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 // Reproduce rg's dotfile pruning for search-narrowed candidates: the
 // generic rg walk skips hidden files and never descends into hidden

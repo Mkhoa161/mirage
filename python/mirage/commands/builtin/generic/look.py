@@ -5,7 +5,8 @@ from mirage.commands.builtin.utils.lines import split_lines
 from mirage.commands.builtin.utils.stream import read_stdin_async
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import CommandName, FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import CommandName, FlagValue
 from mirage.commands.spec.usage import extra_operand_error
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec

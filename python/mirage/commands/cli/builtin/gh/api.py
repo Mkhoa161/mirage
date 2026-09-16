@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from mirage.commands.cli.builtin.gh.accessor import (json_out, read_cli_file,
                                                      text_out)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.github.client import github_request_response
 from mirage.core.github.config import GhConfig
 from mirage.core.github.placeholder import expand

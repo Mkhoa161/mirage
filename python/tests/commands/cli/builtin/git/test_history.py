@@ -19,7 +19,7 @@ from dulwich.repo import Repo
 from mirage.commands.cli.builtin.git.errors import BadDateError
 from mirage.commands.cli.builtin.git.format import subject
 from mirage.commands.cli.builtin.git.history import parse_flags, select
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 
 NO_FLAGS: dict[str, object] = {}
 

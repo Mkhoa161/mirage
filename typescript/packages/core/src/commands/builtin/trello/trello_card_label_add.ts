@@ -20,7 +20,7 @@ import { IOResult } from '../../../io/types.ts'
 import { ResourceName, type PathSpec } from '../../../types.ts'
 import { command, type CommandFnResult, type CommandOpts } from '../../config.ts'
 import { CommandSpec, Option } from '../../spec/types.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 

@@ -29,7 +29,7 @@ import {
 } from '../../../types.ts'
 import { UsageError } from '../../errors.ts'
 import { extraOperandError } from '../../spec/usage.ts'
-import type { FlagView } from '../../spec/types.ts'
+import type { FlagView } from '../../spec/flag_view.ts'
 import { modifiedTs } from '../../../core/generic/find.ts'
 import { backupControl, backupTarget } from '../utils/backup.ts'
 import { DEFAULT_BACKUP_SUFFIX } from '../utils/constants.ts'

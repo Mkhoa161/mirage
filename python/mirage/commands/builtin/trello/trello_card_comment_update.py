@@ -19,7 +19,8 @@ from mirage.commands.builtin.trello._input import (file_operand,
                                                    resolve_text_input)
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
-from mirage.commands.spec.types import CommandSpec, FlagView, Option
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import CommandSpec, Option
 from mirage.context import require_mount_writable
 from mirage.core.trello.client import comment_update
 from mirage.core.trello.normalize import normalize_comment

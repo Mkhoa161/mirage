@@ -26,7 +26,7 @@ from mirage.commands.builtin.generic_bind.adapter import (Builder, CommandIO,
                                                           overlaid_stat)
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.context import hidden_paths_intersect, path_rules_active
 from mirage.io.types import ByteSource, IOResult
 from mirage.ops.types import StatOverlay

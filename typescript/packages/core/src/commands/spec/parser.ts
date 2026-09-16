@@ -22,7 +22,129 @@ import {
   NUMERIC_SHORT,
 } from './constants.ts'
 import { expandOldStyle } from './oldstyle.ts'
-import { type CommandSpec, type ValueType, ParsedArgs, type FlagValue } from './types.ts'
+import { type CommandSpec, type ValueType, type FlagValue } from './types.ts'
+
+export interface ParsedArgsInit {
+  flags: Record<string, FlagValue>
+  args: [string, ValueType][]
+  cachePaths?: string[]
+  pathFlagValues?: string[]
+  rawOperands?: [string, ValueType][]
+  textFlagValues?: string[]
+  warnings?: string[]
+  wordKinds?: (ValueType | null)[]
+  wordBases?: (string | null)[]
+  invalidOptions?: string[]
+  ambiguousOptions?: [string, readonly string[]][]
+  optionErrorKinds?: string[]
+  needsValueOptions?: string[]
+  invalidValueOptions?: [string, string, readonly string[]][]
+  invalidIntOptions?: [string, string][]
+  invalidFloatOptions?: [string, string][]
+  missingRequiredOptions?: string[]
+  /**
+   * Display names of required operand slots the line left empty, in
+   * declaration order. Reported rather than thrown, like every other entry
+   * here, so the dialect that words it is the caller's choice.
+   */
+  missingRequiredOperands?: string[]
+  /**
+   * Dests the line actually carried, in scan order, excluding the ones a
+   * declared default filled in afterwards. A usage line that echoes what was
+   * supplied (clap's) needs exactly this distinction: a defaulted option is
+   * invisible there, a typed one is not.
+   */
+  typedDests?: string[]
+  oldOptionNeedsValue?: string | null
+}
+
+export class ParsedArgs {
+  readonly flags: Record<string, FlagValue>
+  readonly args: [string, ValueType][]
+  readonly cachePaths: string[]
+  readonly pathFlagValues: string[]
+  readonly rawOperands: [string, ValueType][]
+  readonly textFlagValues: string[]
+  readonly warnings: string[]
+  readonly wordKinds: (ValueType | null)[]
+  // Per-position base directory, aligned with wordKinds: the absolute
+  // path a word resolves against when an operandBase option (tar's -C)
+  // moved it, and null when the session cwd still applies. Only a spec
+  // declaring operandBase ever fills this.
+  readonly wordBases: (string | null)[]
+  // GNU-shaped option errors, reported (never thrown) by the parser:
+  // undeclared options ('--bogus' or the offending cluster char 'Y'),
+  // abbreviated longs matching several options (typed prefix, matched
+  // spellings in declaration order), declared value flags that ran out
+  // of line ('--max-depth', 'm'), values outside a declared choices set
+  // (canonical spelling, value, allowed values), non-integer values on
+  // int-typed options (canonical spelling, value), and absent required
+  // options (canonical spelling).
+  readonly invalidOptions: string[]
+  readonly ambiguousOptions: [string, readonly string[]][]
+  // "invalid" / "ambiguous" tags in scan encounter order, so the refusal
+  // names the FIRST offending token like GNU (grep --c --bogus reports
+  // --c; reversed reports --bogus). needsValue is absent by construction:
+  // it only fires on the line's final token, so it can never precede
+  // another scan error.
+  readonly optionErrorKinds: string[]
+  readonly needsValueOptions: string[]
+  readonly invalidValueOptions: [string, string, readonly string[]][]
+  readonly invalidIntOptions: [string, string][]
+  readonly invalidFloatOptions: [string, string][]
+  readonly missingRequiredOptions: string[]
+  readonly missingRequiredOperands: string[]
+  readonly typedDests: string[]
+  // The old-style cluster letter whose argument ran off the end of the
+  // line (`tar xzf` with no archive). Its own report because GNU tar
+  // words it differently and exits differently from every getopt refusal
+  // above, and because it outranks all of them: tar counts the cluster's
+  // argument needs before argp ever validates a letter, so `tar Qf` and
+  // `tar fQ` both name f, not Q.
+  readonly oldOptionNeedsValue: string | null
+
+  constructor(init: ParsedArgsInit) {
+    this.flags = init.flags
+    this.args = init.args
+    this.cachePaths = init.cachePaths ?? []
+    this.pathFlagValues = init.pathFlagValues ?? []
+    this.rawOperands = init.rawOperands ?? []
+    this.textFlagValues = init.textFlagValues ?? []
+    this.warnings = init.warnings ?? []
+    this.wordKinds = init.wordKinds ?? []
+    this.wordBases = init.wordBases ?? []
+    this.invalidOptions = init.invalidOptions ?? []
+    this.ambiguousOptions = init.ambiguousOptions ?? []
+    this.optionErrorKinds = init.optionErrorKinds ?? []
+    this.needsValueOptions = init.needsValueOptions ?? []
+    this.invalidValueOptions = init.invalidValueOptions ?? []
+    this.invalidIntOptions = init.invalidIntOptions ?? []
+    this.invalidFloatOptions = init.invalidFloatOptions ?? []
+    this.missingRequiredOptions = init.missingRequiredOptions ?? []
+    this.missingRequiredOperands = init.missingRequiredOperands ?? []
+    this.typedDests = init.typedDests ?? []
+    this.oldOptionNeedsValue = init.oldOptionNeedsValue ?? null
+  }
+
+  paths(): string[] {
+    return this.args.filter(([, k]) => k === 'path').map(([v]) => v)
+  }
+
+  routingPaths(): string[] {
+    return [...this.paths(), ...this.pathFlagValues]
+  }
+
+  texts(): string[] {
+    return this.args.filter(([, k]) => k !== 'path').map(([v]) => v)
+  }
+
+  flag(
+    name: string,
+    fallback: string | boolean | number | string[] | null = null,
+  ): string | boolean | number | string[] | null {
+    return this.flags[name] ?? fallback
+  }
+}
 
 // Record a value flag occurrence under its canonical dest. Both spellings
 // of one option land on the same key, so the last occurrence wins

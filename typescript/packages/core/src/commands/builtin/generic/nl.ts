@@ -18,7 +18,8 @@ import type { PathSpec } from '../../../types.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { operandsIo, readOperands, singleChunk } from '../utils/operands.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()

@@ -24,7 +24,8 @@ import { BINARY_EXTENSIONS } from '../constants.ts'
 import { getExtension } from '../../resolve.ts'
 import { compileSpec } from '../../spec/compile.ts'
 import { flagKwargName } from '../../spec/constants.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import type { ReaddirOp, ResolveGlobOp, StatOp } from './adapter.ts'
 
 // Cap on entries visited by a planning walk (grep -r): beyond it the

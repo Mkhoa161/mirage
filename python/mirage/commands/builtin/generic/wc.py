@@ -10,7 +10,8 @@ from mirage.commands.builtin.utils.output import format_records
 from mirage.commands.builtin.utils.stream import resolve_source
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.io.cooperative import chunks
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec, PolymorphicReadFn

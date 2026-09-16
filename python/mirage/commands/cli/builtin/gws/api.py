@@ -25,7 +25,8 @@ from mirage.commands.cli.builtin.gws.methods import (GWS_METHODS,
                                                      gws_method_description)
 from mirage.commands.cli.types import CLIInvocation, CLISpec
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagValue, FlagView, Option
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue, Option
 from mirage.core.google.client import (TokenManager, drive_base, google_delete,
                                        google_get, google_get_bytes,
                                        google_patch, google_post)

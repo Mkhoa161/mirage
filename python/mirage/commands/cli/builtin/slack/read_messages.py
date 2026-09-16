@@ -15,7 +15,7 @@
 import json
 
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.slack.config import SlackConfig
 from mirage.core.slack.history import fetch_recent_messages
 from mirage.io.stream import yield_bytes

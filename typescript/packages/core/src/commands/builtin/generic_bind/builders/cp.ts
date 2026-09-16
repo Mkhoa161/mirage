@@ -21,7 +21,7 @@ import { walkFind } from '../../../../core/generic/find.ts'
 import { cpGeneric, parseFlags } from '../../generic/cp.ts'
 import type { Builder, CommandIO } from '../adapter.ts'
 import { resolveGlobOf } from '../adapter.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { specOf } from '../../../spec/builtins.ts'
 
 // The backend stat, merged with the namespace attr overlay if any. cp/mv

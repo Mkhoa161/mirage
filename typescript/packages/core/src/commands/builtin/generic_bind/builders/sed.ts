@@ -20,7 +20,7 @@ import { rstripSlash } from '../../../../utils/slash.ts'
 import type { CommandOpts } from '../../../config.ts'
 import { sedGeneric } from '../../generic/sed.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { type Builder, resolveGlobOf } from '../adapter.ts'
 import { makeSedProvision } from '../provision.ts'
 

@@ -20,8 +20,9 @@ from mirage.commands.builtin.utils.backup import backup_control, backup_target
 from mirage.commands.builtin.utils.constants import DEFAULT_BACKUP_SUFFIX
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS, parse_command
-from mirage.commands.spec.parser import parse_to_kwargs
-from mirage.commands.spec.types import FlagValue, FlagView, ParsedArgs
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.parser import ParsedArgs, parse_to_kwargs
+from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import (ambiguous_option_error,
                                         missing_value_error,
                                         unknown_option_error, usage_hint)

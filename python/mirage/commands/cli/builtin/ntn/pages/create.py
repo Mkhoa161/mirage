@@ -16,7 +16,7 @@ from mirage.commands.cli.builtin.ntn.util import (content_or_stdin,
                                                   notion_config, pretty_json)
 from mirage.commands.cli.types import CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.notion.config import NotionConfig
 from mirage.core.notion.pages import create_page
 from mirage.io.stream import yield_bytes

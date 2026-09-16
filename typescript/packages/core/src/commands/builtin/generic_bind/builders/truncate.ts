@@ -1,6 +1,6 @@
 import { truncateGeneric } from '../../generic/truncate.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { type Builder, resolveGlobOf } from '../adapter.ts'
 
 export const TRUNCATE_BUILDER: Builder = {

@@ -26,7 +26,8 @@ import {
 } from '../sort_keys.ts'
 import { splitLines } from '../utils/lines.ts'
 import { readStdinAsync } from '../utils/stream.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()

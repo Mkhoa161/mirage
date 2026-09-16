@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { stripSlash } from '../../../utils/slash.ts'
 import { AsyncLineIterator } from '../../../io/async_line_iterator.ts'
 import { IOResult } from '../../../io/types.ts'

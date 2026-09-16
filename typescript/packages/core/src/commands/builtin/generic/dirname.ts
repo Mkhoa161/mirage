@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { IOResult } from '../../../io/types.ts'
 import type { CommandFn } from '../../config.ts'
 import { gnuDirname } from '../../../utils/path.ts'

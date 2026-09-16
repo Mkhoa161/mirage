@@ -20,7 +20,7 @@ from mirage.commands.builtin.utils.paths import default_paths
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.lancedb.search import search_rows_output
 from mirage.io.types import ByteSource, IOResult
 from mirage.provision.types import ProvisionResult

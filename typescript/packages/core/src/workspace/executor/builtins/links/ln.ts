@@ -17,7 +17,8 @@ import { DEFAULT_BACKUP_SUFFIX } from '../../../../commands/builtin/utils/consta
 import { UsageError } from '../../../../commands/errors.ts'
 import { specOf } from '../../../../commands/spec/builtins.ts'
 import { parseCommand, parseToKwargs } from '../../../../commands/spec/parser.ts'
-import { FlagView, type ParsedArgs } from '../../../../commands/spec/types.ts'
+import { FlagView } from '../../../../commands/spec/flag_view.ts'
+import { type ParsedArgs } from '../../../../commands/spec/parser.ts'
 import {
   ambiguousOptionError,
   missingValueError,

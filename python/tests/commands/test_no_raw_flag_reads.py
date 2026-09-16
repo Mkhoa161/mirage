@@ -23,7 +23,7 @@ COMMANDS = Path(__file__).resolve().parents[2] / "mirage" / "commands"
 # `config.py` is spec-layer too: the @command wrapper answers --help and
 # --version off the bag before the command it wraps ever sees it.
 EXEMPT = {
-    "spec/parser.py", "spec/shell.py", "spec/types.py", "cli/walk.py",
+    "spec/parser.py", "spec/shell.py", "spec/flag_view.py", "cli/walk.py",
     "config.py"
 }
 # Assignment is fine: crossmount fanout builds a bag to hand to the

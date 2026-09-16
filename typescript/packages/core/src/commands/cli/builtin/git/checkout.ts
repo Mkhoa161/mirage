@@ -16,7 +16,7 @@ import git from 'isomorphic-git'
 
 import { IOResult } from '../../../../io/types.ts'
 import type { CommandFnResult } from '../../../config.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import type { CLIInvocation } from '../../types.ts'
 import { headCommit } from './branch.ts'
 import { ADDED, DELETED, headEntries, MODIFIED, workChanges } from './changes.ts'
