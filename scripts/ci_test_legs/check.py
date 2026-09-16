@@ -54,6 +54,12 @@ def test_matrix(workflow: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(node, dict) or key not in node:
             raise SystemExit(NO_MATRIX.format(file=where, key=key))
         node = node[key]
+    # The loop proves each container it descends INTO is a mapping, never
+    # the value it lands on, so a `matrix:` written as a list reached the
+    # `leg` test as a list and reported a missing dimension instead of a
+    # moved shape.
+    if not isinstance(node, dict):
+        raise SystemExit(NO_MATRIX.format(file=where, key="matrix"))
     if "leg" not in node:
         raise SystemExit(NO_LEG_DIM.format(file=where))
     return node
