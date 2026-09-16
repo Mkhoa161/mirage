@@ -47,7 +47,7 @@ import {
   wrapTargetDir,
   type TransferPolicy,
 } from './cp.ts'
-import type { FlagView } from '../../spec/types.ts'
+import type { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 

@@ -20,7 +20,7 @@ from dulwich.repo import Repo
 
 from mirage.commands.cli.builtin.git import GIT
 from mirage.commands.cli.builtin.git.restore import index_tree, parse_flags
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.resource.disk import DiskResource
 from mirage.types import MountMode
 from mirage.workspace import Workspace

@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { FlagView } from '../../../../../commands/spec/types.ts'
+import { FlagView } from '../../../../../commands/spec/flag_view.ts'
 import { getMessageProcessed } from '../../../../../core/gmail/messages.ts'
 import { TokenManager } from '../../../../../core/google/client.ts'
 import type { GoogleConfig } from '../../../../../core/google/config.ts'

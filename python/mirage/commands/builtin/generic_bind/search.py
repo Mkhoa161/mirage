@@ -22,7 +22,8 @@ from mirage.commands.builtin.grep_pushdown import text_search_results
 from mirage.commands.builtin.utils.output import format_records
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.context import hidden_paths_intersect, path_rules_active
 from mirage.core.hierarchy.probe import A
 from mirage.core.hierarchy.scope import ROOT, DetectFn

@@ -18,7 +18,8 @@ from mirage.commands.cli.builtin.hf import HF
 from mirage.commands.cli.builtin.hf.accessor import hub_for, repo_type_of
 from mirage.commands.cli.specs import cli_spec_for
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView, UsageStyle
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import UsageStyle
 from mirage.core.hf_hub.config import HfConfig
 from tests.commands.cli.builtin.hf.conftest import inv
 

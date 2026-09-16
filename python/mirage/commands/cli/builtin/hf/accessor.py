@@ -15,7 +15,7 @@
 from mirage.accessor.hf_hub import HfHubAccessor, HfRepoConfig
 from mirage.commands.cli.types import CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.hf_hub.config import HfConfig
 from mirage.core.hf_hub.constants import API_SEGMENTS, DEFAULT_REVISION
 from mirage.io.stream import yield_bytes

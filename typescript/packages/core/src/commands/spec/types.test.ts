@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { compileSpec } from './compile.ts'
-import { CommandSpec, Operand, Option, ParsedArgs } from './types.ts'
+import { CommandSpec, Operand, Option } from './types.ts'
 
 describe('ValueType', () => {
   it('covers the five members through Option', () => {
@@ -141,34 +141,5 @@ describe('Option.description', () => {
   it('round-trips an explicit value', () => {
     const opt = new Option({ short: 'n', description: 'number lines' })
     expect(opt.description).toBe('number lines')
-  })
-})
-
-describe('ParsedArgs helpers', () => {
-  const parsed = new ParsedArgs({
-    flags: { '-l': true, '--name': 'README' },
-    args: [
-      ['/ram/x', 'path'],
-      ['literal', 'str'],
-      ['/ram/y', 'path'],
-    ],
-    pathFlagValues: ['/ram/z'],
-  })
-
-  it('paths() returns PATH args only', () => {
-    expect(parsed.paths()).toEqual(['/ram/x', '/ram/y'])
-  })
-
-  it('texts() returns TEXT args only', () => {
-    expect(parsed.texts()).toEqual(['literal'])
-  })
-
-  it('routingPaths() combines paths() and pathFlagValues', () => {
-    expect(parsed.routingPaths()).toEqual(['/ram/x', '/ram/y', '/ram/z'])
-  })
-
-  it('flag() reads with fallback', () => {
-    expect(parsed.flag('-l')).toBe(true)
-    expect(parsed.flag('--missing', 'def')).toBe('def')
   })
 })

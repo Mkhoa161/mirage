@@ -16,7 +16,7 @@ from mirage.commands.cli.builtin.hf.accessor import (hub_for, repo_type_of,
                                                      require_operands,
                                                      require_token, text_out)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.hf_hub.commit import commit
 from mirage.core.hf_hub.config import HfConfig
 from mirage.core.hf_hub.constants import DEFAULT_COMMIT_MESSAGE

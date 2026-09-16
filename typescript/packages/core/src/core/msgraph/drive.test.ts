@@ -134,6 +134,37 @@ describe('copyTree', () => {
     ).toHaveLength(2)
   })
 
+  it.each(['monitor', 'http'] as const)(
+    'normalizes a failed replacement retry via %s to 500',
+    async (transport) => {
+      const retry = 'https://monitor.test/op/retry-failed'
+      const routes: Route[] =
+        transport === 'monitor'
+          ? [
+              { method: 'POST', url: itemUrl('a.txt', '/copy'), status: 202, location: retry },
+              { method: 'GET', url: retry, body: { status: 'failed', ...CONFLICT } },
+            ]
+          : [{ method: 'POST', url: itemUrl('a.txt', '/copy'), status: 409, body: CONFLICT }]
+      const rec = stubFetch([
+        { method: 'POST', url: itemUrl('a.txt', '/copy'), status: 409, body: CONFLICT },
+        { method: 'GET', url: itemUrl('a.txt'), body: { id: '1', file: {} } },
+        { method: 'GET', url: itemUrl('b.txt'), body: { id: '2', file: {} } },
+        { method: 'DELETE', url: itemUrl('b.txt'), status: 204 },
+        ...routes,
+      ])
+
+      await expect(copyTree(config, loc('a.txt'), loc('b.txt'))).rejects.toMatchObject({
+        status: 500,
+        code: 'nameAlreadyExists',
+      })
+      expect(rec.pending()).toBe(0)
+      expect(rec.calls.filter(([method]) => method === 'DELETE')).toEqual([
+        ['DELETE', itemUrl('b.txt')],
+      ])
+      expect(rec.calls.filter(([method]) => method === 'POST')).toHaveLength(2)
+    },
+  )
+
   it('merges two folders per child and never deletes the destination', async () => {
     const monitor = 'https://monitor.test/op/4'
     const childMonitor = 'https://monitor.test/op/4-child'

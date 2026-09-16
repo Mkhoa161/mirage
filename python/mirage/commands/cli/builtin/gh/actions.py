@@ -19,7 +19,7 @@ from mirage.commands.cli.builtin.gh.accessor import (camel, list_limit,
                                                      read_cli_file, repo_for,
                                                      text_out, typed_out)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.github.actions import (dispatch_workflow, get_run,
                                         get_workflow, list_runs,
                                         list_workflows, rerun, rerun_job)

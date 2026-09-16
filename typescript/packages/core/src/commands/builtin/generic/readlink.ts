@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { mountPrefixOf } from '../../../utils/key_prefix.ts'
 import { IOResult, type ByteSource } from '../../../io/types.ts'
 import type { PathSpec } from '../../../types.ts'

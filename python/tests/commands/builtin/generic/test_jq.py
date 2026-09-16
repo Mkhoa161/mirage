@@ -5,7 +5,7 @@ from mirage.commands.builtin.generic.jq import (assemble_inputs, exit_code, jq,
                                                 positional_args)
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.jq import JqOptions
 from mirage.io.types import materialize
 from mirage.types import PathSpec

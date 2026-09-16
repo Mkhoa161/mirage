@@ -14,7 +14,7 @@
 
 from mirage.commands.builtin.trello._input import file_operand
 from mirage.commands.builtin.trello.trello_card_update import SPEC
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.types import PathSpec
 from mirage.workspace.executor.command.flags import parse_flags
 

@@ -21,7 +21,8 @@ import { CHAR_DEVICE_MAX_BYTES } from '../utils/constants.ts'
 import { truncateStream } from '../utils/limit.ts'
 import { splitReadable } from '../utils/operands.ts'
 import { resolveSource } from '../utils/stream.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()

@@ -20,7 +20,8 @@ import { duTotal } from './du.ts'
 import { combineWc } from './wc.ts'
 import { Cmd, type CrossResult, type OperandRun, type RunSingle } from '../types.ts'
 import { mergeOperandIos, runOperands } from '../utils.ts'
-import { FlagView, type FlagValue } from '../../../../spec/types.ts'
+import { FlagView } from '../../../../spec/flag_view.ts'
+import { type FlagValue } from '../../../../spec/types.ts'
 import { specOf } from '../../../../spec/builtins.ts'
 
 const ENC = new TextEncoder()

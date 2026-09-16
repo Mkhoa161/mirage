@@ -20,7 +20,8 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { cutStream, parseRanges, type CutOptions } from '../cut_ranges.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { operandsIo, readOperands, singleChunk } from '../utils/operands.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()

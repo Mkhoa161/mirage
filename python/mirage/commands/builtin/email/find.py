@@ -25,7 +25,7 @@ from mirage.commands.builtin.utils.output import format_records
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.email.client import fetch_headers
 from mirage.core.email.readdir import _date_bucket, _msg_filename
 from mirage.core.email.readdir import readdir as _readdir

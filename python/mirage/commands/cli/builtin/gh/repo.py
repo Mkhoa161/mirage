@@ -18,7 +18,7 @@ from mirage.commands.cli.builtin.gh.accessor import (camel, gh_repo,
                                                      list_limit, text_out,
                                                      typed_out)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.github.config import GhConfig
 from mirage.core.github.repo import (create_repo, fork_repo, list_repos, login,
                                      read_readme, rename_repo, view_repo)

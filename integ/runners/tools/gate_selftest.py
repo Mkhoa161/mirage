@@ -22,6 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import check_case_targets as case_targets
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import harness  # noqa: E402
@@ -486,6 +488,27 @@ def selftest_case_targets() -> None:
     """
     check("case targets: the committed tree sits on its baseline",
           run_case_targets(ROOT.parent) == 0)
+
+    narrow = "integ/unix/example/dialect.json"
+    broad = "integ/unix/example/basic.json"
+    targets = {
+        f"{narrow} :: first": {"ram", "disk"},
+        f"{broad} :: first": {"ram", "disk", "remote"},
+        f"{broad} :: second": {"ram", "disk", "remote"},
+        f"{broad} :: third": {"ram", "disk", "remote"},
+    }
+    rationale = {"files": {narrow: "Backend-independent dialect cases"}}
+    before = case_targets.excuse(case_targets.collect(targets), rationale)
+    targets[f"{narrow} :: added"] = {"ram", "disk"}
+    after = case_targets.excuse(case_targets.collect(targets), rationale)
+    check("case targets: a file rationale covers added dialect cases",
+          before == after == ({}, []))
+    targets[f"{broad} :: second"] = {"ram"}
+    remaining, stale = case_targets.excuse(case_targets.collect(targets),
+                                           rationale)
+    check(
+        "case targets: a file rationale cannot excuse a sibling omission",
+        remaining == {f"{broad} :: second": ["disk", "remote"]} and not stale)
 
     exceptions = ROOT / "target_exceptions.json"
     original = exceptions.read_text()

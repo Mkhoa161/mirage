@@ -18,7 +18,8 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { interpretEscapes } from '../utils/escapes.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { extraOperandError } from '../../spec/usage.ts'
-import { CommandName, FlagView, type FlagValue } from '../../spec/types.ts'
+import { CommandName, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()

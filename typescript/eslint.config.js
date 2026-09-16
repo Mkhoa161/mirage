@@ -96,7 +96,7 @@ const FLAG_BAG_SELECTORS = [
 const FLAG_BAG_EXEMPT = [
   'packages/*/src/commands/spec/parser.ts',
   'packages/*/src/commands/spec/shell.ts',
-  'packages/*/src/commands/spec/types.ts',
+  'packages/*/src/commands/spec/flag_view.ts',
   'packages/*/src/commands/cli/walk.ts',
   'packages/*/src/commands/config.ts',
 ]

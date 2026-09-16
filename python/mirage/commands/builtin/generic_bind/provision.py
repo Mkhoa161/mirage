@@ -24,7 +24,8 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.resolve import get_extension
 from mirage.commands.spec.compile import compile_spec
 from mirage.commands.spec.constants import flag_kwarg_name
-from mirage.commands.spec.types import CommandSpec, FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import CommandSpec, FlagValue
 from mirage.core.jq import is_jsonl_path, is_streamable_jsonl_expr
 from mirage.provision.types import Precision, ProvisionResult
 from mirage.types import FileType, PathSpec

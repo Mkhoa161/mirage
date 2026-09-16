@@ -21,7 +21,7 @@ from mirage.commands.cli.builtin.git.errors import (  # yapf: disable
     NoWorkingDirectoryError, NoWorkspaceError)
 from mirage.commands.cli.builtin.git.session import opened
 from mirage.commands.cli.types import CLIDoors
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from tests.commands.cli.builtin.git.conftest import repo_doors
 
 

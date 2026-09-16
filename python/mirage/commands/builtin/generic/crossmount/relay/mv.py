@@ -22,7 +22,8 @@ from mirage.commands.builtin.generic.mv import mv as generic_mv
 from mirage.commands.builtin.generic.mv import parse_flags
 from mirage.commands.builtin.generic_bind.adapter import refuse_reveal
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.runtime.types import DispatchFn
 from mirage.types import PathSpec, PrimitiveMove
 

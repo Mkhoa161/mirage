@@ -15,7 +15,7 @@
 import json
 
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.discord.config import DiscordConfig
 from mirage.core.discord.search import search_guild
 from mirage.io.stream import yield_bytes

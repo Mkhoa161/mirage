@@ -14,7 +14,8 @@
 
 import { specOf } from '../../spec/builtins.ts'
 import { C_SPACE } from '../constants.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { quoteText } from '../../quote.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
 import { PathSpec } from '../../../types.ts'

@@ -19,7 +19,7 @@ import pytest
 from dulwich.repo import Repo
 
 from mirage.commands.cli.builtin.git.commit import DEFAULT_EMAIL, identity
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.ops.types import SessionView
 from mirage.types import HiddenVars
 from mirage.workspace.session import Session

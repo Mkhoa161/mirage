@@ -22,7 +22,8 @@ import { pureProvision } from '../generic_bind/provision.ts'
 import { DAY_NAMES, MONTH_NAMES, pad2, pad4, strftime } from '../utils/strftime.ts'
 import { quoteText } from '../../quote.ts'
 import { extraOperandError } from '../../spec/usage.ts'
-import { CommandName, FlagView } from '../../spec/types.ts'
+import { CommandName } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { LOCAL_ZONE, UTC_ZONE, type Zone, zoneFromEnv } from '../../../utils/timezone.ts'
 
 const ENC = new TextEncoder()

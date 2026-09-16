@@ -21,7 +21,7 @@ from mirage.commands.builtin.grep_pattern import pattern_arg
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.dropbox.read import read as _read
 from mirage.core.dropbox.read import stream as _stream
 from mirage.core.dropbox.readdir import readdir as _readdir

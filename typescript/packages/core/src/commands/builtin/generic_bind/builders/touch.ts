@@ -15,7 +15,7 @@
 import { IOResult } from '../../../../io/types.ts'
 import { fsStrerror, isFsError } from '../../../../utils/errors.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { type Builder, resolveGlobOf } from '../adapter.ts'
 
 const ENC = new TextEncoder()

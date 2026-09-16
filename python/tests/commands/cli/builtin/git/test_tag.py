@@ -21,7 +21,7 @@ from dulwich.repo import Repo
 
 from mirage.commands.cli.builtin.git.tag import (parse_flags, render_listing,
                                                  selected_names, tag_names)
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from tests.commands.cli.builtin.git.conftest import mounted_rw, pack_refs
 
 

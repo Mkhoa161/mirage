@@ -15,7 +15,7 @@
 from mirage.commands.cli.builtin.ntn.util import (first_text, notion_config,
                                                   pretty_json)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.notion.config import NotionConfig
 from mirage.core.notion.pages import get_page, get_page_markdown
 from mirage.core.notion.pathing import extract_title

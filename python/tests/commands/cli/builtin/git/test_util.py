@@ -19,7 +19,8 @@ from mirage.commands.cli.builtin.git.errors import (  # yapf: disable
 from mirage.commands.cli.builtin.git.util import (check_operands, escaped,
                                                   fatal, start_point, switches)
 from mirage.commands.cli.types import CLIInvocation, CLISpec
-from mirage.commands.spec.types import FlagView, Option
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import Option
 
 
 def test_start_point_reads_the_resolved_c_flag():

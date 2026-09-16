@@ -10,7 +10,8 @@ from mirage.commands.builtin.utils.formatting import format_number, to_number
 from mirage.commands.builtin.utils.stream import resolve_source
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.io.async_line_iterator import AsyncLineIterator
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec

@@ -166,6 +166,34 @@ async def test_copy_deletes_a_conflicting_file_destination_and_retries():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("transport", ["monitor", "http"])
+async def test_copy_normalizes_a_failed_replacement_retry(transport):
+    retry = "https://monitor.example/op/retry-failed"
+    with aioresponses() as m:
+        m.post(_url("a.txt", "/copy"), status=409, payload=_CONFLICT)
+        m.get(_url("a.txt"), payload={"id": "1", "file": {}})
+        m.get(_url("b.txt"), payload={"id": "2", "file": {}})
+        m.delete(_url("b.txt"), status=204)
+        if transport == "monitor":
+            m.post(_url("a.txt", "/copy"),
+                   status=202,
+                   headers={"Location": retry})
+            m.get(retry, payload={"status": "failed", **_CONFLICT})
+        else:
+            m.post(_url("a.txt", "/copy"), status=409, payload=_CONFLICT)
+        with pytest.raises(GraphError) as exc:
+            await copy_tree(_config(), _loc("d1", "a.txt"),
+                            _loc("d1", "b.txt"))
+        assert exc.value.status == 500
+        assert exc.value.code == "nameAlreadyExists"
+        assert str(exc.value).endswith(": x")
+        assert len(m.requests[("DELETE", URL(_url("b.txt")))]) == 1
+        assert len(m.requests[("POST", URL(_url("a.txt", "/copy")))]) == 2
+        if transport == "monitor":
+            assert ("GET", URL(retry)) in m.requests
+
+
+@pytest.mark.asyncio
 async def test_copy_merges_two_folders_per_child_and_deletes_nothing():
     monitor = "https://monitor.example/op/4"
     child_monitor = "https://monitor.example/op/4-child"

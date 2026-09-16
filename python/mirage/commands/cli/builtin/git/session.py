@@ -20,7 +20,7 @@ from mirage.commands.cli.builtin.git.repo import open_repo
 from mirage.commands.cli.builtin.git.types import RepoLocation
 from mirage.commands.cli.builtin.git.util import start_point
 from mirage.commands.cli.types import CLIDoors
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 
 
 async def opened(fl: FlagView,

@@ -21,7 +21,7 @@ from mirage.commands.builtin.utils.constants import DEFAULT_BACKUP_SUFFIX
 from mirage.commands.builtin.utils.copy import (backend_key_default,
                                                 copy_targets, path_exists)
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import (MoveStrategy, NativeMove, PathSpec, PrimitiveMove,
                           ReaddirFn, StatFn)

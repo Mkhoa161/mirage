@@ -21,7 +21,7 @@ from mirage.commands.cli.builtin.git.status import parse_flags
 from mirage.commands.cli.builtin.git.worktree import (UNTRACKED_ALL,
                                                       UNTRACKED_NO,
                                                       UNTRACKED_NORMAL)
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 
 CLEAN = b"On branch main\nnothing to commit, working tree clean\n"
 

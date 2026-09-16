@@ -13,7 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.slack.config import SlackConfig
 from mirage.core.slack.search import search_messages
 from mirage.io.types import ByteSource, IOResult

@@ -14,7 +14,7 @@
 
 import { guardInput } from '../utils/limit.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { fsStrerror, isWalkError } from '../../../utils/errors.ts'
 import { mountKey, mountPrefixOf } from '../../../utils/key_prefix.ts'
 import { respellOne } from '../../../utils/path.ts'

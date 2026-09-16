@@ -30,7 +30,8 @@ import {
 } from './ls.ts'
 import { UsageError } from '../../errors.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 
 const DEC = new TextDecoder()
 

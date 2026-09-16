@@ -16,7 +16,7 @@ from mirage.accessor.history import HistoryAccessor
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.history.render import render_history_listing
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec

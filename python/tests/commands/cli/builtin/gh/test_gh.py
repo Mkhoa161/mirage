@@ -22,7 +22,7 @@ from mirage.commands.cli.builtin.gh.api import api
 from mirage.commands.cli.builtin.gh.repo import fork, rename, summary, view
 from mirage.commands.cli.specs import cli_spec_for
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.api.client import ApiResponse
 from mirage.core.github.config import GhConfig
 from mirage.io.types import materialize

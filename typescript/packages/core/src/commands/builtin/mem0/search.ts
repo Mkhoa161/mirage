@@ -12,7 +12,7 @@ import { metadataProvision } from '../generic_bind/provision.ts'
 import { resolveGlobOf } from '../generic_bind/index.ts'
 import { defaultPaths } from '../utils/operands.ts'
 import { MEM0_IO } from './io.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENCODER = new TextEncoder()
 const resolveGlob = resolveGlobOf(MEM0_IO)

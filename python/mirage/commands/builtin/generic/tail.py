@@ -14,7 +14,8 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import argmatch_error
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import FileType, PathSpec, PolymorphicReadFn, StatFn

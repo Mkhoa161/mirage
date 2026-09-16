@@ -5,7 +5,7 @@ import pytest
 
 from mirage.commands.config import ExecContext
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import spec_flag_names
+from mirage.commands.spec.flag_view import spec_flag_names
 from mirage.io import IOResult
 from mirage.ops.types import NamespaceView
 from mirage.resource.ram import RAMResource

@@ -19,7 +19,7 @@ from mirage.commands.cli.builtin.gh.accessor import (body_value, camel,
                                                      repo_number, text_out,
                                                      typed_out)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.github.config import GhConfig
 from mirage.core.github.pull import (comment_pull, create_pull, diff_pull,
                                      edit_pull, get_pull, list_pulls,

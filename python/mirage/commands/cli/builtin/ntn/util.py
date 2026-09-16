@@ -16,7 +16,8 @@ import json
 
 from mirage.commands.cli.types import CLIInvocation
 from mirage.commands.errors import UsageError
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.core.notion.config import NotionConfig
 from mirage.io.types import ByteSource, materialize
 from mirage.types import JsonValue

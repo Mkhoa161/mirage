@@ -14,7 +14,7 @@
 
 import { commentUpdate } from '../../../../../core/linear/client.ts'
 import { normalizeComment, toJsonBytes } from '../../../../../core/linear/normalize.ts'
-import { FlagView } from '../../../../spec/types.ts'
+import { FlagView } from '../../../../spec/flag_view.ts'
 import { IOResult } from '../../../../../io/types.ts'
 import type { CommandFnResult } from '../../../../config.ts'
 import type { CLIInvocation } from '../../../types.ts'
