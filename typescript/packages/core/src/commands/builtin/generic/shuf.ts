@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
+import { C_SPACE } from '../constants.ts'
 import { FlagView, type FlagValue } from '../../spec/types.ts'
 import { quoteText } from '../../quote.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
@@ -62,16 +63,14 @@ function processItems(items: string[], repeat: boolean, need: number): string[] 
 // so a trailing newline (`shuf -n $'2\n'`) is refused, which is what the
 // python twin's `fullmatch` answers.
 //
-// The leading run of C whitespace is `strtoumax`'s own skip and is real GNU
+// The leading `C_SPACE` run is `strtoumax`'s own skip and is real GNU
 // behavior: `shuf -n ' 2'`, `$'\t2'`, `$'\n2'` and `' +2'` are all accepted
-// while `'2 '` is refused. The class is spelled out rather than written `\s`
-// because it is C `isspace`, and JavaScript's `\s` also matches every Unicode
-// space. Measured, ground truth NL3-C.
-const C_SPACE = '[ \\t\\n\\v\\f\\r]*'
-const LINE_COUNT = new RegExp(`^${C_SPACE}\\+?[0-9]+$`)
-
-// One `-i` bound, scanned on its own. See parseInputRange.
-const BOUND = new RegExp(`^${C_SPACE}\\+?[0-9]+$`)
+// while `'2 '` is refused. Measured, ground truth NL3-C.
+//
+// The same scan reads each `-i` bound: GNU splits that argument at the FIRST
+// dash and hands each side to its own `strtoumax`, so a bound carries its own
+// whitespace and `+`. See parseInputRange.
+const UNSIGNED = new RegExp(`^${C_SPACE}\\+?[0-9]+$`)
 
 // GNU's own `xalloc_die` wording, exit 1. It is what real shuf answers with
 // when a range is too large to materialize, so it is borrowed rather than
@@ -130,7 +129,7 @@ export function rangeError(raw: string, refusal: RangeRefusal): string {
 // NL3-D.
 //
 // Two magnitude limits sit on top of that shape, they are different limits, and
-// they print differently. A BOUND may be as large as UINTMAX_MAX and one past
+// they print differently. A bound may be as large as UINTMAX_MAX and one past
 // it is `overflow`; the SPAN `high - low` must be strictly under SIZE_MAX and
 // the one argument that trips that (`-i 0-18446744073709551615`, whose element
 // count is 2**64) is `invalid` with no clause, exactly as a decreasing range is.
@@ -152,13 +151,13 @@ export function parseInputRange(raw: string): [bigint, bigint] | RangeRefusal {
   if (dash < 0) return 'invalid'
   const lowRaw = raw.slice(0, dash)
   const highRaw = raw.slice(dash + 1)
-  if (!BOUND.test(lowRaw)) return 'invalid'
+  if (!UNSIGNED.test(lowRaw)) return 'invalid'
   // `BigInt` skips the same leading C whitespace and single `+` the regex just
   // accepted, and the regex has already refused everything else, so this cannot
   // throw and cannot read a prefix.
   const low = BigInt(lowRaw)
   if (low > UINTMAX_MAX) return 'overflow'
-  if (!BOUND.test(highRaw)) return 'invalid'
+  if (!UNSIGNED.test(highRaw)) return 'invalid'
   const high = BigInt(highRaw)
   if (high > UINTMAX_MAX) return 'overflow'
   if (low > high || high - low >= SIZE_MAX) return 'invalid'
@@ -285,7 +284,7 @@ export interface ShufFlags {
 export function parseFlags(bag: Record<string, FlagValue>): ShufFlags | string {
   const fl = new FlagView(bag, specOf('shuf'))
   const countValue = fl.asStr('head_count')
-  if (countValue !== undefined && !LINE_COUNT.test(countValue)) {
+  if (countValue !== undefined && !UNSIGNED.test(countValue)) {
     return `shuf: invalid line count: '${quoteText(countValue)}'\n`
   }
   const count = countValue === undefined ? null : BigInt(countValue)

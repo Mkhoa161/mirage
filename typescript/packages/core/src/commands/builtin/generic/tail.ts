@@ -110,7 +110,13 @@ async function pause(seconds: number, signal: AbortSignal | undefined): Promise<
     // wrong. With no signal there is nothing to wake on, which is the
     // indefinite wait python performs.
     if (!Number.isFinite(seconds)) {
-      signal?.addEventListener('abort', () => resolve(), { once: true })
+      signal?.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
       return
     }
     const onAbort = (): void => {

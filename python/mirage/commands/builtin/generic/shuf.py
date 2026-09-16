@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
+from mirage.commands.builtin.constants import C_SPACE
 from mirage.commands.builtin.utils.lines import split_lines
 from mirage.commands.builtin.utils.stream import read_stdin_async
 from mirage.commands.quote import quote_text
@@ -12,21 +13,6 @@ from mirage.commands.spec.types import FlagValue, FlagView
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
 
-# GNU accepts a leading `+` and reads `+2` as 2, and `0` is a valid head
-# count. A `-` is not a sign here but an invalid character, so `-1` is
-# refused and quoted whole with no out-of-range clause: shuf rejects the
-# sign while scanning rather than range-checking a parsed negative.
-#
-# Matched with `fullmatch`, never `match`: python's `$` also matches
-# immediately BEFORE a trailing newline, so `^...$` with `match` reads
-# `shuf -n $'2\n'` as the valid count 2. GNU's scanner stops at the
-# first non-digit and refuses it, as does the TypeScript twin.
-#
-# The leading run of C whitespace is `strtoumax`'s own skip and is real
-# GNU behavior: `shuf -n ' 2'`, `$'\t2'`, `$'\n2'` and `' +2'` are all
-# accepted while `'2 '` is refused. The class is spelled out rather than
-# written `\s` because it is C `isspace`, and python's `\s` also matches
-# 0x1c-0x1f, which GNU refuses. Measured, ground truth NL3-C.
 # A `-o` reached a backend wired without a write op, which is a wiring
 # fault rather than anything the command line did wrong. The TypeScript
 # twin throws a bare `Error` for it where it RETURNS an IOResult for
@@ -62,18 +48,32 @@ SIZE_MAX = 18446744073709551615
 # above this, with GNU's own wording for the same situation.
 MAX_OUTPUT_LINES = 1_000_000
 
-_C_SPACE = r"[ \t\n\v\f\r]*"
-_LINE_COUNT = re.compile(rf"{_C_SPACE}\+?[0-9]+")
-
-# One `-i` bound. GNU splits the argument at the FIRST dash and hands
-# each side to `strtoumax`, so each bound carries its own leading
-# whitespace and optional `+`: `-i +1-3`, `-i 1-+3` and `-i '1- 3'` are
-# all accepted (the blank belongs to the HIGH bound), while `-i '1 -3'`
-# is refused because the blank is trailing garbage on the low one. A `-`
-# is never a sign here, which is why `-i -1-3` (an empty low bound) and
-# `-i 1--3` (a negative high bound) are both refused, and why there is
-# no separate decreasing-range message. Measured, ground truth NL3-D.
-_BOUND = re.compile(rf"{_C_SPACE}\+?[0-9]+")
+# One unsigned value as `strtoumax` reads it, which is both `-n`'s whole
+# argument and each `-i` bound.
+#
+# GNU accepts a leading `+` and reads `+2` as 2, and `0` is a valid head
+# count. A `-` is not a sign here but an invalid character, so `-1` is
+# refused and quoted whole with no out-of-range clause: shuf rejects the
+# sign while scanning rather than range-checking a parsed negative.
+#
+# Matched with `fullmatch`, never `match`: python's `$` also matches
+# immediately BEFORE a trailing newline, so `^...$` with `match` reads
+# `shuf -n $'2\n'` as the valid count 2. GNU's scanner stops at the
+# first non-digit and refuses it, as does the TypeScript twin.
+#
+# The leading `C_SPACE` run is `strtoumax`'s own skip and is real GNU
+# behavior: `shuf -n ' 2'`, `$'\t2'`, `$'\n2'` and `' +2'` are all
+# accepted while `'2 '` is refused. Measured, ground truth NL3-C.
+#
+# GNU splits an `-i` argument at the FIRST dash and hands each side to
+# its own scan, so a bound carries its own whitespace and `+`:
+# `-i +1-3`, `-i 1-+3` and `-i '1- 3'` are all accepted (the blank
+# belongs to the HIGH bound), while `-i '1 -3'` is refused because the
+# blank is trailing garbage on the low one. A `-` is never a sign, which
+# is why `-i -1-3` (an empty low bound) and `-i 1--3` (a negative high
+# bound) are both refused, and why there is no separate decreasing-range
+# message. Measured, ground truth NL3-D.
+_UNSIGNED = re.compile(rf"{C_SPACE}\+?[0-9]+")
 
 # `-i` takes two unsigned bounds with the low one no greater than the
 # high one, and shuf answers every shape it will not read with ONE
@@ -168,12 +168,12 @@ def parse_input_range(raw: str) -> tuple[int, int] | RangeRefusal:
         return RangeRefusal.INVALID
     low_raw = raw[:dash]
     high_raw = raw[dash + 1:]
-    if _BOUND.fullmatch(low_raw) is None:
+    if _UNSIGNED.fullmatch(low_raw) is None:
         return RangeRefusal.INVALID
     low = int(low_raw)
     if low > UINTMAX_MAX:
         return RangeRefusal.OVERFLOW
-    if _BOUND.fullmatch(high_raw) is None:
+    if _UNSIGNED.fullmatch(high_raw) is None:
         return RangeRefusal.INVALID
     high = int(high_raw)
     if high > UINTMAX_MAX:
@@ -244,7 +244,7 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> ShufFlags:
     """
     fl = FlagView(flags, spec=SPECS["shuf"])
     count_raw = fl.as_str("head_count")
-    if count_raw is not None and _LINE_COUNT.fullmatch(count_raw) is None:
+    if count_raw is not None and _UNSIGNED.fullmatch(count_raw) is None:
         raise ValueError(
             f"shuf: invalid line count: '{quote_text(count_raw)}'")
     outputs = fl.as_paths("output")
