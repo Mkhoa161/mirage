@@ -17,7 +17,12 @@ import tree_sitter_bash
 
 from mirage.shell.parse.constants import (ARITH_OPEN_TOKEN, DIGITS, NAME_CONT,
                                           QUOTES)
-from mirage.shell.parse.heredoc import protected_source, same_shape
+from mirage.shell.parse.heredoc import (heredoc_operators, protected_source,
+                                        same_shape)
+from mirage.shell.parse.heredoc.lower import lower_heredocs, rebase_source
+from mirage.shell.parse.heredoc.node import HeredocNode
+from mirage.shell.parse.heredoc.reader import discover_heredocs
+from mirage.shell.types import TSNodeLike
 
 BASH_LANGUAGE = tree_sitter.Language(tree_sitter_bash.language())
 TS_PARSER = tree_sitter.Parser(BASH_LANGUAGE)
@@ -234,8 +239,12 @@ def _repair_orphaned_dollars(root: tree_sitter.Node,
     return root
 
 
-def parse(command: str) -> tree_sitter.Node:
-    """Parse a shell command string into a tree-sitter AST.
+def parse(command: str) -> TSNodeLike:
+    """Parse shell structure after the source reader gathers heredocs.
+
+    Bodies become inline expansion words with reader-owned input metadata.
+    The resulting nodes retain their original source for nested evaluation;
+    neither delimiter recognition nor expansion depends on heredoc tokens.
 
     A leading ``((`` is lexed as the arithmetic opener and the lexer
     cannot back out, so a subshell that immediately opens another
@@ -256,10 +265,18 @@ def parse(command: str) -> tree_sitter.Node:
         command (str): shell source to parse.
 
     Returns:
-        tree_sitter.Node: root node, or the original errored root when no
+        TSNodeLike: root node, or the original errored root when no
         reparse helps.
     """
-    data = strip_line_continuation(command).encode()
+    original = command.encode()
+    source = None
+    if b"<<" in original:
+        hints = heredoc_operators(TS_PARSER.parse(original).root_node)
+        documents = discover_heredocs(original, hints)
+        if documents:
+            source = lower_heredocs(original, documents)
+    data = source.source if source is not None else strip_line_continuation(
+        command).encode()
     root = _parse_bytes(data)
     if root.has_error:
         # Sitting inside an ERROR is not evidence that an opener is
@@ -285,4 +302,7 @@ def parse(command: str) -> tree_sitter.Node:
                 data = retried_data
     if b"$" in data:
         root = _repair_orphaned_dollars(root, data)
-    return root
+    if source is None:
+        return root
+    repaired = source.source[:root.start_byte] + (root.text or b"")
+    return HeredocNode(root, rebase_source(source, repaired))

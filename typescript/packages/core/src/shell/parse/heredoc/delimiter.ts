@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { constructCloser, constructEnd, quoteEnd } from './line.ts'
 import { decodeAnsiC } from '../../escapes.ts'
 import { DQUOTE_ESCAPABLE } from './constants.ts'
 
@@ -56,12 +57,24 @@ export function ansiCEnd(token: string, start: number): number {
  * `EO\<newline>F` names `EOF`; single quotes keep both characters,
  * leaving a newline in the delimiter that no single line can equal.
  */
+export function literalConstructEnd(token: string, start: number): number | null {
+  const closer = token[start] === '$' ? constructCloser(token, start, false) : null
+  if (closer !== null) return constructEnd(token, start, closer)
+  return token[start] === '`' ? quoteEnd(token, start) : null
+}
+
 export function cleanDelimiter(token: string): string {
   let out = ''
   let quote: string | null = null
   let index = 0
   while (index < token.length) {
     const char = token[index] ?? ''
+    const end = quote === null ? literalConstructEnd(token, index) : null
+    if (end !== null) {
+      out += token.slice(index, end)
+      index = end
+      continue
+    }
     if (quote === "'") {
       if (char === "'") quote = null
       else out += char
@@ -115,6 +128,11 @@ export function delimiterQuoted(token: string): boolean {
   let index = 0
   while (index < token.length) {
     const char = token[index] ?? ''
+    const end = literalConstructEnd(token, index)
+    if (end !== null) {
+      index = end
+      continue
+    }
     if (char === '\\' && token[index + 1] === '\n') index += 1
     else if (char === '\\' || char === "'" || char === '"') return true
     index += 1

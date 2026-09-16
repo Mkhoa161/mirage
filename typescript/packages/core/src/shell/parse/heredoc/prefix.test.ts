@@ -17,7 +17,8 @@ import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { Language, Parser } from 'web-tree-sitter'
 import type { TSNodeLike } from '../../types.ts'
-import { createShellParser, type ShellParser } from '../parse.ts'
+import { protectedSource } from './shield.ts'
+import type { Node } from 'web-tree-sitter'
 import { bodyPrefix, treeRoot } from './prefix.ts'
 
 const require = createRequire(import.meta.url)
@@ -26,15 +27,25 @@ const grammarWasm = readFileSync(require.resolve('tree-sitter-bash/tree-sitter-b
 
 const HEREDOC_REDIRECT = 'heredoc_redirect'
 
-let shielding: ShellParser
+let shielding: { parse(command: string): Node }
 let plain: Parser
 
 beforeAll(async () => {
-  shielding = await createShellParser({ engineWasm, grammarWasm })
   await Parser.init({ wasmBinary: engineWasm })
   const language = await Language.load(new Uint8Array(grammarWasm))
   plain = new Parser()
   plain.setLanguage(language)
+  shielding = {
+    parse(command) {
+      const raw = plain.parse(command)
+      if (raw === null) throw new Error('no tree')
+      const source = protectedSource(command, raw.rootNode)
+      if (source === null) return raw.rootNode
+      const shielded = plain.parse(source)
+      if (shielded === null || shielded.rootNode.hasError) return raw.rootNode
+      return plain.parse(command, shielded)?.rootNode ?? raw.rootNode
+    },
+  }
 })
 
 function redirects(root: TSNodeLike): TSNodeLike[] {
@@ -56,7 +67,9 @@ function prefix(command: string): string {
   return bodyPrefix(first)
 }
 
-const TWO_ON_A_LINE = 'cat <<A <<B\na\nA\n\nb\nB\n'
+// Two heredocs on one line, laid out as the parser's source keeps them:
+// innermost-first (see relayout), so B's body precedes A's.
+const TWO_ON_A_LINE = 'cat <<A <<B\nb\nB\n\na\nA\n'
 
 // The slice of a web-tree-sitter Node that bodyPrefix reads, over
 // TWO_ON_A_LINE.
@@ -159,18 +172,19 @@ describe('bodyPrefix', () => {
     expect(bodyPrefix(inner)).toBe('\n')
   })
 
-  it('measures a later heredoc on the line from the line after the earlier body', () => {
-    // tree-sitter-bash has no tree for two heredocs on one line; were it
-    // to grow one, B's node would span A's body too, and B's blank line is
-    // measured from the line after A's terminator, not from the operator
-    // line's newline the two share.
-    const first = heredoc(4, 12)
-    const second = heredoc(8, 17)
+  it('measures an earlier heredoc on the line from the line after the later body', () => {
+    // tree-sitter-bash has no tree for two heredocs on one command; were
+    // it to grow one, the line's bodies would stand innermost-first as
+    // relayout writes them, so B's body follows the operator line and A's
+    // blank line is measured from the line after B's terminator, not from
+    // the operator line's newline the two share.
+    const first = heredoc(4, 17)
+    const second = heredoc(8, 12)
     const root = node('program', 0, TWO_ON_A_LINE.length, [
       node('redirected_statement', 0, 20, [node('command', 0, 3), first, second]),
     ])
     expect(treeRoot(second)).toBe(root)
-    expect(bodyPrefix(first)).toBe('')
-    expect(bodyPrefix(second)).toBe('\n')
+    expect(bodyPrefix(second)).toBe('')
+    expect(bodyPrefix(first)).toBe('\n')
   })
 })

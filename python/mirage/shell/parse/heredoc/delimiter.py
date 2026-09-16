@@ -14,6 +14,8 @@
 
 from mirage.shell.escapes import decode_ansi_c
 from mirage.shell.parse.heredoc.constants import DQUOTE_ESCAPABLE
+from mirage.shell.parse.heredoc.line import (construct_closer, construct_end,
+                                             quote_end)
 
 
 def ansi_c_end(token: str, start: int) -> int:
@@ -41,6 +43,28 @@ def ansi_c_end(token: str, start: int) -> int:
             return index
         index += 1
     return len(token)
+
+
+def literal_construct_end(token: str, start: int) -> int | None:
+    """Skip a substitution-shaped delimiter fragment without quote removal.
+
+    Args:
+        token (str): delimiter word.
+        start (int): character offset of a possible expansion opener.
+    """
+    if token[start] not in ("$", "`"):
+        return None
+    data = token.encode()
+    offset = len(token[:start].encode())
+    closer = construct_closer(data, offset,
+                              False) if token[start] == "$" else None
+    if closer is not None:
+        end = construct_end(data, offset, closer)
+    elif token[start] == "`":
+        end = quote_end(data, offset)
+    else:
+        return None
+    return None if end is None else len(data[:end].decode())
 
 
 def clean_delimiter(token: str) -> str:
@@ -71,6 +95,11 @@ def clean_delimiter(token: str) -> str:
     index = 0
     while index < len(token):
         char = token[index]
+        end = literal_construct_end(token, index) if quote is None else None
+        if end is not None:
+            out.append(token[index:end])
+            index = end
+            continue
         if quote == "'":
             if char == "'":
                 quote = None
@@ -126,6 +155,10 @@ def delimiter_quoted(token: str) -> bool:
     index = 0
     while index < len(token):
         char = token[index]
+        end = literal_construct_end(token, index)
+        if end is not None:
+            index = end
+            continue
         if char == "\\" and token[index + 1:index + 2] == "\n":
             index += 1
         elif char in ("\\", "'", '"'):

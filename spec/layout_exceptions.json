@@ -63,15 +63,17 @@
   "runtime/python/monty": {
    "typescript_only": {
     "tree": "The guest's scratch filesystem for unmounted paths. Python needs no twin: its binding hands monty an OSAccess subclass whose base class (pydantic_monty.os_access) already carries this tree, while the JS binding is a bare callback with no tree behind it, so the TypeScript side implements the same semantics itself (message spellings pinned to the python binding's)."
-   },
-   "python_only": {
-    "stat": "Converts VFS metadata to the Python binding’s StatResult. The JavaScript binding cannot represent both stat attributes and tuple fields, so its adapter declines stat."
    }
   },
   "runtime/js/quickjs": {
    "typescript_only": {
     "list": "Encodes directory entries as QuickJS Emscripten handles. Python QuickJS uses the shared WASI host callbacks instead.",
     "stat": "Encodes stat results as QuickJS Emscripten handles. Python QuickJS uses the shared WASI host callbacks instead."
+   }
+  },
+  "utils": {
+   "typescript_only": {
+    "tz_abbrevs": "The tzdata abbreviation table `date` renders %Z from, generated from zoneinfo by scripts/gen_tz_abbrevs.py. Python reads zoneinfo itself and has nothing to mirror; Intl offers no tzdata names, so typescript ships the data."
    }
   }
  }

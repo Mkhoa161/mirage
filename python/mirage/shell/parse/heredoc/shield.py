@@ -12,8 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import tree_sitter
-
+from mirage.shell.bytes import encode_text
 from mirage.shell.parse.heredoc.body import heredoc_bodies
 from mirage.shell.parse.heredoc.constants import (ALTERNATE_FILLER, BACKSLASH,
                                                   DASH_ARROW, ESCAPE_PARTNERS,
@@ -21,18 +20,18 @@ from mirage.shell.parse.heredoc.constants import (ALTERNATE_FILLER, BACKSLASH,
                                                   LINE_BLANKS)
 from mirage.shell.parse.heredoc.delimiter import clean_delimiter
 from mirage.shell.parse.heredoc.types import HeredocOperator
+from mirage.shell.types import TSNodeLike
 
 
-def heredoc_operators(root: tree_sitter.Node) -> list[HeredocOperator]:
+def heredoc_operators(root: TSNodeLike) -> list[HeredocOperator]:
     """Every heredoc operator under ``root``, in source order.
 
     ERROR subtrees are walked too: a body the lexer mangled badly enough
-    leaves no heredoc_redirect behind, but its start token survives. A
-    token whose delimiter is empty once unquoted names no line and is
-    left out.
+    leaves no heredoc_redirect behind, but its start token survives.
+    These are hints; the source reader validates delimiter word bounds.
 
     Args:
-        root (tree_sitter.Node): the parsed tree.
+        root (TSNodeLike): the parsed tree.
     """
     found: list[HeredocOperator] = []
     stack = [root]
@@ -42,8 +41,6 @@ def heredoc_operators(root: tree_sitter.Node) -> list[HeredocOperator]:
         if node.type != HEREDOC_START:
             continue
         delimiter = clean_delimiter((node.text or b"").decode())
-        if not delimiter:
-            continue
         previous = node.prev_sibling
         found.append(
             HeredocOperator(word_start=node.start_byte,
@@ -74,8 +71,47 @@ def first_content_line(data: bytes, body_start: int,
     return None
 
 
-def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
-    """``data`` with every heredoc body's first line made lexable.
+def terminator_lookalikes(data: bytes, span: tuple[int, int],
+                          delimiter: bytes) -> list[int]:
+    """One byte per body line the scanner would close the body at.
+
+    tree-sitter-bash compares a line's first ``len(delimiter)`` bytes,
+    after any leading blanks, with the delimiter and stops there, so
+    ``EOFX``, ``EOF;`` and `` EOF`` all end a body that bash reads on
+    through: bash wants the whole line to be the delimiter, leading tabs
+    aside under ``<<-``. Writing a letter over one byte of that prefix
+    keeps the scanner in the body. A ``$``, backtick or backslash is
+    passed over, so an expansion opening the line keeps its shape in the
+    masked copy.
+
+    Args:
+        data (bytes): the shell source.
+        span (tuple[int, int]): the body's ``(start, end)``.
+        delimiter (bytes): the cleaned delimiter.
+
+    Returns:
+        list[int]: the offset to mask on each such line, in source order.
+    """
+    offsets: list[int] = []
+    position = span[0]
+    while position < span[1]:
+        newline = data.find(b"\n", position, span[1])
+        line_end = span[1] if newline < 0 else newline
+        start = position
+        while start < line_end and data[start] in LINE_BLANKS:
+            start += 1
+        if data.startswith(delimiter, start, line_end):
+            masked = next((offset
+                           for offset in range(start, start + len(delimiter))
+                           if data[offset] not in ESCAPE_PARTNERS), None)
+            if masked is not None:
+                offsets.append(masked)
+        position = line_end + 1
+    return offsets
+
+
+def protected_source(data: bytes, root: TSNodeLike) -> bytes | None:
+    """``data`` with every heredoc body made lexable as bash reads it.
 
     tree-sitter-bash decides where a heredoc body starts from the byte
     that follows the operator line, and gets it wrong for two shapes bash
@@ -89,11 +125,15 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     does, without moving a single offset; the caller then reads the body
     back out of the untouched source. An empty line before the first
     kept one has no byte to mask without moving a row, so those are left
-    to body_prefix.
+    to body_prefix. It also ends a body one line early, at any line that
+    merely opens with the delimiter (see terminator_lookalikes); one
+    byte of each such line is masked the same way. Bodies are read
+    innermost-first per line, the order the parser's source keeps them
+    in (see relayout).
 
     Args:
         data (bytes): the shell source.
-        root (tree_sitter.Node): the tree parsed from ``data``.
+        root (TSNodeLike): the tree parsed from ``data``.
 
     Returns:
         bytes | None: the protected source, or None when every body
@@ -102,9 +142,15 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     out = bytearray(data)
     changed = False
     operators = heredoc_operators(root)
-    for operator, span in zip(operators, heredoc_bodies(data, operators)):
+    spans = heredoc_bodies(data, operators, nested=True)
+    for operator, span in zip(operators, spans):
         if span is None:
             continue
+        for offset in terminator_lookalikes(data, span,
+                                            encode_text(operator.delimiter)):
+            out[offset] = (ALTERNATE_FILLER
+                           if data[offset] == FILLER else FILLER)
+            changed = True
         line = first_content_line(data, *span)
         if line is None:
             continue
@@ -121,12 +167,12 @@ def protected_source(data: bytes, root: tree_sitter.Node) -> bytes | None:
     return bytes(out) if changed else None
 
 
-def same_shape(left: tree_sitter.Node, right: tree_sitter.Node) -> bool:
+def same_shape(left: TSNodeLike, right: TSNodeLike) -> bool:
     """Whether two trees agree on every node's type and byte span.
 
     Args:
-        left (tree_sitter.Node): one tree's root.
-        right (tree_sitter.Node): the other tree's root.
+        left (TSNodeLike): one tree's root.
+        right (TSNodeLike): the other tree's root.
     """
     stack = [(left, right)]
     while stack:

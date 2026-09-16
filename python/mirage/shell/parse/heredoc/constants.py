@@ -23,6 +23,8 @@ GREATER = 0x3E
 OPEN_PAREN = 0x28
 CLOSE_PAREN = 0x29
 CLOSE_BRACE = 0x7D
+OPEN_BRACKET = 0x5B
+CLOSE_BRACKET = 0x5D
 SINGLE_QUOTE = 0x27
 DOUBLE_QUOTE = 0x22
 BACKTICK = 0x60
@@ -72,3 +74,15 @@ ALTERNATE_FILLER = ord("y")
 HEREDOC_START = "heredoc_start"
 HEREDOC_BODY = "heredoc_body"
 DASH_ARROW = "<<-"
+SEMICOLON = 0x3B
+
+# Bash's metacharacters other than blanks: what ends an unquoted word, so
+# where tree-sitter's delimiter token has run past the delimiter (`EOF;`
+# is the word `EOF` and then a `;`).
+WORD_BREAKERS = frozenset("|&;()<>")
+
+# The statement terminators an operator line keeps as bash reads them at
+# the start of a line, longest first so `;;&` is not read as `;;` and an
+# `&`. A lone `;` is not among them: bash refuses a line opening with one,
+# so the newline that precedes the moved body stands in for it.
+KEPT_TERMINATORS = (b";;&", b";;", b";&", b")")

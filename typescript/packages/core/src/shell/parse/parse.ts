@@ -15,7 +15,11 @@
 import { Language, type Node, Parser } from 'web-tree-sitter'
 
 import { ARITH_OPEN_TOKEN, DIGIT, NAME_CONT, QUOTES } from './constants.ts'
-import { protectedSource, sameShape } from './heredoc/index.ts'
+import { heredocOperators, protectedSource, sameShape } from './heredoc/index.ts'
+import { discoverHeredocs } from './heredoc/reader.ts'
+import { lowerHeredocs, rebaseSource } from './heredoc/lower.ts'
+import { HeredocNode } from './heredoc/node.ts'
+import type { ShellNode } from '../types.ts'
 
 export interface ShellParserConfig {
   engineWasm: Uint8Array | ArrayBuffer
@@ -23,7 +27,7 @@ export interface ShellParserConfig {
 }
 
 export interface ShellParser {
-  parse(command: string): Node
+  parse(command: string): ShellNode
 }
 
 /**
@@ -230,7 +234,9 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
   parser.setLanguage(language)
   return {
     /**
-     * Parse a shell command into a tree-sitter AST.
+     * Parse shell structure after the source reader gathers heredocs.
+     * Bodies become inline expansion words with reader-owned input metadata;
+     * nodes retain their original source for nested evaluation.
      *
      * A leading `((` is lexed as the arithmetic opener and the lexer
      * cannot back out, so a subshell that immediately opens another
@@ -247,8 +253,14 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
      * the line reparsed, so the returned tree can spell `$id` as
      * `${id}`.
      */
-    parse(command: string): Node {
-      const source = stripLineContinuation(command)
+    parse(command: string): ShellNode {
+      const original = command.includes('<<') ? parser.parse(command) : null
+      const documents =
+        command.includes('<<') && original !== null
+          ? discoverHeredocs(command, heredocOperators(original.rootNode))
+          : []
+      const heredocs = documents.length > 0 ? lowerHeredocs(command, documents) : null
+      const source = heredocs?.source ?? stripLineContinuation(command)
       let root = parseProtected(parser, source)
       let text = source
       if (root.hasError) {
@@ -276,7 +288,12 @@ export async function createShellParser(config: ShellParserConfig): Promise<Shel
       if (text.includes('$')) {
         root = repairOrphanedDollars(parser, root, text)
       }
-      return root
+      return heredocs === null
+        ? root
+        : new HeredocNode(
+            root,
+            rebaseSource(heredocs, heredocs.source.slice(0, root.startIndex) + root.text),
+          )
     },
   }
 }

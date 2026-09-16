@@ -16,7 +16,7 @@ import type { ByteSource } from '../../../io/types.ts'
 import { IOResult } from '../../../io/types.ts'
 import type { Resource } from '../../../resource/base.ts'
 import type { PathSpec } from '../../../types.ts'
-import type { FileStat, ResourceName } from '../../../types.ts'
+import type { FileStat } from '../../../types.ts'
 import type { MountEntry } from '../../mount/mount.ts'
 import type {
   LinkView,
@@ -184,30 +184,25 @@ function mountView(registry: MountRegistry): MountView {
 }
 
 /**
- * Drop cached listings and bodies for the mounts a CLI's service backs.
+ * Drop every mount's cached listings and bodies after an account CLI write.
  *
  * An account CLI mutates its service by id, so no vfs path can be derived from
  * the call and per-path invalidation has nothing to aim at: after
  * `gws sheets spreadsheets create` the new file has no cache entry to expire,
- * which is exactly the case that matters. What is known is the service, so the
- * mounts it backs drop their caches and the next read refetches.
+ * which is exactly the case that matters. Which mounts that service backs is
+ * not the CLI's business either (a CLI and a resource are separate tiers, and
+ * a user's own CLI knows nothing about a user's own resource), so the executor
+ * says the one thing it knows: a write happened, and every mount may be stale.
+ * A write verb is rare next to reads, and the cost is one cold listing on a
+ * mount's next read, never a wrong answer.
  *
  * Both caches go, because the two hide different writes. A stale listing hides
  * a create or a delete; a stale body hides an edit, and these resources cache
  * reads, so a `cat` after `gws docs documents batchUpdate` would otherwise keep
  * serving the pre-edit content without ever reaching Google.
- *
- * Scoped by the spec's declared `serves` rather than a blanket reset, so a
- * Slack or S3 mount alongside keeps its cache.
  */
-export async function dropServiceCaches(
-  registry: MountRegistry,
-  serves: readonly ResourceName[],
-): Promise<void> {
-  if (serves.length === 0) return
-  const wanted = new Set<string>(serves)
+export async function dropMountCaches(registry: MountRegistry): Promise<void> {
   for (const mount of registry.allMounts()) {
-    if (!wanted.has(mount.resource.kind)) continue
     // Invalidate rather than clear: a cleared index reads exactly like one
     // that was never filled, so a backend whose index *is* its listing
     // (github seeds the whole tree once) cannot tell the drop from an empty

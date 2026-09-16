@@ -20,7 +20,8 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { fsErrorLine, isFsError } from '../../../utils/errors.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { formatRecords } from '../utils/output.ts'
-import type { FlagValue } from '../../spec/types.ts'
+import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { specOf } from '../../spec/builtins.ts'
 import { advanceColumn, isSpace } from '../../../utils/width.ts'
 
 const ENC = new TextEncoder()
@@ -49,17 +50,18 @@ export interface WcFlags {
   total: 'auto' | 'always' | 'only' | 'never'
 }
 
-export function parseFlags(flags: Record<string, FlagValue>): WcFlags | string {
-  const rawTotal = typeof flags.total === 'string' ? flags.total : 'auto'
+export function parseFlags(bag: Record<string, FlagValue>): WcFlags | string {
+  const fl = new FlagView(bag, specOf('wc'))
+  const rawTotal = fl.asStr('total') ?? 'auto'
   if (!['auto', 'always', 'only', 'never'].includes(rawTotal)) {
     return `wc: invalid argument '${rawTotal}' for '--total'\n`
   }
   return {
-    lines: flags.lines === true,
-    words: flags.words === true,
-    bytes: flags.bytes === true,
-    chars: flags.chars === true,
-    maxLineLength: flags.max_line_length === true,
+    lines: fl.asBool('lines'),
+    words: fl.asBool('words'),
+    bytes: fl.asBool('bytes'),
+    chars: fl.asBool('chars'),
+    maxLineLength: fl.asBool('max_line_length'),
     total: rawTotal as WcFlags['total'],
   }
 }

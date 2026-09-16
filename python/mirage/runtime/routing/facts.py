@@ -14,11 +14,9 @@
 
 from collections.abc import Callable, Container, Iterator
 
-import tree_sitter
-
 from mirage.commands.spec import SPECS
 from mirage.runtime.routing.types import ParsedCommand
-from mirage.shell.types import NodeType
+from mirage.shell.types import NodeType, TSNodeLike
 
 _WORD_TYPES = (NodeType.COMMAND_NAME, NodeType.WORD, NodeType.STRING,
                NodeType.RAW_STRING, NodeType.ANSI_C_STRING,
@@ -26,13 +24,13 @@ _WORD_TYPES = (NodeType.COMMAND_NAME, NodeType.WORD, NodeType.STRING,
                NodeType.CONCATENATION)
 
 
-def command_nodes(ast: tree_sitter.Node) -> Iterator[tree_sitter.Node]:
+def command_nodes(ast: TSNodeLike) -> Iterator[TSNodeLike]:
     """Every command node of a parsed line, in source order, nested
     ones included (a substitution's command follows the word holding
     it).
 
     Args:
-        ast (tree_sitter.Node): the parsed tree-sitter root node.
+        ast (TSNodeLike): the parsed tree-sitter root node.
     """
     stack = [ast]
     while stack:
@@ -43,14 +41,14 @@ def command_nodes(ast: tree_sitter.Node) -> Iterator[tree_sitter.Node]:
 
 
 def parsed_commands(
-    ast: tree_sitter.Node,
+    ast: TSNodeLike,
     clis: Container[str] = frozenset(),
     match_command_prefix: Callable[[list[str]], int] | None = None,
 ) -> tuple[ParsedCommand, ...]:
     """Distill a parsed line into one ParsedCommand per command.
 
     Args:
-        ast (tree_sitter.Node): the parsed tree-sitter root node.
+        ast (TSNodeLike): the parsed tree-sitter root node.
         clis (Container[str]): installed CLI head words; a command whose
             name is one of them carries it as ``cli``.
         match_command_prefix (Callable | None): the workspace's registered

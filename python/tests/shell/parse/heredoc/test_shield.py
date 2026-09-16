@@ -16,7 +16,7 @@ import tree_sitter
 
 from mirage.shell.parse.heredoc import (HeredocOperator, first_content_line,
                                         heredoc_operators, protected_source,
-                                        same_shape)
+                                        same_shape, terminator_lookalikes)
 from mirage.shell.parse.parse import TS_PARSER
 
 
@@ -118,11 +118,13 @@ def test_protected_source_handles_every_heredoc_on_the_line_list():
 
 
 def test_protected_source_shields_both_bodies_of_one_operator_line():
-    cmd = "cat <<A ; cat <<B\n\\one\nA\n\\two\nB\n"
+    # Laid out as the parser's source keeps two heredocs on one line:
+    # innermost-first (see relayout), so B's body precedes A's.
+    cmd = "cat <<A && cat <<B\n\\two\nB\n\\one\nA\n"
     out = protected_source(cmd.encode(), _root(cmd))
     assert out is not None
-    assert _diff(cmd, out) == [(cmd.index("\\one"), "x"),
-                               (cmd.index("\\two"), "x")]
+    assert _diff(cmd, out) == [(cmd.index("\\two"), "x"),
+                               (cmd.index("\\one"), "x")]
 
 
 def test_protected_source_shields_an_escaped_double_quoted_delimiter():
@@ -155,6 +157,60 @@ def test_protected_source_masks_an_unterminated_body_too():
     out = protected_source(cmd.encode(), _root(cmd))
     assert out is not None
     assert _diff(cmd, out) == [(cmd.index("\\first"), "x")]
+
+
+def test_terminator_lookalikes_names_one_byte_per_such_line():
+    data = b"EOFX\nhi\n EOF\n\tEOF;\nEOF EOF\n"
+    assert terminator_lookalikes(data, (0, len(data)), b"EOF") == [
+        0,
+        data.index(b" EOF") + 1,
+        data.index(b"\tEOF;") + 1,
+        data.index(b"EOF EOF"),
+    ]
+
+
+def test_terminator_lookalikes_passes_over_expansion_bytes():
+    assert terminator_lookalikes(b"$X;\nhi\n", (0, 7), b"$X") == [1]
+    assert terminator_lookalikes(b"$$\n", (0, 3), b"$") == []
+
+
+def test_terminator_lookalikes_stays_inside_the_span():
+    assert terminator_lookalikes(b"hi\nEOF\n", (0, 3), b"EOF") == []
+
+
+def test_protected_source_masks_a_line_that_only_opens_with_the_delimiter():
+    # The scanner compares a line's first bytes with the delimiter and
+    # stops there, so each of these would end a body bash reads on.
+    cmd = "cat <<EOF\nhi\nEOFX\nEOF;\n EOF\nEOF\n"
+    out = protected_source(cmd.encode(), _root(cmd))
+    assert out is not None
+    assert _diff(cmd, out) == [(cmd.index("EOFX"), "x"),
+                               (cmd.index("EOF;"), "x"),
+                               (cmd.index(" EOF") + 1, "x")]
+
+
+def test_protected_source_masks_a_lookalike_under_dash():
+    # The first line's tab is masked as before; the lookalikes join it.
+    cmd = "cat <<-EOF\n\thi\n\tEOFX\n  EOF\n\tEOF\n"
+    out = protected_source(cmd.encode(), _root(cmd))
+    assert out is not None
+    assert _diff(cmd, out) == [(cmd.index("\thi"), "x"),
+                               (cmd.index("\tEOFX") + 1, "x"),
+                               (cmd.index("  EOF") + 2, "x")]
+
+
+def test_protected_source_keeps_an_expansion_opening_a_lookalike():
+    cmd = "cat <<$X\n$X;\nhi\n$X\n"
+    out = protected_source(cmd.encode(), _root(cmd))
+    assert out is not None
+    assert _diff(cmd, out) == [(cmd.index("$X;") + 1, "x")]
+
+
+def test_protected_source_writes_the_alternate_letter_over_the_filler():
+    cmd = "cat <<xyz\nxyz1\nxyz\n"
+    out = protected_source(cmd.encode(), _root(cmd))
+    assert out is not None
+    assert _diff(cmd, out) == [(cmd.index("xyz1"), "y")]
 
 
 def test_same_shape_true_for_equal_parses():

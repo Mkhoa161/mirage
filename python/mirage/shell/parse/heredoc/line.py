@@ -18,8 +18,9 @@ from mirage.shell.parse.heredoc import constants
 def construct_closer(data: bytes, index: int, bare: bool) -> int | None:
     """The byte closing the construct that opens at ``index``.
 
-    ``${`` runs to its balancing brace, and ``$(``, ``<(`` and ``>(`` to
-    their balancing paren. A lone ``(`` opens one only inside another
+    ``${`` runs to its balancing brace, ``$[`` to its bracket, and
+    ``$(``, ``<(`` and ``>(`` to their balancing paren. A lone ``(``
+    opens one only inside another
     paren construct, where it is a subshell or a parenthesized case
     pattern; anywhere else it is ordinary text, as ``cat <<EOF (`` is.
 
@@ -35,6 +36,8 @@ def construct_closer(data: bytes, index: int, bare: bool) -> int | None:
     following = data[index + 1:index + 2]
     if byte == constants.DOLLAR and following == b"{":
         return constants.CLOSE_BRACE
+    if byte == constants.DOLLAR and following == b"[":
+        return constants.CLOSE_BRACKET
     if byte in constants.SUBSTITUTION_OPENERS and following == b"(":
         return constants.CLOSE_PAREN
     if bare and byte == constants.OPEN_PAREN:
@@ -127,7 +130,8 @@ def construct_end(data: bytes, start: int, closer: int) -> int | None:
     word (``${x:- #y}`` expands to `` #y``). A ``)`` that ends a case
     pattern closes no construct, so an open ``case`` is counted and the
     paren passed over while one is: ``$(case x in<newline>x)`` runs to
-    its ``esac``, and a parenthesized pattern balances itself.
+    its ``esac``, and a parenthesized pattern balances itself. Brackets
+    inside ``$[...]`` balance too, including array subscripts.
 
     Args:
         data (bytes): the shell source.
@@ -138,11 +142,14 @@ def construct_end(data: bytes, start: int, closer: int) -> int | None:
         int | None: the offset, or None when the construct never closes.
     """
     paren = closer == constants.CLOSE_PAREN
-    index = start + (1 if data[start] == constants.OPEN_PAREN else 2)
+    index = start + (1 if data[start] in (constants.OPEN_PAREN,
+                                          constants.OPEN_BRACKET) else 2)
     cases = 0
     while index < len(data):
         byte = data[index]
-        nested = construct_closer(data, index, paren)
+        nested = (constants.CLOSE_BRACKET if closer == constants.CLOSE_BRACKET
+                  and byte == constants.OPEN_BRACKET else construct_closer(
+                      data, index, paren))
         if byte == constants.BACKSLASH:
             index += 2
         elif byte in constants.QUOTE_OPENERS:

@@ -16,9 +16,8 @@ from typing import cast
 
 import tree_sitter
 
-from mirage.shell.parse import parse
 from mirage.shell.parse.heredoc import body_prefix, tree_root
-from mirage.shell.parse.parse import TS_PARSER
+from mirage.shell.parse.parse import TS_PARSER, _parse_bytes
 
 HEREDOC_REDIRECT = "heredoc_redirect"
 
@@ -37,7 +36,7 @@ def _redirects(root: tree_sitter.Node) -> list[tree_sitter.Node]:
 
 
 def _prefix(command: str) -> str:
-    return body_prefix(_redirects(parse(command))[0])
+    return body_prefix(_redirects(_parse_bytes(command.encode()))[0])
 
 
 class _Node:
@@ -63,7 +62,9 @@ class _Node:
             previous = child
 
 
-TWO_ON_A_LINE = b"cat <<A <<B\na\nA\n\nb\nB\n"
+# Two heredocs on one line, laid out as the parser's source keeps them:
+# innermost-first (see relayout), so B's body precedes A's.
+TWO_ON_A_LINE = b"cat <<A <<B\nb\nB\n\na\nA\n"
 
 
 def _heredoc(operator: int, body: int) -> _Node:
@@ -135,22 +136,24 @@ def test_body_prefix_of_an_unterminated_body():
 
 
 def test_body_prefix_of_a_heredoc_inside_a_command_substitution():
-    outer, inner = _redirects(parse("cat <<A $(cat <<B\n\nb\nB\n)\na\nA\n"))
+    outer, inner = _redirects(
+        _parse_bytes(b"cat <<A $(cat <<B\n\nb\nB\n)\na\nA\n"))
     assert body_prefix(outer) == ""
     assert body_prefix(inner) == "\n"
 
 
-def test_body_prefix_of_a_later_heredoc_on_the_line():
-    # tree-sitter-bash has no tree for two heredocs on one line; were it
-    # to grow one, B's node would span A's body too, and B's blank line
-    # is measured from the line after A's terminator, not from the
-    # operator line's newline the two share.
-    first = _heredoc(4, 12)
-    second = _heredoc(8, 17)
+def test_body_prefix_of_an_earlier_heredoc_on_the_line():
+    # tree-sitter-bash has no tree for two heredocs on one command; were
+    # it to grow one, the line's bodies would stand innermost-first as
+    # relayout writes them, so B's body follows the operator line and
+    # A's blank line is measured from the line after B's terminator, not
+    # from the operator line's newline the two share.
+    first = _heredoc(4, 17)
+    second = _heredoc(8, 12)
     root = _Node("program", 0, len(TWO_ON_A_LINE), TWO_ON_A_LINE, [
         _Node("redirected_statement", 0, 20, TWO_ON_A_LINE,
               [_Node("command", 0, 3, TWO_ON_A_LINE), first, second])
     ])
     assert tree_root(cast(tree_sitter.Node, second)) is root
-    assert body_prefix(cast(tree_sitter.Node, first)) == ""
-    assert body_prefix(cast(tree_sitter.Node, second)) == "\n"
+    assert body_prefix(cast(tree_sitter.Node, second)) == ""
+    assert body_prefix(cast(tree_sitter.Node, first)) == "\n"

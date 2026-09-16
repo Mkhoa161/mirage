@@ -17,13 +17,12 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
-import tree_sitter
-
 from mirage.commands.spec.types import ValueType
 from mirage.ops.types import SessionView
 from mirage.policy.match import scopes_paths
 from mirage.runtime.routing.types import RouteDecision
 from mirage.shell.call_stack import CallStack
+from mirage.shell.types import TSNodeLike
 from mirage.types import PathSpec, word_text
 from mirage.utils.glob_walk import literal_word, mark_globs, unmark_globs
 from mirage.workspace.expand.classify import classify_parts
@@ -90,7 +89,7 @@ class Argv:
 
 
 async def expand_argv(
-    parts: list[tree_sitter.Node],
+    parts: list[TSNodeLike],
     session: Session,
     execute_fn: Callable[..., Any],
     call_stack: CallStack | None,
@@ -106,7 +105,7 @@ async def expand_argv(
     PATH (classify even bare filenames).
 
     Args:
-        parts (list[tree_sitter.Node]): word nodes after env-prefix
+        parts (list[TSNodeLike]): word nodes after env-prefix
             stripping and process-substitution removal.
         session (Session): shell session state.
         execute_fn (Callable): evaluator for command substitutions.

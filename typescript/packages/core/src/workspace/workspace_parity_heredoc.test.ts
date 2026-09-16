@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { makeWorkspace, stdoutStr } from './fixtures/workspace_fixture.ts'
+import { makeWorkspace, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
 
 describe('workspace: heredoc / herestring', () => {
   it('heredoc << EOF', async () => {
@@ -464,5 +464,105 @@ describe('workspace: heredoc operator lines that hold a case or a nested quote',
     const io = await ws.execute('cat /disk/HB9')
     expect(stdoutStr(io)).toBe('\\first\nsecond\n')
     await ws.close()
+  })
+})
+
+// Pinned against bash 5.2 on debian:stable-slim: the `&&`/`||` written on
+// a heredoc's operator line wraps the heredoc'd command, as it would any
+// other command. tree-sitter parses that tail inside the heredoc, which
+// used to make `|| echo` a phantom pipe stage: the body was lost and the
+// recovery never ran.
+describe('workspace: heredoc operator-line list', () => {
+  it.each([
+    ["false <<'EOF' || echo recovered\nignored\nEOF", 'recovered\n', 0],
+    ["cat <<'EOF' && echo after\nhello\nEOF", 'hello\nafter\n', 0],
+    ['cat <<EOF 2>/dev/null || echo fb\nhello\nEOF', 'hello\n', 0],
+    ["true <<'EOF' || echo notrun\nx\nEOF", '', 0],
+    ["false <<'EOF' && echo notrun\nx\nEOF", '', 1],
+    ['cat <<EOF | tr a-z A-Z && echo done\nabc\nEOF', 'ABC\ndone\n', 0],
+    ['cat <<EOF | tr a-z A-Z | rev && echo c\nabc\nEOF', 'CBA\nc\n', 0],
+    ['cat <<EOF | tr a-z A-Z || echo c && echo d\nabc\nEOF', 'ABC\nd\n', 0],
+    ['false <<EOF || echo a && echo b\nx\nEOF', 'a\nb\n', 0],
+    ['true <<EOF || echo a && echo b\nx\nEOF', 'b\n', 0],
+    ['false <<EOF || echo a || echo b\nx\nEOF', 'a\n', 0],
+    ['false <<EOF || echo a | tr a A\nx\nEOF', 'A\n', 0],
+    ['false <<EOF || { echo a; echo b; }\nx\nEOF', 'a\nb\n', 0],
+    ['false <<EOF || (echo x)\nx\nEOF', 'x\n', 0],
+    ['false <<EOF || ! true\nx\nEOF', '', 1],
+    ['true && cat <<EOF || echo x\nbody\nEOF', 'body\n', 0],
+    ['cat <<-EOF && echo after\n\thello\n\tEOF', 'hello\nafter\n', 0],
+    ['x=$(cat <<EOF && echo after\nhello\nEOF\n); echo "[$x]"', '[hello\nafter]\n', 0],
+    ['if false <<EOF || true\nx\nEOF\nthen echo yes; fi', 'yes\n', 0],
+    ['cat /nonexistent <<EOF 2>/dev/null || echo fb\nx\nEOF', 'fb\n', 0],
+  ])('%j', async (line, stdout, exitCode) => {
+    const { ws } = await makeWorkspace()
+    try {
+      const io = await ws.execute(line)
+      expect([stdoutStr(io), stderrStr(io), io.exitCode]).toEqual([stdout, '', exitCode])
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a file redirect then a list', async () => {
+    const { ws } = await makeWorkspace()
+    try {
+      const io = await ws.execute('cat <<EOF > /disk/ho && cat /disk/ho\ninner\nEOF')
+      expect(stdoutStr(io)).toBe('inner\n')
+    } finally {
+      await ws.close()
+    }
+  })
+})
+
+// Pinned against bash 5.2 on debian:stable-slim: a terminator after the
+// operator runs its tail after the heredoc command, an unquoted delimiter
+// ends at a metacharacter, and the bodies of two heredocs on one line
+// follow in source order (issue #1070).
+describe('workspace: heredoc operator-line terminators', () => {
+  it.each([
+    ['cat <<EOF; echo x\nhi\nEOF', 'hi\nx\n', 0],
+    ['cat <<EOF;echo x\nhi\nEOF', 'hi\nx\n', 0],
+    ['cat <<EOF>/hs; cat /hs\nhi\nEOF', 'hi\n', 0],
+    ['cat <<EOF|wc -l\nhi\nEOF', '1\n', 0],
+    ['cat <<EOF&&echo x\nhi\nEOF', 'hi\nx\n', 0],
+    ["cat <<'EOF'; echo x\nhi $HOME\nEOF", 'hi $HOME\nx\n', 0],
+    ['cat <<A && cat <<B\na\nA\nb\nB', 'a\nb\n', 0],
+    ['cat <<A | cat <<B\na\nA\nb\nB', 'b\n', 0],
+    ['cat <<A || cat <<B\na\nA\nb\nB', 'a\n', 0],
+    ['false <<A || cat <<B\na\nA\nb\nB', 'b\n', 0],
+    ['cat <<A; cat <<B\na\nA\nb\nB', 'a\nb\n', 0],
+    ['cat <<A && cat <<B; echo c\na\nA\nb\nB', 'a\nb\nc\n', 0],
+    ['cat <<A && false <<B || echo no\na\nA\nb\nB', 'a\nno\n', 0],
+    ['cat <<A | tr a-z A-Z <<B; echo z\na\nA\nb\nB', 'B\nz\n', 0],
+    ['echo a; cat <<E1 | cat <<E2; echo z\n1\nE1\n2\nE2', 'a\n2\nz\n', 0],
+    ['cat <<A && cat <<B\n\na\nA\n\nb\nB', '\na\n\nb\n', 0],
+    ['(cat <<EOF)\nhi\nEOF', 'hi\n', 0],
+    ['{ cat <<EOF; }\nhi\nEOF', 'hi\n', 0],
+    ['if true; then cat <<EOF; fi\nhi\nEOF', 'hi\n', 0],
+    ['case x in x) cat <<EOF;; esac\nhi\nEOF', 'hi\n', 0],
+    ['cat <<EOF; # comment\nhi\nEOF', 'hi\n', 0],
+    ['cat <<-EOF; echo x\n\thi\n\tEOF', 'hi\nx\n', 0],
+    ['true; cat <<EOF; echo x\nhi\nEOF', 'hi\nx\n', 0],
+    ['cat <<EOF; cat <<EOF\na\nEOF\nb\nEOF', 'a\nb\n', 0],
+    ['cat <<EOF; echo x; echo y\nhi\nEOF', 'hi\nx\ny\n', 0],
+    ['for i in 1 2; do cat <<EOF; done\n$i\nEOF', '1\n2\n', 0],
+    ['f() { cat <<EOF; }; f; f\nhi\nEOF', 'hi\nhi\n', 0],
+    ['while read l; do echo "[$l]"; done <<EOF; echo done\na\nb\nEOF', '[a]\n[b]\ndone\n', 0],
+    ['false <<EOF; echo $?\nEOF', '1\n', 0],
+    ['cat <<EOF; echo x\n  hi\nEOF', '  hi\nx\n', 0],
+    ['cat <<EOF;\nhi\nEOF', 'hi\n', 0],
+    ['cat <<EOF; case y in y) echo z;; esac\nhi\nEOF', 'hi\nz\n', 0],
+    ['cat <<EOF; for ((i=0;i<2;i++)); do echo $i; done\nhi\nEOF', 'hi\n0\n1\n', 0],
+    ['x=1; cat <<EOF; echo $x\n$x\nEOF', '1\n1\n', 0],
+  ])('%j', async (line, stdout, exit) => {
+    const { ws } = await makeWorkspace()
+    try {
+      const io = await ws.execute(line)
+      expect([stdoutStr(io), io.exitCode]).toEqual([stdout, exit])
+      expect(stderrStr(io)).toBe('')
+    } finally {
+      await ws.close()
+    }
   })
 })

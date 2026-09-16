@@ -1127,6 +1127,32 @@
         "stdout": "cli\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "hm_save_shows_in_the_listed_mounted_folder",
+      "seq": 562132,
+      "targets": [
+        "cli-himalaya"
+      ],
+      "command": "ls /mail/Archive > /dev/null; himalaya message compose --to integ@example.com --subject Cacheprobe --body 'filed through the cli' --save Archive > /dev/null; find /mail/Archive -type f -name 'Cacheprobe__*' | wc -l",
+      "expect": {
+        "exit": 0,
+        "stdout": "1\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "hm_sent_copy_shows_in_a_listed_folder_that_had_mail",
+      "seq": 562133,
+      "targets": [
+        "cli-himalaya"
+      ],
+      "command": "ls /mail/INBOX > /dev/null; himalaya message compose --to nobody@example.com --subject Cachecopy --body 'sent through the cli' --send --save INBOX > /dev/null; find /mail/INBOX -type f -name 'Cachecopy__*' | wc -l",
+      "expect": {
+        "exit": 0,
+        "stdout": "1\n",
+        "stderr": ""
+      }
     }
   ]
 }
