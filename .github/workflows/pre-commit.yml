@@ -199,6 +199,16 @@ jobs:
           ./python/.venv/bin/python scripts/check_normalize_renames.py --selftest
           ./python/.venv/bin/python scripts/check_normalize_renames.py
 
+      # The mirage CLI spawns once per shell line in the integ batteries and
+      # once per agent command in production, so a single import added to a
+      # leaf module is a regression every one of those pays. Walks the built
+      # chunk graph, so it sees a heavy package reached three chunks deep.
+      # --selftest first, for the reason the rename gate has one.
+      - name: CLI cold start
+        run: |
+          ./python/.venv/bin/python scripts/check_cli_cold_start.py --selftest
+          ./python/.venv/bin/python scripts/check_cli_cold_start.py
+
       # The docs build parses frontmatter as YAML and stops on the first page
       # it cannot read, so an unquoted description holding ": " fails the
       # deploy with no local signal at all.
