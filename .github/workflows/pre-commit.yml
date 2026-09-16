@@ -204,3 +204,16 @@ jobs:
       # deploy with no local signal at all.
       - name: Docs frontmatter
         run: ./python/.venv/bin/python scripts/check_docs_frontmatter.py
+
+      # The Test (TypeScript) leg table is split across two files -- the
+      # `test:leg:*` scripts carry the package selections, the workflow matrix
+      # decides which of them run -- so either half can drift into silence: a
+      # new package no leg claims, or a leg the matrix stopped invoking. pnpm
+      # reports neither, because a filter that matches nothing and a script
+      # nobody calls both exit 0. --selftest first, for the same reason the
+      # rename gate runs one: a gate that sees nothing looks identical to a
+      # clean tree.
+      - name: CI test legs
+        run: |
+          ./python/.venv/bin/python scripts/ci_test_legs/check.py --selftest
+          ./python/.venv/bin/python scripts/ci_test_legs/check.py
