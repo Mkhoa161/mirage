@@ -21,6 +21,7 @@ from mirage.accessor.base import Accessor
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.commands.constants import ROOT_CWD
 from mirage.commands.spec import CommandSpec
+from mirage.commands.spec.constants import SOLE_ARGUMENT_LONG_OPTIONS
 from mirage.commands.spec.help import render_help
 from mirage.commands.spec.types import FlagValue, Option
 from mirage.io.stream import yield_bytes
@@ -213,7 +214,7 @@ _VERSION_OPTION = Option(
 )
 
 
-def _version_line(name: str) -> bytes:
+def version_line(name: str) -> bytes:
     """Render the GNU-style version line for a command.
 
     Args:
@@ -238,6 +239,17 @@ def version_request(name: str, spec: CommandSpec | None,
     None when the command declares its own --version, when the flag is
     absent, or when it sits after the `--` end-of-options marker.
 
+    This runs on raw argv, ahead of the parser, so it has to honor the
+    one rule the parser states about a long option's POSITION:
+    gnulib's ``parse_long_options`` reads argv[1] only when it is the
+    whole line (``argc == 2``), so for a SOLE_ARGUMENT_LONG_OPTIONS
+    command `--version` is an ordinary operand as soon as another word
+    joins it. Measured on coreutils 9.7: `expr --version` is the
+    version and `expr --version x` is `expr: syntax error: unexpected
+    argument 'x'`. Inside that window the parser's own prefix expansion
+    still answers (`expr --versio`), which is why this only has to
+    decline rather than re-match.
+
     Args:
         name (str): command name as invoked.
         spec (CommandSpec | None): the command's registered spec.
@@ -245,11 +257,13 @@ def version_request(name: str, spec: CommandSpec | None,
     """
     if not has_injected_version(spec):
         return None
+    if name in SOLE_ARGUMENT_LONG_OPTIONS:
+        return version_line(name) if argv == ["--version"] else None
     for arg in argv:
         if arg == "--":
             return None
         if arg == "--version":
-            return _version_line(name)
+            return version_line(name)
     return None
 
 
@@ -271,7 +285,7 @@ def _with_help_support(
     new_spec = (spec if not extras else replace(
         spec, options=spec.options + tuple(extras)))
     help_text = render_help(name, new_spec).encode()
-    version_text = _version_line(name)
+    version_text = version_line(name)
 
     @functools.wraps(fn)
     async def wrapper(accessor: Accessor, paths: list[PathSpec],

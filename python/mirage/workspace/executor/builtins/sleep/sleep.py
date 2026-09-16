@@ -15,30 +15,77 @@
 import asyncio
 import math
 
+from mirage.commands.config import version_line
 from mirage.commands.quote import quote_text
+from mirage.commands.spec import SPECS
 from mirage.commands.spec.constants import NUMERIC_SHORT
-from mirage.commands.spec.usage import unknown_option_error, usage_hint
+from mirage.commands.spec.help import render_help
+from mirage.commands.spec.usage import (ambiguous_option_error,
+                                        unexpected_value_error,
+                                        unknown_option_error, usage_hint)
 from mirage.io import IOResult
+from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource
 from mirage.workspace.abort import cancellable_sleep
 from mirage.workspace.executor.builtins.sleep.constants import SLEEP_INTERVAL
 from mirage.workspace.executor.builtins.types import BuiltinCall, Result
 from mirage.workspace.types import ExecutionNode
 
+# The only two options coreutils sleep declares, through gnulib's
+# `parse_gnu_standard_options_only`. They share no prefix, so an
+# abbreviation of either resolves and neither can ever be ambiguous.
+_STANDARD_OPTIONS = ("--help", "--version")
+
+
+def _standard_matches(name: str) -> tuple[str, ...]:
+    """The standard options a long spelling names, declaration order.
+
+    getopt_long takes an exact word outright and otherwise keeps every
+    candidate the word prefixes, so `sleep --h` is one match (help,
+    exit 0) and `sleep --=x` is an empty name that prefixes both, which
+    GNU refuses as ambiguous. Measured on 9.7.
+
+    Args:
+        name (str): the long token's name half, `=value` already cut
+            off, as typed.
+    """
+    if name in _STANDARD_OPTIONS:
+        return (name, )
+    return tuple(word for word in _STANDARD_OPTIONS if word.startswith(name))
+
+
+def _standard_response(
+        option: str) -> tuple[ByteSource | None, IOResult, ExecutionNode]:
+    """sleep's answer to `--help` or `--version`: stdout, exit 0.
+
+    The page is the spec's, rendered by the one renderer every other
+    mirage command answers `--help` with (commands/config.py), so the
+    two cannot drift.
+
+    Args:
+        option (str): the canonical spelling, from _standard_option.
+    """
+    text = (render_help("sleep", SPECS["sleep"]).encode()
+            if option == "--help" else version_line("sleep"))
+    return yield_bytes(text), IOResult(), ExecutionNode(command="sleep",
+                                                        exit_code=0)
+
 
 def _sleep_operands(args: list[str]) -> tuple[list[str], str | None]:
-    """sleep's operands, and the first option it does not declare.
+    """sleep's operands, and the first dash word that is not one.
 
-    coreutils sleep declares no options of its own and reads the line
-    through a real getopt_long loop
-    (``parse_gnu_standard_options_only``), so it refuses a dash-leading
+    coreutils sleep declares only gnulib's two standard options and
+    reads the line through a real getopt_long loop
+    (``parse_gnu_standard_options_only``), so it stops at a dash-leading
     word wherever that word sits: measured on 9.4, `sleep --zzz 0` and
     `sleep 0 --zzz` both report the option and neither reports the
-    interval. `--` ends the scan, which is what makes
-    `sleep -- '--zzz=é'` an interval diagnostic instead of an option
-    one, and a `-<digits>` word stays an operand -- mirage's
-    NUMERIC_SHORT rule, which every command shares, and the reason
-    `sleep -1` names the interval where GNU names the option letter.
+    interval. The caller decides what that word means, since a
+    `--help`/`--version` spelling is an answer rather than a refusal.
+    `--` ends the scan, which is what makes `sleep -- '--zzz=é'` an
+    interval diagnostic instead of an option one, and a `-<digits>`
+    word stays an operand -- mirage's NUMERIC_SHORT rule, which every
+    command shares, and the reason `sleep -1` names the interval where
+    GNU names the option letter.
 
     Args:
         args (list[str]): words after the command name, as typed.
@@ -69,7 +116,29 @@ async def handle_sleep(
 ) -> tuple[ByteSource | None, IOResult, ExecutionNode]:
     operands, bad_option = _sleep_operands(args)
     if bad_option is not None:
-        message, code = unknown_option_error("sleep", bad_option)
+        # The scan stops at the first dash word, and that word decides
+        # the whole line: `sleep --help --zzz` is help and
+        # `sleep --zzz --help` is the refusal (measured on 9.7). A long
+        # spelling is first offered to the two standard options, which
+        # are real getopt_long options, so an abbreviation resolves and
+        # a value on one is refused for the VALUE rather than as an
+        # unknown option (`sleep --hel=x` is `option '--help' doesn't
+        # allow an argument`).
+        name, eq, _value = bad_option.partition("=")
+        matches = _standard_matches(name) if name.startswith("--") else ()
+        if len(matches) > 1:
+            # `--=x` is an empty long name, which prefixes both, and
+            # getopt_long quotes the WHOLE token here where the
+            # doesn't-allow-an-argument refusal quotes the canonical
+            # spelling.
+            message, code = ambiguous_option_error("sleep", bad_option,
+                                                   matches)
+        elif not matches:
+            message, code = unknown_option_error("sleep", bad_option)
+        elif not eq:
+            return _standard_response(matches[0])
+        else:
+            message, code = unexpected_value_error("sleep", matches[0])
         return None, IOResult(exit_code=code,
                               stderr=message), ExecutionNode(command="sleep",
                                                              exit_code=code)

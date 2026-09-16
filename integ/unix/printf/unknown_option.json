@@ -13,6 +13,20 @@
         "stdout": "",
         "stderr": "printf: --: invalid option\nprintf: usage: printf [-v var] format [arguments]\n"
       }
+    },
+    {
+      "id": "printf_help_prints_to_stdout_and_exits_2",
+      "seq": 991058,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "printf --help",
+      "expect": {
+        "exit": 2,
+        "stdout": "printf\n\nUsage: printf <text> [<text>...]\n",
+        "stderr": ""
+      }
     }
   ]
 }

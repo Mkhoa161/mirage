@@ -16,9 +16,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from mirage.commands.spec.argmatch import (ArgmatchChoices, ArgmatchMatch,
-                                           ArgmatchRefusal, ArgmatchResult,
-                                           argmatch, value_classes)
+from mirage.commands.spec.argmatch import (ArgmatchChoices, ArgmatchKind,
+                                           ArgmatchMatch, ArgmatchRefusal,
+                                           ArgmatchResult, argmatch,
+                                           value_classes)
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
 from mirage.commands.spec.constants import (ARG_PLACEHOLDER,
@@ -72,16 +73,17 @@ class ParsedArgs:
     # renderer tells them apart by the tag.
     option_error_kinds: list[str] = field(default_factory=list)
     needs_value_options: list[str] = field(default_factory=list)
-    invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = field(
-        default_factory=list)
-    # Values that ARGMATCH matched as a prefix of two or more different
-    # candidate values, same triple as invalid_value_options above.
-    # gnulib's own split: `ls --color=a` hits `always` and `auto` and is
-    # `ambiguous argument 'a'`, while `ls --color=zzz` hits nothing and
-    # is `invalid argument 'zzz'` -- two wordings over one candidate
-    # block, so they are two reports rather than one tagged list.
-    ambiguous_value_options: list[tuple[str, str, tuple[str, ...]]] = field(
-        default_factory=list)
+    # Values ARGMATCH refused, in declaration order, each tagged with
+    # the wording gnulib picks for it: `ls --color=a` is a prefix of
+    # `always` and `auto`, two values, and reads `ambiguous argument
+    # 'a'`, while `ls --color=zzz` is a prefix of nothing and reads
+    # `invalid argument 'zzz'`. The two wordings print the same
+    # candidate block, so they are ONE stream and the tag tells them
+    # apart; two lists would have made a later invalid value outrank an
+    # earlier ambiguous one, which no report here does.
+    choice_value_options: list[tuple[str, str, tuple[str, ...],
+                                     ArgmatchKind]] = field(
+                                         default_factory=list)
     invalid_int_options: list[tuple[str, str]] = field(default_factory=list)
     invalid_float_options: list[tuple[str, str]] = field(default_factory=list)
     missing_required_options: list[str] = field(default_factory=list)
@@ -264,10 +266,11 @@ def _match_choice(value: str, choices: ArgmatchChoices,
                   exact_only: bool) -> ArgmatchResult:
     """One option value against its declared candidate table.
 
-    Nearly every spec-declared ``choices`` set is a gnulib ARGMATCH
-    table, so the value goes through :func:`argmatch` and an unambiguous
-    prefix resolves. The exceptions are the options in
-    EXACT_CHOICE_OPTIONS, whose program compares the whole word itself:
+    Nearly every spec-declared ``choices`` set on a GNU command is a
+    gnulib ARGMATCH table, so the value goes through :func:`argmatch`
+    and an unambiguous prefix resolves. Two things are not: the options
+    in EXACT_CHOICE_OPTIONS, and every option on an installed CLI's
+    node. Both have a program that compares the whole word itself, so
     only an exact candidate matches, and the ambiguous wording is
     unreachable for them because a prefix is never a match to be
     ambiguous between.
@@ -275,8 +278,8 @@ def _match_choice(value: str, choices: ArgmatchChoices,
     Args:
         value (str): the value as typed, never pre-escaped.
         choices (ArgmatchChoices): the candidates in declaration order.
-        exact_only (bool): the option is hand-parsed by its program, so
-            prefix matching does not apply to it.
+        exact_only (bool): the option's own program compares the whole
+            word, so prefix matching does not apply to it.
 
     Returns:
         ArgmatchResult: ``ArgmatchMatch`` carrying the canonical word,
@@ -688,20 +691,29 @@ def parse_command(
             if not FLOAT_VALUE.match(part):
                 invalid_float_options.append((dest_name, part))
 
-    # A declared choices set is a gnulib ARGMATCH table, so an
-    # unambiguous prefix of one candidate resolves to it and the bag is
-    # rewritten to the canonical word: the command reads `none`, never
-    # the `non` the line typed. The other two outcomes are reported, one
-    # list each, because GNU words them differently ('ambiguous
-    # argument' vs 'invalid argument') off one shared candidate block.
-    invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = []
-    ambiguous_value_options: list[tuple[str, str, tuple[str, ...]]] = []
+    # A GNU command's declared choices set is a gnulib ARGMATCH table,
+    # so an unambiguous prefix of one candidate resolves to it and the
+    # bag is rewritten to the canonical word: the command reads `none`,
+    # never the `non` the line typed. A refusal is reported with the
+    # wording GNU picks for it ('ambiguous argument' vs 'invalid
+    # argument'), one stream so the report follows declaration order.
+    #
+    # An installed CLI's table is not one: it is clap's or git's, which
+    # compare the whole word, so `ntn` and `gh` refuse `--state=o` where
+    # gnulib would resolve it to `open`. The tier is the same fact
+    # ``installed_cli`` already states above, and it keeps the two
+    # levels of one tree saying one thing -- a group node's choices are
+    # enforced exactly by walk._finish_node, so deriving the leaf's rule
+    # from anything else would make one `Option.choices` mean two things
+    # inside one CLI.
+    choice_value_options: list[tuple[str, str, tuple[str, ...],
+                                     ArgmatchKind]] = []
     for dest_name, allowed in cs.choices_by_dest.items():
         value = flags.get(dest_name)
         # The bare boolean form of an optional-value flag is exempt.
         candidates = value if isinstance(
             value, list) else ([value] if isinstance(value, str) else [])
-        exact_only = dest_name in EXACT_CHOICE_OPTIONS
+        exact_only = installed_cli or dest_name in EXACT_CHOICE_OPTIONS
         canonical: list[str] = []
         for part in candidates:
             match = _match_choice(part, allowed, exact_only)
@@ -709,10 +721,7 @@ def parse_command(
                 canonical.append(match.word)
                 continue
             canonical.append(part)
-            if match.kind == "ambiguous":
-                ambiguous_value_options.append((dest_name, part, allowed))
-            else:
-                invalid_value_options.append((dest_name, part, allowed))
+            choice_value_options.append((dest_name, part, allowed, match.kind))
         if canonical and canonical != candidates:
             flags[dest_name] = (canonical
                                 if isinstance(value, list) else canonical[0])
@@ -830,8 +839,7 @@ def parse_command(
         ambiguous_options=ambiguous_options,
         option_error_kinds=option_error_kinds,
         needs_value_options=needs_value_options,
-        invalid_value_options=invalid_value_options,
-        ambiguous_value_options=ambiguous_value_options,
+        choice_value_options=choice_value_options,
         invalid_int_options=invalid_int_options,
         invalid_float_options=invalid_float_options,
         missing_required_options=missing_required_options,

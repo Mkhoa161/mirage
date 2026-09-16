@@ -164,6 +164,32 @@ def test_option_error_words_an_ambiguous_value_as_gnu_does():
     assert code == 1
 
 
+# The two wordings are one report, so the FIRST refused option in
+# declaration order wins whichever wording it carries. Keeping them in
+# two lists made the later invalid value outrank the earlier ambiguous
+# one, which no other report here does.
+def test_argmatch_refusals_follow_declaration_order():
+    spec = CommandSpec(options=(
+        Option(long="--first", type="str", choices=("alpha", "amber")),
+        Option(long="--second", type="str", choices=("x", "y")),
+    ))
+    parsed = parse_flags(["--first=a", "--second=zzz"], spec, "cmd", "/")
+    refusal = option_error("cmd", parsed)
+    assert refusal is not None
+    assert refusal[0].startswith(
+        b"cmd: ambiguous argument 'a' for '--first'\n")
+    reversed_spec = CommandSpec(options=(
+        Option(long="--first", type="str", choices=("x", "y")),
+        Option(long="--second", type="str", choices=("alpha", "amber")),
+    ))
+    parsed = parse_flags(["--first=zzz", "--second=a"], reversed_spec, "cmd",
+                         "/")
+    refusal = option_error("cmd", parsed)
+    assert refusal is not None
+    assert refusal[0].startswith(
+        b"cmd: invalid argument 'zzz' for '--first'\n")
+
+
 def test_the_two_argmatch_refusals_differ_only_in_the_first_line():
     ambiguous = option_error(
         "tee", parse_flags(["--output-error=w", "/f"], SPECS["tee"], "tee",

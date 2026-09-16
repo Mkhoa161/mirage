@@ -214,17 +214,15 @@ def parse_flags(
         return ParsedCommand(
             paths, texts, flag_kwargs, parsed.warnings, parsed.invalid_options,
             parsed.ambiguous_options, parsed.option_error_kinds,
-            parsed.needs_value_options, parsed.invalid_value_options,
-            parsed.ambiguous_value_options, parsed.invalid_int_options,
-            parsed.invalid_float_options, parsed.missing_required_options,
-            parsed.old_option_needs_value, parsed.missing_required_operands,
-            parsed.typed_dests)
+            parsed.needs_value_options, parsed.choice_value_options,
+            parsed.invalid_int_options, parsed.invalid_float_options,
+            parsed.missing_required_options, parsed.old_option_needs_value,
+            parsed.missing_required_operands, parsed.typed_dests)
 
     # No spec: separate by type
     paths = [item for item in parts if isinstance(item, PathSpec)]
     texts = [item for item in parts if not isinstance(item, PathSpec)]
-    return ParsedCommand(paths, texts, {}, [], [], [], [], [], [], [], [], [],
-                         [])
+    return ParsedCommand(paths, texts, {}, [], [], [], [], [], [], [], [], [])
 
 
 def option_error(cmd_name: str,
@@ -274,20 +272,16 @@ def option_error(cmd_name: str,
     if parsed.invalid_float_options:
         option, value = parsed.invalid_float_options[0]
         return invalid_float_error(cmd_name, option, value)
-    # The two ARGMATCH refusals, adjacent because they are one gnulib
-    # answer worded two ways: only one of them can fire for any single
-    # option, and across options both follow declaration order, as every
-    # report above does.
-    if parsed.invalid_value_options:
-        option, value, choices = parsed.invalid_value_options[0]
-        return invalid_argument_error(cmd_name, option, value, choices)
-    if parsed.ambiguous_value_options:
-        option, value, choices = parsed.ambiguous_value_options[0]
+    # One gnulib answer worded two ways, so one stream: the first
+    # refusal in declaration order wins whichever wording it carries,
+    # as every report above does.
+    if parsed.choice_value_options:
+        option, value, choices, kind = parsed.choice_value_options[0]
         return invalid_argument_error(cmd_name,
                                       option,
                                       value,
                                       choices,
-                                      kind="ambiguous")
+                                      kind=kind)
     if parsed.missing_required_options:
         return missing_required_error(cmd_name,
                                       parsed.missing_required_options[0])

@@ -1,5 +1,7 @@
 import pytest
 
+from mirage.commands.spec import SPECS
+from mirage.commands.spec.help import render_help
 from mirage.shell.bytes import byte_char
 from mirage.shell.variable import VarAttr
 from mirage.workspace.executor.builtins.printf import handle_printf
@@ -107,7 +109,7 @@ async def test_printf_no_args_is_empty():
 # same name is lenient and prints the word; mirage ships the builtin.
 @pytest.mark.asyncio
 @pytest.mark.parametrize("args,bad", [(["--zzz"], "--"), (["--zzz=x"], "--"),
-                                      (["--hel"], "--"), (["--help"], "--"),
+                                      (["--hel"], "--"), (["--help=x"], "--"),
                                       (["--version"], "--"), (["-Q"], "-Q")])
 async def test_printf_unknown_option_reports_the_first_character(args, bad):
     _, io, node = await handle_printf(args, Session(session_id="s1"))
@@ -115,6 +117,20 @@ async def test_printf_unknown_option_reports_the_first_character(args, bad):
     assert io.stderr == (
         f"printf: {bad}: invalid option\n"
         f"printf: usage: printf [-v var] format [arguments]\n").encode()
+    assert node.exit_code == 2
+
+
+# bash answers the EXACT word `--help` for every builtin ahead of
+# `internal_getopt`, writing the page to STDOUT and exiting 2, where
+# `--hel` and `--version` take the invalid-option path above (measured
+# on bash 5.2.37).
+@pytest.mark.asyncio
+async def test_printf_help_prints_the_page_to_stdout_and_exits_2():
+    out, io, node = await handle_printf(["--help"], Session(session_id="s1"))
+    assert io.exit_code == 2
+    assert not io.stderr
+    assert b"".join([chunk async for chunk in out
+                     ]) == render_help("printf", SPECS["printf"]).encode()
     assert node.exit_code == 2
 
 

@@ -21,6 +21,7 @@ import type { DispatchFn } from '../runtime/types.ts'
 import type { NamespaceView, ReaddirPath, SessionView, StatPath } from '../ops/types.ts'
 import { VERSION } from '../version.ts'
 import type { AggregateResult } from './builtin/aggregators.ts'
+import { SOLE_ARGUMENT_LONG_OPTIONS } from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
 import { CommandSpec, Option, type FlagValue } from './spec/types.ts'
 
@@ -269,7 +270,7 @@ const VERSION_OPTION = new Option({
 const HELP_ENC = new TextEncoder()
 
 /** Render the GNU-style version line for a command. */
-function versionLine(name: string): string {
+export function versionLine(name: string): string {
   return `${name} (Mirage) ${VERSION}\n`
 }
 
@@ -277,6 +278,16 @@ function versionLine(name: string): string {
  * Version output when argv asks a command for the injected --version.
  * Null when the command declares its own --version, when the flag is
  * absent, or when it sits after the `--` end-of-options marker.
+ *
+ * This runs on raw argv, ahead of the parser, so it has to honor the one rule
+ * the parser states about a long option's POSITION: gnulib's
+ * `parse_long_options` reads argv[1] only when it is the whole line
+ * (`argc == 2`), so for a SOLE_ARGUMENT_LONG_OPTIONS command `--version` is an
+ * ordinary operand as soon as another word joins it. Measured on coreutils
+ * 9.7: `expr --version` is the version and `expr --version x` is
+ * `expr: syntax error: unexpected argument 'x'`. Inside that window the
+ * parser's own prefix expansion still answers (`expr --versio`), which is why
+ * this only has to decline rather than re-match.
  */
 export function versionRequest(
   name: string,
@@ -284,6 +295,10 @@ export function versionRequest(
   argv: string[],
 ): Uint8Array | null {
   if (!hasInjectedVersion(spec)) return null
+  if (SOLE_ARGUMENT_LONG_OPTIONS.has(name)) {
+    const sole = argv.length === 1 && argv[0] === '--version'
+    return sole ? HELP_ENC.encode(versionLine(name)) : null
+  }
   for (const arg of argv) {
     if (arg === '--') return null
     if (arg === '--version') return HELP_ENC.encode(versionLine(name))

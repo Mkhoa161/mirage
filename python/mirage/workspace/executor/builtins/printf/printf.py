@@ -14,8 +14,11 @@
 
 import re
 
+from mirage.commands.spec import SPECS
+from mirage.commands.spec.help import render_help
 from mirage.context import program_invocation
 from mirage.io import IOResult
+from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource
 from mirage.ops.types import SessionView
 from mirage.policy import PolicyDenied
@@ -124,6 +127,18 @@ async def handle_printf(
                 err = _USAGE.encode()
                 return None, IOResult(exit_code=2, stderr=err), ExecutionNode(
                     command="printf", exit_code=2, stderr=err)
+        elif first == "--help":
+            # bash answers the EXACT word `--help` for every builtin,
+            # ahead of `internal_getopt`, by writing the builtin's help
+            # page to STDOUT and exiting 2 -- only a spelling
+            # internal_getopt actually reads (`--hel`, `--version`)
+            # takes the invalid-option path below (bash 5.2.37). The
+            # page is the spec's, rendered by the one renderer every
+            # other mirage command answers `--help` with, so the two
+            # cannot drift.
+            page = render_help("printf", SPECS["printf"]).encode()
+            return yield_bytes(page), IOResult(exit_code=2), ExecutionNode(
+                command="printf", exit_code=2)
         elif first.startswith("-") and len(first) > 1 and first != "-v":
             # bash's `internal_getopt` takes single letters only, so it
             # reports the first character it does not know spelled with

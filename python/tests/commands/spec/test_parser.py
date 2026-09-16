@@ -419,12 +419,12 @@ def test_count_flag_accumulates_occurrences():
 
 def test_choices_violation_is_reported_not_raised():
     parsed = parse_command(SPECS["tee"], ["--output-error=bogus", "/f"], "/")
-    assert parsed.invalid_value_options == [
+    assert parsed.choice_value_options == [
         ("--output-error", "bogus", ("warn", "warn-nopipe", "exit",
-                                     "exit-nopipe")),
+                                     "exit-nopipe"), "invalid"),
     ]
     ok = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/")
-    assert ok.invalid_value_options == []
+    assert ok.choice_value_options == []
 
 
 # A declared choices set is a gnulib ARGMATCH table, so the parser
@@ -434,23 +434,21 @@ def test_choices_violation_is_reported_not_raised():
 def test_an_unambiguous_prefix_resolves_to_the_canonical_word():
     parsed = parse_command(SPECS["tee"], ["--output-error=warn-", "/f"], "/")
     assert parsed.flags["--output-error"] == "warn-nopipe"
-    assert parsed.invalid_value_options == []
-    assert parsed.ambiguous_value_options == []
+    assert parsed.choice_value_options == []
 
 
 def test_an_exact_word_is_left_alone_and_not_read_as_a_prefix():
     parsed = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/")
     assert parsed.flags["--output-error"] == "warn"
-    assert parsed.ambiguous_value_options == []
+    assert parsed.choice_value_options == []
 
 
-def test_an_ambiguous_prefix_is_its_own_report():
+def test_an_ambiguous_prefix_is_tagged_in_the_one_stream():
     parsed = parse_command(SPECS["tee"], ["--output-error=w", "/f"], "/")
-    assert parsed.ambiguous_value_options == [
-        ("--output-error", "w", ("warn", "warn-nopipe", "exit",
-                                 "exit-nopipe")),
+    assert parsed.choice_value_options == [
+        ("--output-error", "w", ("warn", "warn-nopipe", "exit", "exit-nopipe"),
+         "ambiguous"),
     ]
-    assert parsed.invalid_value_options == []
     # The value the line typed stays in the bag: nothing resolved it, and
     # the renderer names the word as typed.
     assert parsed.flags["--output-error"] == "w"
@@ -458,19 +456,18 @@ def test_an_ambiguous_prefix_is_its_own_report():
 
 def test_the_empty_value_is_reported_ambiguous_not_invalid():
     parsed = parse_command(SPECS["tee"], ["--output-error=", "/f"], "/")
-    assert parsed.ambiguous_value_options == [
-        ("--output-error", "", ("warn", "warn-nopipe", "exit", "exit-nopipe")),
+    assert parsed.choice_value_options == [
+        ("--output-error", "", ("warn", "warn-nopipe", "exit", "exit-nopipe"),
+         "ambiguous"),
     ]
-    assert parsed.invalid_value_options == []
 
 
 def test_prefix_matching_is_case_sensitive():
     parsed = parse_command(SPECS["tee"], ["--output-error=W", "/f"], "/")
-    assert parsed.invalid_value_options == [
-        ("--output-error", "W", ("warn", "warn-nopipe", "exit",
-                                 "exit-nopipe")),
+    assert parsed.choice_value_options == [
+        ("--output-error", "W", ("warn", "warn-nopipe", "exit", "exit-nopipe"),
+         "invalid"),
     ]
-    assert parsed.ambiguous_value_options == []
 
 
 # CPython parses --check-hash-based-pycs by hand and takes only an
@@ -482,10 +479,10 @@ def test_a_hand_parsed_choices_set_takes_no_prefix():
                            ["--check-hash-based-pycs=a", "-c", "x"], "/",
                            "python3")
     assert parsed.flags["--check-hash-based-pycs"] == "a"
-    assert parsed.invalid_value_options == [
-        ("--check-hash-based-pycs", "a", ("always", "default", "never")),
+    assert parsed.choice_value_options == [
+        ("--check-hash-based-pycs", "a", ("always", "default", "never"),
+         "invalid"),
     ]
-    assert parsed.ambiguous_value_options == []
 
 
 def test_a_hand_parsed_choices_set_still_takes_the_exact_word():
@@ -493,7 +490,7 @@ def test_a_hand_parsed_choices_set_still_takes_the_exact_word():
                            ["--check-hash-based-pycs=always", "-c", "x"], "/",
                            "python3")
     assert parsed.flags["--check-hash-based-pycs"] == "always"
-    assert parsed.invalid_value_options == []
+    assert parsed.choice_value_options == []
 
 
 # The empty word has no ambiguity wording to reach here either: nothing
@@ -502,23 +499,46 @@ def test_a_hand_parsed_choices_set_reports_the_empty_word_invalid():
     parsed = parse_command(SPECS["python3"],
                            ["--check-hash-based-pycs=", "-c", "x"], "/",
                            "python3")
-    assert parsed.invalid_value_options == [
-        ("--check-hash-based-pycs", "", ("always", "default", "never")),
+    assert parsed.choice_value_options == [
+        ("--check-hash-based-pycs", "", ("always", "default", "never"),
+         "invalid"),
     ]
-    assert parsed.ambiguous_value_options == []
+
+
+# An installed CLI's choices set is clap's or git's, not gnulib's: the
+# program compares the whole word, so `gh issue list --state=o` is a
+# refusal there where GNU would resolve it to `open`. The CLI's group
+# level already enforces its choices exactly (walk._finish_node), so a
+# leaf that prefix-matched would make one Option.choices mean two things
+# inside one tree.
+def test_an_installed_cli_takes_no_prefix_for_its_choices():
+    spec = CommandSpec(options=(
+        Option(long="--state", type="str", choices=("open", "closed",
+                                                    "all")), ))
+    parsed = parse_command(spec, ["--state=o"], "/", "gh", installed_cli=True)
+    assert parsed.flags["--state"] == "o"
+    assert parsed.choice_value_options == [
+        ("--state", "o", ("open", "closed", "all"), "invalid"),
+    ]
+    exact = parse_command(spec, ["--state=open"],
+                          "/",
+                          "gh",
+                          installed_cli=True)
+    assert exact.flags["--state"] == "open"
+    assert exact.choice_value_options == []
 
 
 def test_choices_exempt_bare_optional_value_form():
     parsed = parse_command(SPECS["tee"], ["--output-error", "/f"], "/")
     assert parsed.flags["--output-error"] is True
-    assert parsed.invalid_value_options == []
+    assert parsed.choice_value_options == []
 
 
 def test_choices_check_every_value_of_a_multiple_flag():
     spec = CommandSpec(options=(
         Option(short="-m", type="str", multiple=True, choices=("x", "y")), ))
     parsed = parse_command(spec, ["-m", "x", "-m", "z"], "/")
-    assert parsed.invalid_value_options == [("-m", "z", ("x", "y"))]
+    assert parsed.choice_value_options == [("-m", "z", ("x", "y"), "invalid")]
 
 
 def test_every_value_of_a_multiple_flag_resolves_to_its_canonical_word():
@@ -526,8 +546,7 @@ def test_every_value_of_a_multiple_flag_resolves_to_its_canonical_word():
         short="-m", type="str", multiple=True, choices=("alpha", "beta")), ))
     parsed = parse_command(spec, ["-m", "al", "-m", "beta"], "/")
     assert parsed.flags["-m"] == ["alpha", "beta"]
-    assert parsed.invalid_value_options == []
-    assert parsed.ambiguous_value_options == []
+    assert parsed.choice_value_options == []
 
 
 def test_required_option_reported_when_absent():

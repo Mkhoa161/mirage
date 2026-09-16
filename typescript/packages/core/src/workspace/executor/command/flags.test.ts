@@ -169,6 +169,40 @@ describe('optionError — the two ARGMATCH refusals', () => {
     expect(refusal?.[1]).toBe(1)
   })
 
+  // The two wordings are one report, so the FIRST refused option in
+  // declaration order wins whichever wording it carries. Keeping them in two
+  // lists made the later invalid value outrank the earlier ambiguous one,
+  // which no other report here does.
+  it('follows declaration order between the two wordings', () => {
+    const dec = new TextDecoder()
+    const spec = new CommandSpec({
+      options: [
+        new Option({ long: '--first', type: 'str', choices: ['alpha', 'amber'] }),
+        new Option({ long: '--second', type: 'str', choices: ['x', 'y'] }),
+      ],
+    })
+    const parsed = parseFlags(['--first=a', '--second=zzz'], spec, 'cmd', '/')
+    const refusal = optionError('cmd', parsed)
+    expect(refusal).not.toBeNull()
+    expect(dec.decode(refusal?.[0]).startsWith("cmd: ambiguous argument 'a' for '--first'\n")).toBe(
+      true,
+    )
+    const reversed = new CommandSpec({
+      options: [
+        new Option({ long: '--first', type: 'str', choices: ['x', 'y'] }),
+        new Option({ long: '--second', type: 'str', choices: ['alpha', 'amber'] }),
+      ],
+    })
+    const other = optionError(
+      'cmd',
+      parseFlags(['--first=zzz', '--second=a'], reversed, 'cmd', '/'),
+    )
+    expect(other).not.toBeNull()
+    expect(dec.decode(other?.[0]).startsWith("cmd: invalid argument 'zzz' for '--first'\n")).toBe(
+      true,
+    )
+  })
+
   it('differs from the invalid refusal only in the first line', () => {
     const dec = new TextDecoder()
     const ambiguous = optionError(

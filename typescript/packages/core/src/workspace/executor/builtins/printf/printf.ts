@@ -12,7 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { specOf } from '../../../../commands/spec/index.ts'
+import { renderHelp } from '../../../../commands/spec/help.ts'
 import { isProgramInvocation } from '../../../../context/session_context.ts'
+import { yieldBytes } from '../../../../io/stream.ts'
 import { IOResult } from '../../../../io/types.ts'
 import type { SessionView } from '../../../../ops/types.ts'
 import { PolicyDenied } from '../../../../policy/errors.ts'
@@ -110,6 +113,19 @@ export async function handlePrintf(
           new ExecutionNode({ command: 'printf', exitCode: 2, stderr: err }),
         ]
       }
+    } else if (first === '--help') {
+      // bash answers the EXACT word `--help` for every builtin, ahead of
+      // `internal_getopt`, by writing the builtin's help page to STDOUT and
+      // exiting 2 -- only a spelling internal_getopt actually reads (`--hel`,
+      // `--version`) takes the invalid-option path below (bash 5.2.37). The
+      // page is the spec's, rendered by the one renderer every other mirage
+      // command answers `--help` with, so the two cannot drift.
+      const page = new TextEncoder().encode(renderHelp('printf', specOf('printf')))
+      return [
+        yieldBytes(page),
+        new IOResult({ exitCode: 2 }),
+        new ExecutionNode({ command: 'printf', exitCode: 2 }),
+      ]
     } else if (first.startsWith('-') && first.length > 1 && first !== '-v') {
       // bash's `internal_getopt` takes single letters only, so it reports the
       // first character it does not know spelled with ONE dash: a long

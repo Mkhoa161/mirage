@@ -12,6 +12,9 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { versionLine } from '../../commands/config.ts'
+import { specOf } from '../../commands/spec/index.ts'
+import { renderHelp } from '../../commands/spec/help.ts'
 import { makeVar } from '../../shell/variable.ts'
 import { seedVar, sessionView, setAttr } from '../../workspace/session/state.ts'
 import { VarAttr } from '../../shell/variable.ts'
@@ -522,7 +525,7 @@ describe('handlePrintf', () => {
     [['--zzz'], '--'],
     [['--zzz=x'], '--'],
     [['--hel'], '--'],
-    [['--help'], '--'],
+    [['--help=x'], '--'],
     [['--version'], '--'],
     [['-Q'], '-Q'],
   ])('refuses %j as an invalid option', async (args, bad) => {
@@ -531,6 +534,18 @@ describe('handlePrintf', () => {
     expect(decode(io.stderr as Uint8Array)).toBe(
       `printf: ${bad}: invalid option\nprintf: usage: printf [-v var] format [arguments]\n`,
     )
+    expect(node.exitCode).toBe(2)
+  })
+
+  // bash answers the EXACT word `--help` for every builtin ahead of
+  // `internal_getopt`, writing the page to STDOUT and exiting 2, where `--hel`
+  // and `--version` take the invalid-option path above (measured on bash
+  // 5.2.37). Mirrors test_printf.py.
+  it('prints the help page to stdout and exits 2', async () => {
+    const [out, io, node] = await handlePrintf(['--help'], new Session({ sessionId: 'test' }))
+    expect(io.exitCode).toBe(2)
+    expect(io.stderr).toBeNull()
+    expect(await readBody(out)).toBe(renderHelp('printf', specOf('printf')))
     expect(node.exitCode).toBe(2)
   })
 
@@ -723,6 +738,78 @@ describe('handleSleep', () => {
       expect(node.exitCode).toBe(1)
     },
   )
+
+  // sleep's only options are gnulib's two standard ones, and they go through a
+  // real getopt_long loop: measured on 9.7, `--help`, `--h`, `--version` and
+  // `--v` all print to stdout and exit 0, wherever on the line they sit, and
+  // the first dash word decides (`sleep --help --zzz` is help,
+  // `sleep --zzz --help` is the refusal). Mirrors test_sleep.py.
+  it.each([[['--help']], [['--h']], [['--hel']], [['0', '--help']], [['--help', '--zzz']]])(
+    'answers %j with the help page on stdout',
+    async (args) => {
+      const [out, io, node] = await handleSleep(args)
+      expect(io.exitCode).toBe(0)
+      expect(io.stderr).toBeNull()
+      expect(await readBody(out)).toBe(renderHelp('sleep', specOf('sleep')))
+      expect(node.exitCode).toBe(0)
+    },
+  )
+
+  it.each([[['--version']], [['--v']], [['0', '--version']]])(
+    'answers %j with the version line on stdout',
+    async (args) => {
+      const [out, io] = await handleSleep(args)
+      expect(io.exitCode).toBe(0)
+      expect(await readBody(out)).toBe(versionLine('sleep'))
+    },
+  )
+
+  // getopt_long recognized the option and refused the VALUE, so the message
+  // names the canonical spelling and drops the value.
+  it.each([
+    ['--help=x', '--help'],
+    ['--hel=x', '--help'],
+    ['--version=x', '--version'],
+  ])('refuses %j for its value', async (arg, canonical) => {
+    const [, io] = await handleSleep([arg])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `sleep: option '${canonical}' doesn't allow an argument\n` +
+        "Try 'sleep --help' for more information.\n",
+    )
+  })
+
+  // An empty long name prefixes both standard options, and getopt_long quotes
+  // the WHOLE token in that refusal where the value one quotes the canonical
+  // spelling (measured on 9.7).
+  it('refuses an empty long name as ambiguous', async () => {
+    const [, io] = await handleSleep(['--=x'])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: option '--=x' is ambiguous; possibilities: '--help' '--version'\n" +
+        "Try 'sleep --help' for more information.\n",
+    )
+  })
+
+  // Prefix matching is byte-exact: a longer dash run and a different case both
+  // prefix nothing (measured on 9.7).
+  it.each(['---help', '--HELP'])('reports %s as unrecognized', async (arg) => {
+    const [, io] = await handleSleep([arg])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `sleep: unrecognized option '${arg}'\nTry 'sleep --help' for more information.\n`,
+    )
+  })
+
+  // `--` ends the scan, so the word after it is an interval, not a help
+  // request (measured on 9.7).
+  it('reads --help after the end of options as an interval', async () => {
+    const [, io] = await handleSleep(['--', '--help'])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: invalid time interval '--help'\nTry 'sleep --help' for more information.\n",
+    )
+  })
 
   // A short one names the offending character, GNU's other wording.
   it('names the character of an unknown short option', async () => {

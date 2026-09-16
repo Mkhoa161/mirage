@@ -724,11 +724,11 @@ describe('count flags accumulate occurrences', () => {
 describe('choices violations are reported, never thrown', () => {
   it('reports the canonical spelling, value, and allowed set', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error=bogus', '/f'], '/')
-    expect(parsed.invalidValueOptions).toEqual([
-      ['--output-error', 'bogus', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']],
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--output-error', 'bogus', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe'], 'invalid'],
     ])
     expect(
-      parseCommand(specOf('tee'), ['--output-error=warn', '/f'], '/').invalidValueOptions,
+      parseCommand(specOf('tee'), ['--output-error=warn', '/f'], '/').choiceValueOptions,
     ).toEqual([])
   })
 
@@ -744,10 +744,9 @@ describe('choices violations are reported, never thrown', () => {
       'python3',
     )
     expect(parsed.flags['--check-hash-based-pycs']).toBe('a')
-    expect(parsed.invalidValueOptions).toEqual([
-      ['--check-hash-based-pycs', 'a', ['always', 'default', 'never']],
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--check-hash-based-pycs', 'a', ['always', 'default', 'never'], 'invalid'],
     ])
-    expect(parsed.ambiguousValueOptions).toEqual([])
     const exact = parseCommand(
       specOf('python3'),
       ['--check-hash-based-pycs=always', '-c', 'x'],
@@ -755,7 +754,7 @@ describe('choices violations are reported, never thrown', () => {
       'python3',
     )
     expect(exact.flags['--check-hash-based-pycs']).toBe('always')
-    expect(exact.invalidValueOptions).toEqual([])
+    expect(exact.choiceValueOptions).toEqual([])
   })
 
   // The empty word has no ambiguity wording to reach here either: nothing is
@@ -767,16 +766,35 @@ describe('choices violations are reported, never thrown', () => {
       '/',
       'python3',
     )
-    expect(parsed.invalidValueOptions).toEqual([
-      ['--check-hash-based-pycs', '', ['always', 'default', 'never']],
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--check-hash-based-pycs', '', ['always', 'default', 'never'], 'invalid'],
     ])
-    expect(parsed.ambiguousValueOptions).toEqual([])
+  })
+
+  // An installed CLI's choices set is clap's or git's, not gnulib's: the
+  // program compares the whole word, so `gh issue list --state=o` is a
+  // refusal there where GNU would resolve it to `open`. The CLI's group level
+  // already enforces its choices exactly (walk's finishNode), so a leaf that
+  // prefix-matched would make one Option.choices mean two things inside one
+  // tree. Mirrors test_parser.py.
+  it('takes no prefix for an installed CLI', () => {
+    const spec = new CommandSpec({
+      options: [new Option({ long: '--state', type: 'str', choices: ['open', 'closed', 'all'] })],
+    })
+    const parsed = parseCommand(spec, ['--state=o'], '/', 'gh', true)
+    expect(parsed.flags['--state']).toBe('o')
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--state', 'o', ['open', 'closed', 'all'], 'invalid'],
+    ])
+    const exact = parseCommand(spec, ['--state=open'], '/', 'gh', true)
+    expect(exact.flags['--state']).toBe('open')
+    expect(exact.choiceValueOptions).toEqual([])
   })
 
   it('exempts the bare optional-value form', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error', '/f'], '/')
     expect(parsed.flags['--output-error']).toBe(true)
-    expect(parsed.invalidValueOptions).toEqual([])
+    expect(parsed.choiceValueOptions).toEqual([])
   })
 
   it('checks every value of a multiple flag', () => {
@@ -791,7 +809,7 @@ describe('choices violations are reported, never thrown', () => {
       ],
     })
     const parsed = parseCommand(spec, ['-m', 'x', '-m', 'z'], '/')
-    expect(parsed.invalidValueOptions).toEqual([['-m', 'z', ['x', 'y']]])
+    expect(parsed.choiceValueOptions).toEqual([['-m', 'z', ['x', 'y'], 'invalid']])
   })
 
   // A declared choices set is a gnulib ARGMATCH table, so the parser
@@ -801,22 +819,20 @@ describe('choices violations are reported, never thrown', () => {
   it('resolves an unambiguous prefix to the canonical word', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error=warn-', '/f'], '/')
     expect(parsed.flags['--output-error']).toBe('warn-nopipe')
-    expect(parsed.invalidValueOptions).toEqual([])
-    expect(parsed.ambiguousValueOptions).toEqual([])
+    expect(parsed.choiceValueOptions).toEqual([])
   })
 
   it('leaves an exact word alone rather than reading it as a prefix', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error=warn', '/f'], '/')
     expect(parsed.flags['--output-error']).toBe('warn')
-    expect(parsed.ambiguousValueOptions).toEqual([])
+    expect(parsed.choiceValueOptions).toEqual([])
   })
 
-  it('reports an ambiguous prefix in its own list', () => {
+  it('tags an ambiguous prefix in the one stream', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error=w', '/f'], '/')
-    expect(parsed.ambiguousValueOptions).toEqual([
-      ['--output-error', 'w', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']],
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--output-error', 'w', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe'], 'ambiguous'],
     ])
-    expect(parsed.invalidValueOptions).toEqual([])
     // The value the line typed stays in the bag: nothing resolved it, and
     // the renderer names the word as typed.
     expect(parsed.flags['--output-error']).toBe('w')
@@ -824,18 +840,16 @@ describe('choices violations are reported, never thrown', () => {
 
   it('reports the empty value as ambiguous, not invalid', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error=', '/f'], '/')
-    expect(parsed.ambiguousValueOptions).toEqual([
-      ['--output-error', '', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']],
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--output-error', '', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe'], 'ambiguous'],
     ])
-    expect(parsed.invalidValueOptions).toEqual([])
   })
 
   it('matches prefixes case-sensitively', () => {
     const parsed = parseCommand(specOf('tee'), ['--output-error=W', '/f'], '/')
-    expect(parsed.invalidValueOptions).toEqual([
-      ['--output-error', 'W', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']],
+    expect(parsed.choiceValueOptions).toEqual([
+      ['--output-error', 'W', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe'], 'invalid'],
     ])
-    expect(parsed.ambiguousValueOptions).toEqual([])
   })
 
   it('resolves every value of a multiple flag to its canonical word', () => {
@@ -851,8 +865,7 @@ describe('choices violations are reported, never thrown', () => {
     })
     const parsed = parseCommand(spec, ['-m', 'al', '-m', 'beta'], '/')
     expect(parsed.flags['-m']).toEqual(['alpha', 'beta'])
-    expect(parsed.invalidValueOptions).toEqual([])
-    expect(parsed.ambiguousValueOptions).toEqual([])
+    expect(parsed.choiceValueOptions).toEqual([])
   })
 })
 
@@ -1372,9 +1385,9 @@ describe('options an environment variable supplies', () => {
       options: [new Option({ long: '--mode', type: 'str', choices: ['a', 'b'], env: 'X_MODE' })],
     })
     expect(
-      parseCommand(picks, [], '/', '', false, { X_MODE: 'zzz' }).invalidValueOptions.length,
+      parseCommand(picks, [], '/', '', false, { X_MODE: 'zzz' }).choiceValueOptions.length,
     ).toBe(1)
-    expect(parseCommand(picks, [], '/', '', false, { X_MODE: 'a' }).invalidValueOptions).toEqual([])
+    expect(parseCommand(picks, [], '/', '', false, { X_MODE: 'a' }).choiceValueOptions).toEqual([])
   })
 
   it('resolves a path value against the cwd like a typed one', () => {

@@ -61,11 +61,215 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "sleep -- '--zzz=é'",
+      "command": "sleep -- '--zzz=\u00e9'",
       "expect": {
         "exit": 1,
         "stdout": "",
         "stderr": "sleep: invalid time interval '--zzz=\\303\\251'\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_help_prints_to_stdout_and_exits_0",
+      "seq": 991052,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep --help",
+      "expect": {
+        "exit": 0,
+        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep [<text>...]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "sleep_help_prefix_resolves",
+      "seq": 991053,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep --h",
+      "expect": {
+        "exit": 0,
+        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep [<text>...]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "sleep_help_after_an_operand_still_resolves",
+      "seq": 991054,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep 0 --help",
+      "expect": {
+        "exit": 0,
+        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep [<text>...]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "sleep_version_prefix_resolves",
+      "seq": 991055,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep --v | cut -d' ' -f1,2",
+      "expect": {
+        "exit": 0,
+        "stdout": "sleep (Mirage)\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "sleep_standard_option_refuses_a_value",
+      "seq": 991056,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep --hel=x",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: option '--help' doesn't allow an argument\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_help_after_end_of_options_is_an_interval",
+      "seq": 991057,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep -- --help",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '--help'\nTry 'sleep --help' for more information.\n"
       }
     }
   ]

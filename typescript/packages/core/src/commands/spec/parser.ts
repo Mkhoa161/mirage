@@ -13,7 +13,13 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { resolvePath } from '../../utils/path.ts'
-import { type ArgmatchChoices, type ArgmatchResult, argmatch, valueClasses } from './argmatch.ts'
+import {
+  type ArgmatchChoices,
+  type ArgmatchKind,
+  type ArgmatchResult,
+  argmatch,
+  valueClasses,
+} from './argmatch.ts'
 import { type CompiledSpec, compileSpec, expandLong } from './compile.ts'
 import {
   ARG_PLACEHOLDER,
@@ -42,16 +48,17 @@ export interface ParsedArgsInit {
   ambiguousOptions?: [string, readonly string[]][]
   optionErrorKinds?: string[]
   needsValueOptions?: string[]
-  invalidValueOptions?: [string, string, readonly string[]][]
   /**
-   * Values that ARGMATCH matched as a prefix of two or more different
-   * candidate values, same triple as invalidValueOptions above. gnulib's
-   * own split: `ls --color=a` hits `always` and `auto` and is
-   * `ambiguous argument 'a'`, while `ls --color=zzz` hits nothing and is
-   * `invalid argument 'zzz'` -- two wordings over one candidate block, so
-   * they are two reports rather than one tagged list.
+   * Values ARGMATCH refused, in declaration order, each tagged with the
+   * wording gnulib picks for it: `ls --color=a` is a prefix of `always` and
+   * `auto`, two values, and reads `ambiguous argument 'a'`, while
+   * `ls --color=zzz` is a prefix of nothing and reads
+   * `invalid argument 'zzz'`. The two wordings print the same candidate
+   * block, so they are ONE stream and the tag tells them apart; two lists
+   * would have made a later invalid value outrank an earlier ambiguous one,
+   * which no report here does.
    */
-  ambiguousValueOptions?: [string, string, readonly string[]][]
+  choiceValueOptions?: [string, string, readonly string[], ArgmatchKind][]
   invalidIntOptions?: [string, string][]
   invalidFloatOptions?: [string, string][]
   missingRequiredOptions?: string[]
@@ -119,8 +126,7 @@ export class ParsedArgs {
   // the tag.
   readonly optionErrorKinds: string[]
   readonly needsValueOptions: string[]
-  readonly invalidValueOptions: [string, string, readonly string[]][]
-  readonly ambiguousValueOptions: [string, string, readonly string[]][]
+  readonly choiceValueOptions: [string, string, readonly string[], ArgmatchKind][]
   readonly invalidIntOptions: [string, string][]
   readonly invalidFloatOptions: [string, string][]
   readonly missingRequiredOptions: string[]
@@ -152,8 +158,7 @@ export class ParsedArgs {
     this.ambiguousOptions = init.ambiguousOptions ?? []
     this.optionErrorKinds = init.optionErrorKinds ?? []
     this.needsValueOptions = init.needsValueOptions ?? []
-    this.invalidValueOptions = init.invalidValueOptions ?? []
-    this.ambiguousValueOptions = init.ambiguousValueOptions ?? []
+    this.choiceValueOptions = init.choiceValueOptions ?? []
     this.invalidIntOptions = init.invalidIntOptions ?? []
     this.invalidFloatOptions = init.invalidFloatOptions ?? []
     this.missingRequiredOptions = init.missingRequiredOptions ?? []
@@ -287,12 +292,13 @@ function matchMixedCluster(tok: string, cs: CompiledSpec): MixedCluster | null {
 /**
  * One option value against its declared candidate table.
  *
- * Nearly every spec-declared `choices` set is a gnulib ARGMATCH table, so the
- * value goes through `argmatch` and an unambiguous prefix resolves. The
- * exceptions are the options in EXACT_CHOICE_OPTIONS, whose program compares
- * the whole word itself: only an exact candidate matches, and the ambiguous
- * wording is unreachable for them because a prefix is never a match to be
- * ambiguous between.
+ * Nearly every spec-declared `choices` set on a GNU command is a gnulib
+ * ARGMATCH table, so the value goes through `argmatch` and an unambiguous
+ * prefix resolves. Two things are not: the options in EXACT_CHOICE_OPTIONS,
+ * and every option on an installed CLI's node. Both have a program that
+ * compares the whole word itself, so only an exact candidate matches, and the
+ * ambiguous wording is unreachable for them because a prefix is never a match
+ * to be ambiguous between.
  *
  * `_match_choice` in parser.py is the twin.
  */
@@ -719,19 +725,26 @@ export function parseCommand(
     }
   }
 
-  // A declared choices set is a gnulib ARGMATCH table, so an unambiguous
-  // prefix of one candidate resolves to it and the bag is rewritten to the
-  // canonical word: the command reads `none`, never the `non` the line
-  // typed. The other two outcomes are reported, one list each, because GNU
-  // words them differently ('ambiguous argument' vs 'invalid argument') off
-  // one shared candidate block.
-  const invalidValueOptions: [string, string, readonly string[]][] = []
-  const ambiguousValueOptions: [string, string, readonly string[]][] = []
+  // A GNU command's declared choices set is a gnulib ARGMATCH table, so an
+  // unambiguous prefix of one candidate resolves to it and the bag is
+  // rewritten to the canonical word: the command reads `none`, never the
+  // `non` the line typed. A refusal is reported with the wording GNU picks
+  // for it ('ambiguous argument' vs 'invalid argument'), one stream so the
+  // report follows declaration order.
+  //
+  // An installed CLI's table is not one: it is clap's or git's, which
+  // compare the whole word, so `ntn` and `gh` refuse `--state=o` where
+  // gnulib would resolve it to `open`. The tier is the same fact
+  // `installedCli` already states above, and it keeps the two levels of one
+  // tree saying one thing -- a group node's choices are enforced exactly by
+  // walk's finishNode, so deriving the leaf's rule from anything else would
+  // make one `Option.choices` mean two things inside one CLI.
+  const choiceValueOptions: [string, string, readonly string[], ArgmatchKind][] = []
   for (const [destName, allowed] of cs.choicesByDest) {
     const value = flags[destName]
     // The bare boolean form of an optional-value flag is exempt.
     const candidates = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
-    const exactOnly = EXACT_CHOICE_OPTIONS.has(destName)
+    const exactOnly = installedCli || EXACT_CHOICE_OPTIONS.has(destName)
     const resolved: string[] = []
     for (const part of candidates) {
       const match = matchChoice(part, allowed, exactOnly)
@@ -740,8 +753,7 @@ export function parseCommand(
         continue
       }
       resolved.push(part)
-      const report = match.kind === 'ambiguous' ? ambiguousValueOptions : invalidValueOptions
-      report.push([destName, part, allowed])
+      choiceValueOptions.push([destName, part, allowed, match.kind])
     }
     if (resolved.length > 0 && resolved.some((word, at) => word !== candidates[at])) {
       flags[destName] = Array.isArray(value) ? resolved : (resolved[0] ?? '')
@@ -852,8 +864,7 @@ export function parseCommand(
     ambiguousOptions,
     optionErrorKinds,
     needsValueOptions,
-    invalidValueOptions,
-    ambiguousValueOptions,
+    choiceValueOptions,
     invalidIntOptions,
     invalidFloatOptions,
     missingRequiredOptions,

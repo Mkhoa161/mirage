@@ -52,9 +52,9 @@ def test_a_bare_output_error_means_warn():
 def test_bad_output_error_mode_is_reported_by_the_parser():
     parsed = parse_command(SPECS["tee"], ["--output-error=bogus", "/f.txt"],
                            cwd="/")
-    assert parsed.invalid_value_options == [
+    assert parsed.choice_value_options == [
         ("--output-error", "bogus", ("warn", "warn-nopipe", "exit",
-                                     "exit-nopipe")),
+                                     "exit-nopipe"), "invalid"),
     ]
 
 
