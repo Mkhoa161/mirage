@@ -57,6 +57,12 @@ const DEFAULT_DIFF_BASIS_MAX_BYTES = 10 * 1024 * 1024
 export interface MirageFsConfig {
   /** Virtual base directory for relative paths. Defaults to `/`. */
   cwd?: string
+  /**
+   * Read and write as this named workspace session, so the profile
+   * that confines the session's shell confines its file tools too. The
+   * workspace's default session otherwise.
+   */
+  sessionId?: string
   /** Exclusive byte limit on each overwrite-diff side. Defaults to 10 MiB. */
   diffBasisMaxBytes?: number
 }
@@ -175,6 +181,7 @@ export class MirageFileSystem extends FileSystem {
 
   private fsOps: Ops | null = null
   private readonly cwd: string
+  private readonly sessionId: string | undefined
   private readonly diffBasisMaxBytes: number
   // Per-targetKey tail promise: serializes mutating ops so the
   // read -> guard -> write window cannot interleave (one concurrent writer
@@ -184,6 +191,7 @@ export class MirageFileSystem extends FileSystem {
   constructor(ctx: Context, config: MirageFsConfig = {}) {
     super(ctx)
     this.cwd = config.cwd ?? '/'
+    this.sessionId = config.sessionId
     this.diffBasisMaxBytes = config.diffBasisMaxBytes ?? DEFAULT_DIFF_BASIS_MAX_BYTES
   }
 
@@ -193,7 +201,10 @@ export class MirageFileSystem extends FileSystem {
   // that wait, after its entry assertion passed, so it is asserted
   // again here, before the op it guards dispatches.
   private async ops(signal?: AbortSignal, operation = 'ready'): Promise<Ops> {
-    this.fsOps ??= (await this.ctx.mirage.ready).fs
+    if (this.fsOps === null) {
+      const fs = (await this.ctx.mirage.ready).fs
+      this.fsOps = this.sessionId === undefined ? fs : fs.forSession(this.sessionId)
+    }
     assertNotAborted(signal, operation)
     return this.fsOps
   }

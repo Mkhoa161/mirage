@@ -28,7 +28,7 @@ from mirage.commands.config import CommandFnResult, CommandOpts, ProvisionFn
 from mirage.context import (effective_path_mode, get_admission,
                             get_current_session, get_mount_gate,
                             get_op_policies, hidden_paths_intersect,
-                            path_allowed, readonly_below)
+                            hidden_refusal, path_allowed, readonly_below)
 from mirage.ops.types import ChildMounts, LinkTargetStat, StatOverlay
 from mirage.policy.policies import Policies, pre_ops_gate
 from mirage.types import FileStat, FileType, MountMode, PathSpec
@@ -260,10 +260,11 @@ async def overlaid_stat(stat: OperationFn, overlay: StatOverlay,
 def _refuse_hidden(path: PathSpec, create: bool) -> None:
     """Refuse a hidden path the way nonexistence would.
 
-    ENOENT for anything acting on the path, EACCES when the caller is
-    creating it (ENOENT is nonsense as the answer to a create). Raised
-    at the op boundary so each command renders the refusal through its
-    own missing-file wording, indistinguishable from a real miss.
+    ENOENT for anything acting on the path; a create answers as
+    :func:`hidden_refusal` says, EACCES only when the directory it
+    lands in is visible. Raised at the op boundary so each command
+    renders the refusal through its own missing-file wording,
+    indistinguishable from a real miss.
 
     Args:
         path (PathSpec): the operand being guarded.
@@ -271,11 +272,7 @@ def _refuse_hidden(path: PathSpec, create: bool) -> None:
     """
     if path_allowed(path.virtual):
         return
-    if create:
-        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES),
-                              path.virtual)
-    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
-                            path.virtual)
+    raise hidden_refusal(path.virtual, create)
 
 
 def _guarded_call(fn: OperationFn, create: bool, *args: Any,
@@ -285,9 +282,9 @@ def _guarded_call(fn: OperationFn, create: bool, *args: Any,
     Sync on purpose: the guard raises at call time and the backend's
     own return shape (coroutine, async iterator) passes through
     untouched. The first path refuses as the op's subject (ENOENT, or
-    EACCES for a create); any further path is a destination, which a
-    hidden target always refuses as EACCES (rename/copy into hidden
-    space is a create).
+    a create's refusal); any further path is a destination, which a
+    hidden target refuses as a create (rename/copy into hidden space
+    is one).
 
     Args:
         fn (OperationFn): the raw backend op.

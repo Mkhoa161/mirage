@@ -245,6 +245,35 @@ async def test_a_hidden_path_denies_a_read_and_refuses_a_create(
 
 
 @pytest.mark.asyncio
+async def test_a_create_under_a_hidden_directory_is_absent_like_its_reads(
+        scoped_session):
+    # Every read on a hidden directory answers ENOENT, and a create
+    # beneath it used to answer EACCES, so a session could map a
+    # profile's hidden prefixes by probing writes. The parent decides:
+    # under a hidden directory a create is ENOENT, and at a hidden name
+    # under a visible directory it keeps EACCES, the way an existing
+    # file the session cannot write does. A rename destination is a
+    # create and answers the same way.
+    dispatcher, _ = _dispatcher(Policies())
+    for op, kwargs in (("write", {
+            "data": b"x"
+    }), ("mkdir", {}), ("create", {})):
+        with pytest.raises(FileNotFoundError):
+            await dispatcher.dispatch(op, _path("/data/locked/other/new.txt"),
+                                      **kwargs)
+    with pytest.raises(FileNotFoundError):
+        await dispatcher.dispatch("rename",
+                                  _path("/data/locked/a.txt"),
+                                  dst=_path("/data/locked/other/moved"))
+    with pytest.raises(PermissionError):
+        await dispatcher.dispatch("mkdir", _path("/data/locked/other"))
+    with pytest.raises(PermissionError):
+        await dispatcher.dispatch("rename",
+                                  _path("/data/locked/a.txt"),
+                                  dst=_path("/data/locked/f.txt"))
+
+
+@pytest.mark.asyncio
 async def test_unlink_removes_a_namespace_link():
     # The door creates links (`symlink`), so it has to remove them too:
     # a link has no backend entry, so forwarding the unlink reaches a

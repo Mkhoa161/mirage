@@ -15,9 +15,11 @@
 import asyncio
 import errno
 
+import pytest
+
 from mirage.context import reset_current_session, set_current_session
 from mirage.resource.ram import RAMResource
-from mirage.types import MountMode
+from mirage.types import MountMode, PathSpec
 from mirage.workspace import Workspace
 
 CARVE_PROFILE = {
@@ -114,17 +116,61 @@ def test_the_road_to_the_carve_out_exists():
 
 
 def test_hide_speaks_before_the_mode():
-    # Creating into hidden space answers EACCES (a silent success would
-    # leave a file the session cannot see, and ENOENT would invite a
-    # retry); the mode never speaks about a path the session cannot
-    # see, so no refusal leaks that the region is read-only.
+    # A create under a hidden directory answers ENOENT, as every read
+    # of that directory does, so a write cannot detect the hide; the
+    # mode never speaks about a path the session cannot see, so no
+    # refusal leaks that the region is read-only. Neither write lands.
     ws = _carved()
     create = _run(ws, "echo x > /repo/secrets/new.txt")
     assert (create.stderr
-            or b"") == b"/repo/secrets/new.txt: Permission denied\n"
+            or b"") == b"/repo/secrets/new.txt: No such file or directory\n"
     clobber = _run(ws, "echo x > /repo/secrets/key.pem")
     assert (clobber.stderr
-            or b"") == b"/repo/secrets/key.pem: Permission denied\n"
+            or b"") == b"/repo/secrets/key.pem: No such file or directory\n"
+    kept = asyncio.run(ws.execute("cat /repo/secrets/key.pem"))
+    assert kept.stdout == b"PRIVATE needle\n"
+
+
+def test_the_op_door_runs_as_the_default_session():
+    # `ws.fs`, `ws.dispatch`, `ws.stat` and `ws.readdir` are judged
+    # under the default session's profile, the way a bare `execute`
+    # is, so an agent whose file tool reads through the facade is
+    # confined like its shell. A session already bound is kept, and
+    # `for_session` runs the same door as another session over the
+    # same ledger; a session with an explicit empty profile is the
+    # host's door to what the default profile hides.
+    ws = Workspace({"/data/": RAMResource()},
+                   mode=MountMode.WRITE,
+                   profiles={"agent": {
+                       "paths": {
+                           "hide": ["/data/vault"]
+                       }
+                   }},
+                   profile="agent")
+    host = ws.create_session("host", profile={})
+
+    async def run():
+        door = ws.fs.for_session(host.session_id)
+        assert door.records is ws.fs.records
+        await door.mkdir("/data/vault")
+        await door.write("/data/vault/secret", b"top\n")
+        assert await door.read("/data/vault/secret") == b"top\n"
+        with pytest.raises(FileNotFoundError):
+            await ws.fs.read("/data/vault/secret")
+        with pytest.raises(FileNotFoundError):
+            await ws.stat("/data/vault")
+        with pytest.raises(FileNotFoundError):
+            await ws.dispatch("read",
+                              PathSpec.from_str_path("/data/vault/secret"))
+        assert await ws.readdir("/data") == []
+        assert await ws.fs.readdir("/data") == []
+        token = set_current_session(host)
+        try:
+            assert await ws.fs.read("/data/vault/secret") == b"top\n"
+        finally:
+            reset_current_session(token)
+
+    asyncio.run(run())
 
 
 def test_a_write_below_the_mode_reads_read_only_file_system():

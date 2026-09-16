@@ -64,7 +64,11 @@ import { WorkspaceBinding, captureBinding } from '../../runtime/binding.ts'
 import type { RuntimeContext } from '../../runtime/types.ts'
 import { ContextScope } from '../../utils/context_scope.ts'
 import { captureRecordingContext } from '../../observe/context.ts'
-import { captureSessionContext } from '../../context/session_context.ts'
+import {
+  captureSessionContext,
+  getCurrentSession,
+  runWithSession,
+} from '../../context/session_context.ts'
 import { namespaceViewOf } from '../executor/command/run.ts'
 import { sessionView, envSnapshot } from '../session/state.ts'
 import type { BridgeDispatchFn } from '../../runtime/types.ts'
@@ -104,6 +108,7 @@ import { WorkspaceMeta } from './meta.ts'
 import { normalizeResources, prepareAddedMount, unmountPrefix } from './mounts.ts'
 import { Router } from './routing.ts'
 import { Runtimes } from './runtimes.ts'
+import { SessionHandle } from './handle.ts'
 import type { ExecuteResult } from './types.ts'
 import { type ExecuteOptions, type MountSpec, type WorkspaceOptions } from './types.ts'
 import { commandName, forkForCall } from './utils.ts'
@@ -382,19 +387,22 @@ export class Workspace {
     // programmatic ws.fs walk the same pipeline as a shell command and
     // the policy gates fire exactly once, at that door. It keeps the
     // ledger, which is its own; the sink is only the observer's copy.
+    // It runs as the default session, as a bare `execute` does, so the
+    // default profile confines it too.
     this.fs = new Ops(
       (op, path, args, kwargs, report) => {
         if (this.isShuttingDown()) throw new Error('Workspace is closed')
         return this.dispatcher.dispatch(op, path, args, kwargs, report)
       },
-      async (rec) => {
-        await this.observer.logOp(rec, this.agentId ?? '', this.sessionManager.defaultId)
+      async (rec, sessionId) => {
+        await this.observer.logOp(rec, this.agentId ?? '', sessionId)
       },
       this.namespace,
       (path) => {
         const mount = this.registry.tryMountFor(path)
         return mount === null ? null : { prefix: mount.prefix, kind: mount.resource.kind }
       },
+      { bind: (sessionId, run) => this.bindSession(sessionId, run) },
     )
     this.runtimes = new Runtimes({
       registry: this.registry,
@@ -729,6 +737,29 @@ export class Workspace {
    * Read at `createSession` rather than at compile time because a CLI is
    * registered on the workspace after it is built.
    */
+  /**
+   * One session's two doors: `execute` and `fs` bound to it.
+   *
+   * Creates the session under the given profile when the id is new (the
+   * same call as `createSession`), and adopts it as is when it exists.
+   * Options for an existing session are refused rather than ignored: a
+   * profile is set once, at creation, and a handle must not look like
+   * it narrowed a session it merely adopted.
+   */
+  session(
+    sessionId: string,
+    options: Parameters<Workspace['createSession']>[1] = {},
+  ): SessionHandle {
+    if (this.sessionManager.list().some((s) => s.sessionId === sessionId)) {
+      if (options.mounts != null || options.profile != null || options.permissions != null) {
+        throw new Error(`session '${sessionId}' exists; its profile was set when it was created`)
+      }
+      return new SessionHandle(this, sessionId)
+    }
+    this.createSession(sessionId, options)
+    return new SessionHandle(this, sessionId)
+  }
+
   private cliVerbs(): ReadonlyMap<string, ReadonlySet<string>> {
     const out = new Map<string, ReadonlySet<string>>()
     for (const [name, install] of this.registry.clis.items()) {
@@ -1006,6 +1037,23 @@ export class Workspace {
     return this.fs.readdir(path)
   }
 
+  /**
+   * Run one op door call as `sessionId`.
+   *
+   * A session already bound in this context is kept: a command's
+   * runtime reaching `ws.fs` stays in its own session, and a kernel
+   * mount serving one session keeps that one, so the door never widens
+   * a caller's view. Otherwise the named session is bound the way
+   * `execute` binds it, so the profile's hides, modes and grants judge
+   * the op.
+   */
+  private async bindSession<T>(sessionId: string | null, run: () => Promise<T>): Promise<T> {
+    if (getCurrentSession() !== null) return run()
+    await this.sessionManager.ensureLoaded()
+    const session = this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
+    return runWithSession(session, run, this.sessionManager)
+  }
+
   async dispatch(
     opName: string,
     path: string,
@@ -1013,7 +1061,8 @@ export class Workspace {
     kwargs: OpKwargs = {},
   ): Promise<unknown> {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
-    return this.dispatchInternal(opName, path, args, kwargs)
+    // Runs as the default session unless one is bound, like `ws.fs`.
+    return this.bindSession(null, () => this.dispatchInternal(opName, path, args, kwargs))
   }
 
   private async dispatchInternal(

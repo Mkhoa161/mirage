@@ -638,6 +638,32 @@ describe('listDir cancellation', () => {
   })
 })
 
+describe('the session the adapter reads as', () => {
+  it('a named session confines ctx.fs the way it confines the shell', async () => {
+    const ws = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] },
+      {
+        profiles: {
+          agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }, 'profile agent'),
+        },
+      },
+    )
+    workspaces.push(ws)
+    await ws.fs.mkdir('/data/vault')
+    await ws.fs.writeFile('/data/vault/secret', 'top')
+    ws.createSession('agent', { profile: 'agent' })
+    const ctx = new Context()
+    await ctx.plugin(MirageService, { workspace: ws }).await()
+    await ctx.plugin(MirageFileSystem, { sessionId: 'agent' }).await()
+    const fs = ctx.fs as MirageFileSystem
+    expect(await fs.stat(await fs.resolve('/data/vault/secret'))).toBeUndefined()
+    const target = await fs.resolve('/data/vault/new.txt')
+    const err = await fs.writeText(target, 'x').catch((caught: unknown) => caught)
+    expect((err as FsError).code).toBe('FS_NOT_FOUND')
+    expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top')
+  })
+})
+
 describe('a policy refusal at the op door', () => {
   it('reads as a sandbox denial, so the tool layer offers the escalation', async () => {
     const ram = new RAMResource()

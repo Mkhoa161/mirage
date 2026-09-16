@@ -73,7 +73,7 @@ def test_fuse_symlink_on_hidden_turf_is_refused():
     ws = _two_mounts()
     sess = ws.create_session("agent", profile={"paths": {"hide": ["/b"]}})
     core = MountCore(ws.fs, session=sess)
-    with pytest.raises(PermissionError):
+    with pytest.raises(FileNotFoundError):
         core.symlink("/b/lk", "/a/x.txt")
     assert not ws.namespace.is_link("/b/lk")
 
@@ -423,11 +423,11 @@ def test_facade_symlink_respects_the_sessions_view():
         token = set_current_session(sess)
         try:
             await ws.fs.symlink("/a/lk", "x.txt")
-            # Creating under a hidden path is EACCES, not ENOENT: a
-            # create is the one op a hide answers out loud, because
-            # silently succeeding would leave a link the session
-            # cannot see and the next writer cannot overwrite.
-            with pytest.raises(PermissionError):
+            # The hidden mount does not exist for the session, so a
+            # create under it answers ENOENT as every read does; only a
+            # create at a hidden name inside a visible directory is
+            # EACCES.
+            with pytest.raises(FileNotFoundError):
                 await ws.fs.symlink("/b/lk", "y.txt")
         finally:
             reset_current_session(token)
@@ -1191,20 +1191,23 @@ def test_ops_exists_says_a_hidden_path_does_not():
     assert asyncio.run(run()) is False
 
 
-def test_ops_create_into_hidden_space_is_eacces():
-    # ENOENT on a create would be nonsense (the caller is naming the
-    # path), so a write into hidden space refuses as permission denied,
-    # and never lands.
+def test_ops_create_into_hidden_space_never_lands():
+    # A create under a hidden directory answers ENOENT, the answer
+    # every read gives for it; a create at a hidden name under a
+    # visible directory answers EACCES, as an existing file the session
+    # cannot write would. Neither lands.
     ws = _hidden_paths_ws()
     sess = ws.get_session("agent")
 
     async def run():
         token = set_current_session(sess)
         try:
-            with pytest.raises(PermissionError):
+            with pytest.raises(FileNotFoundError):
                 await ws.fs.write("/a/secrets/new.txt", b"x")
-            with pytest.raises(PermissionError):
+            with pytest.raises(FileNotFoundError):
                 await ws.fs.mkdir("/a/secrets/sub")
+            with pytest.raises(PermissionError):
+                await ws.fs.write("/a/new.key", b"x")
         finally:
             reset_current_session(token)
 

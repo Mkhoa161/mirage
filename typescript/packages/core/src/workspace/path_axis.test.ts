@@ -123,15 +123,53 @@ describe('the path axis end to end', () => {
   })
 
   it('hide speaks before the mode', async () => {
-    // Creating into hidden space answers EACCES (a silent success would
-    // leave a file the session cannot see, and ENOENT would invite a
-    // retry); the mode never speaks about a path the session cannot
-    // see, so no refusal leaks that the region is read-only.
+    // A create under a hidden directory answers ENOENT, as every read
+    // of that directory does, so a write cannot detect the hide; the
+    // mode never speaks about a path the session cannot see, so no
+    // refusal leaks that the region is read-only. Neither write lands.
     const ws = await carved()
     const create = await ws.execute('echo x > /repo/secrets/new.txt', { sessionId: 'rev' })
-    expect(stderrStr(create)).toBe('/repo/secrets/new.txt: Permission denied\n')
+    expect(stderrStr(create)).toBe('/repo/secrets/new.txt: No such file or directory\n')
     const clobber = await ws.execute('echo x > /repo/secrets/key.pem', { sessionId: 'rev' })
-    expect(stderrStr(clobber)).toBe('/repo/secrets/key.pem: Permission denied\n')
+    expect(stderrStr(clobber)).toBe('/repo/secrets/key.pem: No such file or directory\n')
+    expect(stdoutStr(await ws.execute('cat /repo/secrets/key.pem'))).toBe('PRIVATE needle\n')
+  })
+
+  it('the op door runs as the default session', async () => {
+    // `ws.fs`, `ws.dispatch`, `ws.stat` and `ws.readdir` are judged
+    // under the default session's profile, the way a bare `execute`
+    // is, so an agent whose file tool reads through the facade is
+    // confined like its shell. A session already bound is kept, and
+    // `forSession` runs the same door as another session over the
+    // same ledger; a session with an explicit empty profile is the
+    // host's door to what the default profile hides.
+    const parser = await getTestParser()
+    const ws = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] as const },
+      {
+        mode: MountMode.WRITE,
+        shellParser: parser,
+        profiles: { agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }) },
+        profile: 'agent',
+      },
+    )
+    open.push(ws)
+    const host = ws.createSession('host', { profile: parseSessionProfile({}) })
+    const door = ws.fs.forSession(host.sessionId)
+    expect(door.records).toBe(ws.fs.records)
+    await door.mkdir('/data/vault')
+    await door.writeFile('/data/vault/secret', 'top\n')
+    expect(await door.readFileText('/data/vault/secret')).toBe('top\n')
+    await expect(ws.fs.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(ws.stat('/data/vault')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(ws.dispatch('read', '/data/vault/secret')).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+    expect(await ws.readdir('/data')).toEqual([])
+    expect(await ws.fs.readdir('/data')).toEqual([])
+    await runWithSession(host, async () => {
+      expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
+    })
   })
 
   it('a write below the mode reads Read-only file system', async () => {

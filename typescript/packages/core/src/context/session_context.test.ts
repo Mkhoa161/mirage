@@ -22,6 +22,7 @@ import {
   getOpPolicies,
   hiddenPathsActive,
   hiddenPathsIntersect,
+  hiddenRefusal,
   pathAllowed,
   pathRulesActive,
   readonlyBelow,
@@ -195,6 +196,31 @@ describe('hides', () => {
     await runWithSession(sess, () => {
       expect(pathAllowed('/a/secrets/x')).toBe(false)
       expect(pathAllowed('/a/public')).toBe(true)
+      return Promise.resolve()
+    })
+  })
+
+  it('a hidden create is refused by what its parent answers', async () => {
+    // A create under a hidden directory is ENOENT, the answer every
+    // read gives for that directory, so probing creates cannot map a
+    // profile's hidden prefixes; a hidden name under a visible parent
+    // is EACCES, the way an existing file the session cannot write is.
+    const sess = new Session({
+      sessionId: 'agent',
+      hiddenPaths: { paths: ['/w/vault', '/w/open/file.txt'], patterns: ['*.key'] },
+    })
+    await runWithSession(sess, () => {
+      expect(hiddenRefusal('/w/vault/new.txt', true)).toMatchObject({
+        code: 'ENOENT',
+        message: '/w/vault/new.txt',
+      })
+      expect(hiddenRefusal('/w/vault/a/b', true)).toMatchObject({ code: 'ENOENT' })
+      expect(hiddenRefusal('/w/vault', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/vault/', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/open/file.txt', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/open/new.key', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/vault/new.txt', false)).toMatchObject({ code: 'ENOENT' })
+      expect(hiddenRefusal('/w/open/file.txt', false)).toMatchObject({ code: 'ENOENT' })
       return Promise.resolve()
     })
   })

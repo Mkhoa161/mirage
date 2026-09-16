@@ -14,7 +14,9 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from collections.abc import (AsyncIterator, Awaitable, Callable, Mapping,
+                             Sequence)
+from functools import partial
 from types import TracebackType
 from typing import Any, Literal, overload
 
@@ -24,8 +26,8 @@ from mirage.cache.file.mixin import FileCacheMixin
 from mirage.cache.index import IndexConfig
 from mirage.commands.cli import CLISpec
 from mirage.commands.cli.specs import cli_spec_for
-from mirage.context import (get_current_session_for, reset_current_session,
-                            set_current_session)
+from mirage.context import (get_current_session, get_current_session_for,
+                            reset_current_session, set_current_session)
 from mirage.io import IOResult
 from mirage.io.types import ByteSource
 from mirage.observe.observer import Observer
@@ -84,6 +86,7 @@ from mirage.workspace.workspace.build import (resolve_control_stores,
 from mirage.workspace.workspace.cache import build_file_cache
 from mirage.workspace.workspace.execute import LineFrame, execute_line
 from mirage.workspace.workspace.guard import reject_config_script
+from mirage.workspace.workspace.handle import SessionHandle
 from mirage.workspace.workspace.kernel_mounts import KernelMounts
 from mirage.workspace.workspace.lifecycle import (close_async, patch_process,
                                                   stop_vfs_loop,
@@ -285,13 +288,15 @@ class Workspace:
                              MountMode.READ)
         # The facade delegates every op to the dispatcher, so FUSE and
         # programmatic ws.fs walk the same pipeline as a shell command
-        # and the policy gates fire exactly once, at that door.
+        # and the policy gates fire exactly once, at that door. It runs
+        # as the default session, as a bare ``execute`` does, so the
+        # default profile confines it too.
         self._ops = Ops(self._registry.ops_mounts(),
                         observer=self.observer,
                         agent_id=agent_id or "",
-                        session_id=session_id,
                         links=self._namespace,
-                        dispatch=self._dispatcher.dispatch)
+                        dispatch=self._dispatcher.dispatch,
+                        bind=self._bind_session)
         self._kernel_mounts = KernelMounts(self._ops, self._session_mgr)
         # Held only while the workspace is a context manager; set by
         # lifecycle.patch_process. Declared here because the pair was
@@ -1017,6 +1022,48 @@ class Workspace:
         apply_profile(session, compiled)
         return session
 
+    def session(
+        self,
+        session_id: str,
+        mounts: Mapping[str, MountMode | str] | None = None,
+        *,
+        profile: str | SessionProfile | Mapping[str, Any] | None = None,
+        permissions: SessionProfile | Mapping[str, Any] | None = None,
+    ) -> SessionHandle:
+        """One session's two doors: ``execute`` and ``fs`` bound to it.
+
+        Creates the session under the given profile when the id is new
+        (the same call as ``create_session``), and adopts it as is when
+        it exists. A profile, mounts or permissions for an existing
+        session are refused rather than ignored: a profile is set once,
+        at creation, and a handle must not look like it narrowed a
+        session it merely adopted.
+
+        Args:
+            session_id (str): the session's id.
+            mounts (Mapping[str, MountMode | str] | None): per-mount
+                modes, as ``create_session`` takes them.
+            profile (str | SessionProfile | Mapping[str, Any] | None):
+                the profile to create the session under.
+            permissions (SessionProfile | Mapping[str, Any] | None): an
+                inline document of ask and deny rules and hides.
+
+        Raises:
+            ValueError: the session exists and a profile, mounts or
+                permissions were given.
+        """
+        if any(s.session_id == session_id for s in self._session_mgr.list()):
+            if (mounts is not None or profile is not None
+                    or permissions is not None):
+                raise ValueError(f"session {session_id!r} exists; its "
+                                 "profile was set when it was created")
+            return SessionHandle(self, session_id)
+        self.create_session(session_id,
+                            mounts,
+                            profile=profile,
+                            permissions=permissions)
+        return SessionHandle(self, session_id)
+
     def _cli_verbs(self) -> dict[str, frozenset[str]]:
         """The verbs each installed CLI declares, keyed by head word.
 
@@ -1152,11 +1199,41 @@ class Workspace:
 
     # ── mount management ────────────────────────────────────────────────────
 
+    async def _bind_session(self, session_id: str | None,
+                            run: Callable[[], Awaitable[Any]]) -> Any:
+        """Run one op door call as ``session_id``.
+
+        A session already bound in this context is kept: a command's
+        runtime reaching ``ws.fs`` stays in its own session, and a
+        kernel mount serving one session keeps that one, so the door
+        never widens a caller's view. Otherwise the named session is
+        bound the way ``execute`` binds it, so the profile's hides,
+        modes and grants judge the op.
+
+        Args:
+            session_id (str | None): the session to run as when none is
+                bound; None for the default session as it is now.
+            run (Callable[[], Awaitable[Any]]): the door call.
+        """
+        if get_current_session() is not None:
+            return await run()
+        await self._session_mgr.ensure_loaded()
+        if session_id is None:
+            session_id = self._session_mgr.default_id
+        token = set_current_session(self._session_mgr.get(session_id),
+                                    owner=self._session_mgr)
+        try:
+            return await run()
+        finally:
+            reset_current_session(token)
+
     async def dispatch(self, op: str, path: PathSpec,
                        **kwargs: Any) -> tuple[Any, IOResult]:
         # The door owns pre-dispatch initialization (namespace load,
         # pending drift checks), so FUSE and the ops facade get it too.
-        return await self._dispatcher.dispatch(op, path, **kwargs)
+        # Runs as the default session unless one is bound, like ws.fs.
+        return await self._bind_session(
+            None, partial(self._dispatcher.dispatch, op, path, **kwargs))
 
     async def stat(self, path: str) -> FileStat:
         scope = PathSpec(virtual=path,

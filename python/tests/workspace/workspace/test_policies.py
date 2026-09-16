@@ -781,10 +781,13 @@ async def test_profile_hides_bind_every_session_including_the_default():
                    mode=MountMode.WRITE,
                    profiles=_profile(paths=PathsBlock(hide=("/data/finance",
                                                             "*.key"))))
+    # The facade runs as the default session too, so the seed goes
+    # through a session with an explicit empty profile, the host's door.
+    host = ws.fs.for_session(ws.create_session("host", profile={}).session_id)
     try:
         await ws.execute("mkdir -p /data/finance /data/pub")
-        await ws.fs.write("/data/pub/a.txt", b"a\n")
-        await ws.fs.write("/data/pub/b.key", b"k\n")
+        await host.write("/data/pub/a.txt", b"a\n")
+        await host.write("/data/pub/b.key", b"k\n")
         # The default session cannot see the bound hides ...
         listing = await ws.execute("ls /data /data/pub")
         assert b"finance" not in listing.stdout
@@ -823,13 +826,14 @@ async def test_a_mount_sections_hides_are_written_in_full():
                 }
             }
         })
+    host = ws.fs.for_session(ws.create_session("host", profile={}).session_id)
     try:
         await ws.execute("mkdir -p /repo/certs /other")
-        await ws.fs.write("/repo/.env", b"S=1\n")
-        await ws.fs.write("/repo/certs/k.pem", b"pem\n")
-        await ws.fs.write("/repo/README", b"r\n")
-        await ws.fs.write("/other/.env", b"visible\n")
-        await ws.fs.write("/other/x.pem", b"visible\n")
+        await host.write("/repo/.env", b"S=1\n")
+        await host.write("/repo/certs/k.pem", b"pem\n")
+        await host.write("/repo/README", b"r\n")
+        await host.write("/other/.env", b"visible\n")
+        await host.write("/other/x.pem", b"visible\n")
         listing = await ws.execute("ls -a /repo /repo/certs /other")
         out = listing.stdout.decode()
         # The section reaches only under its own root, so the same two

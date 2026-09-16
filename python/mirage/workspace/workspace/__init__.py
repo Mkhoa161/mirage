@@ -12,6 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+from mirage.workspace.workspace.handle import SessionHandle
 from mirage.workspace.workspace.workspace import ResourceMount, Workspace
 
-__all__ = ["ResourceMount", "Workspace"]
+__all__ = ["ResourceMount", "SessionHandle", "Workspace"]

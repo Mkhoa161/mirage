@@ -19,6 +19,7 @@ import {
   getCurrentSession,
   getOpPolicies,
   hiddenPathsIntersect,
+  hiddenRefusal,
   liveSessions,
   mountGateFor,
   pathAllowed,
@@ -44,7 +45,7 @@ import {
   type ReaddirFn,
   type StatFn,
 } from '../../../types.ts'
-import { eacces, eisdir, enoent, erofsReadOnly, isMissError } from '../../../utils/errors.ts'
+import { eacces, eisdir, erofsReadOnly, isMissError } from '../../../utils/errors.ts'
 import type { ChildMounts } from '../../../ops/types.ts'
 import {
   DEFAULT_MAX_GLOB_MATCHES,
@@ -206,13 +207,13 @@ export function resolveGlobOf<A extends Accessor = Accessor>(ops: CommandIO<A>):
 }
 
 /** Refuse a hidden path the way nonexistence would: ENOENT for anything
- * acting on the path, EACCES when the caller is creating it (ENOENT is
- * nonsense as the answer to a create). Raised at the op boundary so
- * each command renders the refusal through its own missing-file
- * wording, indistinguishable from a real miss. */
+ * acting on the path; a create answers as `hiddenRefusal` says, EACCES
+ * only when the directory it lands in is visible. Raised at the op
+ * boundary so each command renders the refusal through its own
+ * missing-file wording, indistinguishable from a real miss. */
 function refuseHidden(path: PathSpec, create: boolean): void {
   if (pathAllowed(path.virtual)) return
-  throw create ? eacces(path.virtual) : enoent(path.virtual)
+  throw hiddenRefusal(path.virtual, create)
 }
 
 function visibleChildren(entries: string[], parent: PathSpec): string[] {

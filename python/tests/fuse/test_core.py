@@ -234,7 +234,7 @@ async def test_scoped_mount_may_not_touch_a_link_on_hidden_turf():
 
     with pytest.raises(OSError) as created:
         core.symlink("/extra/lk2", "/data/greeting.txt")
-    assert created.value.errno == errno.EACCES
+    assert created.value.errno == errno.ENOENT
     with pytest.raises(OSError) as removed:
         core.unlink("/extra/lk")
     assert removed.value.errno == errno.ENOENT

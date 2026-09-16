@@ -461,3 +461,51 @@ describe('a rename moves what the node table holds', () => {
     }
   })
 })
+
+describe('a hide answers a create by what its parent answers', () => {
+  it('under a hidden directory a create is ENOENT, at a hidden name under a visible one EACCES', async () => {
+    // Every read on a hidden directory answered ENOENT while a create
+    // beneath it answered EACCES, so a session could map a profile's
+    // hidden prefixes by probing writes. The parent decides, a rename
+    // destination is a create, and the shell's redirect renders the
+    // same refusal an ordinary missing directory does.
+    const parser = await getTestParser()
+    const ws = new Workspace(
+      { '/ram': new RAMResource() },
+      { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
+    )
+    try {
+      await ws.execute(
+        'mkdir -p /ram/vault /ram/open && echo s > /ram/vault/secret && echo p > /ram/open/pub.txt && echo q > /ram/open/q.txt',
+      )
+      const sess = ws.createSession('agent', {
+        profile: { paths: { hide: ['/ram/vault', '/ram/open/pub.txt'] } },
+      })
+      await runWithSession(sess, async () => {
+        await expect(
+          ws.dispatch('write', '/ram/vault/new.txt', [ENC.encode('x')]),
+        ).rejects.toMatchObject({ code: 'ENOENT' })
+        await expect(ws.dispatch('mkdir', '/ram/vault/deeper')).rejects.toMatchObject({
+          code: 'ENOENT',
+        })
+        await expect(
+          ws.dispatch('rename', '/ram/open/q.txt', [PathSpec.fromStrPath('/ram/vault/moved')]),
+        ).rejects.toMatchObject({ code: 'ENOENT' })
+        await expect(ws.dispatch('mkdir', '/ram/vault')).rejects.toMatchObject({ code: 'EACCES' })
+        await expect(
+          ws.dispatch('write', '/ram/open/pub.txt', [ENC.encode('x')]),
+        ).rejects.toMatchObject({ code: 'EACCES' })
+        await expect(
+          ws.dispatch('rename', '/ram/open/q.txt', [PathSpec.fromStrPath('/ram/open/pub.txt')]),
+        ).rejects.toMatchObject({ code: 'EACCES' })
+      })
+      const under = await ws.execute('echo x > /ram/vault/new.txt', { sessionId: 'agent' })
+      expect(DEC.decode(under.stderr)).toBe('/ram/vault/new.txt: No such file or directory\n')
+      const control = await ws.execute('echo x > /ram/ghost/new.txt', { sessionId: 'agent' })
+      expect(DEC.decode(control.stderr)).toBe('/ram/ghost/new.txt: No such file or directory\n')
+      expect(DEC.decode((await ws.execute('cat /ram/vault/secret')).stdout)).toBe('s\n')
+    } finally {
+      await ws.close()
+    }
+  })
+})
