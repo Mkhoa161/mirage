@@ -38,7 +38,8 @@ import {
   type CpFlags,
 } from './cp.ts'
 import { UsageError } from '../../errors.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const DEC = new TextDecoder()

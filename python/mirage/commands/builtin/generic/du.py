@@ -10,7 +10,7 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.context import (hidden_paths_intersect, path_allowed,
                             path_rules_active)
 from mirage.io.types import IOResult

@@ -14,7 +14,7 @@
 
 import type { CommandFnResult } from '../../../config.ts'
 import { HEAD } from './constants.ts'
-import type { FlagView } from '../../../spec/types.ts'
+import type { FlagView } from '../../../spec/flag_view.ts'
 import { IOResult } from '../../../../io/types.ts'
 import type { GitError } from './errors.ts'
 import type { CLIInvocation } from '../../types.ts'

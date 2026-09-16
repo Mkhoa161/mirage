@@ -17,7 +17,7 @@ import { IOResult } from '../../../../io/types.ts'
 import { FileType } from '../../../../types.ts'
 import { formatRecords } from '../../utils/output.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { type Builder, resolveGlobOf } from '../adapter.ts'
 
 export const RMDIR_BUILDER: Builder = {

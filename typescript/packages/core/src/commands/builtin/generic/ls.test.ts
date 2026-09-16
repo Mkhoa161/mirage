@@ -30,7 +30,8 @@ import {
 } from './ls.ts'
 import { UsageError } from '../../errors.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 
 const DEC = new TextDecoder()
 
@@ -1043,7 +1044,7 @@ describe('ls quotes the word its argument clauses name', () => {
   ])('words an empty %s as ambiguous', (dest, option, code) => {
     let caught: unknown = null
     try {
-      parseFlags(new FlagView({ [dest as string]: '' }, specOf('ls')))
+      parseFlags(new FlagView({ [dest]: '' }, specOf('ls')))
     } catch (error) {
       caught = error
     }

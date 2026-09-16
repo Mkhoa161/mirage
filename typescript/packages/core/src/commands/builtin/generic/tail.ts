@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { cacheAwareStreamEager } from '../../../cache/read_through.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
 import { FileType, type FileStat, type PathSpec } from '../../../types.ts'
@@ -118,7 +118,13 @@ async function pause(seconds: number, signal: AbortSignal | undefined): Promise<
     // wrong. With no signal there is nothing to wake on, which is the
     // indefinite wait python performs.
     if (!Number.isFinite(seconds)) {
-      signal?.addEventListener('abort', () => resolve(), { once: true })
+      signal?.addEventListener(
+        'abort',
+        () => {
+          resolve()
+        },
+        { once: true },
+      )
       return
     }
     const onAbort = (): void => {

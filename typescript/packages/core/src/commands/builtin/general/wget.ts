@@ -21,7 +21,7 @@ import { HttpConnectError } from '../errors.ts'
 import { httpGet, isHttpError } from '../utils/http.ts'
 import { UsageError } from '../../errors.ts'
 import { resolveTarget } from './curl.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 

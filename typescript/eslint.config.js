@@ -96,7 +96,7 @@ const FLAG_BAG_SELECTORS = [
 const FLAG_BAG_EXEMPT = [
   'packages/*/src/commands/spec/parser.ts',
   'packages/*/src/commands/spec/shell.ts',
-  'packages/*/src/commands/spec/types.ts',
+  'packages/*/src/commands/spec/flag_view.ts',
   'packages/*/src/commands/cli/walk.ts',
   'packages/*/src/commands/config.ts',
 ]
@@ -107,9 +107,6 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       '**/*.d.ts',
-      '**/*.config.ts',
-      '**/*.config.js',
-      '**/*.setup.ts',
       // Narrowed from '**/scripts/**': `packages/*/scripts/*.mjs` are
       // build helpers, but `typescript/scripts/*.ts` generates `spec/`,
       // which pre-commit's Spec drift step and `check_spec_parity.py` both
@@ -181,8 +178,14 @@ export default tseslint.config(
     // it reports ~120 findings, most of them in `gen-specs.ts`, and
     // `pnpm -r typecheck` excludes the workspace root, so wiring tsc for
     // it also needs a CI step rather than a root script.
+    // A build or test config is source too, and this category was ignored by
+    // eslint AND outside every tsconfig `include: ['src']`, so it was gated
+    // by neither tool -- the same hole `scripts/` was in. Violation count
+    // when this landed was zero across all 9 files, so it is a pure ratchet.
+    // Type-aware rules stay off for the same reason as `scripts/`'s own
+    // entry below: no program covers them.
     ...tseslint.configs.disableTypeChecked,
-    files: ['scripts/**/*.ts'],
+    files: ['scripts/**/*.ts', '**/*.config.ts', '**/*.config.js', '**/*.setup.ts'],
     languageOptions: { parserOptions: { projectService: false } },
   },
   {

@@ -22,7 +22,8 @@ from mirage.commands.builtin.utils.copy import (backend_key_default,
                                                 path_exists)
 from mirage.commands.errors import UsageError
 from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import argmatch_error, extra_operand_error
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import (CopyStrategy, FileType, NativeCopy, NativeMove,

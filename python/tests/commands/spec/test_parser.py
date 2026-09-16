@@ -15,9 +15,10 @@
 import pytest
 
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
 from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
-                                        FlagView, Operand, Option)
+                                        Operand, Option)
 
 
 def test_grep_positional_pattern_then_path():

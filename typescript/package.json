@@ -9,7 +9,7 @@
     "test:leg:core": "pnpm -r --fail-if-no-match --filter @struktoai/mirage-core run test",
     "test:leg:cli": "pnpm -r --fail-if-no-match --filter @struktoai/mirage-cli run test",
     "test:leg:rest": "pnpm -r --fail-if-no-match --filter @struktoai/mirage-node --filter @struktoai/mirage-agents --filter @struktoai/mirage-server --filter @struktoai/mirage-browser --filter @struktoai/mirage-dsh --filter @struktoai/mirage-opencode run test",
-    "typecheck": "pnpm -r --filter './packages/*' typecheck",
+    "typecheck": "pnpm -r --filter './packages/*' --filter './scripts' typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

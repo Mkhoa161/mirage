@@ -16,7 +16,7 @@ import dataclasses
 import posixpath
 
 from mirage.commands.spec import SPECS, parse_command, parse_to_kwargs
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.runtime.types import DispatchFn
 from mirage.types import FileStat, FileType, PathSpec
 from mirage.utils.errors import FS_ERRORS, ReadOnlyError, fs_strerror

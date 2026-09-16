@@ -19,7 +19,7 @@ import type { CommandOpts } from '../../config.ts'
 import { mountKey } from '../../../utils/key_prefix.ts'
 import { followFlags, tailGeneric } from './tail.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { runWithCacheManager } from '../../../cache/context.ts'
 import { RAMFileCacheStore } from '../../../cache/file/ram.ts'
 import { CacheManager } from '../../../cache/manager.ts'
@@ -148,7 +148,7 @@ describe('tail -f -s inf', () => {
     const text = await drainFor(stream, 250, abort)
     await grower
     expect(text).toBe('l1\nl2\n')
-    expect(io.exitCode ?? 0).toBe(0)
+    expect(io.exitCode).toBe(0)
   })
 })
 

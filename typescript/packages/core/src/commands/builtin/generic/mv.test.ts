@@ -26,7 +26,8 @@ import {
 import { eacces, enoent, enotdir, enotsup } from '../../../utils/errors.ts'
 import { rstripSlash } from '../../../utils/slash.ts'
 import { mvFlags, mvGeneric, parseFlags, type MvFlags } from './mv.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const DEC = new TextDecoder()

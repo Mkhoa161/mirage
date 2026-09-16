@@ -36,7 +36,7 @@ from mirage.commands.cli.builtin.git.util import (  # yapf: disable
     check_operands, escaped, fatal, links_of, start_point, switches)
 from mirage.commands.cli.builtin.git.worktree import UNTRACKED_ALL, scan
 from mirage.commands.cli.types import CLIDoors, CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.io.types import ByteSource, IOResult
 from mirage.ops.types import StatPath
 from mirage.types import FileStat, FileType

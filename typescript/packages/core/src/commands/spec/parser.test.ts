@@ -14,15 +14,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { specOf } from './builtins.ts'
-import { parseCommand, parseToKwargs } from './parser.ts'
-import {
-  CommandSpec,
-  FlagView,
-  Operand,
-  Option,
-  ParsedArgs,
-  VALUE_OCCURRENCES_KEY,
-} from './types.ts'
+import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
+import { CommandSpec, Operand, Option, VALUE_OCCURRENCES_KEY } from './types.ts'
+import { FlagView } from './flag_view.ts'
 
 describe('parseCommand — bool short flags', () => {
   const spec = new CommandSpec({
@@ -1497,5 +1491,34 @@ describe('a boolean long handed a value', () => {
   ])('keeps scan order for %j', (argv, kinds) => {
     const parsed = parseCommand(specOf('grep'), [...argv, 'x'], '/')
     expect(parsed.optionErrorKinds).toEqual(kinds)
+  })
+})
+
+describe('ParsedArgs helpers', () => {
+  const parsed = new ParsedArgs({
+    flags: { '-l': true, '--name': 'README' },
+    args: [
+      ['/ram/x', 'path'],
+      ['literal', 'str'],
+      ['/ram/y', 'path'],
+    ],
+    pathFlagValues: ['/ram/z'],
+  })
+
+  it('paths() returns PATH args only', () => {
+    expect(parsed.paths()).toEqual(['/ram/x', '/ram/y'])
+  })
+
+  it('texts() returns TEXT args only', () => {
+    expect(parsed.texts()).toEqual(['literal'])
+  })
+
+  it('routingPaths() combines paths() and pathFlagValues', () => {
+    expect(parsed.routingPaths()).toEqual(['/ram/x', '/ram/y', '/ram/z'])
+  })
+
+  it('flag() reads with fallback', () => {
+    expect(parsed.flag('-l')).toBe(true)
+    expect(parsed.flag('--missing', 'def')).toBe('def')
   })
 })

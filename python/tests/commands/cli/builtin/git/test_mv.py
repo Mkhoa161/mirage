@@ -18,7 +18,7 @@ import pytest
 
 from mirage.commands.cli.builtin.git import GIT
 from mirage.commands.cli.builtin.git.mv import Move, moved_path, parse_flags
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.resource.disk import DiskResource
 from mirage.resource.ram import RAMResource
 from mirage.types import MountMode

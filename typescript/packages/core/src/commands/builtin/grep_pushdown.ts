@@ -16,7 +16,8 @@ import type { PathSpec } from '../../types.ts'
 import { PatternType } from './constants.ts'
 import { hasUnresolvedGlob } from './utils/operands.ts'
 import { breSource } from './grep_pattern.ts'
-import { FlagView, type FlagValue } from '../spec/types.ts'
+import { FlagView } from '../spec/flag_view.ts'
+import { type FlagValue } from '../spec/types.ts'
 
 // Classify a grep pattern for API push-down decisions.
 export function classifyPattern(pattern: string, fixedString: boolean): PatternType {

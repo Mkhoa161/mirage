@@ -10,7 +10,7 @@ from mirage.commands.builtin.utils.paths import default_paths
 from mirage.commands.config import CommandOpts
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.context import hidden_paths_intersect, path_rules_active
 from mirage.core.chroma.find import find as find_core
 from mirage.core.chroma.stat import stat as stat_core

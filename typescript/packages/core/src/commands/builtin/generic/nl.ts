@@ -20,8 +20,10 @@ import { BreError, searchBre } from '../utils/bre.ts'
 import { quoteText } from '../../quote.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { operandsIo, readOperands, singleChunk } from '../utils/operands.ts'
-import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
+import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
+import { C_SPACE } from '../constants.ts'
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder('utf-8', { fatal: false })
@@ -245,7 +247,7 @@ function parseNumbering(raw: string): [string, RegExp | null] {
 // space plus U+FEFF, so it would accept a great deal GNU refuses. No
 // whitespace may sit BETWEEN the sign and the digits (`'+ 5'` is refused), and
 // there is only ever one sign. Measured, ground truth NL3-C.
-const NUMBER = /^[ \t\n\v\f\r]*[+-]?[0-9]+$/
+const NUMBER = new RegExp(`^${C_SPACE}[+-]?[0-9]+$`)
 
 const ERANGE = 'Numerical result out of range'
 const EOVERFLOW = 'Value too large for defined data type'

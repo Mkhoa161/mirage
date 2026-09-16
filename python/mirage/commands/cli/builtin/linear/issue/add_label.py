@@ -15,7 +15,7 @@
 from mirage.commands.cli.builtin.linear.util import (first_text, resolve_issue,
                                                      resolve_label_id)
 from mirage.commands.cli.types import CLIInvocation
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.linear.client import get_issue, issue_update
 from mirage.core.linear.config import LinearConfig
 from mirage.core.linear.normalize import normalize_issue, to_json_bytes

@@ -565,7 +565,7 @@ def test_parse_cp_flags_conflicts_and_grammar():
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.errors import UsageError
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     def view(bag):
         return FlagView(bag, spec=SPECS["cp"])
@@ -736,7 +736,7 @@ def test_update_clause_quotes_the_word(value, escaped):
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.errors import UsageError
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     with pytest.raises(UsageError) as exc:
         parse_flags(FlagView({"update": value}, spec=SPECS["cp"]))
@@ -750,7 +750,7 @@ def test_backup_clause_quotes_the_word(value, escaped):
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.errors import UsageError
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     with pytest.raises(UsageError) as exc:
         parse_flags(FlagView({"backup": value}, spec=SPECS["cp"]))
@@ -767,7 +767,7 @@ def test_update_lists_gnu_94_candidates():
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.errors import UsageError
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     with pytest.raises(UsageError) as exc:
         parse_flags(FlagView({"update": "x"}, spec=SPECS["cp"]))
@@ -785,7 +785,7 @@ def test_an_empty_update_is_ambiguous():
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.errors import UsageError
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     with pytest.raises(UsageError) as exc:
         parse_flags(FlagView({"update": ""}, spec=SPECS["cp"]))
@@ -809,7 +809,7 @@ def test_an_empty_update_is_ambiguous():
 def test_update_accepts_an_unambiguous_prefix(value, mode):
     from mirage.commands.builtin.generic.cp import parse_flags
     from mirage.commands.spec import SPECS
-    from mirage.commands.spec.types import FlagView
+    from mirage.commands.spec.flag_view import FlagView
 
     assert parse_flags(FlagView({"update": value},
                                 spec=SPECS["cp"])).update == mode

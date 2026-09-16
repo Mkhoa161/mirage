@@ -22,7 +22,8 @@ from mirage.commands.builtin.generic.crossmount.utils import (
     merge_operand_ios, run_operands)
 from mirage.commands.builtin.generic.wc import parse_flags as parse_wc_flags
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.io.stream import materialize
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec

@@ -17,7 +17,7 @@ from pathlib import Path
 
 import mirage.commands
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import spec_flag_names
+from mirage.commands.spec.flag_view import spec_flag_names
 
 QUERY_METHODS = frozenset({
     "as_bool",

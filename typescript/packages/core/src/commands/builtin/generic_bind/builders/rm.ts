@@ -18,7 +18,7 @@ import { cpWalk } from '../../generic/cp.ts'
 import { formatRecords } from '../../utils/output.ts'
 import { removalLines } from '../../utils/verbose.ts'
 import { specOf } from '../../../spec/builtins.ts'
-import { FlagView } from '../../../spec/types.ts'
+import { FlagView } from '../../../spec/flag_view.ts'
 import { isSlashedLink, rmLinkRefusal } from '../../utils/slash_links.ts'
 import {
   errorVirtualPath,

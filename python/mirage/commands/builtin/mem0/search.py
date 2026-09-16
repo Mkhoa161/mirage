@@ -22,7 +22,7 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.core.mem0.scope import detect_scope
 from mirage.core.mem0.search import search_memories_rendered
 from mirage.io.types import ByteSource, IOResult

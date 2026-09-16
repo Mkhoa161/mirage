@@ -14,7 +14,7 @@
 
 import git from 'isomorphic-git'
 
-import type { FlagView } from '../../../spec/types.ts'
+import type { FlagView } from '../../../spec/flag_view.ts'
 import { discover } from './discover.ts'
 import { NoWorkspaceError } from './errors.ts'
 import { abbrevLength, type CommitFacts } from './format.ts'

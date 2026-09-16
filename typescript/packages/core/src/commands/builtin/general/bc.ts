@@ -19,7 +19,7 @@ import { command, type CommandFnResult, type CommandOpts } from '../../config.ts
 import { specOf } from '../../spec/builtins.ts'
 import { readStdinAsync } from '../utils/stream.ts'
 import { pureProvision } from '../generic_bind/provision.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
@@ -500,7 +500,7 @@ const RESERVED_WORDS = new Set([
 const BASE_DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const DECIMAL_DIGITS = new Set('0123456789')
 const DIGIT_CHARS = new Set(BASE_DIGITS)
-const NUMBER_CHARS = new Set([...BASE_DIGITS, '.'])
+const NUMBER_CHARS = new Set([...DIGIT_CHARS, '.'])
 // ASCII only, matching `NAME_CHARS` in the python twin. A name is
 // `[a-z][a-z0-9_]*`, so a leading `_` is not a name at all.
 const NAME_START = new Set('abcdefghijklmnopqrstuvwxyz')
@@ -508,7 +508,9 @@ const NAME_CHARS = new Set([...NAME_START, ...DECIMAL_DIGITS, '_'])
 // Every character GNU's lexer has a rule for. One outside this set is
 // reported as an illegal character rather than a syntax error, which is
 // why `@` and a stray `_` read differently from `)`.
-const LEGAL_CHARS = new Set([...BASE_DIGITS, ...NAME_START, ...'.+-*/%^=<>!()[]{},;', ...'"\\# \t'])
+const SYMBOL_CHARS = new Set('.+-*/%^=<>!()[]{},;')
+const QUOTE_CHARS = new Set('"\\# \t')
+const LEGAL_CHARS = new Set([...DIGIT_CHARS, ...NAME_START, ...SYMBOL_CHARS, ...QUOTE_CHARS])
 const COMPOUND_OPS = '+-*/%^'
 const BLANKS = new Set(' \t')
 const STATEMENT_SEPARATOR = ';'
@@ -567,8 +569,8 @@ function digitValue(char: string, ibase: number, clamp: boolean): number {
 // keeps every literal correctly rounded, which is what makes `0.29*0.3`
 // answer the same in both hosts.
 function decimalText(whole: string, fraction: string, clamp: boolean): string {
-  const before = [...whole].map((c) => String(digitValue(c, DEFAULT_BASE, clamp))).join('')
-  const after = [...fraction].map((c) => String(digitValue(c, DEFAULT_BASE, clamp))).join('')
+  const before = Array.from(whole, (c) => String(digitValue(c, DEFAULT_BASE, clamp))).join('')
+  const after = Array.from(fraction, (c) => String(digitValue(c, DEFAULT_BASE, clamp))).join('')
   return `${before === '' ? '0' : before}.${after === '' ? '0' : after}`
 }
 

@@ -24,7 +24,7 @@ from mirage.commands.cli.builtin.git.errors import (BadDateError,
 from mirage.commands.cli.builtin.git.format import (MEDIUM, LogFormat,
                                                     parse_pretty)
 from mirage.commands.cli.builtin.git.pickaxe import touches
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 from mirage.utils.dates import iso_timestamp
 
 REMOTE_PREFIX = b"refs/remotes/"

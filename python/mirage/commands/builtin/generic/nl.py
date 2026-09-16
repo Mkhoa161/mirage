@@ -2,6 +2,7 @@ import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
 
+from mirage.commands.builtin.constants import C_SPACE
 from mirage.commands.builtin.utils.bre import BreError, search_bre
 from mirage.commands.builtin.utils.operands import (merge_split_errors,
                                                     normalized_read,
@@ -10,7 +11,8 @@ from mirage.commands.builtin.utils.stream import resolve_source
 from mirage.commands.config import CommandOpts
 from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.io.async_line_iterator import AsyncLineIterator
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec, PolymorphicReadFn, StatFn
@@ -30,8 +32,7 @@ from mirage.types import PathSpec, PolymorphicReadFn, StatFn
 # `\s` would accept four bytes too many. No whitespace may sit BETWEEN
 # the sign and the digits (`'+ 5'` is refused), and there is only ever
 # one sign. Measured, ground truth NL3-C.
-_C_SPACE = r"[ \t\n\v\f\r]*"
-_NUMBER = re.compile(rf"{_C_SPACE}[+-]?[0-9]+")
+_NUMBER = re.compile(rf"{C_SPACE}[+-]?[0-9]+")
 
 # gnulib appends `strerror(ERANGE)` when a value parsed but fell outside
 # the option's range, and `strerror(EOVERFLOW)` when the value did not

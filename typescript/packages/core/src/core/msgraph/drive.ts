@@ -211,7 +211,9 @@ export async function copyTree(
   }
   await graphDelete(config, dst.item())
   const secondConflict = await copyOnce(config, src, dst)
-  if (secondConflict !== null) throw secondConflict
+  if (secondConflict !== null) {
+    throw new GraphError(500, secondConflict.code, secondConflict.message)
+  }
   await invalidateAfterWrite(virtSpec(dst))
 }
 

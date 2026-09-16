@@ -35,7 +35,7 @@ import { patternArg } from '../grep_pattern.ts'
 import { pushdownOperand } from '../grep_pushdown.ts'
 import { rgGeneric } from '../generic/rg.ts'
 import { SEARCH_HONORED, SEARCH_MAX_RESULTS } from './grep.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 
 const resolveSlackGlob = resolveGlobOf(SLACK_IO)
 

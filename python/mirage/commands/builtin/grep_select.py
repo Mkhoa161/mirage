@@ -15,7 +15,7 @@
 import fnmatch
 from dataclasses import dataclass
 
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 
 
 @dataclass(frozen=True, slots=True)

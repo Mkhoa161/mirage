@@ -2,7 +2,7 @@ from mirage.commands.builtin.grep_select import (NO_FILTERS, FileGlob,
                                                  WalkFilters, file_admitted,
                                                  parse_file_globs)
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagView
+from mirage.commands.spec.flag_view import FlagView
 
 
 def _rules(*pairs: tuple[str, bool]) -> WalkFilters:

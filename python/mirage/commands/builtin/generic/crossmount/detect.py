@@ -16,7 +16,8 @@ from mirage.commands.builtin.generic.crossmount.constants import (
     CROSS_MOUNT_COMMANDS, RELAY_COMMANDS, STREAM_COMMANDS)
 from mirage.commands.builtin.generic.crossmount.types import Cmd, Strategy
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import FlagValue, FlagView
+from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.types import FlagValue
 from mirage.types import PathSpec
 
 

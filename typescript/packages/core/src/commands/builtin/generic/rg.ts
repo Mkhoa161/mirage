@@ -21,7 +21,7 @@ import { fsStrerror, isFsError, isWalkError } from '../../../utils/errors.ts'
 import { respellRaw } from '../../../utils/path.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { specOf } from '../../spec/builtins.ts'
-import { FlagView } from '../../spec/types.ts'
+import { FlagView } from '../../spec/flag_view.ts'
 import { compilePattern, resolvePattern } from '../grep_pattern.ts'
 import {
   exitCodeFor,
