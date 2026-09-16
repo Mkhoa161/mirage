@@ -14,6 +14,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RAMObserverStore } from '../../observe/store.ts'
+import { parseSessionProfile } from '../../policy/profile.ts'
 import { RAMResource } from '../../resource/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
@@ -96,6 +97,35 @@ describe('Workspace on a WorkspaceStateStore', () => {
     expect(wsB.defaultSessionId).toBe(wsA.defaultSessionId)
     expect(wsB.defaultSessionId).not.toBe(minted)
     expect(wsB.getSession(wsB.defaultSessionId).env.MARK).toBe('1')
+  })
+
+  it('the op door adopts the stored default before binding', async () => {
+    // The first `ws.fs` call on a fresh attach used to hydrate the
+    // session store alone, so it ran as the minted default rather than
+    // the writer's, whose hides the discovery record points at.
+    const store = new RAMWorkspaceStateStore()
+    const parser = await getTestParser()
+    const ram = new RAMResource()
+    const build = (): Workspace =>
+      new Workspace(
+        { '/data': [ram, MountMode.WRITE] as const },
+        { mode: MountMode.WRITE, shellParser: parser, workspaceId: 'shared', store },
+      )
+    const wsA = build()
+    open.push(wsA)
+    await wsA.execute('mkdir -p /data/vault && echo top > /data/vault/secret')
+    await wsA.setSessionProfile(
+      wsA.defaultSessionId,
+      parseSessionProfile({ paths: { hide: ['/data/vault'] } }),
+    )
+    await wsA.flushSessions()
+
+    const wsB = build()
+    open.push(wsB)
+    const minted = wsB.defaultSessionId
+    await expect(wsB.fs.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(wsB.defaultSessionId).toBe(wsA.defaultSessionId)
+    expect(wsB.defaultSessionId).not.toBe(minted)
   })
 
   it('an explicit session id is not adopted away', async () => {

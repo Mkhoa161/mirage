@@ -1225,7 +1225,11 @@ class Workspace:
         """
         if get_current_session_unless_foreign(self._session_mgr) is not None:
             return await run()
-        await self._session_mgr.ensure_loaded()
+        # The full hydration path, discovery record first: a workspace
+        # attached to a shared store adopts the persisted default
+        # session's id there, and binding before that would run as a
+        # freshly minted, unrestricted default instead.
+        await self.ensure_sessions_loaded()
         if session_id is None:
             session_id = self._session_mgr.default_id
         token = set_current_session(self._session_mgr.get(session_id),

@@ -27,7 +27,9 @@ import type {
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
 import { DiskResource } from '@struktoai/mirage-node'
+import { sessionPathAllowed } from '@struktoai/mirage-core/context/session_context'
 import type { MountEntry } from '@struktoai/mirage-core/workspace/mount/mount'
+import type { Session } from '@struktoai/mirage-core/workspace/session/session'
 import type { Ops } from '@struktoai/mirage-core/ops/ops'
 import { FileType } from '@struktoai/mirage-core/types'
 import type { FileStat } from '@struktoai/mirage-core/types'
@@ -44,6 +46,7 @@ import {
 import type {} from './service.ts'
 
 type LinksSeam = NonNullable<Ops['links']>
+type Host = Awaited<Context['mirage']['ready']>
 
 // Read off the seam's own signature rather than imported: the policy type
 // lives in `@deepseek-ai/dsh-sandbox`, which reaches this package only as a
@@ -180,6 +183,7 @@ export class MirageFileSystem extends FileSystem {
   static readonly inject = ['mirage']
 
   private fsOps: Ops | null = null
+  private host: Host | null = null
   private readonly cwd: string
   private readonly sessionId: string | undefined
   private readonly diffBasisMaxBytes: number
@@ -202,8 +206,9 @@ export class MirageFileSystem extends FileSystem {
   // again here, before the op it guards dispatches.
   private async ops(signal?: AbortSignal, operation = 'ready'): Promise<Ops> {
     if (this.fsOps === null) {
-      const fs = (await this.ctx.mirage.ready).fs
-      this.fsOps = this.sessionId === undefined ? fs : fs.forSession(this.sessionId)
+      const host = await this.ctx.mirage.ready
+      this.host = host
+      this.fsOps = this.sessionId === undefined ? host.fs : host.fs.forSession(this.sessionId)
     }
     assertNotAborted(signal, operation)
     return this.fsOps
@@ -214,6 +219,25 @@ export class MirageFileSystem extends FileSystem {
       throw new Error('mirage: filesystem used before the workspace is ready')
     }
     return this.fsOps.links
+  }
+
+  /** The session the op door judges this adapter's ops as. */
+  private session(): Session {
+    if (this.host === null) {
+      throw new Error('mirage: filesystem used before the workspace is ready')
+    }
+    return this.host.getSession(this.sessionId ?? this.host.defaultSessionId)
+  }
+
+  /**
+   * Whether the session may be told a path exists. The link table is
+   * read here, outside the door, so it is read the way the door would:
+   * a link the session cannot see is never followed (the typed path
+   * reaches the door and is refused as absent, not resolved to the
+   * visible target it points at), and never listed.
+   */
+  private visible(path: string): boolean {
+    return sessionPathAllowed(this.session(), path)
   }
 
   /**
@@ -279,7 +303,7 @@ export class MirageFileSystem extends FileSystem {
 
   private follow(path: string): string {
     const links = this.links
-    if (links === null) return path
+    if (links === null || !this.visible(path)) return path
     try {
       return links.follow(path)
     } catch (err) {
@@ -550,7 +574,11 @@ export class MirageFileSystem extends FileSystem {
     if (links !== null) {
       const base = key === '/' ? '/' : `${key}/`
       for (const linkPath of links.symlinkTargets().keys()) {
-        if (linkPath.startsWith(base) && !linkPath.slice(base.length).includes('/')) {
+        if (
+          linkPath.startsWith(base) &&
+          !linkPath.slice(base.length).includes('/') &&
+          this.visible(linkPath)
+        ) {
           names.add(linkPath.slice(base.length))
         }
       }

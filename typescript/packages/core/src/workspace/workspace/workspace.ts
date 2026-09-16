@@ -1064,7 +1064,11 @@ export class Workspace {
   private async bindSession<T>(sessionId: string | null, run: () => Promise<T>): Promise<T> {
     const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
     if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return run()
-    await this.sessionManager.ensureLoaded()
+    // The full hydration path, discovery record first: a workspace
+    // attached to a shared store adopts the persisted default session's
+    // id there, and binding before that would run as a freshly minted,
+    // unrestricted default instead.
+    await this.ensureSessionsLoaded()
     const session = this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
     return runWithSession(session, run, this.sessionManager)
   }

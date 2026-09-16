@@ -651,6 +651,8 @@ describe('the session the adapter reads as', () => {
     workspaces.push(ws)
     await ws.fs.mkdir('/data/vault')
     await ws.fs.writeFile('/data/vault/secret', 'top')
+    await ws.fs.writeFile('/data/public.txt', 'pub')
+    await ws.fs.symlink('/data/vault/lk', '/data/public.txt')
     ws.createSession('agent', { profile: 'agent' })
     const ctx = new Context()
     await ctx.plugin(MirageService, { workspace: ws }).await()
@@ -660,6 +662,14 @@ describe('the session the adapter reads as', () => {
     const target = await fs.resolve('/data/vault/new.txt')
     const err = await fs.writeText(target, 'x').catch((caught: unknown) => caught)
     expect((err as FsError).code).toBe('FS_NOT_FOUND')
+    // A link inside hidden space is not followed out of it: the typed
+    // path reaches the door and reads as absent, and the listing never
+    // names a hidden link either.
+    const link = await fs.resolve('/data/vault/lk')
+    expect(String(link.targetKey)).toBe('/data/vault/lk')
+    expect(await fs.stat(link)).toBeUndefined()
+    const listed = await fs.listDir(await fs.resolve('/data'))
+    expect(listed.map((e) => e.name)).toEqual(['public.txt'])
     expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top')
   })
 })
