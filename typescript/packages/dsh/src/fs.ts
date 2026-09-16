@@ -204,9 +204,17 @@ export class MirageFileSystem extends FileSystem {
   // once and caches the op door. The caller's signal can fire during
   // that wait, after its entry assertion passed, so it is asserted
   // again here, before the op it guards dispatches.
+  //
+  // `ready` does not hydrate: a workspace freshly attached to a shared
+  // store still holds a minted default session and an empty link table
+  // until its first op loads both. This adapter reads the session and
+  // the links outside the door, so it hydrates before either is
+  // consulted, or a persisted hide would be judged by the wrong session.
   private async ops(signal?: AbortSignal, operation = 'ready'): Promise<Ops> {
     if (this.fsOps === null) {
       const host = await this.ctx.mirage.ready
+      await host.ensureSessionsLoaded()
+      await host.namespace.ensureLoaded()
       this.host = host
       this.fsOps = this.sessionId === undefined ? host.fs : host.fs.forSession(this.sessionId)
     }
@@ -293,8 +301,9 @@ export class MirageFileSystem extends FileSystem {
    */
   private async resolveBase(path: string, cwd: string | undefined): Promise<string> {
     if (cwd === undefined || posix.isAbsolute(path)) return this.cwd
-    const ws = await this.ctx.mirage.ready
-    return (await ws.fs.isDir(cwd)) ? cwd : this.cwd
+    // Probed as the session this adapter reads as: a directory only the
+    // named session can see is a base here, and one it cannot see is not.
+    return (await (await this.ops()).isDir(cwd)) ? cwd : this.cwd
   }
 
   private normalize(path: string, base: string): string {
@@ -429,8 +438,11 @@ export class MirageFileSystem extends FileSystem {
       normalized === '/'
         ? '/'
         : posix.join(this.follow(posix.dirname(normalized)), posix.basename(normalized))
+    // The leaf is read off the link table outside the door, so it is
+    // gated the way the door would gate it: a link the session cannot
+    // see is not a link here, and the stat below reports it absent.
     const links = this.links
-    if (links?.isLink(parentFollowed) === true) {
+    if (links?.isLink(parentFollowed) === true && this.visible(parentFollowed)) {
       const linkTarget = links.readlink(parentFollowed) ?? ''
       return {
         version: FsVersion(`link:${linkTarget}`),

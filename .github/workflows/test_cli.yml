@@ -322,6 +322,7 @@ jobs:
             done
             echo "FAIL: no daemon answered on 8765 within 30s"
             cat "$log" 2>/dev/null || true
+            fail=1
             return 1
           }
           wait_down() {
@@ -332,6 +333,7 @@ jobs:
               sleep 0.5
             done
             echo "FAIL: a daemon still answers on 8765 after 30s"
+            fail=1
             return 1
           }
 
@@ -630,6 +632,7 @@ jobs:
             done
             echo "FAIL: no daemon answered on 8765 within 30s"
             cat "$log" 2>/dev/null || true
+            fail=1
             return 1
           }
           wait_down() {
@@ -640,6 +643,7 @@ jobs:
               sleep 0.5
             done
             echo "FAIL: a daemon still answers on 8765 after 30s"
+            fail=1
             return 1
           }
 
