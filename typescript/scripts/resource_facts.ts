@@ -27,6 +27,11 @@ import ts from 'typescript'
 // different spec depending on who runs it, so the values come from the
 // declarations instead.
 
+// What a declaration slot can be read as: a numeric or boolean literal, or
+// a string -- which covers both a named constant reported by its name and a
+// slot declared with no initializer at all.
+type CapabilityValue = number | boolean | string
+
 const CAPABILITY_FIELDS = [
   'indexTtl',
   'cachesReads',
@@ -85,7 +90,7 @@ function sourceFiles(dir: string): string[] {
 // is reported verbatim as `<expr:Kind>` so the parity gate shows a real
 // mismatch instead of a plausible-looking default: a value this cannot
 // read is a value it must not guess.
-function literalValue(node: ts.Expression | undefined): number | boolean | string {
+function literalValue(node: ts.Expression | undefined): CapabilityValue {
   if (node === undefined) return '<declared, no initializer>'
   if (ts.isNumericLiteral(node)) return Number(node.text.replaceAll('_', ''))
   if (node.kind === ts.SyntaxKind.TrueKeyword) return true
@@ -176,7 +181,7 @@ export function capabilitiesOf(className: string, classes: Map<string, ClassInfo
   const ancestry = chain(className, classes)
   if (ancestry.length === 0)
     throw new Error(`no source declaration for resource class ${className}`)
-  const values: Record<string, number | boolean | string> = {}
+  const values: Record<string, CapabilityValue> = {}
   for (const info of ancestry) {
     for (const member of info.decl.members) {
       if (!ts.isPropertyDeclaration(member)) continue
@@ -188,13 +193,47 @@ export function capabilitiesOf(className: string, classes: Map<string, ClassInfo
   }
   const overrides = ancestry.filter((info) => info.decl.name?.text !== BASE_CLASS)
   return {
-    index_ttl: values.indexTtl ?? 600,
-    caches_reads: values.cachesReads ?? false,
-    supports_snapshot: values.supportsSnapshot ?? false,
-    sizes_always_known: values.sizesAlwaysKnown ?? false,
+    index_ttl: numericCapability(values, 'indexTtl', 600, className),
+    caches_reads: booleanCapability(values, 'cachesReads', false, className),
+    supports_snapshot: booleanCapability(values, 'supportsSnapshot', false, className),
+    sizes_always_known: booleanCapability(values, 'sizesAlwaysKnown', false, className),
     storage_id: overrides.some((info) => declaresMethod(info, 'storageId')),
     statfs: overrides.some((info) => declaresMethod(info, 'statfs')),
   }
+}
+
+// A capability slot holds a literal, a named constant reported by its name,
+// or the placeholder for a slot declared without an initializer -- so a
+// string is always a legal reading, and only a number where a boolean belongs
+// (or the reverse) is wrong. Refuse it here rather than emit it: a miscoerced
+// value surfaces downstream as an unexplained `check_spec_parity.py` mismatch
+// against Python, where nothing names the class that declared it.
+function numericCapability(
+  values: Record<string, CapabilityValue>,
+  name: string,
+  fallback: number,
+  className: string,
+): number | string {
+  const value = values[name]
+  if (value === undefined) return fallback
+  if (typeof value === 'boolean') {
+    throw new Error(`${className}.${name} is a boolean, expected a number`)
+  }
+  return value
+}
+
+function booleanCapability(
+  values: Record<string, CapabilityValue>,
+  name: string,
+  fallback: boolean,
+  className: string,
+): boolean | string {
+  const value = values[name]
+  if (value === undefined) return fallback
+  if (typeof value === 'number') {
+    throw new Error(`${className}.${name} is a number, expected a boolean`)
+  }
+  return value
 }
 
 // The value of a named constant a slot was set to, followed one import
@@ -438,7 +477,7 @@ export function commandIoFacts(
       visit(source)
       if (literal === undefined) continue
       const slots: string[] = []
-      const values: Record<string, number | boolean | string> = {}
+      const values: Record<string, CapabilityValue> = {}
       let readBytes: string | undefined
       for (const prop of literal.properties) {
         if (ts.isSpreadAssignment(prop)) {

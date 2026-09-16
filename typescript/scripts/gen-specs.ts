@@ -128,8 +128,7 @@ function collectRegistrations(modules: ModuleBag[]): Record<string, RegisteredCo
     for (const [key, value] of Object.entries(mod)) {
       if (!key.endsWith('_COMMANDS') || !Array.isArray(value)) continue
       for (const rc of value as RegisteredCommand[]) {
-        if (!out[rc.name]) out[rc.name] = []
-        out[rc.name].push(rc)
+        ;(out[rc.name] ??= []).push(rc)
       }
     }
   }
@@ -367,14 +366,17 @@ function emitVariant(
   const registry = collectRegistrations(modules)
   const outDir = resolve(SPEC_ROOT, name, 'general')
   mkdirSync(outDir, { recursive: true })
-  const cmdNames = Object.keys(SPECS).sort(compareCodePoints)
-  for (const cmd of cmdNames) {
-    const spec = SPECS[cmd]
+  // Entries, not keys: a key read back through `SPECS[cmd]` is
+  // `CommandSpec | undefined` under `noUncheckedIndexedAccess`, and the only
+  // ways to spend that are a cast or a skip that would emit fewer specs than
+  // it reported. Pairing the two removes the possibility instead.
+  const entries = Object.entries(SPECS).sort(([a], [b]) => compareCodePoints(a, b))
+  for (const [cmd, spec] of entries) {
     const rcs = registry[cmd] ?? []
     const payload = serializeSpec(spec, rcs)
     writeFileSync(resolve(outDir, `${cmd}.json`), sortedStringify(payload) + '\n')
   }
-  console.log(`emitted ${cmdNames.length} specs to ${outDir}`)
+  console.log(`emitted ${entries.length} specs to ${outDir}`)
   emitResources(
     name,
     knownResources,
