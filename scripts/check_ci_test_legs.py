@@ -31,14 +31,59 @@ LEG_PREFIX = "test:leg:"
 FILTER = re.compile(r"--filter(?:=|\s+)(\S+)")
 MATRIX_REF = re.compile(r"matrix\.([A-Za-z_][A-Za-z0-9_-]*)")
 
+NO_MATRIX = ("{file}: no jobs.test.strategy.matrix (stopped at {key!r}); the "
+             "job or its matrix was renamed, and this gate cannot see the leg "
+             "table any more")
+NO_LEG_DIM = ("{file}: jobs.test.strategy.matrix has no `leg` dimension; this "
+              "gate cannot see the leg table any more")
+NO_TEST_SCRIPT = ("{name} declares no `test` script; the root `test` script "
+                  "selects ./packages/* and pnpm.requiredScripts lists "
+                  "`test`, so this breaks `pnpm test` for everyone as well as "
+                  "going unclaimed by any leg")
+JOB_MAY_FAIL = ("the `test` job is `continue-on-error: true`, so every leg "
+                "reports success whatever its tests do and "
+                "test-typescript-gate goes green over a red run")
+NO_LIVE_STEP = ("no step runs `{wanted}` on a live line that can fail the "
+                "job; a step that is absent, `if: false`, "
+                "`continue-on-error: true` or only mentions it in a comment "
+                "all leave the legs selected by the matrix and then never "
+                "invoked")
+STRAY_INCLUDE = ("include row for leg {leg!r} matches no declared leg "
+                 "({legs}); GitHub cannot merge it into a combination, so it "
+                 "becomes a spurious extra job and the leg it was meant for "
+                 "loses {lost}")
+FALSY_GATE = ("include sets `{key}: {value!r}` on {where}; a falsy value "
+              "gates nothing, so every step behind `if: matrix.{key}` is "
+              "skipped on every leg and the run still reports green")
+UNSET_GATE = ("step(s) {steps} run only `if: matrix.{key}`, which no include "
+              "row sets, so they are skipped on every leg and the run still "
+              "reports green")
+NO_LEG_SCRIPT = ("matrix leg {leg!r} has no {prefix}{leg} script in "
+                 "typescript/package.json; the job would fail on the runner "
+                 "with pnpm's \"Missing script\"")
+WRONG_VERB = ("{prefix}{leg} runs {ran!r}, not `test`; it would select the "
+              "right packages and run the wrong script, and pnpm's "
+              "requiredScripts only guards the `test` verb it never reaches")
+SCRIPT_UNUSED = ("script {prefix}{leg} is never run: {leg!r} is absent from "
+                 "the matrix leg list, so every package it claims is tested "
+                 "by nobody")
+CLOSURE_FILTER = ("leg {leg!r} filters {token!r}: a `...` selector pulls the "
+                  "dependency closure back into the leg and re-serialises "
+                  "what the split exists to remove")
+DOUBLE_FILTER = "leg {leg!r} filters {name!r} more than once"
+BAD_PACKAGE = "leg(s) {legs} filter {name!r}, which {why}"
+NO_TEST_WHY = "exists but declares no `test` script"
+UNKNOWN_WHY = "is not a workspace package"
+DOUBLE_CLAIM = ("{name} is claimed by more than one leg ({legs}), so its "
+                "tests run twice")
+UNCLAIMED = "{name} is claimed by no leg, so CI never runs its tests"
+
 
 def package_of(token: str) -> str:
     """Reduce a `--filter` token to the package name it selects.
 
-    pnpm accepts the name quoted, and `...pkg` / `pkg...` to pull in the
-    dependency closure. Only the bare name is comparable against the
-    workspace, and `strip` is the wrong tool for the closure syntax: it
-    would eat the leading dot of a path selector like `./packages/core`.
+    `strip` is the wrong tool for pnpm's `...pkg` closure syntax: it would
+    eat the leading dot of a path selector like `./packages/core`.
 
     Args:
         token (str): one whitespace-delimited word following `--filter`.
@@ -53,18 +98,14 @@ def package_of(token: str) -> str:
 def invoked_script(body: str) -> str | None:
     """Name the npm script a leg body actually runs.
 
-    Tokenised rather than pattern-matched, because both `pnpm ... run test`
-    and `pnpm ... test` are valid -- the root `test` script uses the second
-    -- and because `-` and `:` are regex word boundaries, so a pattern loose
-    enough to accept the second spelling also accepts `run test:unit`, which
-    selects the right packages and runs the wrong script.
+    Tokenised rather than pattern-matched: `-` and `:` are regex word
+    boundaries, so a pattern loose enough to accept the repo's own
+    `pnpm ... test` spelling also accepts `run test:unit`. A chained body
+    returns None rather than being segmented, since the point is to name
+    one script.
 
     Args:
         body (str): the script body from typescript/package.json.
-
-    A chained body returns None rather than being segmented: the whole
-    point is to name one script, and `--filter X run test && --filter Y run
-    build` would otherwise read as `test` while Y's tests never ran.
 
     Returns:
         The script name, or None when the body chains or invokes nothing.
@@ -103,18 +144,14 @@ def test_matrix(workflow: dict[str, Any]) -> dict[str, Any]:
     Returns:
         The matrix mapping.
     """
+    where = str(WORKFLOW.relative_to(REPO))
     node: Any = workflow
     for key in ("jobs", "test", "strategy", "matrix"):
         if not isinstance(node, dict) or key not in node:
-            raise SystemExit(
-                f"{WORKFLOW.relative_to(REPO)}: no jobs.test.strategy.matrix "
-                f"(stopped at {key!r}); the job or its matrix was renamed, "
-                f"and this gate cannot see the leg table any more")
+            raise SystemExit(NO_MATRIX.format(file=where, key=key))
         node = node[key]
     if "leg" not in node:
-        raise SystemExit(
-            f"{WORKFLOW.relative_to(REPO)}: jobs.test.strategy.matrix has no "
-            f"`leg` dimension; this gate cannot see the leg table any more")
+        raise SystemExit(NO_LEG_DIM.format(file=where))
     return node
 
 
@@ -150,10 +187,8 @@ def package_members() -> dict[str, bool]:
 def audit_packages(members: dict[str, bool]) -> list[str]:
     """Refuse a `packages/*` member that declares no `test` script.
 
-    The root `test` script selects `./packages/*` and the manifest sets
-    `pnpm.requiredScripts: ["test"]`, so such a member is not merely
-    untested by the legs -- it makes `pnpm test` fail outright for every
-    developer with `RECURSIVE_RUN_NO_SCRIPT`.
+    Such a member is not merely unclaimed by a leg: `pnpm.requiredScripts`
+    makes `pnpm test` fail outright for every developer.
 
     Args:
         members (dict[str, bool]): package name to whether it has a test.
@@ -162,9 +197,7 @@ def audit_packages(members: dict[str, bool]) -> list[str]:
         One line per member missing a test script.
     """
     return [
-        f"{name} declares no `test` script; the root `test` script selects "
-        f"./packages/* and pnpm.requiredScripts lists `test`, so this breaks "
-        f"`pnpm test` for everyone as well as going unclaimed by any leg"
+        NO_TEST_SCRIPT.format(name=name)
         for name, has_test in sorted(members.items()) if not has_test
     ]
 
@@ -172,11 +205,9 @@ def audit_packages(members: dict[str, bool]) -> list[str]:
 def runs_command(step: dict[str, Any], command: str) -> bool:
     """Whether a step actually executes `command`.
 
-    Mentioning it is not running it, and the difference is the whole point:
-    a shell comment, an `echo` quoting it, a step turned off with
-    `if: false` or one allowed to fail all leave the text in place while
-    nothing runs. Same rule, and deliberately the same shape, as
-    `check_skip_hooks.py`.
+    Mentioning it is not running it: a shell comment, an `echo` quoting it,
+    a step turned off with `if: false` or one allowed to fail all leave the
+    text in place while nothing runs. Same shape as `check_skip_hooks.py`.
 
     Args:
         step (dict[str, Any]): one parsed workflow step.
@@ -203,12 +234,10 @@ def runs_command(step: dict[str, Any], command: str) -> bool:
 def audit_invocation(job: dict[str, Any]) -> list[str]:
     """Check that the job really runs the leg script the matrix selects.
 
-    Everything else here assumes the workflow invokes
-    `test:leg:${{ matrix.leg }}` and lets it fail the run. Nothing asserted
-    that, so deleting the step, hardcoding one leg, disabling the step or
-    marking it (or the job) allowed-to-fail each left a green gate over a
-    job that tested nothing -- the exact silent-coverage-loss this file
-    exists to refuse.
+    Everything else here assumes the workflow invokes the selected leg and
+    lets it fail the run. Deleting the step, hardcoding one leg, disabling
+    it or marking it allowed-to-fail each leave a green gate over a job
+    that tested nothing.
 
     Args:
         job (dict[str, Any]): the parsed `test` job.
@@ -219,16 +248,9 @@ def audit_invocation(job: dict[str, Any]) -> list[str]:
     wanted = LEG_PREFIX + "${{ matrix.leg }}"
     problems: list[str] = []
     if job.get("continue-on-error") is True:
-        problems.append(
-            "the `test` job is `continue-on-error: true`, so every leg "
-            "reports success whatever its tests do and test-typescript-gate "
-            "goes green over a red run")
+        problems.append(JOB_MAY_FAIL)
     if not any(runs_command(step, wanted) for step in job.get("steps", [])):
-        problems.append(
-            f"no step runs `{wanted}` on a live line that can fail the job; "
-            f"a step that is absent, `if: false`, `continue-on-error: true` "
-            f"or only mentions it in a comment all leave the legs selected "
-            f"by the matrix and then never invoked")
+        problems.append(NO_LIVE_STEP.format(wanted=wanted))
     return problems
 
 
@@ -236,11 +258,9 @@ def audit_gates(matrix: dict[str, Any], gated: dict[str,
                                                     list[str]]) -> list[str]:
     """Check every `if: matrix.<key>` step against the include rows.
 
-    A step gated on a key that no include row defines is skipped on every
-    leg, silently: bare truthiness on an absent key is false everywhere, so
-    mistyping `examples:` as `example:` deletes a whole battery and leaves
-    the run green. That is the same silent-drop this gate exists to stop,
-    in the mechanism the split itself introduced.
+    Bare truthiness on an absent key is false everywhere, so mistyping
+    `examples:` as `example:` deletes a whole battery and leaves the run
+    green.
 
     Args:
         matrix (dict[str, Any]): the `test` job's matrix.
@@ -256,32 +276,27 @@ def audit_gates(matrix: dict[str, Any], gated: dict[str,
     for row in matrix.get("include", []):
         leg = row.get("leg")
         if leg is not None and leg not in declared:
-            lost = ", ".join(sorted(set(row) - {"leg"})) or "nothing"
             problems.append(
-                f"include row for leg {leg!r} matches no declared leg "
-                f"({', '.join(matrix['leg'])}); GitHub cannot merge it into a "
-                f"combination, so it becomes a spurious extra job and the leg "
-                f"it was meant for loses {lost}")
+                STRAY_INCLUDE.format(leg=leg,
+                                     legs=", ".join(matrix["leg"]),
+                                     lost=", ".join(sorted(set(row) - {"leg"}))
+                                     or "nothing"))
         for key, value in row.items():
             if key in dims:
                 continue
-            where = f"leg {leg}" if leg is not None else "every leg"
             if not value:
                 problems.append(
-                    f"include sets `{key}: {value!r}` on {where}; a falsy "
-                    f"value gates nothing, so every step behind "
-                    f"`if: matrix.{key}` is skipped on every leg and the run "
-                    f"still reports green")
+                    FALSY_GATE.format(key=key,
+                                      value=value,
+                                      where=f"leg {leg}"
+                                      if leg is not None else "every leg"))
             provided.setdefault(
                 key, []).append(str(leg) if leg is not None else "all")
 
     for key, steps in sorted(gated.items()):
         if key in dims or key in provided:
             continue
-        problems.append(
-            f"step(s) {', '.join(steps)} run only `if: matrix.{key}`, which "
-            f"no include row sets, so they are skipped on every leg and the "
-            f"run still reports green")
+        problems.append(UNSET_GATE.format(steps=", ".join(steps), key=key))
     return problems
 
 
@@ -301,78 +316,65 @@ def audit(scripts: dict[str, str], declared: list[str], packages: set[str],
     problems: list[str] = []
     for leg in declared:
         if leg not in scripts:
-            problems.append(
-                f"matrix leg {leg!r} has no {LEG_PREFIX}{leg} script in "
-                f"typescript/package.json; the job would fail on the runner "
-                f'with pnpm\'s "Missing script"')
+            problems.append(NO_LEG_SCRIPT.format(leg=leg, prefix=LEG_PREFIX))
     for leg in declared:
         body = scripts.get(leg)
         if body is None:
             continue
         ran = invoked_script(body)
         if ran != "test":
-            ran = ran or "no single script (the body chains commands)"
             problems.append(
-                f"{LEG_PREFIX}{leg} runs {ran!r}, not `test`; it would select "
-                f"the right packages and run the wrong script, and pnpm's "
-                f"requiredScripts only guards the `test` verb it never "
-                f"reaches")
+                WRONG_VERB.format(
+                    prefix=LEG_PREFIX,
+                    leg=leg,
+                    ran=ran or "no single script (the body chains commands)"))
     for leg in scripts:
         if leg not in declared:
-            problems.append(
-                f"script {LEG_PREFIX}{leg} is never run: {leg!r} is absent "
-                f"from the matrix leg list, so every package it claims is "
-                f"tested by nobody")
+            problems.append(SCRIPT_UNUSED.format(prefix=LEG_PREFIX, leg=leg))
 
     claims: dict[str, list[str]] = {}
     for leg in declared:
         seen: set[str] = set()
         for token in FILTER.findall(scripts.get(leg, "")):
             if "..." in token:
-                problems.append(
-                    f"leg {leg!r} filters {token!r}: a `...` selector pulls "
-                    f"the dependency closure back into the leg and "
-                    f"re-serialises what the split exists to remove")
+                problems.append(CLOSURE_FILTER.format(leg=leg, token=token))
             name = package_of(token)
             if name in seen:
-                problems.append(f"leg {leg!r} filters {name!r} more than once")
+                problems.append(DOUBLE_FILTER.format(leg=leg, name=name))
                 continue
             seen.add(name)
             claims.setdefault(name, []).append(leg)
 
     for name, legs in sorted(claims.items()):
         if name not in packages:
-            why = ("exists but declares no `test` script"
-                   if name in known else "is not a workspace package")
             problems.append(
-                f"leg(s) {', '.join(sorted(legs))} filter {name!r}, which "
-                f"{why}")
+                BAD_PACKAGE.format(
+                    legs=", ".join(sorted(legs)),
+                    name=name,
+                    why=NO_TEST_WHY if name in known else UNKNOWN_WHY))
         elif len(legs) > 1:
             problems.append(
-                f"{name} is claimed by more than one leg "
-                f"({', '.join(sorted(legs))}), so its tests run twice")
+                DOUBLE_CLAIM.format(name=name, legs=", ".join(sorted(legs))))
     for name in sorted(packages - set(claims)):
-        problems.append(
-            f"{name} is claimed by no leg, so CI never runs its tests")
+        problems.append(UNCLAIMED.format(name=name))
     return problems
 
 
 CORE = "@struktoai/mirage-core"
 NODE = "@struktoai/mirage-node"
-BOTH = {CORE, NODE}
 DSH = "@struktoai/mirage-dsh"
+BOTH = {CORE, NODE}
+AB = ["a", "b"]
 MATRIX = {"node-version": ["24"], "leg": ["core", "cli"]}
 LIVE = "pnpm run test:leg:${{ matrix.leg }}"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Fixture:
-    """One made-up repo and the refusal it has to produce.
+    """A made-up repo and the refusal it has to produce.
 
     `expect` is the answer key: a substring the refusal must contain, or
-    empty for a fixture the gate must pass in silence. Every field is
-    keyword-only, because the shape these replaced was a positional tuple
-    whose fourth and fifth members could only be told apart by counting.
+    empty for a fixture the gate has to pass in silence.
     """
 
     name: str
@@ -391,15 +393,16 @@ class Fixture:
 class LegCase(Fixture):
     """A leg table, against the workspace it claims to cover.
 
-    `tested` and `known` differ by one thing and the messages differ with
-    them: a name in neither is a typo, while a name in `known` but not
-    `tested` is a real package that lost its `test` script.
+    The defaults are the healthy two-leg repo, so a fixture spells out
+    only what it breaks. `tested` is the packages that have a `test`
+    script and `known` is every package that exists: a name in neither is
+    a typo, one in `known` alone is a package that lost its script.
     """
 
     scripts: dict[str, str]
-    declared: list[str]
-    tested: set[str]
-    known: set[str]
+    declared: list[str] = dataclasses.field(default_factory=AB.copy)
+    tested: set[str] = dataclasses.field(default_factory=BOTH.copy)
+    known: set[str] = dataclasses.field(default_factory=BOTH.copy)
 
     def problems(self) -> list[str]:
         """Audit the leg table.
@@ -456,263 +459,164 @@ class PackageCase(Fixture):
         return audit_packages(self.members)
 
 
+CLEAN = {"a": f"--filter {CORE} run test", "b": f"--filter {NODE} run test"}
 LEG_CASES = (
-    LegCase(
-        name="clean table",
-        scripts={
-            "a": f"--filter {CORE} run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-    ),
-    LegCase(
-        name="package claimed by no leg",
-        scripts={"a": f"--filter {CORE} run test"},
-        declared=["a"],
-        tested=BOTH,
-        known=BOTH,
-        expect="claimed by no leg",
-    ),
-    LegCase(
-        name="package claimed twice",
-        scripts={
-            "a": f"--filter {CORE} run test",
-            "b": f"--filter {CORE} --filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-        expect="more than one leg",
-    ),
-    LegCase(
-        name="filter names a package that does not exist",
-        scripts={
-            "a": f"--filter {CORE} --filter @struktoai/mirage-ghost run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-        expect="is not a workspace package",
-    ),
-    LegCase(
-        name="filter names a package that lost its test script",
-        scripts={
-            "a": f"--filter {CORE} --filter {DSH} run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH | {DSH},
-        expect="declares no `test` script",
-    ),
-    LegCase(
-        name="script the matrix never runs",
-        scripts={
-            "a": f"--filter {CORE} run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a"],
-        tested=BOTH,
-        known=BOTH,
-        expect="is never run",
-    ),
-    LegCase(
-        name="matrix leg with no script",
-        scripts={"a": f"--filter {CORE} --filter {NODE} run test"},
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-        expect="has no test:leg:b",
-    ),
-    LegCase(
-        name="leg script runs the wrong verb",
-        scripts={
-            "a": f"--filter {CORE} run build",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-        expect="not `test`",
-    ),
-    LegCase(
-        name="ellipsis selector",
-        scripts={
-            "a": f"--filter {CORE}... run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-        expect="dependency closure",
-    ),
-    LegCase(
-        name="same package filtered twice in one leg",
-        scripts={
-            "a": f"--filter {CORE} --filter {CORE} run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-        expect="more than once",
-    ),
-    LegCase(
-        name="--filter=name is read, not missed",
-        scripts={
-            "a": f"--filter={CORE} run test",
-            "b": f"--filter {NODE} run test",
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-    ),
-    LegCase(
-        name="a quoted name is read, not reported stale",
-        scripts={
-            "a": f"--filter '{CORE}' run test",
-            "b": f'--filter "{NODE}" run test',
-        },
-        declared=["a", "b"],
-        tested=BOTH,
-        known=BOTH,
-    ),
+    LegCase(name="clean table", scripts=CLEAN),
+    LegCase(name="package claimed by no leg",
+            scripts={"a": CLEAN["a"]},
+            declared=["a"],
+            expect="claimed by no leg"),
+    LegCase(name="package claimed twice",
+            scripts={
+                **CLEAN, "b": f"--filter {CORE} --filter {NODE} run test"
+            },
+            expect="more than one leg"),
+    LegCase(name="filter names a package that does not exist",
+            scripts={
+                **CLEAN, "a": f"{CLEAN['a']} --filter @struktoai/ghost"
+            },
+            expect="is not a workspace package"),
+    LegCase(name="filter names a package that lost its test script",
+            scripts={
+                **CLEAN, "a": f"--filter {CORE} --filter {DSH} run test"
+            },
+            known=BOTH | {DSH},
+            expect="declares no `test` script"),
+    LegCase(name="script the matrix never runs",
+            scripts=CLEAN,
+            declared=["a"],
+            expect="is never run"),
+    LegCase(name="matrix leg with no script",
+            scripts={"a": f"--filter {CORE} --filter {NODE} run test"},
+            expect="has no test:leg:b"),
+    LegCase(name="leg script runs the wrong verb",
+            scripts={
+                **CLEAN, "a": f"--filter {CORE} run build"
+            },
+            expect="not `test`"),
+    LegCase(name="ellipsis selector",
+            scripts={
+                **CLEAN, "a": f"--filter {CORE}... run test"
+            },
+            expect="dependency closure"),
+    LegCase(name="same package filtered twice in one leg",
+            scripts={
+                **CLEAN, "a": f"--filter {CORE} --filter {CORE} run test"
+            },
+            expect="more than once"),
+    LegCase(name="--filter=name is read, not missed",
+            scripts={
+                **CLEAN, "a": f"--filter={CORE} run test"
+            }),
+    LegCase(name="a quoted name is read, not reported stale",
+            scripts={
+                "a": f"--filter '{CORE}' run test",
+                "b": f'--filter "{NODE}" run test'
+            }),
 )
 
+TYPECHECK = {"typecheck": ["Typecheck"]}
+EXAMPLES = {"examples": ["Examples"]}
 GATE_CASES = (
-    GateCase(
-        name="every gated key is set",
-        include=[{
-            "leg": "cli",
-            "typecheck": True
-        }],
-        gated={"typecheck": ["Typecheck"]},
-    ),
-    GateCase(
-        name="a gated key no include row sets",
-        include=[],
-        gated={"examples": ["Examples"]},
-        expect="skipped on every leg",
-    ),
-    GateCase(
-        name="a gated key set to false",
-        include=[{
-            "leg": "cli",
-            "typecheck": False
-        }],
-        gated={"typecheck": ["Typecheck"]},
-        expect="falsy value",
-    ),
-    GateCase(
-        name="a gated key set to an empty string",
-        include=[{
-            "leg": "cli",
-            "examples": ""
-        }],
-        gated={"examples": ["Examples"]},
-        expect="falsy value",
-    ),
-    GateCase(
-        name="an include row for an undeclared leg",
-        include=[{
-            "leg": "ghost",
-            "examples": True
-        }],
-        gated={"examples": ["Examples"]},
-        expect="matches no declared leg",
-    ),
+    GateCase(name="every gated key is set",
+             include=[{
+                 "leg": "cli",
+                 "typecheck": True
+             }],
+             gated=TYPECHECK),
+    GateCase(name="a gated key no include row sets",
+             include=[],
+             gated=EXAMPLES,
+             expect="skipped on every leg"),
+    GateCase(name="a gated key set to false",
+             include=[{
+                 "leg": "cli",
+                 "typecheck": False
+             }],
+             gated=TYPECHECK,
+             expect="falsy value"),
+    GateCase(name="a gated key set to an empty string",
+             include=[{
+                 "leg": "cli",
+                 "examples": ""
+             }],
+             gated=EXAMPLES,
+             expect="falsy value"),
+    GateCase(name="an include row for an undeclared leg",
+             include=[{
+                 "leg": "ghost",
+                 "examples": True
+             }],
+             gated=EXAMPLES,
+             expect="matches no declared leg"),
 )
 
+DEAD = "no step runs"
 INVOCATION_CASES = (
-    InvocationCase(
-        name="a step runs the selected leg",
-        job={"steps": [{
-            "run": LIVE
-        }]},
-    ),
-    InvocationCase(
-        name="no step runs any leg",
-        job={"steps": [{
-            "run": "pnpm -r build"
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="a step hardcodes one leg",
-        job={"steps": [{
-            "run": "pnpm run test:leg:core"
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="the step is allowed to fail",
-        job={"steps": [{
-            "run": LIVE,
-            "continue-on-error": True
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="the step is turned off with if: false",
-        job={"steps": [{
-            "run": LIVE,
-            "if": False
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="the step is turned off with ${{ false }}",
-        job={"steps": [{
-            "run": LIVE,
-            "if": "${{ false }}"
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="the leg is only named in a comment",
-        job={"steps": [{
-            "run": f"# {LIVE}\necho skipped"
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="the leg is only echoed, not run",
-        job={"steps": [{
-            "run": f'echo "{LIVE}"'
-        }]},
-        expect="no step runs",
-    ),
-    InvocationCase(
-        name="the whole job is allowed to fail",
-        job={
-            "continue-on-error": True,
-            "steps": [{
-                "run": LIVE
-            }]
-        },
-        expect="continue-on-error: true",
-    ),
+    InvocationCase(name="a step runs the selected leg",
+                   job={"steps": [{
+                       "run": LIVE
+                   }]}),
+    InvocationCase(name="no step runs any leg",
+                   job={"steps": [{
+                       "run": "pnpm -r build"
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="a step hardcodes one leg",
+                   job={"steps": [{
+                       "run": "pnpm run test:leg:core"
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="the step is allowed to fail",
+                   job={"steps": [{
+                       "run": LIVE,
+                       "continue-on-error": True
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="the step is turned off with if: false",
+                   job={"steps": [{
+                       "run": LIVE,
+                       "if": False
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="the step is turned off with ${{ false }}",
+                   job={"steps": [{
+                       "run": LIVE,
+                       "if": "${{ false }}"
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="the leg is only named in a comment",
+                   job={"steps": [{
+                       "run": f"# {LIVE}\necho skipped"
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="the leg is only echoed, not run",
+                   job={"steps": [{
+                       "run": f'echo "{LIVE}"'
+                   }]},
+                   expect=DEAD),
+    InvocationCase(name="the whole job is allowed to fail",
+                   job={
+                       "continue-on-error": True,
+                       "steps": [{
+                           "run": LIVE
+                       }]
+                   },
+                   expect="continue-on-error: true"),
 )
 
 PACKAGE_CASES = (
-    PackageCase(
-        name="every package has a test",
-        members={
-            "a": True,
-            "b": True
-        },
-    ),
-    PackageCase(
-        name="a package with no test script",
-        members={
-            "a": True,
-            "b": False
-        },
-        expect="declares no `test` script",
-    ),
+    PackageCase(name="every package has a test",
+                members={
+                    "a": True,
+                    "b": True
+                }),
+    PackageCase(name="a package with no test script",
+                members={
+                    "a": True,
+                    "b": False
+                },
+                expect="declares no `test` script"),
 )
 
 GROUPS: tuple[tuple[str, tuple[Fixture, ...]], ...] = (
