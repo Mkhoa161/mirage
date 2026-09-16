@@ -12,6 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import dataclasses
 import json
 import re
 import shlex
@@ -360,163 +361,374 @@ CORE = "@struktoai/mirage-core"
 NODE = "@struktoai/mirage-node"
 BOTH = {CORE, NODE}
 DSH = "@struktoai/mirage-dsh"
-SELFTEST_CASES: tuple[tuple[str, dict[
-    str, str], list[str], set[str], set[str], str], ...] = (
-        ("clean table", {
-            "a": f"--filter {CORE} run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, ""),
-        ("package claimed by no leg", {
-            "a": f"--filter {CORE} run test"
-        }, ["a"], BOTH, BOTH, "claimed by no leg"),
-        ("package claimed twice", {
-            "a": f"--filter {CORE} run test",
-            "b": f"--filter {CORE} --filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, "more than one leg"),
-        ("filter names a package that does not exist", {
-            "a": f"--filter {CORE} --filter @struktoai/mirage-ghost run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, "is not a workspace package"),
-        ("filter names a package that lost its test script", {
-            "a": f"--filter {CORE} --filter {DSH} run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH | {DSH}, "declares no `test` script"),
-        ("script the matrix never runs", {
-            "a": f"--filter {CORE} run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a"], BOTH, BOTH, "is never run"),
-        ("matrix leg with no script", {
-            "a": f"--filter {CORE} --filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, "has no test:leg:b"),
-        ("leg script runs the wrong verb", {
-            "a": f"--filter {CORE} run build",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, "not `test`"),
-        ("ellipsis selector", {
-            "a": f"--filter {CORE}... run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, "dependency closure"),
-        ("same package filtered twice in one leg", {
-            "a": f"--filter {CORE} --filter {CORE} run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, "more than once"),
-        ("--filter=name is read, not missed", {
-            "a": f"--filter={CORE} run test",
-            "b": f"--filter {NODE} run test"
-        }, ["a", "b"], BOTH, BOTH, ""),
-        ("a quoted name is read, not reported stale", {
-            "a": f"--filter '{CORE}' run test",
-            "b": f'--filter "{NODE}" run test'
-        }, ["a", "b"], BOTH, BOTH, ""),
-    )
-
 MATRIX = {"node-version": ["24"], "leg": ["core", "cli"]}
-GATE_CASES: tuple[tuple[str, list[dict[str, Any]], dict[str, list[str]], str],
-                  ...] = (
-                      ("every gated key is set", [{
-                          "leg": "cli",
-                          "typecheck": True
-                      }], {
-                          "typecheck": ["Typecheck"]
-                      }, ""),
-                      ("a gated key no include row sets", [], {
-                          "examples": ["Examples"]
-                      }, "skipped on every leg"),
-                      ("a gated key set to false", [{
-                          "leg": "cli",
-                          "typecheck": False
-                      }], {
-                          "typecheck": ["Typecheck"]
-                      }, "falsy value"),
-                      ("a gated key set to an empty string", [{
-                          "leg": "cli",
-                          "examples": ""
-                      }], {
-                          "examples": ["Examples"]
-                      }, "falsy value"),
-                      ("an include row for an undeclared leg", [{
-                          "leg":
-                          "ghost",
-                          "examples":
-                          True
-                      }], {
-                          "examples": ["Examples"]
-                      }, "matches no declared leg"),
-                  )
-
 LIVE = "pnpm run test:leg:${{ matrix.leg }}"
-INVOCATION_CASES: tuple[tuple[str, dict[str, Any], str], ...] = (
-    ("a step runs the selected leg", {
-        "steps": [{
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Fixture:
+    """One made-up repo and the refusal it has to produce.
+
+    `expect` is the answer key: a substring the refusal must contain, or
+    empty for a fixture the gate must pass in silence. Every field is
+    keyword-only, because the shape these replaced was a positional tuple
+    whose fourth and fifth members could only be told apart by counting.
+    """
+
+    name: str
+    expect: str = ""
+
+    def problems(self) -> list[str]:
+        """Run the audit this fixture exercises.
+
+        Returns:
+            Every refusal the audit produced for this fixture.
+        """
+        raise NotImplementedError
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class LegCase(Fixture):
+    """A leg table, against the workspace it claims to cover.
+
+    `tested` and `known` differ by one thing and the messages differ with
+    them: a name in neither is a typo, while a name in `known` but not
+    `tested` is a real package that lost its `test` script.
+    """
+
+    scripts: dict[str, str]
+    declared: list[str]
+    tested: set[str]
+    known: set[str]
+
+    def problems(self) -> list[str]:
+        """Audit the leg table.
+
+        Returns:
+            Every refusal `audit` produced for this fixture.
+        """
+        return audit(self.scripts, self.declared, self.tested, self.known)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class GateCase(Fixture):
+    """Matrix include rows, against the steps whose `if:` reads them."""
+
+    include: list[dict[str, Any]]
+    gated: dict[str, list[str]]
+
+    def problems(self) -> list[str]:
+        """Audit the include rows against the gated steps.
+
+        Returns:
+            Every refusal `audit_gates` produced for this fixture.
+        """
+        return audit_gates({**MATRIX, "include": self.include}, self.gated)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class InvocationCase(Fixture):
+    """A `test` job, against the leg script it is supposed to run."""
+
+    job: dict[str, Any]
+
+    def problems(self) -> list[str]:
+        """Audit the job's invocation of the selected leg.
+
+        Returns:
+            Every refusal `audit_invocation` produced for this fixture.
+        """
+        return audit_invocation(self.job)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class PackageCase(Fixture):
+    """Workspace members, against whether each declares a `test` script."""
+
+    members: dict[str, bool]
+
+    def problems(self) -> list[str]:
+        """Audit the members for a missing `test` script.
+
+        Returns:
+            Every refusal `audit_packages` produced for this fixture.
+        """
+        return audit_packages(self.members)
+
+
+LEG_CASES = (
+    LegCase(
+        name="clean table",
+        scripts={
+            "a": f"--filter {CORE} run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+    ),
+    LegCase(
+        name="package claimed by no leg",
+        scripts={"a": f"--filter {CORE} run test"},
+        declared=["a"],
+        tested=BOTH,
+        known=BOTH,
+        expect="claimed by no leg",
+    ),
+    LegCase(
+        name="package claimed twice",
+        scripts={
+            "a": f"--filter {CORE} run test",
+            "b": f"--filter {CORE} --filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+        expect="more than one leg",
+    ),
+    LegCase(
+        name="filter names a package that does not exist",
+        scripts={
+            "a": f"--filter {CORE} --filter @struktoai/mirage-ghost run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+        expect="is not a workspace package",
+    ),
+    LegCase(
+        name="filter names a package that lost its test script",
+        scripts={
+            "a": f"--filter {CORE} --filter {DSH} run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH | {DSH},
+        expect="declares no `test` script",
+    ),
+    LegCase(
+        name="script the matrix never runs",
+        scripts={
+            "a": f"--filter {CORE} run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a"],
+        tested=BOTH,
+        known=BOTH,
+        expect="is never run",
+    ),
+    LegCase(
+        name="matrix leg with no script",
+        scripts={"a": f"--filter {CORE} --filter {NODE} run test"},
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+        expect="has no test:leg:b",
+    ),
+    LegCase(
+        name="leg script runs the wrong verb",
+        scripts={
+            "a": f"--filter {CORE} run build",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+        expect="not `test`",
+    ),
+    LegCase(
+        name="ellipsis selector",
+        scripts={
+            "a": f"--filter {CORE}... run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+        expect="dependency closure",
+    ),
+    LegCase(
+        name="same package filtered twice in one leg",
+        scripts={
+            "a": f"--filter {CORE} --filter {CORE} run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+        expect="more than once",
+    ),
+    LegCase(
+        name="--filter=name is read, not missed",
+        scripts={
+            "a": f"--filter={CORE} run test",
+            "b": f"--filter {NODE} run test",
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+    ),
+    LegCase(
+        name="a quoted name is read, not reported stale",
+        scripts={
+            "a": f"--filter '{CORE}' run test",
+            "b": f'--filter "{NODE}" run test',
+        },
+        declared=["a", "b"],
+        tested=BOTH,
+        known=BOTH,
+    ),
+)
+
+GATE_CASES = (
+    GateCase(
+        name="every gated key is set",
+        include=[{
+            "leg": "cli",
+            "typecheck": True
+        }],
+        gated={"typecheck": ["Typecheck"]},
+    ),
+    GateCase(
+        name="a gated key no include row sets",
+        include=[],
+        gated={"examples": ["Examples"]},
+        expect="skipped on every leg",
+    ),
+    GateCase(
+        name="a gated key set to false",
+        include=[{
+            "leg": "cli",
+            "typecheck": False
+        }],
+        gated={"typecheck": ["Typecheck"]},
+        expect="falsy value",
+    ),
+    GateCase(
+        name="a gated key set to an empty string",
+        include=[{
+            "leg": "cli",
+            "examples": ""
+        }],
+        gated={"examples": ["Examples"]},
+        expect="falsy value",
+    ),
+    GateCase(
+        name="an include row for an undeclared leg",
+        include=[{
+            "leg": "ghost",
+            "examples": True
+        }],
+        gated={"examples": ["Examples"]},
+        expect="matches no declared leg",
+    ),
+)
+
+INVOCATION_CASES = (
+    InvocationCase(
+        name="a step runs the selected leg",
+        job={"steps": [{
             "run": LIVE
-        }]
-    }, ""),
-    ("no step runs any leg", {
-        "steps": [{
+        }]},
+    ),
+    InvocationCase(
+        name="no step runs any leg",
+        job={"steps": [{
             "run": "pnpm -r build"
-        }]
-    }, "no step runs"),
-    ("a step hardcodes one leg", {
-        "steps": [{
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="a step hardcodes one leg",
+        job={"steps": [{
             "run": "pnpm run test:leg:core"
-        }]
-    }, "no step runs"),
-    ("the step is allowed to fail", {
-        "steps": [{
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="the step is allowed to fail",
+        job={"steps": [{
             "run": LIVE,
             "continue-on-error": True
-        }]
-    }, "no step runs"),
-    ("the step is turned off with if: false", {
-        "steps": [{
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="the step is turned off with if: false",
+        job={"steps": [{
             "run": LIVE,
             "if": False
-        }]
-    }, "no step runs"),
-    ("the step is turned off with ${{ false }}", {
-        "steps": [{
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="the step is turned off with ${{ false }}",
+        job={"steps": [{
             "run": LIVE,
             "if": "${{ false }}"
-        }]
-    }, "no step runs"),
-    ("the leg is only named in a comment", {
-        "steps": [{
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="the leg is only named in a comment",
+        job={"steps": [{
             "run": f"# {LIVE}\necho skipped"
-        }]
-    }, "no step runs"),
-    ("the leg is only echoed, not run", {
-        "steps": [{
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="the leg is only echoed, not run",
+        job={"steps": [{
             "run": f'echo "{LIVE}"'
-        }]
-    }, "no step runs"),
-    ("the whole job is allowed to fail", {
-        "continue-on-error": True,
-        "steps": [{
-            "run": LIVE
-        }]
-    }, "continue-on-error: true"),
+        }]},
+        expect="no step runs",
+    ),
+    InvocationCase(
+        name="the whole job is allowed to fail",
+        job={
+            "continue-on-error": True,
+            "steps": [{
+                "run": LIVE
+            }]
+        },
+        expect="continue-on-error: true",
+    ),
 )
 
-PACKAGE_CASES: tuple[tuple[str, dict[str, bool], str], ...] = (
-    ("every package has a test", {
-        "a": True,
-        "b": True
-    }, ""),
-    ("a package with no test script", {
-        "a": True,
-        "b": False
-    }, "declares no `test` script"),
+PACKAGE_CASES = (
+    PackageCase(
+        name="every package has a test",
+        members={
+            "a": True,
+            "b": True
+        },
+    ),
+    PackageCase(
+        name="a package with no test script",
+        members={
+            "a": True,
+            "b": False
+        },
+        expect="declares no `test` script",
+    ),
+)
+
+GROUPS: tuple[tuple[str, tuple[Fixture, ...]], ...] = (
+    ("leg table", LEG_CASES),
+    ("matrix gates", GATE_CASES),
+    ("invocation", INVOCATION_CASES),
+    ("packages", PACKAGE_CASES),
 )
 
 
-def run_cases(label: str, cases: tuple[tuple[Any, ...], ...],
-              call: Any) -> int:
+def run_cases(label: str, cases: tuple[Fixture, ...]) -> int:
     """Run one group of selftest fixtures.
 
     Args:
         label (str): the group name, printed as a heading.
-        cases (tuple[tuple[Any, ...], ...]): fixtures, expectation last.
-        call (Any): a function taking the fixture's leading fields.
+        cases (tuple[Fixture, ...]): the fixtures in that group.
 
     Returns:
         The number of fixtures that did not behave as expected.
@@ -524,15 +736,15 @@ def run_cases(label: str, cases: tuple[tuple[Any, ...], ...],
     failures = 0
     print(f"  {label}")
     for case in cases:
-        name, args, expected = case[0], case[1:-1], case[-1]
-        problems = call(*args)
-        hit = any(expected in problem for problem in problems)
-        if (hit and expected) or (not problems and not expected):
-            print(f"    ok   {name}")
+        problems = case.problems()
+        hit = any(case.expect in problem for problem in problems)
+        if (hit and case.expect) or (not problems and not case.expect):
+            print(f"    ok   {case.name}")
             continue
         failures += 1
-        want = f"a problem containing {expected!r}" if expected else "none"
-        print(f"    FAIL {name}: expected {want}, got {problems}")
+        want = (f"a problem containing {case.expect!r}"
+                if case.expect else "none")
+        print(f"    FAIL {case.name}: expected {want}, got {problems}")
     return failures
 
 
@@ -542,23 +754,12 @@ def selftest() -> int:
     Returns:
         0 when every fixture is classified as expected.
     """
-    failures = run_cases(
-        "leg table", SELFTEST_CASES,
-        lambda scripts, declared, packages, known: audit(
-            scripts, declared, packages, known))
-    failures += run_cases(
-        "matrix gates", GATE_CASES,
-        lambda include, gated: audit_gates({
-            **MATRIX, "include": include
-        }, gated))
-    failures += run_cases("invocation", INVOCATION_CASES, audit_invocation)
-    failures += run_cases("packages", PACKAGE_CASES, audit_packages)
+    failures = sum(run_cases(label, cases) for label, cases in GROUPS)
     if failures:
         print(f"\n{failures} selftest case(s) failed; the gate cannot see a "
               f"drift it claims to cover.")
         return 1
-    total = (len(SELFTEST_CASES) + len(GATE_CASES) + len(INVOCATION_CASES) +
-             len(PACKAGE_CASES))
+    total = sum(len(cases) for _, cases in GROUPS)
     print(f"\nselftest OK: {total} drift shapes covered")
     return 0
 
