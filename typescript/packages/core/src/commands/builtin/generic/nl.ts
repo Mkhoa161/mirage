@@ -20,8 +20,8 @@ import { BreError, searchBre } from '../utils/bre.ts'
 import { quoteText } from '../../quote.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { operandsIo, readOperands, singleChunk } from '../utils/operands.ts'
-import { specOf } from '../../spec/builtins.ts'
 import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder('utf-8', { fatal: false })
@@ -463,8 +463,8 @@ export interface NlFlags {
 //
 // Returns the stderr text instead of the struct when GNU refuses the line,
 // the shape every sibling generic's parseFlags uses.
-export function parseFlags(flags: Record<string, FlagValue>): NlFlags | string {
-  const fl = new FlagView(flags, specOf('nl'))
+export function parseFlags(bag: Record<string, FlagValue>): NlFlags | string {
+  const fl = new FlagView(bag, specOf('nl'))
   const optionErr = optionErrors(fl)
   if (optionErr !== null) return optionErr
   const rawDelimiter = fl.asStr('section_delimiter')

@@ -154,7 +154,7 @@ repos:
         language: system
         # Every server directory, not a hand-kept list: the list had already
         # fallen five fakes behind tsconfig.check.json, so editing one of those
-        # skipped the only hook that type checks it.
+        # skipped the hook that type checks it.
         files: ^integ/(server/.*\.ts|wandb/.*\.ts|tsconfig(\.check)?\.json)$
         pass_filenames: false
       - id: py-mypy
@@ -167,5 +167,8 @@ repos:
         name: PathSpec discipline (tests)
         entry: python3 scripts/check_test_pathspec.py
         language: system
-        files: ^python/(mirage/.*\.py|tests/.*\.py)$
+        # The checker itself is listed because the hook is diff-scoped in
+        # CI: without it, editing the gate re-runs nothing, which is the
+        # one change most likely to break it.
+        files: ^(python/(mirage|tests)/.*\.py|scripts/check_test_pathspec\.py)$
         pass_filenames: false

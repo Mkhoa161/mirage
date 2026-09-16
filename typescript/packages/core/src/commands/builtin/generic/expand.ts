@@ -206,8 +206,8 @@ export function parseTabStops(occurrences: readonly string[]): TabStops | string
 }
 
 // Read expand's flags once, refusing a tab list GNU refuses.
-export function parseFlags(flags: Record<string, FlagValue>): ExpandFlags | string {
-  const fl = new FlagView(flags, specOf('expand'))
+export function parseFlags(bag: Record<string, FlagValue>): ExpandFlags | string {
+  const fl = new FlagView(bag, specOf('expand'))
   const occurrences = fl.valueOccurrences('tabs').map(([, raw]) => raw)
   const tabs = parseTabStops(occurrences)
   if (typeof tabs === 'string') return tabs
