@@ -12,15 +12,18 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import errno
+
 import pytest
 
 from mirage.context import (effective_mount_mode, effective_path_mode,
                             get_current_session, get_current_session_for,
-                            hidden_paths_intersect, readonly_below,
-                            require_mount_writable, reset_current_session,
-                            reset_mount_gate, session_path_allowed,
-                            set_current_session, set_mount_gate,
-                            strongest_mode_under)
+                            get_current_session_unless_foreign,
+                            hidden_paths_intersect, hidden_refusal,
+                            readonly_below, require_mount_writable,
+                            reset_current_session, reset_mount_gate,
+                            session_path_allowed, set_current_session,
+                            set_mount_gate, strongest_mode_under)
 from mirage.types import (HiddenPaths, MountMode, ShowEntry, ShownPaths,
                           weaker_mode)
 from mirage.utils.errors import ReadOnlyError
@@ -386,3 +389,54 @@ def test_a_show_reaches_the_session_predicate():
     assert session_path_allowed(sess, "/repo/public/index.html")
     assert session_path_allowed(sess, "/repo")
     assert not session_path_allowed(sess, "/repo/secrets")
+
+
+def test_hidden_refusal_answers_a_create_by_its_parent():
+    # A create under a hidden directory is ENOENT, the answer every read
+    # gives for that directory, so probing creates cannot map a
+    # profile's hidden prefixes; a hidden name under a visible parent is
+    # EACCES, the way an existing file the session cannot write is.
+    sess = Session(session_id="agent",
+                   hidden_paths=HiddenPaths(paths=("/w/vault",
+                                                   "/w/open/file.txt"),
+                                            patterns=("*.key", )))
+    token = set_current_session(sess)
+    try:
+        under = hidden_refusal("/w/vault/new.txt", create=True)
+        assert under.errno == errno.ENOENT
+        assert under.filename == "/w/vault/new.txt"
+        assert hidden_refusal("/w/vault/a/b",
+                              create=True).errno == errno.ENOENT
+        assert hidden_refusal("/w/vault", create=True).errno == errno.EACCES
+        assert hidden_refusal("/w/vault/", create=True).errno == errno.EACCES
+        assert hidden_refusal("/w/open/file.txt",
+                              create=True).errno == errno.EACCES
+        assert hidden_refusal("/w/open/new.key",
+                              create=True).errno == errno.EACCES
+        assert hidden_refusal("/w/vault/new.txt",
+                              create=False).errno == errno.ENOENT
+        assert hidden_refusal("/w/open/file.txt",
+                              create=False).errno == errno.ENOENT
+    finally:
+        reset_current_session(token)
+
+
+def test_the_op_door_keeps_any_bind_but_another_owners():
+    # A kernel mount and a guest runtime bind without an owner, and
+    # the door keeps those; only a binding another workspace made is
+    # refused, since its session describes that workspace's view.
+    mine = SessionManager("default")
+    theirs = SessionManager("default")
+    sess = Session(session_id="default")
+    assert get_current_session_unless_foreign(mine) is None
+    token = set_current_session(sess)
+    try:
+        assert get_current_session_unless_foreign(mine) is sess
+    finally:
+        reset_current_session(token)
+    token = set_current_session(sess, mine)
+    try:
+        assert get_current_session_unless_foreign(mine) is sess
+        assert get_current_session_unless_foreign(theirs) is None
+    finally:
+        reset_current_session(token)

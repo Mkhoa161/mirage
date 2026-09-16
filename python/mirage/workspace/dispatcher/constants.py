@@ -46,12 +46,15 @@ NAMESPACE_TABLE_OPS = frozenset({"symlink", "readlink"})
 # spells lstat; a following stat arrives already resolved to its target.
 LINK_ENTRY_OPS = frozenset({"unlink", "rename", "stat"})
 
-# Ops that create the path they name. A hidden target refuses these as
-# EACCES rather than ENOENT, because "does not exist" is nonsense as
-# the answer to a create the caller is spelling out; every other op on
-# a hidden path answers ENOENT, the no-name-leak rule.
-HIDDEN_CREATE_OPS = frozenset(
-    {"write", "write_bytes", "append", "create", "mkdir", "symlink"})
+# Ops that create the path they name. A hidden target refuses these
+# through `hidden_refusal` with `create` set: EACCES when the directory
+# the create lands in is visible (a hidden name there reads as a file
+# the session cannot write), ENOENT when that directory is hidden too,
+# the same answer every read gives for it. Every other op on a hidden
+# path answers ENOENT, the no-name-leak rule.
+HIDDEN_CREATE_OPS = frozenset({
+    "write", "write_bytes", "append", "create", "truncate", "mkdir", "symlink"
+})
 
 # The attribute fields a setattr op can carry, in one place so the
 # requested/residual split and the overlay write read the same names.

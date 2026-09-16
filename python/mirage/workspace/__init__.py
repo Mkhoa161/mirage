@@ -15,11 +15,12 @@
 from mirage.workspace.runner import WorkspaceRunner
 from mirage.workspace.session import Session
 from mirage.workspace.types import ExecutionNode
-from mirage.workspace.workspace import Workspace
+from mirage.workspace.workspace import SessionHandle, Workspace
 
 __all__ = [
     "ExecutionNode",
     "Session",
+    "SessionHandle",
     "Workspace",
     "WorkspaceRunner",
 ]

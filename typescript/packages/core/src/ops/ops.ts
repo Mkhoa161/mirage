@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { OpReport } from '../io/types.ts'
+import { type IOResult, OpReport } from '../io/types.ts'
 import type { OpRecord } from '../observe/record.ts'
 import { finishRecord, type OpTimer, startOp } from '../observe/context.ts'
 import { NO_FOLLOW_OPS, type NamespaceLinks } from './config.ts'
@@ -21,8 +21,10 @@ import type { FileStat, SetAttrFields } from '../types.ts'
 import { FileType, PathSpec } from '../types.ts'
 import { exdev, isMissingPath } from '../utils/errors.ts'
 import type { DispatchFn } from '../runtime/types.ts'
+import { getCurrentSession, pathAllowed } from '../context/session_context.ts'
 
-export type OpSink = (rec: OpRecord) => Promise<void>
+/** Receives each record with the id of the session the op ran as. */
+export type OpSink = (rec: OpRecord, sessionId: string) => Promise<void>
 
 interface MountOwner {
   readonly prefix: string
@@ -30,6 +32,21 @@ interface MountOwner {
 }
 
 export type OwnerOf = (path: string) => MountOwner | null
+
+/**
+ * Run one facade op as a session: `(sessionId, run) => result`, null
+ * naming the workspace's default session as it is when the op runs.
+ * The workspace supplies it, so the facade binds the session the way a
+ * shell line does without holding the session manager itself.
+ */
+export type SessionBind = <T>(sessionId: string | null, run: () => Promise<T>) => Promise<T>
+
+/** What `forSession` carries over and a constructor may set. */
+export interface OpsOptions {
+  bind?: SessionBind | null
+  sessionId?: string | null
+  records?: OpRecord[]
+}
 
 // The op's byte count for recording: the result first, else the input
 // (write payloads travel as the first positional argument). Mirrors
@@ -54,6 +71,17 @@ function payloadBytes(result: unknown, args: readonly unknown[]): number {
  * ledger lives here, not on the workspace, which is what lets
  * `MountCore` take one `Ops` instead of reaching through a whole
  * `Workspace`. Mirrors Python's `Ops`.
+ *
+ * The facade runs as one session, `sessionId`, through `bind`: every
+ * op is judged under that session's profile (hides, mount modes,
+ * grants) exactly as a shell line in it would be, so an agent whose
+ * file tool reads through `ws.fs` is confined the way its shell is.
+ * null names the workspace's default session as it is when the op
+ * runs, since a snapshot load can rename it. A session already bound
+ * when the op arrives (a command's own runtime, a kernel mount serving
+ * one session) is kept, so the facade never widens the caller's view,
+ * and the record names the session that judged the op. `forSession`
+ * derives a facade for another session over the same ledger.
  */
 export class Ops {
   private readonly dispatch: DispatchFn
@@ -62,23 +90,42 @@ export class Ops {
   // for its symlink surface.
   readonly links: NamespaceLinks | null
   private readonly ownerOf: OwnerOf
+  private readonly bind: SessionBind | null
+  /** The session this facade runs as; null for the workspace's default. */
+  readonly sessionId: string | null
   /**
    * The op ledger: every facade op lands here, and the executor
    * appends each shell line's ops too, so this is the one
    * workspace-wide account (python's `Ops.records`).
    */
-  readonly records: OpRecord[] = []
+  readonly records: OpRecord[]
 
   constructor(
     dispatch: DispatchFn,
     sink: OpSink | null = null,
     links: NamespaceLinks | null = null,
     ownerOf: OwnerOf = () => null,
+    options: OpsOptions = {},
   ) {
     this.dispatch = dispatch
     this.sink = sink
     this.links = links
     this.ownerOf = ownerOf
+    this.bind = options.bind ?? null
+    this.sessionId = options.sessionId ?? null
+    this.records = options.records ?? []
+  }
+
+  /**
+   * The same facade run as another session, over the same ledger, so
+   * the workspace-wide account stays one list.
+   */
+  forSession(sessionId: string): Ops {
+    return new Ops(this.dispatch, this.sink, this.links, this.ownerOf, {
+      bind: this.bind,
+      sessionId,
+      records: this.records,
+    })
   }
 
   /** Ops that moved bytes over the network, in arrival order. */
@@ -109,10 +156,11 @@ export class Ops {
     source: string,
     bytes: number,
     timer: OpTimer,
+    session: string,
   ): Promise<void> {
     const rec = finishRecord(op, path, source, bytes, timer)
     this.records.push(rec)
-    if (this.sink !== null) await this.sink(rec)
+    if (this.sink !== null) await this.sink(rec, session)
   }
 
   /**
@@ -122,7 +170,10 @@ export class Ops {
    * structure, invalidation); the facade's own share is the record. The
    * path is link-followed here first so the record carries the resolved
    * path; the door's second follow of an already-resolved path is a
-   * no-op. Mirrors Python's Ops._through_door.
+   * no-op. That follow runs inside the session binding and only from a
+   * path the session can see: a link the session cannot see stays the
+   * typed path, so the door refuses it as absent instead of serving the
+   * visible target it points at. Mirrors Python's Ops._call.
    */
   private async through(
     op: string,
@@ -134,15 +185,26 @@ export class Ops {
     // `nofollow` is the caller's AT_SYMLINK_NOFOLLOW and suppresses
     // both follows, so an op meant for a link entry itself (chmod -h, a
     // guest's lchown) still records the link's own path.
-    const skipFollow = NO_FOLLOW_OPS.has(op) || kwargs.nofollow === true
-    const followed = this.links !== null && !skipFollow ? this.links.follow(path) : path
-    const owner = this.ownerOf(followed)
+    const links = NO_FOLLOW_OPS.has(op) || kwargs.nofollow === true ? null : this.links
+    let followed = path
     const report = new OpReport()
+    // The record names the session the op ran as: noted inside the
+    // bind, since the facade's own id may be null (the default) and a
+    // session bound by the caller is kept over it.
+    let seen: string | null = null
+    const run = (): Promise<[unknown, IOResult]> => {
+      seen = getCurrentSession()?.sessionId ?? null
+      if (links !== null && pathAllowed(path)) followed = links.follow(path)
+      return this.dispatch(op, PathSpec.fromStrPath(followed), args, kwargs, report)
+    }
     let result: unknown
+    let owner: MountOwner | null = null
     try {
-      const [value] = await this.dispatch(op, PathSpec.fromStrPath(followed), args, kwargs, report)
+      const [value] = await (this.bind === null ? run() : this.bind(this.sessionId, run))
       result = value
+      owner = this.ownerOf(followed)
     } catch (err) {
+      owner = this.ownerOf(followed)
       // Anything thrown after the op ran (a postOps deny, a hard
       // output cap, a bookkeeping failure) suppresses the result, not
       // the effect, so observation must reflect the op before the
@@ -150,14 +212,40 @@ export class Ops {
       // completion, so even a foreign error the door never defined
       // leaves the transfer on the books.
       if (report.completed && owner !== null) {
-        await this.recordOp(op, followed, owner, report.source, report.bytes, null, args, timer)
+        await this.recordOp(
+          op,
+          followed,
+          owner,
+          report.source,
+          report.bytes,
+          null,
+          args,
+          timer,
+          this.sessionFor(seen),
+        )
       }
       throw err
     }
     if (owner !== null) {
-      await this.recordOp(op, followed, owner, report.source, report.bytes, result, args, timer)
+      await this.recordOp(
+        op,
+        followed,
+        owner,
+        report.source,
+        report.bytes,
+        result,
+        args,
+        timer,
+        this.sessionFor(seen),
+      )
     }
     return result
+  }
+
+  /** The session id a record carries: the one the op ran as, else this
+   * facade's own, else the unbound door's empty id. */
+  private sessionFor(seen: string | null): string {
+    return seen ?? this.sessionId ?? ''
   }
 
   /**
@@ -178,8 +266,16 @@ export class Ops {
     result: unknown,
     args: readonly unknown[],
     timer: OpTimer,
+    session: string,
   ): Promise<void> {
-    await this.record(op, path, source ?? owner.kind, moved ?? payloadBytes(result, args), timer)
+    await this.record(
+      op,
+      path,
+      source ?? owner.kind,
+      moved ?? payloadBytes(result, args),
+      timer,
+      session,
+    )
   }
 
   // `raw` skips the filetype cascade: an explicit null filetype stops

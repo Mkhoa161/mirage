@@ -16,10 +16,12 @@ import asyncio
 import errno
 from typing import Any
 
+from mirage.context import get_current_session, path_allowed
 from mirage.io import OpReport
 from mirage.observe import OpRecord
 from mirage.observe.context import OpTimer, finish_record, start_op
 from mirage.ops.config import NO_FOLLOW_OPS, NamespaceLinks, OpsMount
+from mirage.ops.types import SessionBind
 from mirage.runtime.types import DispatchFn
 from mirage.types import FileStat, FileType, MountMode, PathSpec
 from mirage.utils.errors import NoMountError
@@ -43,6 +45,18 @@ class Ops:
     namespace structure, and fired the gates only when a caller
     remembered to hand it policies. TypeScript's ``Ops`` takes
     the same stance.
+
+    The facade runs as one session, ``session_id``, through ``bind``:
+    every op is judged under that session's profile (hides, mount
+    modes, grants) exactly as a shell line in it would be, so an agent
+    whose file tool reads through ``ws.fs`` is confined the way its
+    shell is. None names the workspace's default session as it is when
+    the op runs, since a snapshot load can rename it. A session already
+    bound when the op arrives (a command's own runtime, a kernel mount
+    serving one session) is kept, so the facade never widens the
+    caller's view, and the record names the session that judged the
+    op. ``for_session`` derives a facade for another session over the
+    same ledger.
     """
 
     def __init__(self,
@@ -50,15 +64,46 @@ class Ops:
                  dispatch: DispatchFn,
                  observer: Any | None = None,
                  agent_id: str = "default",
-                 session_id: str = "default",
-                 links: NamespaceLinks | None = None) -> None:
+                 session_id: str | None = None,
+                 links: NamespaceLinks | None = None,
+                 bind: SessionBind | None = None,
+                 records: list[OpRecord] | None = None) -> None:
+        self._mounts: list[OpsMount] = []
         self.set_mounts(mounts)
         self._observer = observer
         self._agent_id = agent_id
         self._session_id = session_id
         self._links = links
         self._dispatch = dispatch
-        self.records: list[OpRecord] = []
+        self._bind = bind
+        self.records: list[OpRecord] = records if records is not None else []
+
+    @property
+    def session_id(self) -> str | None:
+        """The session this facade runs as; None for the workspace's
+        default session."""
+        return self._session_id
+
+    def for_session(self, session_id: str) -> "Ops":
+        """The same facade run as another session.
+
+        Shares the mount table and the op ledger with this one, so the
+        workspace-wide account stays one list and a later mount is seen
+        by both.
+
+        Args:
+            session_id (str): the session whose profile judges the ops.
+        """
+        derived = Ops([],
+                      self._dispatch,
+                      observer=self._observer,
+                      agent_id=self._agent_id,
+                      session_id=session_id,
+                      links=self._links,
+                      bind=self._bind,
+                      records=self.records)
+        derived._mounts = self._mounts
+        return derived
 
     @property
     def links(self) -> NamespaceLinks | None:
@@ -83,9 +128,11 @@ class Ops:
         Args:
             mounts (list[OpsMount]): the workspace's current mount table.
         """
-        self._mounts = sorted(mounts,
-                              key=lambda m: len(m.prefix),
-                              reverse=True)
+        # In place, so a facade derived by ``for_session`` sees the
+        # refreshed table through the list it shares.
+        self._mounts[:] = sorted(mounts,
+                                 key=lambda m: len(m.prefix),
+                                 reverse=True)
 
     def unsized_mounts(self, root_prefix: str = "") -> list[tuple[str, str]]:
         """Mounts whose files cannot be sized without reading them.
@@ -133,10 +180,13 @@ class Ops:
     def unmount(self, prefix: str) -> None:
         stripped = prefix.strip("/")
         norm = ("/" + stripped + "/" if stripped else "/")
-        self._mounts = [m for m in self._mounts if m.prefix != norm]
+        # In place, for the same reason ``set_mounts`` is: a facade
+        # derived by ``for_session`` shares this list, and a retained
+        # one must stop reporting a mount the workspace dropped.
+        self._mounts[:] = [m for m in self._mounts if m.prefix != norm]
 
     def _record(self, op: str, path: str, source: str, nbytes: int,
-                timer: OpTimer) -> None:
+                timer: OpTimer, session: str) -> None:
         rec = finish_record(
             op,
             path,
@@ -147,7 +197,7 @@ class Ops:
         self.records.append(rec)
         if self._observer is not None:
             asyncio.ensure_future(
-                self._observer.log_op(rec, self._agent_id, self._session_id))
+                self._observer.log_op(rec, self._agent_id, session))
 
     def _owner(self, path: str) -> OpsMount | None:
         """The mount owning ``path`` by longest prefix, or None."""
@@ -182,10 +232,14 @@ class Ops:
         structure, invalidation); the facade's own share is the record.
         The path is link-followed here first so the record carries the
         resolved path; the door's second follow of an already-resolved
-        path is a no-op. ``nofollow`` is the caller's
-        AT_SYMLINK_NOFOLLOW and suppresses both follows, so an op meant
-        for a link entry itself (``chmod -h``, a guest's ``lchown``)
-        still records the link's own path.
+        path is a no-op. That follow runs inside the session binding
+        and only from a path the session can see: a link the session
+        cannot see stays the typed path, so the door refuses it as
+        absent instead of serving the visible target it points at.
+        ``nofollow`` is the caller's AT_SYMLINK_NOFOLLOW and suppresses
+        both follows, so an op meant for a link entry itself
+        (``chmod -h``, a guest's ``lchown``) still records the link's
+        own path.
 
         Whether the op is a write is the door's call too: it reads that
         off the op name, so there is nothing for a caller here to
@@ -197,16 +251,26 @@ class Ops:
             **kwargs: op arguments, by the op function's names.
         """
         timer = start_op()
-        if (self._links is not None and op not in NO_FOLLOW_OPS
-                and not kwargs.get("nofollow")):
-            path = self._links.follow(path)
-        owner = self._owner(path)
+        follow = (self._links is not None and op not in NO_FOLLOW_OPS
+                  and not kwargs.get("nofollow"))
         report = OpReport()
+        seen: list[str] = []
+        resolved = [path]
+
+        async def run() -> tuple[Any, Any]:
+            sess = get_current_session()
+            if sess is not None:
+                seen.append(sess.session_id)
+            if follow and self._links is not None and path_allowed(path):
+                resolved[0] = self._links.follow(path)
+            return await self._dispatch(op,
+                                        PathSpec.from_str_path(resolved[0]),
+                                        report=report,
+                                        **kwargs)
+
         try:
-            result, _ = await self._dispatch(op,
-                                             PathSpec.from_str_path(path),
-                                             report=report,
-                                             **kwargs)
+            result, _ = await (run() if self._bind is None else self._bind(
+                self._session_id, run))
         except BaseException:
             # Anything raised after the op ran (a post_ops deny, a hard
             # output cap, a bookkeeping failure) suppresses the result,
@@ -214,18 +278,34 @@ class Ops:
             # the error propagates. The door stamps the report at the
             # moment of completion, so even a foreign error the door
             # never defined leaves the transfer on the books.
+            owner = self._owner(resolved[0])
             if report.completed and owner is not None:
-                self._record_op(op, path, owner, report.source, report.bytes,
-                                None, kwargs, timer)
+                self._record_op(op, resolved[0], owner, report.source,
+                                report.bytes, None, kwargs, timer,
+                                self._session_for(seen))
             raise
+        owner = self._owner(resolved[0])
         if owner is not None:
-            self._record_op(op, path, owner, report.source, report.bytes,
-                            result, kwargs, timer)
+            self._record_op(op, resolved[0], owner, report.source,
+                            report.bytes, result, kwargs, timer,
+                            self._session_for(seen))
         return result
+
+    def _session_for(self, seen: list[str]) -> str:
+        """The session id a record carries: the one the op ran as, else
+        this facade's own, else the unbound door's empty id.
+
+        Args:
+            seen (list[str]): what ``_run_as_seen`` noted.
+        """
+        if seen:
+            return seen[0]
+        return self._session_id if self._session_id is not None else ""
 
     def _record_op(self, op: str, path: str, owner: OpsMount,
                    source: str | None, moved: int | None, result: Any,
-                   kwargs: dict[str, Any], timer: OpTimer) -> None:
+                   kwargs: dict[str,
+                                Any], timer: OpTimer, session: str) -> None:
         """Record one op from the door's report of who served it.
 
         The door names the server when it was not the owning mount (a
@@ -245,10 +325,12 @@ class Ops:
             result (Any): what the op returned, None when withheld.
             kwargs (dict[str, Any]): the op's arguments.
             timer (OpTimer): the stopwatch opened when the op started.
+            session (str): the session the op ran as.
         """
         nbytes = (moved if moved is not None else self._payload_bytes(
             result, kwargs))
-        self._record(op, path, source or owner.resource_type, nbytes, timer)
+        self._record(op, path, source or owner.resource_type, nbytes, timer,
+                     session)
 
     async def read(self,
                    path: str,

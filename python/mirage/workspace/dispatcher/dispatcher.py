@@ -25,7 +25,7 @@ from mirage.cache.file import io as cache_io
 from mirage.cache.manager import CacheManager
 from mirage.commands.builtin.utils.limit import apply_op_limit
 from mirage.context import (get_current_session, hidden_paths_intersect,
-                            path_allowed)
+                            hidden_refusal, path_allowed)
 from mirage.io import IOResult, OpReport
 from mirage.observe.context import record, start_op
 from mirage.observe.record import OpRecord
@@ -73,19 +73,6 @@ def _memory_answered(report: OpReport | None,
     """
     if report is not None:
         report.served(ResourceName.RAM.value, moved)
-
-
-def _hidden_refusal(op: str, virtual: str) -> OSError:
-    """The error a hidden path answers: ENOENT, or EACCES for a create.
-
-    Args:
-        op (str): the dispatched op name.
-        virtual (str): the hidden virtual path.
-    """
-    if op in HIDDEN_CREATE_OPS:
-        return PermissionError(errno.EACCES, os.strerror(errno.EACCES),
-                               virtual)
-    return FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), virtual)
 
 
 def _visible_entries(entries: list[str], parent: str) -> list[str]:
@@ -280,12 +267,11 @@ class Dispatcher:
         # out of it, the followed path is re-checked so a visible link
         # cannot lead in, and a rename destination is a create.
         if not path_allowed(path.virtual):
-            raise _hidden_refusal(op, path.virtual)
+            raise hidden_refusal(path.virtual, op in HIDDEN_CREATE_OPS)
         dst = kwargs.get("dst")
         if (op == "rename" and isinstance(dst, PathSpec)
                 and not path_allowed(dst.virtual)):
-            raise PermissionError(errno.EACCES, os.strerror(errno.EACCES),
-                                  dst.virtual)
+            raise hidden_refusal(dst.virtual, True)
         if op == "rename" and isinstance(dst, PathSpec):
             # A rename re-anchors everything below its source while the
             # hides stay where they are written, so hidden content would
@@ -322,7 +308,7 @@ class Dispatcher:
             if followed != path.virtual:
                 path = PathSpec.from_str_path(followed)
                 if not path_allowed(path.virtual):
-                    raise _hidden_refusal(op, path.virtual)
+                    raise hidden_refusal(path.virtual, op in HIDDEN_CREATE_OPS)
         mount = self._namespace.try_mount_for(path.virtual)
         if mount is None:
             # No mount serves the path, but the namespace may still know

@@ -187,6 +187,7 @@ jobs:
             integ/truth/python/custom_command.json
             integ/truth/custom_resource.json
             integ/truth/custom_cli.json
+            integ/truth/session.json
             integ/truth/python/filetype.json
             integ/truth/version_branching.json
           )

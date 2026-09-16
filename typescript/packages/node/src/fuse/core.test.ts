@@ -37,7 +37,9 @@ describe('MountCore', () => {
   it('refuses a symlink on hidden turf for a scoped session', async () => {
     // The R8 hole: a session-scoped kernel mount could create a link on
     // a mount the profile hides, because the FUSE symlink path wrote the
-    // namespace table directly, at a layer no session view covers.
+    // namespace table directly, at a layer no session view covers. The
+    // refusal is ENOENT: symlink is a create, and a create under a
+    // hidden directory answers as every read of that directory does.
     const ws = new Workspace(
       { '/data/': new RAMResource(), '/extra/': new RAMResource() },
       { mode: MountMode.WRITE },
@@ -49,7 +51,7 @@ describe('MountCore', () => {
     // callback; the unit test binds the same way.
     await runWithSession(sess, async () => {
       await expect(core.symlink('/data/greeting.txt', '/extra/lk')).rejects.toMatchObject({
-        code: 'EACCES',
+        code: 'ENOENT',
       })
       await core.symlink('greeting.txt', '/data/lk')
     })

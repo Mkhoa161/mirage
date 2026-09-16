@@ -64,8 +64,13 @@ import { WorkspaceBinding, captureBinding } from '../../runtime/binding.ts'
 import type { RuntimeContext } from '../../runtime/types.ts'
 import { ContextScope } from '../../utils/context_scope.ts'
 import { captureRecordingContext } from '../../observe/context.ts'
-import { captureSessionContext } from '../../context/session_context.ts'
+import {
+  captureSessionContext,
+  getCurrentSessionUnlessForeign,
+  runWithSession,
+} from '../../context/session_context.ts'
 import { namespaceViewOf } from '../executor/command/run.ts'
+import { asyncContextIsolatesTasks } from '../../utils/async_context.ts'
 import { sessionView, envSnapshot } from '../session/state.ts'
 import type { BridgeDispatchFn } from '../../runtime/types.ts'
 import { MontyUnavailableError } from '../../runtime/python/monty/index.ts'
@@ -104,6 +109,7 @@ import { WorkspaceMeta } from './meta.ts'
 import { normalizeResources, prepareAddedMount, unmountPrefix } from './mounts.ts'
 import { Router } from './routing.ts'
 import { Runtimes } from './runtimes.ts'
+import { SessionHandle } from './handle.ts'
 import type { ExecuteResult } from './types.ts'
 import { type ExecuteOptions, type MountSpec, type WorkspaceOptions } from './types.ts'
 import { commandName, forkForCall } from './utils.ts'
@@ -382,19 +388,22 @@ export class Workspace {
     // programmatic ws.fs walk the same pipeline as a shell command and
     // the policy gates fire exactly once, at that door. It keeps the
     // ledger, which is its own; the sink is only the observer's copy.
+    // It runs as the default session, as a bare `execute` does, so the
+    // default profile confines it too.
     this.fs = new Ops(
       (op, path, args, kwargs, report) => {
         if (this.isShuttingDown()) throw new Error('Workspace is closed')
         return this.dispatcher.dispatch(op, path, args, kwargs, report)
       },
-      async (rec) => {
-        await this.observer.logOp(rec, this.agentId ?? '', this.sessionManager.defaultId)
+      async (rec, sessionId) => {
+        await this.observer.logOp(rec, this.agentId ?? '', sessionId)
       },
       this.namespace,
       (path) => {
         const mount = this.registry.tryMountFor(path)
         return mount === null ? null : { prefix: mount.prefix, kind: mount.resource.kind }
       },
+      { bind: (sessionId, run) => this.bindSession(sessionId, run) },
     )
     this.runtimes = new Runtimes({
       registry: this.registry,
@@ -729,6 +738,33 @@ export class Workspace {
    * Read at `createSession` rather than at compile time because a CLI is
    * registered on the workspace after it is built.
    */
+  /**
+   * One session's two doors: `execute` and `fs` bound to it.
+   *
+   * Creates the session under the given profile when the id is new (the
+   * same call as `createSession`), and adopts it as is when it exists.
+   * Options for an existing session are refused rather than ignored: a
+   * profile is set once, at creation, and a handle must not look like
+   * it narrowed a session it merely adopted. The session store is
+   * hydrated first, so a session a previous process persisted is
+   * adopted with its stored profile rather than recreated over it; that
+   * is why this is async where `createSession` is not.
+   */
+  async session(
+    sessionId: string,
+    options: Parameters<Workspace['createSession']>[1] = {},
+  ): Promise<SessionHandle> {
+    await this.ensureSessionsLoaded()
+    if (this.sessionManager.list().some((s) => s.sessionId === sessionId)) {
+      if (options.mounts != null || options.profile != null || options.permissions != null) {
+        throw new Error(`session '${sessionId}' exists; its profile was set when it was created`)
+      }
+      return new SessionHandle(this, sessionId)
+    }
+    this.createSession(sessionId, options)
+    return new SessionHandle(this, sessionId)
+  }
+
   private cliVerbs(): ReadonlyMap<string, ReadonlySet<string>> {
     const out = new Map<string, ReadonlySet<string>>()
     for (const [name, install] of this.registry.clis.items()) {
@@ -1006,6 +1042,62 @@ export class Workspace {
     return this.fs.readdir(path)
   }
 
+  /**
+   * Run one op door call as `sessionId`.
+   *
+   * A session already bound in this context is kept: a command's
+   * runtime reaching `ws.fs` stays in its own session, and a kernel
+   * mount serving one session keeps that one, so the door never widens
+   * a caller's view. A session another workspace bound is the
+   * exception: its hides and grants describe that workspace, so an
+   * embedder callback reaching this door from inside the other's line
+   * runs as the session it asked for, judged by this workspace's own
+   * profile. Otherwise the named session is bound the way `execute`
+   * binds it.
+   *
+   * On the fallback storage (no task isolation) the newest live frame
+   * may be another task's, so a facade that names its session binds it
+   * rather than trusting an ambient one; only the unnamed door (`ws.fs`,
+   * `ws.dispatch`) keeps whatever is bound there, which is what a
+   * command's runtime reaching it relies on.
+   */
+  private async bindSession<T>(sessionId: string | null, run: () => Promise<T>): Promise<T> {
+    if (this.ambientFor(sessionId) !== null) return run()
+    // The full hydration path, discovery record first: a workspace
+    // attached to a shared store adopts the persisted default session's
+    // id there, and binding before that would run as a freshly minted,
+    // unrestricted default instead.
+    await this.ensureSessionsLoaded()
+    const session = this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
+    return runWithSession(session, run, this.sessionManager)
+  }
+
+  /** The ambient session the op door keeps for a facade, or null. */
+  private ambientFor(sessionId: string | null): Session | null {
+    const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
+    if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return ambient
+    return null
+  }
+
+  /**
+   * The session the op door would run a facade's op as, from here.
+   *
+   * The rule is `bindSession`'s, so an adapter that reads namespace
+   * state outside the door (a link table consulted before a dispatch)
+   * judges it as the session the dispatch will then run as, ambient
+   * one included, rather than as the one it was configured with.
+   * Sessions must already be hydrated: this is a lookup, not a bind.
+   *
+   * @param sessionId the facade's session, or null for the default.
+   * @returns the session an op through that facade runs as.
+   */
+  sessionForOps(sessionId: string | null): Session {
+    return (
+      this.ambientFor(sessionId) ??
+      this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
+    )
+  }
+
   async dispatch(
     opName: string,
     path: string,
@@ -1013,7 +1105,8 @@ export class Workspace {
     kwargs: OpKwargs = {},
   ): Promise<unknown> {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
-    return this.dispatchInternal(opName, path, args, kwargs)
+    // Runs as the default session unless one is bound, like `ws.fs`.
+    return this.bindSession(null, () => this.dispatchInternal(opName, path, args, kwargs))
   }
 
   private async dispatchInternal(

@@ -68,7 +68,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "/scratch/grove/store/new.txt: Permission denied\n"
+        "stderr": "/scratch/grove/store/new.txt: No such file or directory\n"
       }
     },
     {

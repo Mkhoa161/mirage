@@ -16,7 +16,7 @@ import { createAsyncContext } from '../utils/async_context.ts'
 import type { ContextCall } from '../utils/async_context.ts'
 import type { SessionManager } from '../workspace/session/manager.ts'
 import type { Session } from '../workspace/session/session.ts'
-import { stripSlash } from '../utils/slash.ts'
+import { rstripSlash, stripSlash } from '../utils/slash.ts'
 import {
   anchorDepth,
   hidesIntersect,
@@ -25,7 +25,8 @@ import {
   showHead,
   shownMode,
 } from '../utils/hidden.ts'
-import { erofsReadOnly } from '../utils/errors.ts'
+import { eacces, enoent, erofsReadOnly } from '../utils/errors.ts'
+import { parent } from '../utils/path.ts'
 import type { Policies } from '../policy/policies.ts'
 import type { EntryGate, PathSpec } from '../types.ts'
 import { MOUNT_MODE_RANK, MountMode, weakerMode } from '../types.ts'
@@ -96,6 +97,24 @@ export function getCurrentSessionFor(owner: SessionManager): Session | null {
     if (binding?.owner === owner) return binding.session
   }
   return null
+}
+
+/**
+ * The bound session, unless another owner published it.
+ *
+ * An op door keeps the session it is reached under, so it never widens
+ * a caller's view: a command's runtime, a kernel mount and a guest
+ * runtime all bind before they call. A binding that names an owner
+ * other than `owner` is another workspace's, and its session describes
+ * that workspace's hides and grants, so the door must not adopt it. A
+ * binding that names no owner is a deliberate placement (a kernel
+ * mount, a guest runtime, an embedder binding by hand) and is kept.
+ */
+export function getCurrentSessionUnlessForeign(owner: SessionManager): Session | null {
+  const binding = sessionStorage.getStore()
+  if (binding === undefined) return null
+  if (binding.owner !== null && binding.owner !== owner) return null
+  return binding.session
 }
 
 function normPrefix(mountPrefix: string): string {
@@ -201,8 +220,8 @@ export function sessionPathAllowed(sess: Session, virtual: string): boolean {
 /**
  * Whether the current session's hides leave this path visible:
  * enumeration surfaces filter names through it and the doors answer
- * ENOENT (EACCES for creates) when it says no, so hiding reads as
- * nonexistence, never as a denial that leaks the name. True when no
+ * `hiddenRefusal` when it says no, so hiding reads as nonexistence,
+ * never as a denial that leaks the name. True when no
  * session is bound. This is how a profile keeps a session away from a
  * mount, since naming mounts only narrows their modes. Every live
  * session must leave the path visible, so on the fallback storage a
@@ -211,6 +230,25 @@ export function sessionPathAllowed(sess: Session, virtual: string): boolean {
  */
 export function pathAllowed(virtual: string): boolean {
   return liveSessions().every((sess) => sessionPathAllowed(sess, virtual))
+}
+
+/**
+ * The error a hidden path answers, in POSIX's own terms.
+ *
+ * ENOENT names a component that does not exist and EACCES an entry the
+ * caller may not write, so a create is EACCES only when the directory
+ * it lands in is visible: a hidden name under a visible parent reads
+ * as an existing file the session cannot write, which is the one
+ * answer that neither reveals the content nor invites a create that
+ * would clobber it. A create under a hidden directory is ENOENT, the
+ * same answer every read gives for that directory, so a write cannot
+ * detect a hide a read could not. Everything that is not a create is
+ * ENOENT. `create` is whether the op creates the path it names; a
+ * rename or copy destination is one.
+ */
+export function hiddenRefusal(virtual: string, create: boolean): Error {
+  if (create && pathAllowed(parent(rstripSlash(virtual) || '/'))) return eacces(virtual)
+  return enoent(virtual)
 }
 
 const admissionStorage = createAsyncContext<EntryGate>()

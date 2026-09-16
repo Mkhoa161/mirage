@@ -19,9 +19,11 @@ import {
   getAdmission,
   getCurrentSession,
   getCurrentSessionFor,
+  getCurrentSessionUnlessForeign,
   getOpPolicies,
   hiddenPathsActive,
   hiddenPathsIntersect,
+  hiddenRefusal,
   pathAllowed,
   pathRulesActive,
   readonlyBelow,
@@ -148,6 +150,29 @@ describe('a binding belongs to the workspace that published it', () => {
     })
   })
 
+  it("the op door keeps any bind but another owner's", async () => {
+    // A kernel mount and a guest runtime bind without an owner, and
+    // the door keeps those; only a binding another workspace made is
+    // refused, since its session describes that workspace's view.
+    const mine = new SessionManager('default')
+    const theirs = new SessionManager('default')
+    const session = new Session({ sessionId: 'default' })
+    expect(getCurrentSessionUnlessForeign(mine)).toBeNull()
+    await runWithSession(session, () => {
+      expect(getCurrentSessionUnlessForeign(mine)).toBe(session)
+      return Promise.resolve()
+    })
+    await runWithSession(
+      session,
+      () => {
+        expect(getCurrentSessionUnlessForeign(mine)).toBe(session)
+        expect(getCurrentSessionUnlessForeign(theirs)).toBeNull()
+        return Promise.resolve()
+      },
+      mine,
+    )
+  })
+
   it('node isolates concurrent tasks', () => {
     // What lets a background job bind its fork without the foreground
     // seeing it; the browser fallback storage cannot, and jobs.ts
@@ -195,6 +220,31 @@ describe('hides', () => {
     await runWithSession(sess, () => {
       expect(pathAllowed('/a/secrets/x')).toBe(false)
       expect(pathAllowed('/a/public')).toBe(true)
+      return Promise.resolve()
+    })
+  })
+
+  it('a hidden create is refused by what its parent answers', async () => {
+    // A create under a hidden directory is ENOENT, the answer every
+    // read gives for that directory, so probing creates cannot map a
+    // profile's hidden prefixes; a hidden name under a visible parent
+    // is EACCES, the way an existing file the session cannot write is.
+    const sess = new Session({
+      sessionId: 'agent',
+      hiddenPaths: { paths: ['/w/vault', '/w/open/file.txt'], patterns: ['*.key'] },
+    })
+    await runWithSession(sess, () => {
+      expect(hiddenRefusal('/w/vault/new.txt', true)).toMatchObject({
+        code: 'ENOENT',
+        message: '/w/vault/new.txt',
+      })
+      expect(hiddenRefusal('/w/vault/a/b', true)).toMatchObject({ code: 'ENOENT' })
+      expect(hiddenRefusal('/w/vault', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/vault/', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/open/file.txt', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/open/new.key', true)).toMatchObject({ code: 'EACCES' })
+      expect(hiddenRefusal('/w/vault/new.txt', false)).toMatchObject({ code: 'ENOENT' })
+      expect(hiddenRefusal('/w/open/file.txt', false)).toMatchObject({ code: 'ENOENT' })
       return Promise.resolve()
     })
   })
