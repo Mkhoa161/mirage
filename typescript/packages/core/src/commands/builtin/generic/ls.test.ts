@@ -941,7 +941,7 @@ describe('ls quotes the word its argument clauses name', () => {
   ])('words an empty %s as ambiguous', (dest, option, code) => {
     let caught: unknown = null
     try {
-      parseFlags(new FlagView({ [dest as string]: '' }, specOf('ls')))
+      parseFlags(new FlagView({ [dest]: '' }, specOf('ls')))
     } catch (error) {
       caught = error
     }
