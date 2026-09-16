@@ -17,12 +17,10 @@ import sys
 from typing import Any
 
 import yaml
-from ci_test_legs.audits import (audit, audit_gates, audit_invocation,
-                                 audit_packages)
-from ci_test_legs.cases import GROUPS, Fixture
-from ci_test_legs.constants import (LEG_PREFIX, MATRIX_REF, NO_LEG_DIM,
-                                    NO_MATRIX, PACKAGES, REPO, ROOT_MANIFEST,
-                                    WORKFLOW)
+from audits import audit, audit_gates, audit_invocation, audit_packages
+from cases import GROUPS, Fixture
+from constants import (LEG_PREFIX, MATRIX_REF, NO_LEG_DIM, NO_MATRIX, PACKAGES,
+                       REPO, ROOT_MANIFEST, WORKFLOW)
 
 
 def leg_scripts(manifest: dict[str, Any]) -> dict[str, str]:

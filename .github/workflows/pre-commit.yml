@@ -215,5 +215,5 @@ jobs:
       # clean tree.
       - name: CI test legs
         run: |
-          ./python/.venv/bin/python scripts/check_ci_test_legs.py --selftest
-          ./python/.venv/bin/python scripts/check_ci_test_legs.py
+          ./python/.venv/bin/python scripts/ci_test_legs/check.py --selftest
+          ./python/.venv/bin/python scripts/ci_test_legs/check.py

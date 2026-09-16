@@ -15,8 +15,7 @@
 import dataclasses
 from typing import Any
 
-from ci_test_legs.audits import (audit, audit_gates, audit_invocation,
-                                 audit_packages)
+from audits import audit, audit_gates, audit_invocation, audit_packages
 
 CORE = "@struktoai/mirage-core"
 NODE = "@struktoai/mirage-node"

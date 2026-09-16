@@ -15,12 +15,11 @@
 import shlex
 from typing import Any
 
-from ci_test_legs.constants import (BAD_PACKAGE, CLOSURE_FILTER, DOUBLE_CLAIM,
-                                    DOUBLE_FILTER, FALSY_GATE, FILTER,
-                                    JOB_MAY_FAIL, LEG_PREFIX, NO_LEG_SCRIPT,
-                                    NO_LIVE_STEP, NO_TEST_SCRIPT, NO_TEST_WHY,
-                                    SCRIPT_UNUSED, STRAY_INCLUDE, UNCLAIMED,
-                                    UNKNOWN_WHY, UNSET_GATE, WRONG_VERB)
+from constants import (BAD_PACKAGE, CLOSURE_FILTER, DOUBLE_CLAIM,
+                       DOUBLE_FILTER, FALSY_GATE, FILTER, JOB_MAY_FAIL,
+                       LEG_PREFIX, NO_LEG_SCRIPT, NO_LIVE_STEP, NO_TEST_SCRIPT,
+                       NO_TEST_WHY, SCRIPT_UNUSED, STRAY_INCLUDE, UNCLAIMED,
+                       UNKNOWN_WHY, UNSET_GATE, WRONG_VERB)
 
 
 def package_of(token: str) -> str:
