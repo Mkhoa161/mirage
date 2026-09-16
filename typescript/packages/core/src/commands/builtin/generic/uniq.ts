@@ -15,7 +15,7 @@
 import { IOResult, materialize } from '../../../io/types.ts'
 import type { PathSpec } from '../../../types.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
-import { extraOperandError } from '../../spec/usage.ts'
+import { argmatchError, extraOperandError } from '../../spec/usage.ts'
 import { CommandName, FlagView, type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { resolveSource } from '../utils/stream.ts'
@@ -46,16 +46,22 @@ function parseCount(value: string | boolean | number | string[] | undefined): nu
   return count
 }
 
+// GNU's `delimit_method_string` and `grouping_method_string`, in
+// declaration order, which is what each option lists back. No aliases in
+// either, so one candidate per line.
+const ALL_REPEATED_ARGS = ['none', 'prepend', 'separate'] as const
+const GROUP_ARGS = ['prepend', 'append', 'separate', 'both'] as const
+
 function optionalMethod(
   value: string | boolean | number | string[] | undefined,
   defaultValue: string,
-  allowed: string[],
+  allowed: readonly string[],
   option: string,
 ): string | null {
   if (value === undefined || value === false) return null
   const normalized = value === true ? defaultValue : value
   if (typeof normalized !== 'string' || !allowed.includes(normalized)) {
-    throw new Error(`uniq: invalid argument '${String(normalized)}' for '--${option}'`)
+    throw argmatchError('uniq', `--${option}`, String(normalized), allowed)
   }
   return normalized
 }
@@ -68,13 +74,13 @@ function parseFlags(bag: Record<string, FlagValue>): UniqFlags {
   const allRepeated = optionalMethod(
     fl.asBool('D') ? true : fl.raw('all_repeated'),
     'none',
-    ['none', 'prepend', 'separate'],
+    ALL_REPEATED_ARGS,
     'all-repeated',
   ) as UniqFlags['allRepeated']
   const group = optionalMethod(
     fl.raw('group'),
     'separate',
-    ['separate', 'prepend', 'append', 'both'],
+    GROUP_ARGS,
     'group',
   ) as UniqFlags['group']
   if (group !== null && (count || duplicatesOnly || uniqueOnly || allRepeated !== null)) {

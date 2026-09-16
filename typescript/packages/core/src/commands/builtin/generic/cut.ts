@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { quoteText } from '../../quote.ts'
 import { asyncChain } from '../../../io/stream.ts'
 import { IOResult, type ByteSource } from '../../../io/types.ts'
 import type { PathSpec } from '../../../types.ts'
@@ -43,7 +44,9 @@ function parseFlags(bag: Record<string, FlagValue>): CutOptions | string {
     whitespace = 'default'
   } else if (typeof rawWhitespace === 'string') {
     if (rawWhitespace !== 'trimmed') {
-      return `cut: invalid argument '${rawWhitespace}' for '--whitespace-delimited'\n`
+      return (
+        `cut: invalid argument '${quoteText(rawWhitespace)}' for ` + "'--whitespace-delimited'\n"
+      )
     }
     whitespace = 'trimmed'
   }
@@ -56,8 +59,12 @@ function parseFlags(bag: Record<string, FlagValue>): CutOptions | string {
   if (explicitDelimiter !== undefined && Array.from(explicitDelimiter).length !== 1) {
     return 'cut: the delimiter must be a single character\n'
   }
+  // A refusal arrives as the stderr text to print, the same shape every
+  // other check in this function returns.
+  const ranges = parseRanges(range, mode)
+  if (typeof ranges === 'string') return ranges
   return {
-    ranges: parseRanges(range),
+    ranges,
     mode,
     delimiter: explicitDelimiter ?? '\t',
     complement: fl.asBool('complement'),

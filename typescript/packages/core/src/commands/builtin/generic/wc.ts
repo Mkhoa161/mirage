@@ -20,6 +20,7 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { fsErrorLine, isFsError } from '../../../utils/errors.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { formatRecords } from '../utils/output.ts'
+import { argmatchError } from '../../spec/usage.ts'
 import { FlagView, type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { advanceColumn, isSpace } from '../../../utils/width.ts'
@@ -41,6 +42,10 @@ interface WcCounts {
   maxLineLength: number
 }
 
+// GNU's `total_types` in declaration order, which is both the accepted set
+// and what `--total=x` lists back. No aliases, so one per line.
+const TOTAL_ARGS = ['auto', 'always', 'only', 'never'] as const
+
 export interface WcFlags {
   lines: boolean
   words: boolean
@@ -52,9 +57,15 @@ export interface WcFlags {
 
 export function parseFlags(bag: Record<string, FlagValue>): WcFlags | string {
   const fl = new FlagView(bag, specOf('wc'))
+  // `--total=` is NOT the default: GNU reads the empty word as a prefix of
+  // every candidate and answers `ambiguous argument ''` (exit 1), which is
+  // what the shared renderer words. Python read it as `auto` and exited 0,
+  // the one py/ts split at this slot. `asStr` keeps the empty string (it
+  // tests `typeof === 'string'`), so the empty word still reaches the
+  // renderer rather than defaulting.
   const rawTotal = fl.asStr('total') ?? 'auto'
-  if (!['auto', 'always', 'only', 'never'].includes(rawTotal)) {
-    return `wc: invalid argument '${rawTotal}' for '--total'\n`
+  if (!(TOTAL_ARGS as readonly string[]).includes(rawTotal)) {
+    return argmatchError('wc', '--total', rawTotal, TOTAL_ARGS).message + '\n'
   }
   return {
     lines: fl.asBool('lines'),

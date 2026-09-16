@@ -15,7 +15,7 @@
 import type { PathSpec } from '../../types.ts'
 import { PatternType } from './constants.ts'
 import { hasUnresolvedGlob } from './utils/operands.ts'
-import { breToRegExp } from '../../utils/bre.ts'
+import { breSource } from './grep_pattern.ts'
 import { FlagView, type FlagValue } from '../spec/types.ts'
 
 // Classify a grep pattern for API push-down decisions.
@@ -126,7 +126,7 @@ export function extractRequiredLiteral(pattern: string): string | null {
 export function searchQuery(pattern: string, fixedString: boolean, basic = false): string | null {
   if (pattern.includes('\n')) return null
   if (isLiteralPattern(pattern, fixedString)) return pattern
-  return extractRequiredLiteral(basic ? breToRegExp(pattern) : pattern)
+  return extractRequiredLiteral(basic ? breSource(pattern) : pattern)
 }
 
 // Whether the pattern is searched verbatim, with no regex extraction.
@@ -143,6 +143,7 @@ export function isLiteralPattern(pattern: string, fixedString: boolean): boolean
 const PUSHDOWN_SHAPING_BOOL = [
   'v',
   'n',
+  'byte_offset',
   'c',
   'args_l',
   'w',
@@ -164,7 +165,7 @@ const PUSHDOWN_FILTER_LIST = ['include', 'exclude', 'exclude_dir'] as const
 
 // True when a flag alters the match set or output shape of grep/rg. A search
 // push-down prints each matching record as one whole line, so it cannot honor
-// -v/-n/-c/-l/-w/-o/-m/-A/-B/-C/-q/-H/-h, rg's -I (no filename), nor rg's
+// -v/-n/-b/-c/-l/-w/-o/-m/-A/-B/-C/-q/-H/-h, rg's -I (no filename), nor rg's
 // file-filtering --glob/--type; the wrapper must defer to the generic scan
 // when any is present.
 //

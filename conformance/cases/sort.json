@@ -170,6 +170,20 @@
       }
     },
     {
+      "id": "sort_astral_plane_codepoint_order",
+      "cmd": "sort",
+      "matrix": {
+        "python": ["ram", "disk", "redis"],
+        "typescript": ["ram", "disk", "redis"]
+      },
+      "stdin_base64": "egrwnYSeCu+/vQo=",
+      "expect": {
+        "exit": 0,
+        "stdout_base64": "egrvv70K8J2Engo=",
+        "stderr_text": ""
+      }
+    },
+    {
       "id": "sort_astral_codepoint_order",
       "cmd": "sort /data/astral.txt",
       "matrix": {
