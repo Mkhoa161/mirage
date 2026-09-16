@@ -148,7 +148,7 @@ describe('tail -f -s inf', () => {
     const text = await drainFor(stream, 250, abort)
     await grower
     expect(text).toBe('l1\nl2\n')
-    expect(io.exitCode ?? 0).toBe(0)
+    expect(io.exitCode).toBe(0)
   })
 })
 

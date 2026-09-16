@@ -113,30 +113,30 @@ describe('parseRanges refuses what GNU cut refuses', () => {
 
 describe('cut reports a refused range with GNU exit status', () => {
   it('exits 1 for a field list it cannot read whole', async () => {
-    expect(await run({ d: ',', f: '2-3x' })).toEqual({
+    expect(await run({ delimiter: ',', fields: '2-3x' })).toEqual({
       exit: 1,
       stderr: "cut: invalid field value 'x'\n" + TRY,
     })
-    expect(await run({ d: ',', f: 'abc' })).toEqual({
+    expect(await run({ delimiter: ',', fields: 'abc' })).toEqual({
       exit: 1,
       stderr: "cut: invalid field value 'abc'\n" + TRY,
     })
-    expect(await run({ d: ',', f: '0' })).toEqual({
+    expect(await run({ delimiter: ',', fields: '0' })).toEqual({
       exit: 1,
       stderr: 'cut: fields are numbered from 1\n' + TRY,
     })
-    expect(await run({ d: ',', f: '3-1' })).toEqual({
+    expect(await run({ delimiter: ',', fields: '3-1' })).toEqual({
       exit: 1,
       stderr: 'cut: invalid decreasing range\n' + TRY,
     })
-    expect(await run({ d: ',', f: '1-2-3' })).toEqual({
+    expect(await run({ delimiter: ',', fields: '1-2-3' })).toEqual({
       exit: 1,
       stderr: 'cut: invalid field range\n' + TRY,
     })
   })
 
   it('exits 1 for a byte/character list it cannot read whole', async () => {
-    expect(await run({ c: 'abc' })).toEqual({
+    expect(await run({ characters: 'abc' })).toEqual({
       exit: 1,
       stderr: "cut: invalid byte/character position 'abc'\n" + TRY,
     })
