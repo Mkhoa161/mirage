@@ -39,6 +39,15 @@ class TestMountPrefixes:
         ops.unmount("/data/")
         assert "/data/" not in ops.mount_prefixes()
 
+    def test_a_derived_facade_sees_an_unmount(self):
+        # `for_session` shares the mount list so a later mount reaches
+        # both; an unmount has to reach both the same way.
+        ops, _ = make_ops()
+        derived = ops.for_session("agent")
+        ops.unmount("/data/")
+        assert "/data/" not in derived.mount_prefixes()
+        assert "/data/" not in [p for p, _ in derived.writable_mounts()]
+
 
 class TestReadWrite:
 

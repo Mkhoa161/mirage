@@ -21,7 +21,7 @@ import type { FileStat, SetAttrFields } from '../types.ts'
 import { FileType, PathSpec } from '../types.ts'
 import { exdev, isMissingPath } from '../utils/errors.ts'
 import type { DispatchFn } from '../runtime/types.ts'
-import { getCurrentSession } from '../context/session_context.ts'
+import { getCurrentSession, pathAllowed } from '../context/session_context.ts'
 
 /** Receives each record with the id of the session the op ran as. */
 export type OpSink = (rec: OpRecord, sessionId: string) => Promise<void>
@@ -170,7 +170,10 @@ export class Ops {
    * structure, invalidation); the facade's own share is the record. The
    * path is link-followed here first so the record carries the resolved
    * path; the door's second follow of an already-resolved path is a
-   * no-op. Mirrors Python's Ops._through_door.
+   * no-op. That follow runs inside the session binding and only from a
+   * path the session can see: a link the session cannot see stays the
+   * typed path, so the door refuses it as absent instead of serving the
+   * visible target it points at. Mirrors Python's Ops._call.
    */
   private async through(
     op: string,
@@ -182,9 +185,8 @@ export class Ops {
     // `nofollow` is the caller's AT_SYMLINK_NOFOLLOW and suppresses
     // both follows, so an op meant for a link entry itself (chmod -h, a
     // guest's lchown) still records the link's own path.
-    const skipFollow = NO_FOLLOW_OPS.has(op) || kwargs.nofollow === true
-    const followed = this.links !== null && !skipFollow ? this.links.follow(path) : path
-    const owner = this.ownerOf(followed)
+    const links = NO_FOLLOW_OPS.has(op) || kwargs.nofollow === true ? null : this.links
+    let followed = path
     const report = new OpReport()
     // The record names the session the op ran as: noted inside the
     // bind, since the facade's own id may be null (the default) and a
@@ -192,13 +194,17 @@ export class Ops {
     let seen: string | null = null
     const run = (): Promise<[unknown, IOResult]> => {
       seen = getCurrentSession()?.sessionId ?? null
+      if (links !== null && pathAllowed(path)) followed = links.follow(path)
       return this.dispatch(op, PathSpec.fromStrPath(followed), args, kwargs, report)
     }
     let result: unknown
+    let owner: MountOwner | null = null
     try {
       const [value] = await (this.bind === null ? run() : this.bind(this.sessionId, run))
       result = value
+      owner = this.ownerOf(followed)
     } catch (err) {
+      owner = this.ownerOf(followed)
       // Anything thrown after the op ran (a postOps deny, a hard
       // output cap, a bookkeeping failure) suppresses the result, not
       // the effect, so observation must reflect the op before the

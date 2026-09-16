@@ -150,11 +150,11 @@ async function main(): Promise<void> {
   );
   for (const seed of SEED) await ws.execute(seed);
 
-  const reviewer = ws.session("reviewer", {
+  const reviewer = await ws.session("reviewer", {
     profile: "reviewer",
     mounts: { "/repo": "read" },
   });
-  const editor = ws.session("editor", { profile: "editor" });
+  const editor = await ws.session("editor", { profile: "editor" });
   const host: Doors = { execute: (cmd) => ws.execute(cmd), fs: ws.fs };
 
   await line(
@@ -215,7 +215,7 @@ async function main(): Promise<void> {
   );
   await line("editor", editor, "echo x > /repo/new.txt", "and the same grant");
 
-  const again = ws.session("reviewer");
+  const again = await ws.session("reviewer");
   show(
     "reviewer",
     "session",
@@ -224,7 +224,7 @@ async function main(): Promise<void> {
     "an existing session is adopted as is",
   );
   try {
-    ws.session("reviewer", { profile: "editor" });
+    await ws.session("reviewer", { profile: "editor" });
   } catch (err) {
     show(
       "reviewer",

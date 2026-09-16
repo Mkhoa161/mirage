@@ -173,6 +173,74 @@ def test_the_op_door_runs_as_the_default_session():
     asyncio.run(run())
 
 
+def _hiding() -> Workspace:
+    return Workspace({"/data/": RAMResource()},
+                     mode=MountMode.WRITE,
+                     profiles={"agent": {
+                         "paths": {
+                             "hide": ["/data/vault"]
+                         }
+                     }},
+                     profile="agent")
+
+
+def test_the_op_door_does_not_adopt_another_workspaces_session():
+    # A session bound by another workspace describes that workspace:
+    # an embedder callback reaching this door from inside the other's
+    # line runs as this workspace's default session, not as the wider
+    # session it arrived under. A binding that names no owner is a
+    # deliberate placement (a kernel mount binds one that way) and is
+    # kept as before.
+    other = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    wide = other.create_session("wide", profile={})
+    ws = _hiding()
+    host = ws.create_session("host", profile={})
+
+    async def run():
+        door = ws.fs.for_session(host.session_id)
+        await door.mkdir("/data/vault")
+        await door.write("/data/vault/secret", b"top\n")
+        token = set_current_session(wide, other._session_mgr)
+        try:
+            with pytest.raises(FileNotFoundError):
+                await ws.fs.read("/data/vault/secret")
+            assert await door.read("/data/vault/secret") == b"top\n"
+        finally:
+            reset_current_session(token)
+        token = set_current_session(wide)
+        try:
+            assert await ws.fs.read("/data/vault/secret") == b"top\n"
+        finally:
+            reset_current_session(token)
+
+    asyncio.run(run())
+
+
+def test_the_op_door_does_not_follow_a_link_the_session_cannot_see():
+    # The facade follows links before the door so the record carries
+    # the resolved path, and that follow used to run unbound: a link
+    # inside hidden space reached the door already resolved to its
+    # visible target, so the door's check of the typed path never saw
+    # the hide. The follow now runs as the session and only from a
+    # path it can see, so the link reads as absent.
+    ws = _hiding()
+    host = ws.create_session("host", profile={})
+
+    async def run():
+        door = ws.fs.for_session(host.session_id)
+        await door.write("/data/pub.txt", b"pub\n")
+        await door.mkdir("/data/vault")
+        await door.symlink("/data/vault/lk", "/data/pub.txt")
+        assert await door.read("/data/vault/lk") == b"pub\n"
+        with pytest.raises(FileNotFoundError):
+            await ws.fs.read("/data/vault/lk")
+        with pytest.raises(FileNotFoundError):
+            await ws.fs.write("/data/vault/lk", b"x\n")
+        assert await door.read("/data/pub.txt") == b"pub\n"
+
+    asyncio.run(run())
+
+
 def test_a_write_below_the_mode_reads_read_only_file_system():
     ws = _carved()
     refused = _run(ws, "echo x > /repo/public/new.txt")

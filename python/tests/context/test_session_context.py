@@ -18,6 +18,7 @@ import pytest
 
 from mirage.context import (effective_mount_mode, effective_path_mode,
                             get_current_session, get_current_session_for,
+                            get_current_session_unless_foreign,
                             hidden_paths_intersect, hidden_refusal,
                             readonly_below, require_mount_writable,
                             reset_current_session, reset_mount_gate,
@@ -416,5 +417,26 @@ def test_hidden_refusal_answers_a_create_by_its_parent():
                               create=False).errno == errno.ENOENT
         assert hidden_refusal("/w/open/file.txt",
                               create=False).errno == errno.ENOENT
+    finally:
+        reset_current_session(token)
+
+
+def test_the_op_door_keeps_any_bind_but_another_owners():
+    # A kernel mount and a guest runtime bind without an owner, and
+    # the door keeps those; only a binding another workspace made is
+    # refused, since its session describes that workspace's view.
+    mine = SessionManager("default")
+    theirs = SessionManager("default")
+    sess = Session(session_id="default")
+    assert get_current_session_unless_foreign(mine) is None
+    token = set_current_session(sess)
+    try:
+        assert get_current_session_unless_foreign(mine) is sess
+    finally:
+        reset_current_session(token)
+    token = set_current_session(sess, mine)
+    try:
+        assert get_current_session_unless_foreign(mine) is sess
+        assert get_current_session_unless_foreign(theirs) is None
     finally:
         reset_current_session(token)

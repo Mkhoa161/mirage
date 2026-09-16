@@ -488,6 +488,14 @@ describe('a hide answers a create by what its parent answers', () => {
         await expect(ws.dispatch('mkdir', '/ram/vault/deeper')).rejects.toMatchObject({
           code: 'ENOENT',
         })
+        // truncate creates a missing file at the requested length, so
+        // it is a create too.
+        await expect(ws.dispatch('truncate', '/ram/vault/new.txt', [0])).rejects.toMatchObject({
+          code: 'ENOENT',
+        })
+        await expect(ws.dispatch('truncate', '/ram/open/pub.txt', [0])).rejects.toMatchObject({
+          code: 'EACCES',
+        })
         await expect(
           ws.dispatch('rename', '/ram/open/q.txt', [PathSpec.fromStrPath('/ram/vault/moved')]),
         ).rejects.toMatchObject({ code: 'ENOENT' })

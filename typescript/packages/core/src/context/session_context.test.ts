@@ -19,6 +19,7 @@ import {
   getAdmission,
   getCurrentSession,
   getCurrentSessionFor,
+  getCurrentSessionUnlessForeign,
   getOpPolicies,
   hiddenPathsActive,
   hiddenPathsIntersect,
@@ -147,6 +148,29 @@ describe('a binding belongs to the workspace that published it', () => {
       expect(getCurrentSessionFor(new SessionManager('default'))).toBeNull()
       return Promise.resolve()
     })
+  })
+
+  it("the op door keeps any bind but another owner's", async () => {
+    // A kernel mount and a guest runtime bind without an owner, and
+    // the door keeps those; only a binding another workspace made is
+    // refused, since its session describes that workspace's view.
+    const mine = new SessionManager('default')
+    const theirs = new SessionManager('default')
+    const session = new Session({ sessionId: 'default' })
+    expect(getCurrentSessionUnlessForeign(mine)).toBeNull()
+    await runWithSession(session, () => {
+      expect(getCurrentSessionUnlessForeign(mine)).toBe(session)
+      return Promise.resolve()
+    })
+    await runWithSession(
+      session,
+      () => {
+        expect(getCurrentSessionUnlessForeign(mine)).toBe(session)
+        expect(getCurrentSessionUnlessForeign(theirs)).toBeNull()
+        return Promise.resolve()
+      },
+      mine,
+    )
   })
 
   it('node isolates concurrent tasks', () => {

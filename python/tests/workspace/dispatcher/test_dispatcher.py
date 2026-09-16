@@ -253,14 +253,21 @@ async def test_a_create_under_a_hidden_directory_is_absent_like_its_reads(
     # under a hidden directory a create is ENOENT, and at a hidden name
     # under a visible directory it keeps EACCES, the way an existing
     # file the session cannot write does. A rename destination is a
-    # create and answers the same way.
+    # create and answers the same way, and so is truncate, which
+    # creates a missing file at the requested length.
     dispatcher, _ = _dispatcher(Policies())
     for op, kwargs in (("write", {
             "data": b"x"
-    }), ("mkdir", {}), ("create", {})):
+    }), ("mkdir", {}), ("create", {}), ("truncate", {
+            "length": 0
+    })):
         with pytest.raises(FileNotFoundError):
             await dispatcher.dispatch(op, _path("/data/locked/other/new.txt"),
                                       **kwargs)
+    with pytest.raises(PermissionError):
+        await dispatcher.dispatch("truncate",
+                                  _path("/data/locked/f.txt"),
+                                  length=0)
     with pytest.raises(FileNotFoundError):
         await dispatcher.dispatch("rename",
                                   _path("/data/locked/a.txt"),

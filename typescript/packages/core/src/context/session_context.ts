@@ -99,6 +99,24 @@ export function getCurrentSessionFor(owner: SessionManager): Session | null {
   return null
 }
 
+/**
+ * The bound session, unless another owner published it.
+ *
+ * An op door keeps the session it is reached under, so it never widens
+ * a caller's view: a command's runtime, a kernel mount and a guest
+ * runtime all bind before they call. A binding that names an owner
+ * other than `owner` is another workspace's, and its session describes
+ * that workspace's hides and grants, so the door must not adopt it. A
+ * binding that names no owner is a deliberate placement (a kernel
+ * mount, a guest runtime, an embedder binding by hand) and is kept.
+ */
+export function getCurrentSessionUnlessForeign(owner: SessionManager): Session | null {
+  const binding = sessionStorage.getStore()
+  if (binding === undefined) return null
+  if (binding.owner !== null && binding.owner !== owner) return null
+  return binding.session
+}
+
 function normPrefix(mountPrefix: string): string {
   const stripped = stripSlash(mountPrefix)
   return stripped === '' ? '/' : '/' + stripped

@@ -72,6 +72,7 @@ export const HIDDEN_CREATE_OPS: ReadonlySet<string> = new Set([
   'write_bytes',
   'append',
   'create',
+  'truncate',
   'mkdir',
   'symlink',
 ])

@@ -43,6 +43,21 @@ afterEach(async () => {
   for (const ws of open.splice(0)) await ws.close()
 })
 
+async function hiding(): Promise<Workspace> {
+  const parser = await getTestParser()
+  const ws = new Workspace(
+    { '/data': [new RAMResource(), MountMode.WRITE] as const },
+    {
+      mode: MountMode.WRITE,
+      shellParser: parser,
+      profiles: { agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }) },
+      profile: 'agent',
+    },
+  )
+  open.push(ws)
+  return ws
+}
+
 async function seeded(mode: MountMode = MountMode.WRITE): Promise<Workspace> {
   const parser = await getTestParser()
   const repo = new RAMResource()
@@ -170,6 +185,61 @@ describe('the path axis end to end', () => {
     await runWithSession(host, async () => {
       expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
     })
+  })
+
+  it("the op door does not adopt another workspace's session", async () => {
+    // A session bound by another workspace describes that workspace:
+    // an embedder callback reaching this door from inside the other's
+    // line runs as this workspace's default session, not as the wider
+    // session it arrived under. A binding that names no owner is a
+    // deliberate placement (a kernel mount binds one that way) and is
+    // kept as before.
+    const parser = await getTestParser()
+    const other = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] as const },
+      { mode: MountMode.WRITE, shellParser: parser },
+    )
+    open.push(other)
+    const wide = other.createSession('wide', { profile: parseSessionProfile({}) })
+    const ws = await hiding()
+    const host = ws.createSession('host', { profile: parseSessionProfile({}) })
+    const door = ws.fs.forSession(host.sessionId)
+    await door.mkdir('/data/vault')
+    await door.writeFile('/data/vault/secret', 'top\n')
+    await runWithSession(
+      wide,
+      async () => {
+        await expect(ws.fs.readFile('/data/vault/secret')).rejects.toMatchObject({
+          code: 'ENOENT',
+        })
+        expect(await door.readFileText('/data/vault/secret')).toBe('top\n')
+      },
+      other.sessionManager,
+    )
+    await runWithSession(wide, async () => {
+      expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
+    })
+  })
+
+  it('the op door does not follow a link the session cannot see', async () => {
+    // The facade follows links before the door so the record carries
+    // the resolved path, and that follow used to run unbound: a link
+    // inside hidden space reached the door already resolved to its
+    // visible target, so the door's check of the typed path never saw
+    // the hide. The follow now runs as the session and only from a
+    // path it can see, so the link reads as absent.
+    const ws = await hiding()
+    const host = ws.createSession('host', { profile: parseSessionProfile({}) })
+    const door = ws.fs.forSession(host.sessionId)
+    await door.writeFile('/data/pub.txt', 'pub\n')
+    await door.mkdir('/data/vault')
+    await door.symlink('/data/vault/lk', '/data/pub.txt')
+    expect(await door.readFileText('/data/vault/lk')).toBe('pub\n')
+    await expect(ws.fs.readFile('/data/vault/lk')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(ws.fs.writeFile('/data/vault/lk', 'x\n')).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+    expect(await door.readFileText('/data/pub.txt')).toBe('pub\n')
   })
 
   it('a write below the mode reads Read-only file system', async () => {

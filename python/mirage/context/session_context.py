@@ -95,6 +95,29 @@ def get_current_session_for(owner: "SessionManager") -> "Session | None":
     return binding.session
 
 
+def get_current_session_unless_foreign(
+        owner: "SessionManager") -> "Session | None":
+    """The bound session, unless another owner published it.
+
+    An op door keeps the session it is reached under, so it never
+    widens a caller's view: a command's runtime, a kernel mount and a
+    guest runtime all bind before they call. A binding that names an
+    owner other than ``owner`` is another workspace's, and its session
+    describes that workspace's hides and grants, so the door must not
+    adopt it. A binding that names no owner is a deliberate placement
+    (a kernel mount, a guest runtime, an embedder binding by hand) and
+    is kept.
+
+    Args:
+        owner (SessionManager): the asking workspace's session manager.
+    """
+    binding = _current_session.get()
+    if binding is None or (binding.owner is not None
+                           and binding.owner is not owner):
+        return None
+    return binding.session
+
+
 def _norm_prefix(mount_prefix: str) -> str:
     stripped = mount_prefix.strip("/")
     return "/" + stripped if stripped else "/"

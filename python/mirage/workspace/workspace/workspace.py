@@ -26,7 +26,8 @@ from mirage.cache.file.mixin import FileCacheMixin
 from mirage.cache.index import IndexConfig
 from mirage.commands.cli import CLISpec
 from mirage.commands.cli.specs import cli_spec_for
-from mirage.context import (get_current_session, get_current_session_for,
+from mirage.context import (get_current_session_for,
+                            get_current_session_unless_foreign,
                             reset_current_session, set_current_session)
 from mirage.io import IOResult
 from mirage.io.types import ByteSource
@@ -1022,7 +1023,7 @@ class Workspace:
         apply_profile(session, compiled)
         return session
 
-    def session(
+    async def session(
         self,
         session_id: str,
         mounts: Mapping[str, MountMode | str] | None = None,
@@ -1037,7 +1038,10 @@ class Workspace:
         it exists. A profile, mounts or permissions for an existing
         session are refused rather than ignored: a profile is set once,
         at creation, and a handle must not look like it narrowed a
-        session it merely adopted.
+        session it merely adopted. The session store is hydrated
+        first, so a session a previous process persisted is adopted
+        with its stored profile rather than recreated over it; that is
+        why this is a coroutine where ``create_session`` is not.
 
         Args:
             session_id (str): the session's id.
@@ -1052,6 +1056,7 @@ class Workspace:
             ValueError: the session exists and a profile, mounts or
                 permissions were given.
         """
+        await self.ensure_sessions_loaded()
         if any(s.session_id == session_id for s in self._session_mgr.list()):
             if (mounts is not None or profile is not None
                     or permissions is not None):
@@ -1206,16 +1211,19 @@ class Workspace:
         A session already bound in this context is kept: a command's
         runtime reaching ``ws.fs`` stays in its own session, and a
         kernel mount serving one session keeps that one, so the door
-        never widens a caller's view. Otherwise the named session is
-        bound the way ``execute`` binds it, so the profile's hides,
-        modes and grants judge the op.
+        never widens a caller's view. A session another workspace
+        bound is the exception: its hides and grants describe that
+        workspace, so an embedder callback reaching this door from
+        inside the other's line runs as the session it asked for,
+        judged by this workspace's own profile. Otherwise the named
+        session is bound the way ``execute`` binds it.
 
         Args:
             session_id (str | None): the session to run as when none is
                 bound; None for the default session as it is now.
             run (Callable[[], Awaitable[Any]]): the door call.
         """
-        if get_current_session() is not None:
+        if get_current_session_unless_foreign(self._session_mgr) is not None:
             return await run()
         await self._session_mgr.ensure_loaded()
         if session_id is None:

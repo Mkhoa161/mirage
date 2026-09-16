@@ -144,10 +144,10 @@ async def main() -> None:
     for seed in SEED:
         await ws.execute(seed)
 
-    reviewer = ws.session("reviewer",
-                          profile="reviewer",
-                          mounts={"/repo": "read"})
-    editor = ws.session("editor", profile="editor")
+    reviewer = await ws.session("reviewer",
+                                profile="reviewer",
+                                mounts={"/repo": "read"})
+    editor = await ws.session("editor", profile="editor")
 
     await line("reviewer", reviewer, "cat /repo/README.md",
                "the shell door, as the reviewer")
@@ -172,11 +172,11 @@ async def main() -> None:
     await line("editor", editor, "echo x > /repo/new.txt",
                "and the same grant")
 
-    again = ws.session("reviewer")
+    again = await ws.session("reviewer")
     show("reviewer", "session", "ws.session('reviewer')", again.session_id,
          "an existing session is adopted as is")
     try:
-        ws.session("reviewer", profile="editor")
+        await ws.session("reviewer", profile="editor")
     except ValueError as exc:
         show("reviewer", "session", "ws.session('reviewer', profile=...)",
              f"refused: {exc}", "a profile is set once, at creation")

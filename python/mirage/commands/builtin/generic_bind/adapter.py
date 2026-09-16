@@ -706,10 +706,12 @@ class CommandIO:
 
 
 _GUARD_ENOENT_SLOTS = ("read_bytes", "read_stream", "stat", "read_range",
-                       "set_attrs", "unlink", "rm_r", "truncate", "copy",
-                       "find")
+                       "set_attrs", "unlink", "rm_r", "copy", "find")
 
-_GUARD_EACCES_SLOTS = ("write", "mkdir", "append", "create")
+# The slots that create the path they name, truncate among them: a
+# missing file is created at the requested length, the way
+# truncate(1) does without -c.
+_GUARD_EACCES_SLOTS = ("write", "mkdir", "append", "create", "truncate")
 
 
 def with_hidden_guard(ops: CommandIO) -> CommandIO:

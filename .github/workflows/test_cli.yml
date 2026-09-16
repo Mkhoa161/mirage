@@ -308,6 +308,32 @@ jobs:
               fail=1
             fi
           }
+          # A fixed sleep raced the daemon on a slow runner: curl then
+          # exited 7 on a port nobody was listening on yet. Wait for the
+          # health route to answer, and for the previous daemon to let
+          # go of the port before the next one claims it.
+          wait_ready() {
+            local log="$1"
+            for _ in $(seq 1 60); do
+              if curl -s -o /dev/null http://127.0.0.1:8765/v1/health; then
+                return 0
+              fi
+              sleep 0.5
+            done
+            echo "FAIL: no daemon answered on 8765 within 30s"
+            cat "$log" 2>/dev/null || true
+            return 1
+          }
+          wait_down() {
+            for _ in $(seq 1 60); do
+              if ! curl -s -o /dev/null http://127.0.0.1:8765/v1/health; then
+                return 0
+              fi
+              sleep 0.5
+            done
+            echo "FAIL: a daemon still answers on 8765 after 30s"
+            return 1
+          }
 
           echo
           echo "===== auth: mode=local (daemon spawned by CLI, token auto-minted) ====="
@@ -329,7 +355,7 @@ jobs:
 
           $MIRAGE workspace delete smoke
           $MIRAGE daemon stop || true
-          sleep 2
+          wait_down
 
           echo
           echo "===== auth: mode=token (operator PAT) ====="
@@ -337,7 +363,7 @@ jobs:
             .venv/bin/python -m uvicorn mirage.server.daemon:app \
             --host 127.0.0.1 --port 8765 --log-level warning >/tmp/auth-token.log 2>&1 &
           TOKEN_PID=$!
-          sleep 2
+          wait_ready /tmp/auth-token.log
           curl_check "correct PAT => 200" 200 \
             -H "Authorization: Bearer operator-pat-xyz" http://127.0.0.1:8765/v1/workspaces
           curl_check "wrong PAT => 401" 401 \
@@ -345,7 +371,7 @@ jobs:
           curl_check "no header => 401" 401 http://127.0.0.1:8765/v1/workspaces
           curl_check "/v1/health bypass => 200" 200 http://127.0.0.1:8765/v1/health
           kill $TOKEN_PID 2>/dev/null || true
-          sleep 2
+          wait_down
 
           echo
           echo "===== auth: mode=jwt (RS256, external issuer) ====="
@@ -377,7 +403,7 @@ jobs:
             .venv/bin/python -m uvicorn mirage.server.daemon:app \
             --host 127.0.0.1 --port 8765 --log-level warning >/tmp/auth-jwt.log 2>&1 &
           JWT_PID=$!
-          sleep 2
+          wait_ready /tmp/auth-jwt.log
           GOOD=$(cat /tmp/jwt-test/good.jwt)
           EXPIRED=$(cat /tmp/jwt-test/expired.jwt)
           curl_check "valid signed JWT => 200" 200 \
@@ -590,6 +616,32 @@ jobs:
               fail=1
             fi
           }
+          # A fixed sleep raced the daemon on a slow runner: curl then
+          # exited 7 on a port nobody was listening on yet. Wait for the
+          # health route to answer, and for the previous daemon to let
+          # go of the port before the next one claims it.
+          wait_ready() {
+            local log="$1"
+            for _ in $(seq 1 60); do
+              if curl -s -o /dev/null http://127.0.0.1:8765/v1/health; then
+                return 0
+              fi
+              sleep 0.5
+            done
+            echo "FAIL: no daemon answered on 8765 within 30s"
+            cat "$log" 2>/dev/null || true
+            return 1
+          }
+          wait_down() {
+            for _ in $(seq 1 60); do
+              if ! curl -s -o /dev/null http://127.0.0.1:8765/v1/health; then
+                return 0
+              fi
+              sleep 0.5
+            done
+            echo "FAIL: a daemon still answers on 8765 after 30s"
+            return 1
+          }
 
           echo
           echo "===== auth: mode=local (TS daemon spawned by CLI, token auto-minted) ====="
@@ -611,14 +663,14 @@ jobs:
 
           $MIRAGE workspace delete smoke
           $MIRAGE daemon stop || true
-          sleep 2
+          wait_down
 
           echo
           echo "===== auth: mode=token (TS daemon, operator PAT) ====="
           MIRAGE_AUTH_MODE=token MIRAGE_AUTH_TOKEN=operator-pat-xyz \
             node packages/server/dist/bin/daemon.js >/tmp/auth-token-ts.log 2>&1 &
           TOKEN_PID=$!
-          sleep 2
+          wait_ready /tmp/auth-token-ts.log
           curl_check "correct PAT => 200" 200 \
             -H "Authorization: Bearer operator-pat-xyz" http://127.0.0.1:8765/v1/workspaces
           curl_check "wrong PAT => 401" 401 \
@@ -626,7 +678,7 @@ jobs:
           curl_check "no header => 401" 401 http://127.0.0.1:8765/v1/workspaces
           curl_check "/v1/health bypass => 200" 200 http://127.0.0.1:8765/v1/health
           kill $TOKEN_PID 2>/dev/null || true
-          sleep 2
+          wait_down
 
           echo
           echo "===== auth: mode=jwt (TS daemon, RS256, external issuer) ====="
@@ -652,7 +704,7 @@ jobs:
             MIRAGE_JWT_ALG=RS256 \
             node packages/server/dist/bin/daemon.js >/tmp/auth-jwt-ts.log 2>&1 &
           JWT_PID=$!
-          sleep 2
+          wait_ready /tmp/auth-jwt-ts.log
           GOOD=$(cat /tmp/jwt-test-ts/good.jwt)
           EXPIRED=$(cat /tmp/jwt-test-ts/expired.jwt)
           curl_check "valid signed JWT => 200" 200 \

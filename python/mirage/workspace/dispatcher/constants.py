@@ -52,8 +52,9 @@ LINK_ENTRY_OPS = frozenset({"unlink", "rename", "stat"})
 # the session cannot write), ENOENT when that directory is hidden too,
 # the same answer every read gives for it. Every other op on a hidden
 # path answers ENOENT, the no-name-leak rule.
-HIDDEN_CREATE_OPS = frozenset(
-    {"write", "write_bytes", "append", "create", "mkdir", "symlink"})
+HIDDEN_CREATE_OPS = frozenset({
+    "write", "write_bytes", "append", "create", "truncate", "mkdir", "symlink"
+})
 
 # The attribute fields a setattr op can carry, in one place so the
 # requested/residual split and the overlay write read the same names.

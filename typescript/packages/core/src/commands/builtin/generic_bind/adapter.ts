@@ -418,7 +418,9 @@ export function withHiddenGuard<A extends Accessor = Accessor>(ops: CommandIO<A>
   const tr = ops.truncate
   if (tr !== undefined) {
     guarded.truncate = (accessor, path, length) => {
-      refuseHidden(path, false)
+      // A create: a missing file is created at the requested length,
+      // the way truncate(1) does without -c.
+      refuseHidden(path, true)
       return tr(accessor, path, length)
     }
   }

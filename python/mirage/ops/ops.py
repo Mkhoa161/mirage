@@ -14,11 +14,9 @@
 
 import asyncio
 import errno
-from collections.abc import Awaitable, Callable
-from functools import partial
 from typing import Any
 
-from mirage.context import get_current_session
+from mirage.context import get_current_session, path_allowed
 from mirage.io import OpReport
 from mirage.observe import OpRecord
 from mirage.observe.context import OpTimer, finish_record, start_op
@@ -28,20 +26,6 @@ from mirage.runtime.types import DispatchFn
 from mirage.types import FileStat, FileType, MountMode, PathSpec
 from mirage.utils.errors import NoMountError
 from mirage.utils.path import owner_prefix
-
-
-async def _run_as_seen(run: Callable[[], Awaitable[Any]],
-                       seen: list[str]) -> Any:
-    """Run the door call and note the session it ran as.
-
-    Args:
-        run (Callable[[], Awaitable[Any]]): the door call.
-        seen (list[str]): receives the bound session's id, if any.
-    """
-    sess = get_current_session()
-    if sess is not None:
-        seen.append(sess.session_id)
-    return await run()
 
 
 class Ops:
@@ -196,7 +180,10 @@ class Ops:
     def unmount(self, prefix: str) -> None:
         stripped = prefix.strip("/")
         norm = ("/" + stripped + "/" if stripped else "/")
-        self._mounts = [m for m in self._mounts if m.prefix != norm]
+        # In place, for the same reason ``set_mounts`` is: a facade
+        # derived by ``for_session`` shares this list, and a retained
+        # one must stop reporting a mount the workspace dropped.
+        self._mounts[:] = [m for m in self._mounts if m.prefix != norm]
 
     def _record(self, op: str, path: str, source: str, nbytes: int,
                 timer: OpTimer, session: str) -> None:
@@ -245,10 +232,14 @@ class Ops:
         structure, invalidation); the facade's own share is the record.
         The path is link-followed here first so the record carries the
         resolved path; the door's second follow of an already-resolved
-        path is a no-op. ``nofollow`` is the caller's
-        AT_SYMLINK_NOFOLLOW and suppresses both follows, so an op meant
-        for a link entry itself (``chmod -h``, a guest's ``lchown``)
-        still records the link's own path.
+        path is a no-op. That follow runs inside the session binding
+        and only from a path the session can see: a link the session
+        cannot see stays the typed path, so the door refuses it as
+        absent instead of serving the visible target it points at.
+        ``nofollow`` is the caller's AT_SYMLINK_NOFOLLOW and suppresses
+        both follows, so an op meant for a link entry itself
+        (``chmod -h``, a guest's ``lchown``) still records the link's
+        own path.
 
         Whether the op is a write is the door's call too: it reads that
         off the op name, so there is nothing for a caller here to
@@ -260,19 +251,23 @@ class Ops:
             **kwargs: op arguments, by the op function's names.
         """
         timer = start_op()
-        if (self._links is not None and op not in NO_FOLLOW_OPS
-                and not kwargs.get("nofollow")):
-            path = self._links.follow(path)
-        owner = self._owner(path)
+        follow = (self._links is not None and op not in NO_FOLLOW_OPS
+                  and not kwargs.get("nofollow"))
         report = OpReport()
         seen: list[str] = []
-        run = partial(
-            _run_as_seen,
-            partial(self._dispatch,
-                    op,
-                    PathSpec.from_str_path(path),
-                    report=report,
-                    **kwargs), seen)
+        resolved = [path]
+
+        async def run() -> tuple[Any, Any]:
+            sess = get_current_session()
+            if sess is not None:
+                seen.append(sess.session_id)
+            if follow and self._links is not None and path_allowed(path):
+                resolved[0] = self._links.follow(path)
+            return await self._dispatch(op,
+                                        PathSpec.from_str_path(resolved[0]),
+                                        report=report,
+                                        **kwargs)
+
         try:
             result, _ = await (run() if self._bind is None else self._bind(
                 self._session_id, run))
@@ -283,13 +278,17 @@ class Ops:
             # the error propagates. The door stamps the report at the
             # moment of completion, so even a foreign error the door
             # never defined leaves the transfer on the books.
+            owner = self._owner(resolved[0])
             if report.completed and owner is not None:
-                self._record_op(op, path, owner, report.source, report.bytes,
-                                None, kwargs, timer, self._session_for(seen))
+                self._record_op(op, resolved[0], owner, report.source,
+                                report.bytes, None, kwargs, timer,
+                                self._session_for(seen))
             raise
+        owner = self._owner(resolved[0])
         if owner is not None:
-            self._record_op(op, path, owner, report.source, report.bytes,
-                            result, kwargs, timer, self._session_for(seen))
+            self._record_op(op, resolved[0], owner, report.source,
+                            report.bytes, result, kwargs, timer,
+                            self._session_for(seen))
         return result
 
     def _session_for(self, seen: list[str]) -> str:

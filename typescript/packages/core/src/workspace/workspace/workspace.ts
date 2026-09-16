@@ -66,7 +66,7 @@ import { ContextScope } from '../../utils/context_scope.ts'
 import { captureRecordingContext } from '../../observe/context.ts'
 import {
   captureSessionContext,
-  getCurrentSession,
+  getCurrentSessionUnlessForeign,
   runWithSession,
 } from '../../context/session_context.ts'
 import { namespaceViewOf } from '../executor/command/run.ts'
@@ -744,12 +744,16 @@ export class Workspace {
    * same call as `createSession`), and adopts it as is when it exists.
    * Options for an existing session are refused rather than ignored: a
    * profile is set once, at creation, and a handle must not look like
-   * it narrowed a session it merely adopted.
+   * it narrowed a session it merely adopted. The session store is
+   * hydrated first, so a session a previous process persisted is
+   * adopted with its stored profile rather than recreated over it; that
+   * is why this is async where `createSession` is not.
    */
-  session(
+  async session(
     sessionId: string,
     options: Parameters<Workspace['createSession']>[1] = {},
-  ): SessionHandle {
+  ): Promise<SessionHandle> {
+    await this.ensureSessionsLoaded()
     if (this.sessionManager.list().some((s) => s.sessionId === sessionId)) {
       if (options.mounts != null || options.profile != null || options.permissions != null) {
         throw new Error(`session '${sessionId}' exists; its profile was set when it was created`)
@@ -1043,12 +1047,15 @@ export class Workspace {
    * A session already bound in this context is kept: a command's
    * runtime reaching `ws.fs` stays in its own session, and a kernel
    * mount serving one session keeps that one, so the door never widens
-   * a caller's view. Otherwise the named session is bound the way
-   * `execute` binds it, so the profile's hides, modes and grants judge
-   * the op.
+   * a caller's view. A session another workspace bound is the
+   * exception: its hides and grants describe that workspace, so an
+   * embedder callback reaching this door from inside the other's line
+   * runs as the session it asked for, judged by this workspace's own
+   * profile. Otherwise the named session is bound the way `execute`
+   * binds it.
    */
   private async bindSession<T>(sessionId: string | null, run: () => Promise<T>): Promise<T> {
-    if (getCurrentSession() !== null) return run()
+    if (getCurrentSessionUnlessForeign(this.sessionManager) !== null) return run()
     await this.sessionManager.ensureLoaded()
     const session = this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
     return runWithSession(session, run, this.sessionManager)

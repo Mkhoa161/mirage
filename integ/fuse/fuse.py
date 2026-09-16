@@ -19,6 +19,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
+from typing import IO
 
 from mirage import Mount, MountBackend, MountMode, Workspace
 from mirage.fuse.mount import mount_background
@@ -191,6 +193,91 @@ def run_policy_probe(result: dict[str, ProbeValue]) -> None:
             result["policy_redact_eacces"] = sys.platform == "win32"
 
 
+def _absent(attempt: Callable[[], IO[bytes]]) -> bool:
+    """Whether opening through the kernel answers ENOENT.
+
+    Args:
+        attempt (Callable[[], IO[bytes]]): the open to try.
+    """
+    try:
+        with attempt():
+            return False
+    except FileNotFoundError:
+        return True
+
+
+def run_session_probe(result: dict[str, ProbeValue]) -> None:
+    """Record that a session-bound kernel mount answers as its shell does.
+
+    The session's profile hides /data/vault and caps /data at read.
+    Through the kernel the hidden directory is absent: a read under
+    it and a create under it both answer ENOENT and the listing omits
+    it; the cap refuses a write and leaves the file as it was. The
+    shell door run as the same session gives every answer the same
+    way, and the host's own door still reads the hidden file, so the
+    hide is the session's and not the mount's.
+
+    Args:
+        result (dict[str, ProbeValue]): the probe result to extend.
+    """
+    res = RAMResource()
+    res._store.dirs.add("/")
+    res._store.dirs.add("/vault")
+    res._store.files["/pub.txt"] = b"pub\n"
+    res._store.files["/vault/secret.txt"] = b"secret\n"
+    ws = Workspace({"/data": Mount(res, mode=MountMode.WRITE)})
+    session = ws.create_session("agent",
+                                profile={
+                                    "paths": {
+                                        "hide": ["/data/vault"]
+                                    },
+                                    "mounts": {
+                                        "/data": "read"
+                                    },
+                                })
+    # The shell door first, before the mount goes live, on the same
+    # loop discipline the link probe keeps.
+    hidden = asyncio.run(
+        ws.execute("cat /data/vault/secret.txt", session_id="agent"))
+    result["session_shell_hidden_exit"] = hidden.exit_code
+    listing = asyncio.run(ws.execute("ls /data", session_id="agent"))
+    result["session_shell_listing"] = (listing.stdout or b"").decode().strip()
+    capped = asyncio.run(
+        ws.execute("echo x > /data/pub.txt", session_id="agent"))
+    result["session_shell_write_refused"] = capped.exit_code != 0
+    result["session_host_reads_hidden"] = asyncio.run(
+        ws.fs.read("/data/vault/secret.txt")).decode().strip()
+    mountpoint = tempfile.mkdtemp(prefix="mirage-fuse-session-")
+    mount_background(ws.fs, mountpoint, session=session)
+    data = f"{mountpoint}/data"
+    try:
+        with open(f"{data}/pub.txt", "rb") as fh:
+            result["session_kernel_visible_read"] = fh.read().decode().strip()
+        result["session_kernel_listing"] = ",".join(sorted(os.listdir(data)))
+        result["session_kernel_hidden_absent"] = _absent(
+            lambda: open(f"{data}/vault/secret.txt", "rb"))
+        result["session_kernel_create_under_hidden_absent"] = _absent(
+            lambda: open(f"{data}/vault/new.txt", "wb"))
+        # The cap's refusal is an errno the adapter picks; what is
+        # pinned is that the write fails and the body survives.
+        try:
+            with open(f"{data}/pub.txt", "wb") as fh:
+                fh.write(b"x\n")
+            refused = False
+        except OSError:
+            refused = True
+        with open(f"{data}/pub.txt", "rb") as fh:
+            result["session_kernel_write_refused"] = (refused and fh.read()
+                                                      == b"pub\n")
+    finally:
+        if sys.platform == "darwin":
+            subprocess.run(["diskutil", "unmount", "force", mountpoint],
+                           capture_output=True)
+        elif sys.platform != "win32":
+            subprocess.run(["fusermount", "-u", mountpoint],
+                           capture_output=True)
+
+
 def run_sizeless_probe(result: dict[str, ProbeValue]) -> None:
     """Record the size-unknown semantics into the shared result.
 
@@ -291,6 +378,7 @@ def main() -> None:
     run_sizeless_probe(result)
     run_policy_probe(result)
     run_link_probe(result)
+    run_session_probe(result)
     print(json.dumps(result))
 
 
