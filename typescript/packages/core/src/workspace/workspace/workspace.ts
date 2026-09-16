@@ -1062,8 +1062,7 @@ export class Workspace {
    * command's runtime reaching it relies on.
    */
   private async bindSession<T>(sessionId: string | null, run: () => Promise<T>): Promise<T> {
-    const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
-    if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return run()
+    if (this.ambientFor(sessionId) !== null) return run()
     // The full hydration path, discovery record first: a workspace
     // attached to a shared store adopts the persisted default session's
     // id there, and binding before that would run as a freshly minted,
@@ -1071,6 +1070,32 @@ export class Workspace {
     await this.ensureSessionsLoaded()
     const session = this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
     return runWithSession(session, run, this.sessionManager)
+  }
+
+  /** The ambient session the op door keeps for a facade, or null. */
+  private ambientFor(sessionId: string | null): Session | null {
+    const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
+    if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return ambient
+    return null
+  }
+
+  /**
+   * The session the op door would run a facade's op as, from here.
+   *
+   * The rule is `bindSession`'s, so an adapter that reads namespace
+   * state outside the door (a link table consulted before a dispatch)
+   * judges it as the session the dispatch will then run as, ambient
+   * one included, rather than as the one it was configured with.
+   * Sessions must already be hydrated: this is a lookup, not a bind.
+   *
+   * @param sessionId the facade's session, or null for the default.
+   * @returns the session an op through that facade runs as.
+   */
+  sessionForOps(sessionId: string | null): Session {
+    return (
+      this.ambientFor(sessionId) ??
+      this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
+    )
   }
 
   async dispatch(

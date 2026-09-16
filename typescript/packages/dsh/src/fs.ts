@@ -229,12 +229,17 @@ export class MirageFileSystem extends FileSystem {
     return this.fsOps.links
   }
 
-  /** The session the op door judges this adapter's ops as. */
+  /**
+   * The session the op door judges this adapter's ops as, asked of the
+   * workspace so it is the one a dispatch from this context will bind:
+   * the configured session, unless an ambient one of this workspace is
+   * kept (a callback reaching `ctx.fs` from inside its `execute`).
+   */
   private session(): Session {
     if (this.host === null) {
       throw new Error('mirage: filesystem used before the workspace is ready')
     }
-    return this.host.getSession(this.sessionId ?? this.host.defaultSessionId)
+    return this.host.sessionForOps(this.sessionId ?? null)
   }
 
   /**

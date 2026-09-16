@@ -19,6 +19,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type { FsErrorCode } from '@deepseek-ai/dsh-fs'
+import { runWithSession } from '@struktoai/mirage-core/context/session_context'
 import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { RAMWorkspaceStateStore } from '@struktoai/mirage-core/workspace/store/ram'
@@ -685,6 +686,38 @@ describe('the session the adapter reads as', () => {
     expect(await fs.lstat('/data/hidden-lk')).toBeUndefined()
     expect(String((await fs.resolve('/data/hidden-lk')).targetKey)).toBe('/data/hidden-lk')
     expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top')
+  })
+
+  it('reads links as the ambient session the door will keep', async () => {
+    // A callback reaching ctx.fs from inside `ws.execute` dispatches as
+    // that line's session, so the link table is judged as it too: a
+    // link the ambient session hides stays typed for the door to refuse,
+    // even though the adapter's own configured session could see it.
+    const ws = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] },
+      {
+        profiles: {
+          agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }, 'profile agent'),
+        },
+      },
+    )
+    workspaces.push(ws)
+    await ws.fs.mkdir('/data/vault')
+    await ws.fs.writeFile('/data/public.txt', 'pub')
+    await ws.fs.symlink('/data/vault/lk', '/data/public.txt')
+    const agent = ws.createSession('agent', { profile: 'agent' })
+    const fs = await adapterOn(ws, {})
+    expect(String((await fs.resolve('/data/vault/lk')).targetKey)).toBe('/data/public.txt')
+    const asAgent = await runWithSession(
+      agent,
+      async () => ({
+        key: String((await fs.resolve('/data/vault/lk')).targetKey),
+        names: (await fs.listDir(await fs.resolve('/data'))).map((e) => e.name),
+        stat: await fs.stat(await fs.resolve('/data/vault/lk')),
+      }),
+      ws.sessionManager,
+    )
+    expect(asAgent).toEqual({ key: '/data/vault/lk', names: ['public.txt'], stat: undefined })
   })
 
   it('probes a caller cwd as the session, not as the default', async () => {
