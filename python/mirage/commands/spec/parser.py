@@ -14,10 +14,16 @@
 
 from collections.abc import Mapping
 
+from mirage.commands.spec.argmatch import (ArgmatchChoices, ArgmatchMatch,
+                                           ArgmatchRefusal, ArgmatchResult,
+                                           argmatch, value_classes)
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
-from mirage.commands.spec.constants import (ARG_PLACEHOLDER, FLOAT_VALUE,
-                                            INT_VALUE, NUMERIC_SHORT,
+from mirage.commands.spec.constants import (ARG_PLACEHOLDER,
+                                            EXACT_CHOICE_OPTIONS, FLOAT_VALUE,
+                                            INT_VALUE, NO_LONG_OPTIONS,
+                                            NUMERIC_SHORT,
+                                            SOLE_ARGUMENT_LONG_OPTIONS,
                                             flag_kwarg_name)
 from mirage.commands.spec.oldstyle import expand_old_style
 from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
@@ -160,10 +166,42 @@ def _match_mixed_cluster(
     return None
 
 
+def _match_choice(value: str, choices: ArgmatchChoices,
+                  exact_only: bool) -> ArgmatchResult:
+    """One option value against its declared candidate table.
+
+    Nearly every spec-declared ``choices`` set is a gnulib ARGMATCH
+    table, so the value goes through :func:`argmatch` and an unambiguous
+    prefix resolves. The exceptions are the options in
+    EXACT_CHOICE_OPTIONS, whose program compares the whole word itself:
+    only an exact candidate matches, and the ambiguous wording is
+    unreachable for them because a prefix is never a match to be
+    ambiguous between.
+
+    Args:
+        value (str): the value as typed, never pre-escaped.
+        choices (ArgmatchChoices): the candidates in declaration order.
+        exact_only (bool): the option is hand-parsed by its program, so
+            prefix matching does not apply to it.
+
+    Returns:
+        ArgmatchResult: ``ArgmatchMatch`` carrying the canonical word,
+            or ``ArgmatchRefusal`` carrying the wording GNU picks.
+    """
+    if not exact_only:
+        return argmatch(value, choices)
+    for group in value_classes(choices):
+        if value in group:
+            return ArgmatchMatch(group[0])
+    return ArgmatchRefusal("invalid")
+
+
 def parse_command(
     spec: CommandSpec,
     argv: list[str],
     cwd: str,
+    cmd_name: str = "",
+    installed_cli: bool = False,
     env: Mapping[str, str] | None = None,
 ) -> ParsedArgs:
     cs = compile_spec(spec)
@@ -228,11 +266,48 @@ def parse_command(
     ambiguous_options: list[tuple[str, tuple[str, ...]]] = []
     option_error_kinds: list[str] = []
     needs_value_options: list[str] = []
-    # Free-text commands (echo/python/bash-style TEXT rest) keep unknown
-    # dash tokens verbatim; elsewhere they are dropped with a warning so a
-    # stray flag never corrupts pattern/path classification.
-    lenient_dash_operands = (cs.rest_kind is not None
-                             and cs.rest_kind != "path" and not cs.remainder)
+    # Who owns a dashed word the spec does not declare. The two tiers
+    # answer differently, and only the caller knows which tier it is in,
+    # which is what ``installed_cli`` states.
+    if installed_cli:
+        # An installed CLI is not a GNU tool and mirage is not its only
+        # parser: the node declares the flags mirage enforces and the
+        # program owns the rest, so an undeclared dash word lands in a
+        # textual rest slot when the node has one -- git's `log -p`,
+        # which git itself refuses in git's own words and exit
+        # (`fatal: unrecognized argument: -p`), and a script root whose
+        # whole line is forwarded -- and is refused here when the node
+        # declares no slot for it (`pager --frobnicate`). The rest kind
+        # answers that question for this tier, where it cannot answer it
+        # for a GNU command: a CLI node's textual rest IS the
+        # pass-through slot, while basename's is a list of names.
+        lenient_dash_operands = (cs.rest_kind is not None
+                                 and cs.rest_kind != "path"
+                                 and not cs.remainder)
+        no_long_option_parser = lenient_dash_operands
+        outside_sole_argument = False
+    else:
+        # getopt_long, with exactly two exceptions, both named rather
+        # than derived from the spec because nothing in a declaration
+        # tells them apart: see NO_LONG_OPTIONS and
+        # SOLE_ARGUMENT_LONG_OPTIONS for the measurements and for why
+        # #1107's "declares no long options" predicate cannot work. A
+        # program with no long-option parser prints a dash word it does
+        # not know instead of refusing it, and never expands an
+        # abbreviation.
+        no_long_option_parser = cmd_name in NO_LONG_OPTIONS
+        # gnulib's parse_long_options reads argv[1] only when it is the
+        # whole line, so outside that one-argument window the program
+        # has no long options AT ALL and even an exact `--help` is an
+        # operand. Counted over filtered_argv because `--cache` is
+        # mirage's own out-of-band word and not part of the command line
+        # being emulated.
+        outside_sole_argument = (cmd_name in SOLE_ARGUMENT_LONG_OPTIONS
+                                 and len(filtered_argv) != 1)
+        # A dash-leading word this program answers by printing it as an
+        # operand rather than by refusing it.
+        lenient_dash_operands = (no_long_option_parser
+                                 or cmd_name in SOLE_ARGUMENT_LONG_OPTIONS)
     i = 0
     end_of_flags = False
 
@@ -252,15 +327,27 @@ def parse_command(
             continue
 
         if tok.startswith("--"):
+            if outside_sole_argument:
+                # Outside gnulib's one-argument window the program has no
+                # long options to recognize, so the word is an operand
+                # whether or not it is declared: `expr --help x` is a
+                # syntax error on `x`, not a help request.
+                raw_args.append(tok)
+                raw_indices.append(orig_indices[i])
+                raw_bases.append(base)
+                i += 1
+                continue
             # getopt_long: an exact spelling always wins; otherwise an
             # unambiguous prefix expands to its declared spelling
             # (grep --rec) and an ambiguous one is refused with every
-            # possibility. Free-text commands keep exact-only matching:
-            # their unknown dash tokens are operands, not typos.
+            # possibility. A program with no long-option parser keeps
+            # exact-only matching: its unknown dash tokens are operands,
+            # not typos. expr inside its window is a real getopt_long
+            # call, so `expr --h` does resolve to --help.
             eq = tok.find("=")
             typed = tok if eq == -1 else tok[:eq]
             spelling = typed
-            if typed not in cs.dest and not lenient_dash_operands:
+            if typed not in cs.dest and not no_long_option_parser:
                 expansions = expand_long(cs, typed)
                 if len(expansions) == 1:
                     spelling = expansions[0]
@@ -507,15 +594,34 @@ def parse_command(
             if not FLOAT_VALUE.match(part):
                 invalid_float_options.append((dest_name, part))
 
+    # A declared choices set is a gnulib ARGMATCH table, so an
+    # unambiguous prefix of one candidate resolves to it and the bag is
+    # rewritten to the canonical word: the command reads `none`, never
+    # the `non` the line typed. The other two outcomes are reported, one
+    # list each, because GNU words them differently ('ambiguous
+    # argument' vs 'invalid argument') off one shared candidate block.
     invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = []
+    ambiguous_value_options: list[tuple[str, str, tuple[str, ...]]] = []
     for dest_name, allowed in cs.choices_by_dest.items():
         value = flags.get(dest_name)
         # The bare boolean form of an optional-value flag is exempt.
         candidates = value if isinstance(
             value, list) else ([value] if isinstance(value, str) else [])
+        exact_only = dest_name in EXACT_CHOICE_OPTIONS
+        canonical: list[str] = []
         for part in candidates:
-            if part not in allowed:
+            match = _match_choice(part, allowed, exact_only)
+            if isinstance(match, ArgmatchMatch):
+                canonical.append(match.word)
+                continue
+            canonical.append(part)
+            if match.kind == "ambiguous":
+                ambiguous_value_options.append((dest_name, part, allowed))
+            else:
                 invalid_value_options.append((dest_name, part, allowed))
+        if canonical and canonical != candidates:
+            flags[dest_name] = (canonical
+                                if isinstance(value, list) else canonical[0])
 
     missing_required_options = [
         dest_name for dest_name in cs.required_dests if dest_name not in flags
@@ -631,6 +737,7 @@ def parse_command(
         option_error_kinds=option_error_kinds,
         needs_value_options=needs_value_options,
         invalid_value_options=invalid_value_options,
+        ambiguous_value_options=ambiguous_value_options,
         invalid_int_options=invalid_int_options,
         invalid_float_options=invalid_float_options,
         missing_required_options=missing_required_options,

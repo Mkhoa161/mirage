@@ -13,13 +13,17 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { resolvePath } from '../../utils/path.ts'
+import { type ArgmatchChoices, type ArgmatchResult, argmatch, valueClasses } from './argmatch.ts'
 import { type CompiledSpec, compileSpec, expandLong } from './compile.ts'
 import {
   ARG_PLACEHOLDER,
+  EXACT_CHOICE_OPTIONS,
   FLOAT_VALUE,
   flagKwargName,
   INT_VALUE,
+  NO_LONG_OPTIONS,
   NUMERIC_SHORT,
+  SOLE_ARGUMENT_LONG_OPTIONS,
 } from './constants.ts'
 import { expandOldStyle } from './oldstyle.ts'
 import {
@@ -131,10 +135,32 @@ function matchMixedCluster(tok: string, cs: CompiledSpec): MixedCluster | null {
   return null
 }
 
+/**
+ * One option value against its declared candidate table.
+ *
+ * Nearly every spec-declared `choices` set is a gnulib ARGMATCH table, so the
+ * value goes through `argmatch` and an unambiguous prefix resolves. The
+ * exceptions are the options in EXACT_CHOICE_OPTIONS, whose program compares
+ * the whole word itself: only an exact candidate matches, and the ambiguous
+ * wording is unreachable for them because a prefix is never a match to be
+ * ambiguous between.
+ *
+ * `_match_choice` in parser.py is the twin.
+ */
+function matchChoice(value: string, choices: ArgmatchChoices, exactOnly: boolean): ArgmatchResult {
+  if (!exactOnly) return argmatch(value, choices)
+  for (const group of valueClasses(choices)) {
+    if (group.includes(value)) return { matched: true, word: group[0] ?? value }
+  }
+  return { matched: false, kind: 'invalid' }
+}
+
 export function parseCommand(
   spec: CommandSpec,
   argv: string[],
   cwd: string,
+  cmdName = '',
+  installedCli = false,
   env?: Readonly<Record<string, string>>,
 ): ParsedArgs {
   const cs = compileSpec(spec)
@@ -208,10 +234,44 @@ export function parseCommand(
   const ambiguousOptions: [string, readonly string[]][] = []
   const optionErrorKinds: string[] = []
   const needsValueOptions: string[] = []
-  // Free-text commands (echo/python/bash-style TEXT rest) keep unknown dash
-  // tokens verbatim; elsewhere they are dropped with a warning so a stray
-  // flag never corrupts pattern/path classification.
-  const lenientDashOperands = cs.restKind !== null && cs.restKind !== 'path' && !cs.remainder
+  // Who owns a dashed word the spec does not declare. The two tiers answer
+  // differently, and only the caller knows which tier it is in, which is what
+  // `installedCli` states.
+  let noLongOptionParser: boolean
+  let outsideSoleArgument: boolean
+  let lenientDashOperands: boolean
+  if (installedCli) {
+    // An installed CLI is not a GNU tool and mirage is not its only parser:
+    // the node declares the flags mirage enforces and the program owns the
+    // rest, so an undeclared dash word lands in a textual rest slot when the
+    // node has one -- git's `log -p`, which git itself refuses in git's own
+    // words and exit (`fatal: unrecognized argument: -p`), and a script root
+    // whose whole line is forwarded -- and is refused here when the node
+    // declares no slot for it (`pager --frobnicate`). The rest kind answers
+    // that question for this tier, where it cannot answer it for a GNU
+    // command: a CLI node's textual rest IS the pass-through slot, while
+    // basename's is a list of names.
+    lenientDashOperands = cs.restKind !== null && cs.restKind !== 'path' && !cs.remainder
+    noLongOptionParser = lenientDashOperands
+    outsideSoleArgument = false
+  } else {
+    // getopt_long, with exactly two exceptions, both named rather than derived
+    // from the spec because nothing in a declaration tells them apart: see
+    // NO_LONG_OPTIONS and SOLE_ARGUMENT_LONG_OPTIONS for the measurements and
+    // for why #1107's "declares no long options" predicate cannot work. A
+    // program with no long-option parser prints a dash word it does not know
+    // instead of refusing it, and never expands an abbreviation.
+    noLongOptionParser = NO_LONG_OPTIONS.has(cmdName)
+    // gnulib's parse_long_options reads argv[1] only when it is the whole
+    // line, so outside that one-argument window the program has no long
+    // options AT ALL and even an exact `--help` is an operand. Counted over
+    // filteredArgv because `--cache` is mirage's own out-of-band word and not
+    // part of the command line being emulated.
+    outsideSoleArgument = SOLE_ARGUMENT_LONG_OPTIONS.has(cmdName) && filteredArgv.length !== 1
+    // A dash-leading word this program answers by printing it as an operand
+    // rather than by refusing it.
+    lenientDashOperands = noLongOptionParser || SOLE_ARGUMENT_LONG_OPTIONS.has(cmdName)
+  }
   i = 0
   let endOfFlags = false
 
@@ -246,15 +306,27 @@ export function parseCommand(
     }
 
     if (tok.startsWith('--')) {
+      if (outsideSoleArgument) {
+        // Outside gnulib's one-argument window the program has no long options
+        // to recognize, so the word is an operand whether or not it is
+        // declared: `expr --help x` is a syntax error on `x`, not a help
+        // request.
+        rawArgs.push(tok)
+        rawIndices.push(origIndices[i] ?? -1)
+        rawBases.push(base)
+        i += 1
+        continue
+      }
       // getopt_long: an exact spelling always wins; otherwise an
       // unambiguous prefix expands to its declared spelling (grep --rec)
-      // and an ambiguous one is refused with every possibility.
-      // Free-text commands keep exact-only matching: their unknown dash
-      // tokens are operands, not typos.
+      // and an ambiguous one is refused with every possibility. A program
+      // with no long-option parser keeps exact-only matching: its unknown
+      // dash tokens are operands, not typos. expr inside its window is a
+      // real getopt_long call, so `expr --h` does resolve to --help.
       const eqPos = tok.indexOf('=')
       const typed = eqPos === -1 ? tok : tok.slice(0, eqPos)
       let spelling = typed
-      if (!cs.dest.has(typed) && !lenientDashOperands) {
+      if (!cs.dest.has(typed) && !noLongOptionParser) {
         const candidates = expandLong(cs, typed)
         if (candidates.length === 1) {
           spelling = candidates[0] ?? typed
@@ -498,13 +570,32 @@ export function parseCommand(
     }
   }
 
+  // A declared choices set is a gnulib ARGMATCH table, so an unambiguous
+  // prefix of one candidate resolves to it and the bag is rewritten to the
+  // canonical word: the command reads `none`, never the `non` the line
+  // typed. The other two outcomes are reported, one list each, because GNU
+  // words them differently ('ambiguous argument' vs 'invalid argument') off
+  // one shared candidate block.
   const invalidValueOptions: [string, string, readonly string[]][] = []
+  const ambiguousValueOptions: [string, string, readonly string[]][] = []
   for (const [destName, allowed] of cs.choicesByDest) {
     const value = flags[destName]
     // The bare boolean form of an optional-value flag is exempt.
     const candidates = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
+    const exactOnly = EXACT_CHOICE_OPTIONS.has(destName)
+    const resolved: string[] = []
     for (const part of candidates) {
-      if (!allowed.includes(part)) invalidValueOptions.push([destName, part, allowed])
+      const match = matchChoice(part, allowed, exactOnly)
+      if (match.matched) {
+        resolved.push(match.word)
+        continue
+      }
+      resolved.push(part)
+      const report = match.kind === 'ambiguous' ? ambiguousValueOptions : invalidValueOptions
+      report.push([destName, part, allowed])
+    }
+    if (resolved.length > 0 && resolved.some((word, at) => word !== candidates[at])) {
+      flags[destName] = Array.isArray(value) ? resolved : (resolved[0] ?? '')
     }
   }
 
@@ -613,6 +704,7 @@ export function parseCommand(
     optionErrorKinds,
     needsValueOptions,
     invalidValueOptions,
+    ambiguousValueOptions,
     invalidIntOptions,
     invalidFloatOptions,
     missingRequiredOptions,

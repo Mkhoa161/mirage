@@ -37,6 +37,7 @@ def _parsed(invalid: list[str]) -> ParsedCommand:
                          option_error_kinds=[],
                          needs_value_options=[],
                          invalid_value_options=[],
+                         ambiguous_value_options=[],
                          invalid_int_options=[],
                          invalid_float_options=[],
                          missing_required_options=[])

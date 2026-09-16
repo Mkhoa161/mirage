@@ -594,7 +594,7 @@ async def handle_ln(
         args (list[str | PathSpec]): args after the command name.
     """
     parsed = parse_command(SPECS["ln"], [word_text(a) for a in args],
-                           session.cwd)
+                           session.cwd, "ln")
     refusal = option_refusal(parsed)
     if refusal is not None:
         return fail("ln", refusal[0], refusal[1])

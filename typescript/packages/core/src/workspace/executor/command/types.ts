@@ -37,6 +37,10 @@ export interface ParsedCommand {
   optionErrorKinds: string[]
   needsValueOptions: string[]
   invalidValueOptions: [string, string, readonly string[]][]
+  // The ambiguous half of the same ARGMATCH report: a value that is a
+  // prefix of candidates spanning two or more values, which GNU words
+  // `ambiguous argument` over the same candidate block.
+  ambiguousValueOptions: [string, string, readonly string[]][]
   invalidIntOptions: [string, string][]
   invalidFloatOptions: [string, string][]
   missingRequiredOptions: string[]

@@ -21,8 +21,10 @@ from mirage.workspace.mount.registry import MountRegistry
 from mirage.workspace.session.session import Session
 from mirage.workspace.types import ExecutionNode
 
+# bash 5.2.21's own string, letters in ITS order (`history -anrw`, not
+# the accepted-set order the flag table is written in).
 _USAGE = ("history: usage: history [-c] [-d offset] [n] or "
-          "history -awrn [filename] or history -ps arg [arg...]\n")
+          "history -anrw [filename] or history -ps arg [arg...]\n")
 _OPTION_CHARS = "cdanrwsp"
 
 

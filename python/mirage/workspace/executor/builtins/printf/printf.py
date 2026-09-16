@@ -29,6 +29,10 @@ from mirage.workspace.session.elements import assign_element
 from mirage.workspace.session.state import session_view
 from mirage.workspace.types import ExecutionNode
 
+# bash 5.2.21's own string, which both the usage error and the
+# invalid-option refusal end with.
+_USAGE = "printf: usage: printf [-v var] format [arguments]\n"
+
 
 async def _assign_printf_target(session: Session, view: SessionView | None,
                                 name: str, subscript: str | None,
@@ -107,10 +111,40 @@ async def handle_printf(
                                   stderr=err), ExecutionNode(command="printf",
                                                              exit_code=2,
                                                              stderr=err)
+    if args and not program_invocation(session):
+        first = args[0]
+        if first == "--":
+            args = args[1:]
+            if not args:
+                # `--` ends the options and the FORMAT is still
+                # required, so the line is bash's usage error rather
+                # than an empty one (bash 5.2.21: `printf --` is exit 2
+                # with the usage, where `printf -- --zzz` prints
+                # `--zzz`).
+                err = _USAGE.encode()
+                return None, IOResult(exit_code=2, stderr=err), ExecutionNode(
+                    command="printf", exit_code=2, stderr=err)
+        elif first.startswith("-") and len(first) > 1 and first != "-v":
+            # bash's `internal_getopt` takes single letters only, so it
+            # reports the first character it does not know spelled with
+            # ONE dash: a long spelling answers for its second dash and
+            # its text never reaches the message, which is why
+            # `printf --zzz`, `printf --hel` and `printf --zzz=é` are all
+            # `printf: --: invalid option` (bash 5.2.21). The coreutils
+            # binary is lenient here and prints the word, but mirage
+            # ships printf as a builtin, so the builtin governs. A bare
+            # `-v` short of its NAME is left to the format path, where
+            # bash's own `option requires an argument` is a separate
+            # change.
+            err = f"printf: -{first[1]}: invalid option\n{_USAGE}".encode()
+            return None, IOResult(exit_code=2,
+                                  stderr=err), ExecutionNode(command="printf",
+                                                             exit_code=2,
+                                                             stderr=err)
     if not args:
         if target is not None:
             # `printf -v x` with no format is a usage error in bash.
-            err = b"printf: usage: printf [-v var] format [arguments]\n"
+            err = _USAGE.encode()
             return None, IOResult(exit_code=2,
                                   stderr=err), ExecutionNode(command="printf",
                                                              exit_code=2)

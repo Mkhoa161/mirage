@@ -282,6 +282,111 @@
         "gdrive-folder",
         "box"
       ]
+    },
+    {
+      "id": "cp_update_prefix_resolves_all",
+      "seq": 991021,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mkdir -p /data/cpu8 && printf 'new\\n' > /data/cpu8/src.txt && printf 'old\\n' > /data/cpu8/dst.txt && touch -d '2020-01-01T00:00:00' /data/cpu8/src.txt && touch -d '2024-01-01T00:00:00' /data/cpu8/dst.txt && cp --update=al /data/cpu8/src.txt /data/cpu8/dst.txt && cat /data/cpu8/dst.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "new\n",
+        "stderr": ""
+      },
+      "flags": [
+        "update"
+      ]
+    },
+    {
+      "id": "cp_update_prefix_resolves_none",
+      "seq": 991022,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mkdir -p /data/cpu9 && printf 'new\\n' > /data/cpu9/src.txt && printf 'old\\n' > /data/cpu9/dst.txt && touch -d '2024-01-01T00:00:00' /data/cpu9/src.txt && touch -d '2020-01-01T00:00:00' /data/cpu9/dst.txt && cp --update=n /data/cpu9/src.txt /data/cpu9/dst.txt && cat /data/cpu9/dst.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "old\n",
+        "stderr": ""
+      },
+      "flags": [
+        "update"
+      ]
+    },
+    {
+      "id": "cp_update_empty_value_is_ambiguous",
+      "seq": 991023,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "cp --update= /data/a.txt /data/b.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "cp: ambiguous argument '' for '--update'\nValid arguments are:\n  - 'all'\n  - 'none'\n  - 'older'\nTry 'cp --help' for more information.\n"
+      },
+      "flags": [
+        "update"
+      ]
     }
   ]
 }

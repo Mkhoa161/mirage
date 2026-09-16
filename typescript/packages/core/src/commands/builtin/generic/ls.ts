@@ -30,6 +30,7 @@ import {
 } from '../utils/formatting.ts'
 import { UsageError } from '../../errors.ts'
 import { argmatchError, argmatchLine, usageHint } from '../../spec/usage.ts'
+import { type ArgmatchKind, argmatch } from '../../spec/argmatch.ts'
 import { identityOf, type Identity } from '../utils/identity.ts'
 import { gnuStrerror, isEacces, isWalkError } from '../../../utils/errors.ts'
 import { rstripSlash } from '../../../utils/slash.ts'
@@ -686,8 +687,9 @@ function groupedArgumentError(
   option: string,
   value: string,
   groups: readonly (readonly string[])[],
+  kind: ArgmatchKind,
 ): UsageError {
-  return argmatchError('ls', option, value, groups, 1)
+  return argmatchError('ls', option, value, groups, 1, kind)
 }
 
 // The sort key the line asked for, last spelling winning, and whether it
@@ -698,11 +700,12 @@ function sortFlag(fl: FlagView): [SortBy, boolean] {
   if (last === undefined) return ['name', false]
   if (last !== 'sort') return [SORT_FLAGS[last] ?? 'name', true]
   const word = fl.asStr('sort') ?? ''
-  const key = SORT_WORDS[word]
-  if (key === undefined) {
-    throw argmatchError('ls', '--sort', word, Object.keys(SORT_WORDS), 1)
+  const words = Object.keys(SORT_WORDS)
+  const match = argmatch(word, words)
+  if (!match.matched) {
+    throw argmatchError('ls', '--sort', word, words, 1, match.kind)
   }
-  return [key, true]
+  return [SORT_WORDS[match.word] ?? 'name', true]
 }
 
 // Which timestamp -c, -u or --time asked for, last one winning.
@@ -713,28 +716,35 @@ function timeFlag(fl: FlagView): LsTimeKind {
   if (last === 'c') return 'ctime'
   if (last === 'u') return 'atime'
   const word = fl.asStr('time') ?? ''
-  for (const group of TIME_GROUPS) {
-    if (group.includes(word)) return TIME_KINDS[group[0] ?? 'mtime'] ?? 'mtime'
-  }
-  throw groupedArgumentError('--time', word, TIME_GROUPS)
+  const match = argmatch(word, TIME_GROUPS)
+  if (!match.matched) throw groupedArgumentError('--time', word, TIME_GROUPS, match.kind)
+  return TIME_KINDS[match.word] ?? 'mtime'
 }
 
-// --time-style, validated the way GNU words it (exit 2). A posix- style
-// takes effect only outside the POSIX locale, and mirage has no other
-// locale, so the prefix validates its suffix and renders the locale
-// style, as `LC_ALL=C ls --time-style=posix-full-iso` does.
+// --time-style, validated the way GNU words it (exit 2). A posix- prefix
+// short-circuits the whole option: GNU's loop strips each one and, outside
+// a hard LC_TIME locale, jumps straight to the locale style without looking
+// at what follows. mirage has no other locale, so every posix- spelling is
+// the locale style and none of them is ever refused -- measured on
+// coreutils 9.4, where `posix-full-iso`, `posix-l`, `posix-zzz`, `posix-`
+// and `posix-+%H:%M` all exit 0 and all print what `locale` prints. The
+// matcher therefore has to run after that check, not before: the remainder
+// is not a candidate word at all.
 function timeStyleFlag(fl: FlagView): string {
   const style = fl.asStr('time_style')
   if (style === undefined) return 'locale'
-  const posix = style.startsWith('posix-')
-  const bare = posix ? style.slice(6) : style
-  if (LS_TIME_STYLES.includes(bare) || bare.startsWith('+')) return posix ? 'locale' : bare
+  if (style.startsWith('posix-')) return 'locale'
+  if (style.startsWith('+')) return style
+  const match = argmatch(style, LS_TIME_STYLES)
+  if (match.matched) return match.word
   // ls hand-writes this block rather than letting argmatch print
   // `time_style_args`, so it is the one ARGMATCH refusal in the repo whose
   // candidates are neither quoted nor a subset of the words it accepts --
-  // and the one that exits 2, ls's own `usage (LS_FAILURE)`.
+  // and the one that exits 2, ls's own `usage (LS_FAILURE)`. The first line
+  // is still argmatch's, so `--time-style=lo` spans long-iso and locale and
+  // reads `ambiguous argument 'lo'`.
   throw new UsageError(
-    `${argmatchLine('ls', 'time style', style)}\n` +
+    `${argmatchLine('ls', 'time style', style, match.kind)}\n` +
       'Valid arguments are:\n' +
       '  - [posix-]full-iso\n' +
       '  - [posix-]long-iso\n' +
@@ -754,10 +764,11 @@ function hyperlinkFlag(fl: FlagView): boolean {
   if (raw === undefined || raw === null || raw === false) return false
   if (raw === true) return true
   const word = typeof raw === 'string' ? raw : ''
-  for (const group of HYPERLINK_GROUPS) {
-    if (group.includes(word)) return group[0] === 'always'
+  const match = argmatch(word, HYPERLINK_GROUPS)
+  if (!match.matched) {
+    throw groupedArgumentError('--hyperlink', word, HYPERLINK_GROUPS, match.kind)
   }
-  throw groupedArgumentError('--hyperlink', word, HYPERLINK_GROUPS)
+  return match.word === 'always'
 }
 
 // Parse the ls flag bag once into a frozen struct. GNU's rules that are

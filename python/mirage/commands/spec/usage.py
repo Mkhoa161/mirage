@@ -14,6 +14,7 @@
 
 from mirage.commands.errors import UsageError
 from mirage.commands.quote import quote_text
+from mirage.commands.spec.argmatch import ArgmatchChoices, ArgmatchKind
 from mirage.commands.spec.constants import (OLD_OPTION_EXIT, OPERAND_EXIT,
                                             PYTHON_NAMES, PYTHON_USAGE,
                                             READ_FAIL_EXIT,
@@ -350,28 +351,26 @@ def old_option_error(cmd_name: str, letter: str) -> tuple[bytes, int]:
     return (line + hint).encode(), OLD_OPTION_EXIT
 
 
-# One ARGMATCH candidate: a bare name, or a group of spellings that
-# gnulib's argmatch maps to the SAME value. The group is not cosmetic --
-# `argmatch_valid` starts a new `  - ` line only when the value changes
-# and joins the aliases of one value with `, `, which is why GNU answers
-# `sort --check=x` with `  - 'quiet', 'silent'` on one line and
-# `  - 'diagnose-first'` on the next.
-ArgmatchChoices = tuple[str | tuple[str, ...], ...]
-
-
-def argmatch_line(cmd_name: str, option: str, value: str) -> str:
+def argmatch_line(cmd_name: str,
+                  option: str,
+                  value: str,
+                  kind: ArgmatchKind = "invalid") -> str:
     r"""The first line of a gnulib ARGMATCH refusal, without newline.
 
-    Two wordings, and the empty word picks the second: gnulib's
-    ``argmatch`` matches on a prefix, so ``""`` is a prefix of every
-    candidate and comes back ambiguous rather than invalid. Measured on
-    coreutils 9.4 at every argmatch slot in the repo (``tail --follow=``,
-    ``sort --check=``, ``wc --total=``, ``uniq --all-repeated=``,
-    ``uniq --group=``, ``ls --format=``, ``ls -l --time-style=``,
-    ``cp --update=``, ``tee --output-error=``), all of which answer
-    ``ambiguous argument ''``. ``du --max-depth=`` is NOT argmatch and
-    says ``invalid maximum depth ''``, which is why that one is worded
-    in du.
+    Two wordings, and the CALLER's match result picks between them: the
+    wording is a property of how ``argmatch`` refused the value, not of
+    the value itself, so it arrives from :func:`argmatch` rather than
+    being re-derived here. There is deliberately no ``value == ""``
+    branch: the empty word is ambiguous because it is a prefix of every
+    candidate and those candidates span two or more values, which is the
+    same rule every other word goes through and is what
+    ``tail --follow=``, ``sort --check=``, ``wc --total=``,
+    ``uniq --all-repeated=``, ``uniq --group=``, ``ls --format=``,
+    ``ls -l --time-style=``, ``cp --update=`` and ``tee --output-error=``
+    were all measured answering ``ambiguous argument ''`` for. Re-adding
+    the special case would get those right and a one-candidate slot
+    wrong. ``du --max-depth=`` is NOT argmatch and says
+    ``invalid maximum depth ''``, which is why that one is worded in du.
 
     The word is rendered through ``quote_text``, gnulib's own
     ``quote()``: ``tee --output-error=xé`` is
@@ -384,8 +383,11 @@ def argmatch_line(cmd_name: str, option: str, value: str) -> str:
             ('--output-error') or a prose name ('backup type',
             'time style'), quoted either way.
         value (str): the rejected value, as typed.
+        kind (ArgmatchKind): the wording, from the refusal
+            :func:`argmatch` answered with. Defaults to the invalid one,
+            which is every caller that has no candidate table to match
+            against.
     """
-    kind = "ambiguous" if value == "" else "invalid"
     return (f"{cmd_name}: {kind} argument '{quote_text(value)}' "
             f"for '{option}'")
 
@@ -404,11 +406,13 @@ def argmatch_valid_block(choices: ArgmatchChoices) -> str:
     return "Valid arguments are:\n" + "\n".join(rows)
 
 
-def invalid_argument_error(cmd_name: str,
-                           option: str,
-                           value: str,
-                           choices: ArgmatchChoices,
-                           exit_code: int | None = None) -> tuple[bytes, int]:
+def invalid_argument_error(
+        cmd_name: str,
+        option: str,
+        value: str,
+        choices: ArgmatchChoices,
+        exit_code: int | None = None,
+        kind: ArgmatchKind = "invalid") -> tuple[bytes, int]:
     """GNU ARGMATCH refusal for a value outside a declared choices set.
 
     Shape pinned against real GNU (``tee --output-error=bogus``): the
@@ -428,8 +432,14 @@ def invalid_argument_error(cmd_name: str,
             ls and sort pass 1 explicitly: gnulib's ``argmatch_die``
             always calls ``usage (EXIT_FAILURE)``, so their argmatch
             refusals are 1 even though their other usage errors are 2.
+        kind (ArgmatchKind): which wording the first line carries, from
+            the caller's :func:`argmatch` refusal. Everything after that
+            line -- the block and the hint -- is byte-identical between
+            the two, measured across ``--quoting-style``, ``--time``,
+            ``--color``, ``--format``, ``--total``, ``--sort`` and
+            ``time style``, which is why one renderer words both.
     """
-    line = (f"{argmatch_line(cmd_name, option, value)}\n"
+    line = (f"{argmatch_line(cmd_name, option, value, kind)}\n"
             f"{argmatch_valid_block(choices)}\n")
     hint = f"Try '{cmd_name} --help' for more information.\n"
     code = usage_exit_code(cmd_name) if exit_code is None else exit_code
@@ -440,7 +450,8 @@ def argmatch_error(cmd_name: str,
                    option: str,
                    value: str,
                    choices: ArgmatchChoices,
-                   exit_code: int | None = None) -> UsageError:
+                   exit_code: int | None = None,
+                   kind: ArgmatchKind = "invalid") -> UsageError:
     """:func:`invalid_argument_error` as the exception a command raises.
 
     The commands that validate an ARGMATCH value themselves (``sort``,
@@ -454,9 +465,10 @@ def argmatch_error(cmd_name: str,
         value (str): the rejected value, as typed.
         choices (ArgmatchChoices): allowed values in declaration order.
         exit_code (int | None): as in :func:`invalid_argument_error`.
+        kind (ArgmatchKind): as in :func:`invalid_argument_error`.
     """
     message, code = invalid_argument_error(cmd_name, option, value, choices,
-                                           exit_code)
+                                           exit_code, kind)
     return UsageError(message.decode().rstrip("\n"), code)
 
 

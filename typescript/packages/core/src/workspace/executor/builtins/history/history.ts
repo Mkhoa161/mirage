@@ -24,7 +24,7 @@ const ENC = new TextEncoder()
 
 const USAGE =
   'history: usage: history [-c] [-d offset] [n] or ' +
-  'history -awrn [filename] or history -ps arg [arg...]\n'
+  'history -anrw [filename] or history -ps arg [arg...]\n'
 const OPTION_CHARS = 'cdanrwsp'
 
 function usageError(message: string): Result {

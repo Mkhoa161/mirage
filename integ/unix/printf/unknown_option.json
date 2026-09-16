@@ -1,0 +1,18 @@
+{
+  "cases": [
+    {
+      "id": "printf_unrecognized_long_option",
+      "seq": 991042,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "printf --zzz",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "printf: --: invalid option\nprintf: usage: printf [-v var] format [arguments]\n"
+      }
+    }
+  ]
+}

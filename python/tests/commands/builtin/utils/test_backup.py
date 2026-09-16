@@ -159,3 +159,31 @@ def test_backup_type_clause_quotes_the_word(value, escaped):
                        "  - 'numbered', 't'\n"
                        "Try 'cp --help' for more information.")
     assert exc.value.exit_code == 1
+
+
+# gnulib resolves an unambiguous prefix, and each control's canonical
+# word IS the control, so `--backup=e` is `existing` and `=t` is
+# `numbered`. Measured on coreutils 9.4: `cp --backup=e`, `=s` and `=t`
+# all exit 0.
+def test_backup_control_accepts_an_unambiguous_prefix():
+    assert backup_control("cp", "e", None) == "existing"
+    assert backup_control("cp", "s", None) == "simple"
+    assert backup_control("cp", "t", None) == "numbered"
+    assert backup_control("cp", "nu", None) == "numbered"
+    assert backup_control("cp", "of", None) == "none"
+
+
+def test_backup_control_refuses_a_prefix_spanning_two_values():
+    """`cp --backup=n` is `ambiguous argument 'n'`, exit 1 (measured).
+
+    `n` starts `none`, `never`, `nil` and `numbered`, which are four
+    different controls, so gnulib refuses it rather than picking one.
+    """
+    with pytest.raises(UsageError) as exc:
+        backup_control("cp", "n", None)
+    assert str(exc.value) == ("cp: ambiguous argument 'n' for 'backup type'\n"
+                              "Valid arguments are:\n"
+                              "  - 'none', 'off'\n  - 'simple', 'never'\n"
+                              "  - 'existing', 'nil'\n  - 'numbered', 't'\n"
+                              "Try 'cp --help' for more information.")
+    assert exc.value.exit_code == 1

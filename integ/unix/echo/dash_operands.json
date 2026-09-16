@@ -1,0 +1,106 @@
+{
+  "cases": [
+    {
+      "id": "echo_dash_dash_is_echoed_literally",
+      "seq": 991049,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo -- --zzz",
+      "expect": {
+        "exit": 0,
+        "stdout": "-- --zzz\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "echo_help_is_an_operand",
+      "seq": 991050,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo --help",
+      "expect": {
+        "exit": 0,
+        "stdout": "--help\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "echo_unknown_option_with_a_multibyte_value_is_an_operand",
+      "seq": 991051,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo --zzz='é'",
+      "expect": {
+        "exit": 0,
+        "stdout": "--zzz=é\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

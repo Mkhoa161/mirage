@@ -557,6 +557,7 @@ export async function handleLn(
     spec,
     args.map((a) => wordText(a)),
     session.cwd,
+    'ln',
   )
   const refusal = optionRefusal(parsed)
   if (refusal !== null) return fail('ln', refusal[0], refusal[1])

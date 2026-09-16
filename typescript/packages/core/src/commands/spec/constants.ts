@@ -44,6 +44,56 @@ export const NUMERIC_SHORT = /^-\d+$/
 // CommandSpec: options are LEADING words matching this pattern only.
 export const ECHO_OPTION = /^-[neE]+$/
 
+// The programs with NO long-option parser at all: their answer to a
+// dash-leading word they do not recognize is to print it as an operand rather
+// than to refuse it, and they never expand an abbreviation. bash's `echo`
+// builtin reads only a leading `-neE` cluster and prints every other word
+// verbatim, `--` included (`echo -- --zzz` prints `-- --zzz`); Info-ZIP unzip
+// has no `--long` grammar either, scanning the word's letters instead, so
+// `unzip --nothelp` prints help for the `h` the word happens to contain.
+// unzip's own refusal -- exit 10 with the whole usage block, and `--` not an
+// end-of-options marker -- is a separate change; it sits here because of the
+// two answers the parser has today, the lenient one is the closer.
+//
+// MEASURED against coreutils 9.4, bash 5.2.21 and Info-ZIP 6.00, and
+// deliberately NOT derived. #1107 proposed deriving it -- require that "the
+// command declare no long options" -- and no predicate over the declarations
+// can work: `sleep`, `pwd`, `bc`, `history` and `printf` declare zero long
+// options in mirage's specs and all five REPORT an option they do not know,
+// while `echo` declares zero and treats it as an operand, so `expr` and
+// `sleep` are indistinguishable that way. The `@command` decorator also
+// injects `--help`/`--version` into every registered spec, so no spec declares
+// zero by the time the parser reads it. Ten of the thirteen commands the old
+// rest-operand-kind predicate reached (basename, dirname, csplit, numfmt,
+// sleep, pwd, bc, history, bash, printf) are strict, which is why this is an
+// exception list and not a rule.
+export const NO_LONG_OPTIONS: ReadonlySet<string> = new Set(['echo', 'unzip'])
+
+// The programs whose long options are parsed ONLY when the line carries
+// exactly one argument: gnulib's `parse_long_options`, whose guard is
+// literally `argc == 2`. Measured on coreutils 9.4: `expr --help` exits 0 with
+// help, `expr --help x` exits 2 with
+// `expr: syntax error: unexpected argument 'x'`, and `expr -- --help` is argc
+// 3, so it prints `--help`. Inside the window getopt_long's name-prefix
+// matching applies (`--h`, `--hel` and `--versio` all resolve) and a word that
+// prefixes nothing falls through to an operand with no diagnostic at all,
+// because parse_long_options sets `opterr = 0`: `expr --hex` prints `--hex`,
+// and so does `expr --help=x`. This is a narrower rule than NO_LONG_OPTIONS
+// and not the same one -- echo has no long options in any position, expr has
+// them in exactly one -- so the two are spelled separately rather than
+// collapsed.
+export const SOLE_ARGUMENT_LONG_OPTIONS: ReadonlySet<string> = new Set(['expr'])
+
+// The declared `choices` sets that are NOT gnulib ARGMATCH tables, so an
+// abbreviation of a candidate is not a match. CPython compares
+// `--check-hash-based-pycs` against its three words by hand and refuses
+// anything else: measured on 3.11.15, `--check-hash-based-pycs a` and
+// `--check-hash-based-pycs al` are both `--check-hash-based-pycs must be one
+// of 'default', 'always', or 'never'`, where gnulib would have resolved `a` to
+// `always`. Keyed by canonical long spelling, and an exception list again --
+// `tee --output-error` is real argmatch and keeps its prefixes.
+export const EXACT_CHOICE_OPTIONS: ReadonlySet<string> = new Set(['--check-hash-based-pycs'])
+
 // Value shape accepted by an int-typed option: optional sign plus digits,
 // the portable core of Python int() and argparse (no whitespace, no
 // underscores, so both languages accept exactly the same strings).

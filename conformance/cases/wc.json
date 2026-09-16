@@ -275,6 +275,48 @@
         "stdout_text": "2 /data/astral.txt\n",
         "stderr_text": ""
       }
+    },
+    {
+      "id": "wc_total_prefix_spanning_two_values_is_ambiguous",
+      "cmd": "wc -l --total=a /data/a.txt",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "wc: ambiguous argument 'a' for '--total'\nValid arguments are:\n  - 'auto'\n  - 'always'\n  - 'only'\n  - 'never'\nTry 'wc --help' for more information.\n"
+      }
+    },
+    {
+      "id": "wc_total_prefix_resolves_always",
+      "cmd": "wc -l --total=al /data/a.txt",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "5 /data/a.txt\n5 total\n",
+        "stderr_text": ""
+      }
     }
   ]
 }

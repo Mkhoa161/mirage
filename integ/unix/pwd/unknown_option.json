@@ -1,0 +1,18 @@
+{
+  "cases": [
+    {
+      "id": "pwd_unrecognized_long_option",
+      "seq": 991041,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "pwd --zzz",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "pwd: --: invalid option\npwd: usage: pwd [-LP]\n"
+      }
+    }
+  ]
+}

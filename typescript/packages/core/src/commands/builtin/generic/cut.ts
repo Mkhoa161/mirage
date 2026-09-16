@@ -21,9 +21,12 @@ import { cutStream, parseRanges, type CutOptions } from '../cut_ranges.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { operandsIo, readOperands, singleChunk } from '../utils/operands.ts'
 import { FlagView, type FlagValue } from '../../spec/types.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 import { specOf } from '../../spec/builtins.ts'
 
 const ENC = new TextEncoder()
+
+const WHITESPACE_ARGS: readonly string[] = ['trimmed']
 
 function parseFlags(bag: Record<string, FlagValue>): CutOptions | string {
   const fl = new FlagView(bag, specOf('cut'))
@@ -43,7 +46,13 @@ function parseFlags(bag: Record<string, FlagValue>): CutOptions | string {
   if (fl.asBool('w') || fl.asStr('F') !== undefined || rawWhitespace === true) {
     whitespace = 'default'
   } else if (typeof rawWhitespace === 'string') {
-    if (rawWhitespace !== 'trimmed') {
+    // One candidate, so ARGMATCH can only match or not match here: a
+    // prefix of `trimmed` resolves to it, and the refusal keeps cut's own
+    // one-line wording (no candidate block). GNU cut has no such option, so
+    // there is nothing to measure this against: the empty word reaching the
+    // sole candidate as ACCEPTED is what the general rule says, not a probed
+    // answer. It stays the general rule rather than a special case.
+    if (!argmatch(rawWhitespace, WHITESPACE_ARGS).matched) {
       return (
         `cut: invalid argument '${quoteText(rawWhitespace)}' for ` + "'--whitespace-delimited'\n"
       )

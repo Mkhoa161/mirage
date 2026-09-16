@@ -1,0 +1,159 @@
+{
+  "cases": [
+    {
+      "id": "expr_help_outside_the_sole_argument_window_is_a_syntax_error",
+      "seq": 991044,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr --help x",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "expr: syntax error: unexpected argument 'x'\n"
+      }
+    },
+    {
+      "id": "expr_non_prefix_dash_word_is_an_operand",
+      "seq": 991045,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr --hex",
+      "expect": {
+        "exit": 0,
+        "stdout": "--hex\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_help_with_a_value_is_an_operand",
+      "seq": 991046,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr --help=x",
+      "expect": {
+        "exit": 0,
+        "stdout": "--help=x\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_dash_dash_leaves_help_an_operand",
+      "seq": 991047,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr -- --help",
+      "expect": {
+        "exit": 0,
+        "stdout": "--help\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "expr_unknown_option_with_a_multibyte_value_is_an_operand",
+      "seq": 991048,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "expr --zzz='é'",
+      "expect": {
+        "exit": 0,
+        "stdout": "--zzz=é\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

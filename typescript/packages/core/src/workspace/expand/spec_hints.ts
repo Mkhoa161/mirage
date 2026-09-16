@@ -57,7 +57,7 @@ export function specWordKinds(
   argv: readonly string[],
   name = '',
 ): (ValueType | null)[] {
-  const kinds = [...parseCommand(spec, [...argv], '/').wordKinds]
+  const kinds = [...parseCommand(spec, [...argv], '/', name).wordKinds]
   if (name === 'find') {
     for (const [start, end] of execSpans(argv)) {
       for (let i = start; i <= end; i++) kinds[i] = 'str'

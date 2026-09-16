@@ -182,7 +182,7 @@ export async function handleCommandProvision(
     let flagKwargs: Record<string, FlagValue> = {}
     let textArgs: string[]
     if (spec !== null) {
-      const parsed = parseCommand(spec, argv, session.cwd)
+      const parsed = parseCommand(spec, argv, session.cwd, cmdName)
       flagKwargs = parseToKwargs(parsed)
       textArgs = parsed.texts()
     } else {

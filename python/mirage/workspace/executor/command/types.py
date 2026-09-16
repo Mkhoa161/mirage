@@ -50,6 +50,10 @@ class ParsedCommand(NamedTuple):
     option_error_kinds: list[str]
     needs_value_options: list[str]
     invalid_value_options: list[tuple[str, str, tuple[str, ...]]]
+    # The ambiguous half of the same ARGMATCH report: a value that is a
+    # prefix of candidates spanning two or more values, which GNU words
+    # `ambiguous argument` over the same candidate block.
+    ambiguous_value_options: list[tuple[str, str, tuple[str, ...]]]
     invalid_int_options: list[tuple[str, str]]
     invalid_float_options: list[tuple[str, str]]
     missing_required_options: list[str]

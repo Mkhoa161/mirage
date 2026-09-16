@@ -21,6 +21,7 @@ import { fsErrorLine, isFsError } from '../../../utils/errors.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { formatRecords } from '../utils/output.ts'
 import { argmatchError } from '../../spec/usage.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 import { FlagView, type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { advanceColumn, isSpace } from '../../../utils/width.ts'
@@ -64,8 +65,11 @@ export function parseFlags(bag: Record<string, FlagValue>): WcFlags | string {
   // tests `typeof === 'string'`), so the empty word still reaches the
   // renderer rather than defaulting.
   const rawTotal = fl.asStr('total') ?? 'auto'
-  if (!(TOTAL_ARGS as readonly string[]).includes(rawTotal)) {
-    return argmatchError('wc', '--total', rawTotal, TOTAL_ARGS).message + '\n'
+  const match = argmatch(rawTotal, TOTAL_ARGS)
+  if (!match.matched) {
+    return (
+      argmatchError('wc', '--total', rawTotal, TOTAL_ARGS, undefined, match.kind).message + '\n'
+    )
   }
   return {
     lines: fl.asBool('lines'),
@@ -73,7 +77,7 @@ export function parseFlags(bag: Record<string, FlagValue>): WcFlags | string {
     bytes: fl.asBool('bytes'),
     chars: fl.asBool('chars'),
     maxLineLength: fl.asBool('max_line_length'),
-    total: rawTotal as WcFlags['total'],
+    total: match.word as WcFlags['total'],
   }
 }
 

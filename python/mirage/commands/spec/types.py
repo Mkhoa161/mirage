@@ -491,6 +491,14 @@ class ParsedArgs:
     needs_value_options: list[str] = field(default_factory=list)
     invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = field(
         default_factory=list)
+    # Values that ARGMATCH matched as a prefix of two or more different
+    # candidate values, same triple as invalid_value_options above.
+    # gnulib's own split: `ls --color=a` hits `always` and `auto` and is
+    # `ambiguous argument 'a'`, while `ls --color=zzz` hits nothing and
+    # is `invalid argument 'zzz'` -- two wordings over one candidate
+    # block, so they are two reports rather than one tagged list.
+    ambiguous_value_options: list[tuple[str, str, tuple[str, ...]]] = field(
+        default_factory=list)
     invalid_int_options: list[tuple[str, str]] = field(default_factory=list)
     invalid_float_options: list[tuple[str, str]] = field(default_factory=list)
     missing_required_options: list[str] = field(default_factory=list)

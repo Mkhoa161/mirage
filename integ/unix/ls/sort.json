@@ -114,6 +114,192 @@
         "r",
         "S"
       ]
+    },
+    {
+      "id": "ls_sort_prefix_resolves_none",
+      "seq": 991000,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls -1 --sort=non /data/b.txt /data/a.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n/data/a.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "1",
+        "sort"
+      ]
+    },
+    {
+      "id": "ls_sort_prefix_none_differs_from_the_default_order",
+      "seq": 991001,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls -1 /data/b.txt /data/a.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/a.txt\n/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "1"
+      ]
+    },
+    {
+      "id": "ls_sort_empty_value_is_ambiguous",
+      "seq": 991002,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --sort= /data",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "ls: ambiguous argument '' for '--sort'\nValid arguments are:\n  - 'none'\n  - 'time'\n  - 'size'\n  - 'extension'\n  - 'version'\n  - 'width'\nTry 'ls --help' for more information.\n"
+      },
+      "flags": [
+        "sort"
+      ]
+    },
+    {
+      "id": "ls_sort_prefix_matching_is_case_sensitive",
+      "seq": 991003,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --sort=NON /data",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "ls: invalid argument 'NON' for '--sort'\nValid arguments are:\n  - 'none'\n  - 'time'\n  - 'size'\n  - 'extension'\n  - 'version'\n  - 'width'\nTry 'ls --help' for more information.\n"
+      },
+      "flags": [
+        "sort"
+      ]
+    },
+    {
+      "id": "ls_sort_refused_value_is_octal_escaped",
+      "seq": 991004,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --sort='é' /data",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "ls: invalid argument '\\303\\251' for '--sort'\nValid arguments are:\n  - 'none'\n  - 'time'\n  - 'size'\n  - 'extension'\n  - 'version'\n  - 'width'\nTry 'ls --help' for more information.\n"
+      },
+      "flags": [
+        "sort"
+      ]
     }
   ]
 }

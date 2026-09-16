@@ -108,6 +108,19 @@ describe('cut', () => {
     ).toBe('a\tc\n')
   })
 
+  // One candidate, so ARGMATCH accepts any prefix of it. GNU cut has no
+  // such option, so these are the general rule's answer rather than a
+  // measured one, and the empty word is deliberately not pinned either way.
+  // Mirrors test_cut.py.
+  it.each(['trim', 't'])('--whitespace-delimited=%s resolves to trimmed', async (value) => {
+    expect(
+      await runCut(ENC.encode('  a   b c  \n'), {
+        fields: '1,3',
+        whitespace_delimited: value,
+      }),
+    ).toBe('a\tc\n')
+  })
+
   it('-c overlapping ranges dedup ascending', async () => {
     expect(await runCut(ENC.encode('abcdef\n'), { characters: '1-3,2-4' })).toBe('abcd\n')
   })

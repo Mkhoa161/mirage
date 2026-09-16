@@ -165,7 +165,10 @@ async def handle_command_provision(
         argv = [p.virtual if isinstance(p, PathSpec) else p for p in parts[1:]]
         spec = mount.spec_for(cmd_name)
         if spec is not None:
-            parsed = parse_command(spec, argv, cwd=session.cwd)
+            parsed = parse_command(spec,
+                                   argv,
+                                   cwd=session.cwd,
+                                   cmd_name=cmd_name)
             flag_kwargs = parse_to_kwargs(parsed)
             text_args = parsed.texts()
         else:

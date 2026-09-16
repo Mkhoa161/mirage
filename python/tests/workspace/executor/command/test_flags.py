@@ -138,3 +138,39 @@ def test_a_word_the_parser_normalized_is_synthesized_not_paired():
                        raw_path="/data/b/link")
     parsed = parse_flags([climbing], SPECS["cat"], "cat", "/data")
     assert parsed.paths[0].virtual == "/data/a/f.txt"
+
+
+# The spec-driven ARGMATCH path, end to end through the executor's
+# renderer. Measured on coreutils 9.4: `tee --output-error=warn-` exits
+# 0, `=w` is `ambiguous argument 'w'` and `=zzz` is
+# `invalid argument 'zzz'`, over one shared candidate block.
+def test_option_error_accepts_an_unambiguous_prefix():
+    parsed = parse_flags(["--output-error=warn-", "/f"], SPECS["tee"], "tee",
+                         "/")
+    assert option_error("tee", parsed) is None
+    assert parsed.flag_kwargs["output_error"] == "warn-nopipe"
+
+
+def test_option_error_words_an_ambiguous_value_as_gnu_does():
+    parsed = parse_flags(["--output-error=w", "/f"], SPECS["tee"], "tee", "/")
+    refusal = option_error("tee", parsed)
+    assert refusal is not None
+    message, code = refusal
+    assert message == (b"tee: ambiguous argument 'w' for '--output-error'\n"
+                       b"Valid arguments are:\n"
+                       b"  - 'warn'\n  - 'warn-nopipe'\n"
+                       b"  - 'exit'\n  - 'exit-nopipe'\n"
+                       b"Try 'tee --help' for more information.\n")
+    assert code == 1
+
+
+def test_the_two_argmatch_refusals_differ_only_in_the_first_line():
+    ambiguous = option_error(
+        "tee", parse_flags(["--output-error=w", "/f"], SPECS["tee"], "tee",
+                           "/"))
+    invalid = option_error(
+        "tee",
+        parse_flags(["--output-error=zzz", "/f"], SPECS["tee"], "tee", "/"))
+    assert ambiguous is not None and invalid is not None
+    assert ambiguous[0].split(b"\n", 1)[1] == invalid[0].split(b"\n", 1)[1]
+    assert ambiguous[1] == invalid[1] == 1

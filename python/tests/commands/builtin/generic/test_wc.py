@@ -376,3 +376,24 @@ def test_an_empty_total_is_ambiguous_not_the_default():
 
 def test_an_absent_total_is_still_auto():
     assert parse_flags({}).total == "auto"
+
+
+# `wc --total=al` is `always` and `--total=au` is `auto` (measured,
+# coreutils 9.4), while the bare `a` they share spans two values.
+def test_total_accepts_an_unambiguous_prefix():
+    assert parse_flags({"total": "al"}).total == "always"
+    assert parse_flags({"total": "au"}).total == "auto"
+    assert parse_flags({"total": "o"}).total == "only"
+    assert parse_flags({"total": "n"}).total == "never"
+    assert parse_flags({"total": "always"}).total == "always"
+
+
+def test_total_refuses_a_prefix_spanning_two_values():
+    with pytest.raises(UsageError) as exc:
+        parse_flags({"total": "a"})
+    assert str(exc.value) == ("wc: ambiguous argument 'a' for '--total'\n"
+                              "Valid arguments are:\n"
+                              "  - 'auto'\n  - 'always'\n"
+                              "  - 'only'\n  - 'never'\n"
+                              "Try 'wc --help' for more information.")
+    assert exc.value.exit_code == 1

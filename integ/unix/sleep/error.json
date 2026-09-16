@@ -31,7 +31,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: invalid time interval 'abc'\n"
+        "stderr": "sleep: invalid time interval 'abc'\nTry 'sleep --help' for more information.\n"
       }
     },
     {
@@ -65,7 +65,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: missing operand\n"
+        "stderr": "sleep: missing operand\nTry 'sleep --help' for more information.\n"
       }
     },
     {
@@ -99,7 +99,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: invalid time interval '-1'\n"
+        "stderr": "sleep: invalid time interval '-1'\nTry 'sleep --help' for more information.\n"
       },
       "flags": [
         "1"
@@ -136,7 +136,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: invalid time interval 'Infinity'\n"
+        "stderr": "sleep: invalid time interval 'Infinity'\nTry 'sleep --help' for more information.\n"
       }
     }
   ]

@@ -31,6 +31,7 @@ import {
   readFailExitCodeFromLine,
   usageExitCode,
 } from './usage.ts'
+import { argmatch } from './argmatch.ts'
 
 const td = new TextDecoder()
 
@@ -131,23 +132,64 @@ describe('invalidArgumentError', () => {
   })
 
   // gnulib's argmatch matches on a prefix and `''` is a prefix of every
-  // candidate, so the empty word comes back AMBIGUOUS. Measured the same way
-  // at `tail --follow=`, `sort --check=`, `wc --total=`,
-  // `uniq --all-repeated=`, `uniq --group=`, `ls --format=`,
-  // `ls -l --time-style=` and `cp --update=`.
+  // candidate, so the empty word comes back AMBIGUOUS -- through the
+  // ordinary rule, not a special case: it matches all four candidates, which
+  // are four different values. Measured the same way at `tail --follow=`,
+  // `sort --check=`, `wc --total=`, `uniq --all-repeated=`, `uniq --group=`,
+  // `ls --format=`, `ls -l --time-style=` and `cp --update=`.
   it('words an empty value as ambiguous, not invalid', () => {
-    const [msg, code] = invalidArgumentError('tee', '--output-error', '', ['warn'])
+    const choices = ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']
+    const refusal = argmatch('', choices)
+    expect(refusal).toEqual({ matched: false, kind: 'ambiguous' })
+    const kind = refusal.matched ? 'invalid' : refusal.kind
+    const [msg, code] = invalidArgumentError('tee', '--output-error', '', choices, undefined, kind)
     expect(new TextDecoder().decode(msg).split('\n')[0]).toBe(
       "tee: ambiguous argument '' for '--output-error'",
     )
     expect(code).toBe(1)
   })
+
+  // Measured on coreutils 9.4 by stripping the first line from each pair of
+  // refusals: `ls --quoting-style=l` vs `=zzz`, `ls -l --time=c` vs `=zzz`,
+  // `ls --color=a` vs `=zzz`, `wc --total=a` vs `=zzz` and
+  // `ls -l --time-style=l` vs `=zzz` all agree byte for byte below line 1.
+  it('differs from the ambiguous refusal only in the first line', () => {
+    const choices = [
+      ['atime', 'access', 'use'],
+      ['ctime', 'status'],
+    ]
+    const [amb, ambCode] = invalidArgumentError(
+      'du',
+      '--time',
+      'a',
+      choices,
+      undefined,
+      'ambiguous',
+    )
+    const [inv, invCode] = invalidArgumentError('du', '--time', 'zzz', choices)
+    const ambText = new TextDecoder().decode(amb)
+    const invText = new TextDecoder().decode(inv)
+    expect(ambText.split('\n')[0]).toBe("du: ambiguous argument 'a' for '--time'")
+    expect(invText.split('\n')[0]).toBe("du: invalid argument 'zzz' for '--time'")
+    expect(ambText.slice(ambText.indexOf('\n'))).toBe(invText.slice(invText.indexOf('\n')))
+    expect(ambCode).toBe(1)
+    expect(invCode).toBe(1)
+  })
 })
 
 describe('argmatchLine and argmatchValidBlock', () => {
-  it('words both kinds and quotes the slot', () => {
+  // The wording is the caller's match result, not a re-derivation: there is
+  // no empty-string branch, because a slot whose candidates all mean one
+  // value ACCEPTS the empty word and only the caller holding the candidates
+  // can tell.
+  it('words the kind the caller matched', () => {
     expect(argmatchLine('ls', 'time style', 'x')).toBe("ls: invalid argument 'x' for 'time style'")
-    expect(argmatchLine('ls', 'time style', '')).toBe("ls: ambiguous argument '' for 'time style'")
+    expect(argmatchLine('ls', 'time style', 'x', 'ambiguous')).toBe(
+      "ls: ambiguous argument 'x' for 'time style'",
+    )
+    expect(argmatchLine('ls', 'time style', '', 'ambiguous')).toBe(
+      "ls: ambiguous argument '' for 'time style'",
+    )
   })
 
   // GNU `sort --check=x` prints `  - 'quiet', 'silent'` on ONE line:
@@ -160,6 +202,23 @@ describe('argmatchLine and argmatchValidBlock', () => {
 })
 
 describe('argmatchError', () => {
+  it('words the ambiguous kind over the same block', () => {
+    const err = argmatchError(
+      'sort',
+      '--check',
+      '',
+      [['quiet', 'silent'], ['diagnose-first']],
+      1,
+      'ambiguous',
+    )
+    expect(err.message).toBe(
+      "sort: ambiguous argument '' for '--check'\n" +
+        "Valid arguments are:\n  - 'quiet', 'silent'\n  - 'diagnose-first'\n" +
+        "Try 'sort --help' for more information.",
+    )
+    expect(err.exitCode).toBe(1)
+  })
+
   it('carries the block and the code it was given', () => {
     const err = argmatchError('sort', '--check', 'x', [['quiet', 'silent'], ['diagnose-first']], 1)
     expect(err.message).toBe(

@@ -387,6 +387,15 @@ export interface ParsedArgsInit {
   optionErrorKinds?: string[]
   needsValueOptions?: string[]
   invalidValueOptions?: [string, string, readonly string[]][]
+  /**
+   * Values that ARGMATCH matched as a prefix of two or more different
+   * candidate values, same triple as invalidValueOptions above. gnulib's
+   * own split: `ls --color=a` hits `always` and `auto` and is
+   * `ambiguous argument 'a'`, while `ls --color=zzz` hits nothing and is
+   * `invalid argument 'zzz'` -- two wordings over one candidate block, so
+   * they are two reports rather than one tagged list.
+   */
+  ambiguousValueOptions?: [string, string, readonly string[]][]
   invalidIntOptions?: [string, string][]
   invalidFloatOptions?: [string, string][]
   missingRequiredOptions?: string[]
@@ -455,6 +464,7 @@ export class ParsedArgs {
   readonly optionErrorKinds: string[]
   readonly needsValueOptions: string[]
   readonly invalidValueOptions: [string, string, readonly string[]][]
+  readonly ambiguousValueOptions: [string, string, readonly string[]][]
   readonly invalidIntOptions: [string, string][]
   readonly invalidFloatOptions: [string, string][]
   readonly missingRequiredOptions: string[]
@@ -487,6 +497,7 @@ export class ParsedArgs {
     this.optionErrorKinds = init.optionErrorKinds ?? []
     this.needsValueOptions = init.needsValueOptions ?? []
     this.invalidValueOptions = init.invalidValueOptions ?? []
+    this.ambiguousValueOptions = init.ambiguousValueOptions ?? []
     this.invalidIntOptions = init.invalidIntOptions ?? []
     this.invalidFloatOptions = init.invalidFloatOptions ?? []
     this.missingRequiredOptions = init.missingRequiredOptions ?? []

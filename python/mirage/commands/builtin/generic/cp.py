@@ -21,6 +21,7 @@ from mirage.commands.builtin.utils.copy import (backend_key_default,
                                                 copy_targets, is_directory,
                                                 path_exists)
 from mirage.commands.errors import UsageError
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.types import FlagValue, FlagView
 from mirage.commands.spec.usage import argmatch_error, extra_operand_error
 from mirage.io.types import ByteSource, IOResult
@@ -110,9 +111,18 @@ def update_mode(cmd_name: str, fl: FlagView) -> str | None:
         return None
     if value is True:
         return "older"
+    # An exact word is taken against the accepted set (9.5's), a prefix
+    # against the printed one (9.4's, which is the table this is
+    # measured on): `cp --update=n` is `none` and exits 0 there, and it
+    # only becomes ambiguous the day `none-fail` joins the table.
     if isinstance(value, str) and value in UPDATE_MODES:
         return value
-    raise argmatch_error(cmd_name, "--update", str(value), UPDATE_ARGS, 1)
+    word = str(value)
+    match = argmatch(word, UPDATE_ARGS)
+    if isinstance(match, ArgmatchMatch):
+        return match.word
+    raise argmatch_error(cmd_name, "--update", word, UPDATE_ARGS, 1,
+                         match.kind)
 
 
 def backup_raw(fl: FlagView) -> str | bool | None:

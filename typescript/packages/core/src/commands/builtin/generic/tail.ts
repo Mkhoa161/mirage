@@ -18,6 +18,7 @@ import { cacheAwareStreamEager } from '../../../cache/read_through.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
 import { FileType, type FileStat, type PathSpec } from '../../../types.ts'
 import { argmatchError } from '../../spec/usage.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import {
   countNewlines,
@@ -56,8 +57,15 @@ export interface FollowFlags {
 // while -F's --retry half stays on either way.
 export function followFlags(fl: FlagView): FollowFlags | string {
   const raw: unknown = fl.raw('follow')
-  if (typeof raw === 'string' && !(FOLLOW_ARGS as readonly string[]).includes(raw)) {
-    return argmatchError('tail', '--follow', raw, FOLLOW_ARGS).message + '\n'
+  let how: string | null = null
+  if (typeof raw === 'string') {
+    const match = argmatch(raw, FOLLOW_ARGS)
+    if (!match.matched) {
+      return (
+        argmatchError('tail', '--follow', raw, FOLLOW_ARGS, undefined, match.kind).message + '\n'
+      )
+    }
+    how = match.word
   }
   const typed = fl
     .typedOrder('follow', 'F')
@@ -65,7 +73,7 @@ export function followFlags(fl: FlagView): FollowFlags | string {
       k === 'F' ? fl.asBool('F') : raw !== undefined && raw !== null && raw !== false,
     )
   const follow = typed.length > 0
-  const byName = follow && (typed[typed.length - 1] === 'F' || raw === 'name')
+  const byName = follow && (typed[typed.length - 1] === 'F' || how === 'name')
   const retry = fl.asBool('retry') || typed.includes('F')
   const rawSeconds = fl.asStr('sleep_interval')
   let interval = DEFAULT_SLEEP_INTERVAL

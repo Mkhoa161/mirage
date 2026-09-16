@@ -75,7 +75,7 @@ def spec_word_kinds(
     # parse_command classifies ignore_tokens as TEXT itself, so there is
     # nothing to override here: leaving them None sent `find \( ... \)`
     # back to the shape heuristic, which read "(" as the bare path "/(".
-    kinds = list(parse_command(spec, argv, cwd="/").word_kinds)
+    kinds = list(parse_command(spec, argv, cwd="/", cmd_name=name).word_kinds)
     if name == "find":
         for start, end in exec_spans(argv):
             for i in range(start, end + 1):

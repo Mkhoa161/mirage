@@ -123,3 +123,24 @@ async def test_open_ended_ranges_stay_valid(flags, expected):
 
     assert io.exit_code == 0
     assert await materialize(source) == expected
+
+
+# `--whitespace-delimited` has one candidate, so ARGMATCH accepts any
+# prefix of it. The refusal keeps cut's own one-line wording; GNU cut has
+# no such option, so the rows below are the general rule's answer rather
+# than a measured one, and the empty word (which the general rule
+# ACCEPTS against a sole candidate) is deliberately not pinned either
+# way.
+@pytest.mark.parametrize("value", ["trimmed", "trim", "t"])
+def test_whitespace_delimited_accepts_an_unambiguous_prefix(value):
+    assert parse_flags({
+        "fields": "1",
+        "whitespace_delimited": value
+    }).whitespace == "trimmed"
+
+
+def test_whitespace_delimited_still_refuses_an_unmatched_word():
+    with pytest.raises(ValueError) as exc:
+        parse_flags({"fields": "1", "whitespace_delimited": "tt"})
+    assert str(exc.value) == ("cut: invalid argument 'tt' for "
+                              "'--whitespace-delimited'")

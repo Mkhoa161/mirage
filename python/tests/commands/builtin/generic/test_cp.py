@@ -792,3 +792,24 @@ def test_an_empty_update_is_ambiguous():
     assert str(
         exc.value).startswith("cp: ambiguous argument '' for '--update'\n")
     assert exc.value.exit_code == 1
+
+
+# `cp --update=al`, `=n` and `=o` all exit 0 (measured, coreutils 9.4).
+# The prefix is matched against the 9.4 table mirage prints back, so `n`
+# is `none` rather than an ambiguity with the 9.5-only `none-fail`, which
+# only an exact word reaches.
+@pytest.mark.parametrize("value,mode", [
+    ("al", "all"),
+    ("a", "all"),
+    ("n", "none"),
+    ("no", "none"),
+    ("o", "older"),
+    ("none-fail", "none-fail"),
+])
+def test_update_accepts_an_unambiguous_prefix(value, mode):
+    from mirage.commands.builtin.generic.cp import parse_flags
+    from mirage.commands.spec import SPECS
+    from mirage.commands.spec.types import FlagView
+
+    assert parse_flags(FlagView({"update": value},
+                                spec=SPECS["cp"])).update == mode

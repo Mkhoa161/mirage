@@ -16,6 +16,7 @@ import { IOResult, materialize } from '../../../io/types.ts'
 import type { PathSpec } from '../../../types.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { argmatchError, extraOperandError } from '../../spec/usage.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 import { CommandName, FlagView, type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { resolveSource } from '../utils/stream.ts'
@@ -60,10 +61,15 @@ function optionalMethod(
 ): string | null {
   if (value === undefined || value === false) return null
   const normalized = value === true ? defaultValue : value
-  if (typeof normalized !== 'string' || !allowed.includes(normalized)) {
-    throw argmatchError('uniq', `--${option}`, String(normalized), allowed)
+  const word = String(normalized)
+  // A non-string bag value (a number, a list) is not a candidate word at
+  // all, so it never reaches the matcher and reads as invalid.
+  const match = typeof normalized === 'string' ? argmatch(word, allowed) : null
+  if (match?.matched !== true) {
+    const kind = match === null ? 'invalid' : match.kind
+    throw argmatchError('uniq', `--${option}`, word, allowed, undefined, kind)
   }
-  return normalized
+  return match.word
 }
 
 function parseFlags(bag: Record<string, FlagValue>): UniqFlags {

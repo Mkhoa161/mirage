@@ -872,6 +872,108 @@ describe('lsGeneric columns and time styles', () => {
     expect(parse({ args_1: true })).toBe(false)
   })
 
+  // gnulib's argmatch resolves an unambiguous prefix and answers the
+  // canonical word of the value it matched. Every row measured on coreutils
+  // 9.4 (`ls --sort=non`, `-l --time=acc`, `--hyperlink=n`,
+  // `-l --time-style=full`). Mirrors test_ls.py.
+  it.each([
+    [{ sort: 'non' }, 'sortBy', 'none'],
+    [{ sort: 'n' }, 'sortBy', 'none'],
+    [{ sort: 'si' }, 'sortBy', 'size'],
+    [{ time: 'a' }, 'timeKind', 'atime'],
+    [{ time: 'acc' }, 'timeKind', 'atime'],
+    [{ time: 'u' }, 'timeKind', 'atime'],
+    [{ time: 'm' }, 'timeKind', 'mtime'],
+    [{ time: 's' }, 'timeKind', 'ctime'],
+    [{ time: 'b' }, 'timeKind', 'birth'],
+    [{ hyperlink: 'al' }, 'hyperlink', true],
+    [{ hyperlink: 'y' }, 'hyperlink', true],
+    [{ hyperlink: 'f' }, 'hyperlink', true],
+    [{ hyperlink: 'n' }, 'hyperlink', false],
+    [{ hyperlink: 'au' }, 'hyperlink', false],
+    [{ hyperlink: 'i' }, 'hyperlink', false],
+  ])('parseFlags accepts an unambiguous prefix (%o)', (flags, attr, expected) => {
+    const parsed = parseFlags(
+      new FlagView(flags as Record<string, FlagValue>, specOf('ls')),
+    ) as unknown as Record<string, unknown>
+    expect(parsed[attr]).toBe(expected)
+  })
+
+  it.each([
+    ['full', 'full-iso'],
+    ['long', 'long-iso'],
+    ['i', 'iso'],
+    ['loc', 'locale'],
+  ])('parseFlags accepts the unambiguous time style %s', (value, expected) => {
+    expect(parseFlags(new FlagView({ time_style: value }, specOf('ls'))).columns.timeStyle).toBe(
+      expected,
+    )
+  })
+
+  // A posix- prefix short-circuits the option before the matcher: GNU jumps
+  // to the locale style without reading what follows, so every row here
+  // exits 0 and prints what `locale` prints -- measured on coreutils 9.4,
+  // `posix-l` included, which is ambiguous only if the remainder is matched
+  // (it must not be).
+  it.each([
+    'posix-full-iso',
+    'posix-long-iso',
+    'posix-iso',
+    'posix-locale',
+    'posix-l',
+    'posix-zzz',
+    'posix-',
+    'posix-+%H:%M',
+    'posix-posix-full-iso',
+  ])('parseFlags treats %s as the locale style', (value) => {
+    expect(parseFlags(new FlagView({ time_style: value }, specOf('ls'))).columns.timeStyle).toBe(
+      'locale',
+    )
+  })
+
+  // Ambiguity is decided on values: `--time=a` matches atime and access,
+  // one value, and is accepted above, while these span two and are refused.
+  // The block and the hint below line 1 are the invalid refusal's, measured
+  // byte for byte.
+  it.each([
+    [
+      { time: 'c' },
+      "ls: ambiguous argument 'c' for '--time'\nValid arguments are:\n  - 'atime', 'access', 'use'",
+      1,
+    ],
+    [
+      { hyperlink: 'a' },
+      "ls: ambiguous argument 'a' for '--hyperlink'\nValid arguments are:\n  - 'always', 'yes', 'force'",
+      1,
+    ],
+    [{ time_style: 'lo' }, "ls: ambiguous argument 'lo' for 'time style'", 2],
+  ])('parseFlags refuses a prefix spanning two values (%o)', (flags, prefix, code) => {
+    let caught: unknown = null
+    try {
+      parseFlags(new FlagView(flags as Record<string, FlagValue>, specOf('ls')))
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(UsageError)
+    expect((caught as UsageError).message.startsWith(prefix)).toBe(true)
+    expect((caught as UsageError).exitCode).toBe(code)
+  })
+
+  // `ls --sort=NON`, `=NONE` and `=None` are all `invalid argument`, never
+  // ambiguous and never accepted: gnulib compares bytes (measured).
+  it.each(['NON', 'NONE', 'None'])('parseFlags matches --sort case-sensitively (%s)', (value) => {
+    let caught: unknown = null
+    try {
+      parseFlags(new FlagView({ sort: value }, specOf('ls')))
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(UsageError)
+    expect(
+      (caught as UsageError).message.startsWith(`ls: invalid argument '${value}' for '--sort'`),
+    ).toBe(true)
+  })
+
   it.each([
     [{ sort: 'bogus' }, "ls: invalid argument 'bogus' for '--sort'", 1],
     [

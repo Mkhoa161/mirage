@@ -195,10 +195,60 @@ def test_missing_value_reported_short_and_long():
     assert parsed.needs_value_options == ["e"]
 
 
-def test_text_rest_keeps_unknown_dash_tokens():
-    parsed = parse_command(SPECS["expr"], ["-x", "hello"], "/")
+def test_an_operand_class_command_keeps_unknown_dash_tokens():
+    parsed = parse_command(SPECS["expr"], ["-x", "hello"], "/", "expr")
     assert parsed.texts() == ["-x", "hello"]
     assert parsed.warnings == []
+
+
+# The rest operand's kind used to decide this and cannot: basename,
+# dirname, csplit, numfmt and sleep all declare a TEXT rest and all five
+# report an option they do not know (measured on coreutils 9.4).
+def test_a_text_rest_command_reports_an_unknown_long_option():
+    parsed = parse_command(SPECS["basename"], ["--zzz"], "/", "basename")
+    assert parsed.invalid_options == ["--zzz"]
+    assert parsed.option_error_kinds == ["invalid"]
+    assert parsed.texts() == []
+
+
+def test_a_text_rest_command_reports_an_unknown_short_option():
+    parsed = parse_command(SPECS["basename"], ["-Q"], "/", "basename")
+    assert parsed.invalid_options == ["Q"]
+    assert parsed.texts() == []
+
+
+# An unnamed parse gets the rule, not the exception: the sets are keyed
+# by command name and "" is in neither.
+def test_an_unnamed_parse_is_a_strict_getopt_long_parse():
+    parsed = parse_command(SPECS["basename"], ["--zzz"], "/")
+    assert parsed.invalid_options == ["--zzz"]
+
+
+# An installed CLI node is the other tier: the program owns whatever
+# mirage does not declare, so an undeclared dash word lands in the
+# node's textual rest slot and no abbreviation is expanded on the
+# program's behalf.
+def test_an_installed_cli_node_forwards_dash_words_into_its_rest_slot():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ),
+                       rest=Operand(type="str"))
+    parsed = parse_command(spec, ["--widt", "80", "-n", "x"],
+                           "/",
+                           "pager",
+                           installed_cli=True)
+    assert parsed.flags == {}
+    assert parsed.invalid_options == []
+    assert parsed.texts() == ["--widt", "80", "-n", "x"]
+
+
+# With no slot to forward into, the same tier refuses it: the program
+# cannot be handed a word the node has nowhere to put.
+def test_an_installed_cli_node_without_a_rest_slot_still_refuses():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ))
+    parsed = parse_command(spec, ["--frobnicate"],
+                           "/",
+                           "pager",
+                           installed_cli=True)
+    assert parsed.invalid_options == ["--frobnicate"]
 
 
 def test_numeric_dash_token_stays_operand():
@@ -376,6 +426,87 @@ def test_choices_violation_is_reported_not_raised():
     assert ok.invalid_value_options == []
 
 
+# A declared choices set is a gnulib ARGMATCH table, so the parser
+# resolves a prefix and rewrites the bag to the canonical word. Measured
+# on coreutils 9.4: `tee --output-error=warn-` exits 0 (warn-nopipe) and
+# `=w` is `ambiguous argument 'w'`.
+def test_an_unambiguous_prefix_resolves_to_the_canonical_word():
+    parsed = parse_command(SPECS["tee"], ["--output-error=warn-", "/f"], "/")
+    assert parsed.flags["--output-error"] == "warn-nopipe"
+    assert parsed.invalid_value_options == []
+    assert parsed.ambiguous_value_options == []
+
+
+def test_an_exact_word_is_left_alone_and_not_read_as_a_prefix():
+    parsed = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/")
+    assert parsed.flags["--output-error"] == "warn"
+    assert parsed.ambiguous_value_options == []
+
+
+def test_an_ambiguous_prefix_is_its_own_report():
+    parsed = parse_command(SPECS["tee"], ["--output-error=w", "/f"], "/")
+    assert parsed.ambiguous_value_options == [
+        ("--output-error", "w", ("warn", "warn-nopipe", "exit",
+                                 "exit-nopipe")),
+    ]
+    assert parsed.invalid_value_options == []
+    # The value the line typed stays in the bag: nothing resolved it, and
+    # the renderer names the word as typed.
+    assert parsed.flags["--output-error"] == "w"
+
+
+def test_the_empty_value_is_reported_ambiguous_not_invalid():
+    parsed = parse_command(SPECS["tee"], ["--output-error=", "/f"], "/")
+    assert parsed.ambiguous_value_options == [
+        ("--output-error", "", ("warn", "warn-nopipe", "exit", "exit-nopipe")),
+    ]
+    assert parsed.invalid_value_options == []
+
+
+def test_prefix_matching_is_case_sensitive():
+    parsed = parse_command(SPECS["tee"], ["--output-error=W", "/f"], "/")
+    assert parsed.invalid_value_options == [
+        ("--output-error", "W", ("warn", "warn-nopipe", "exit",
+                                 "exit-nopipe")),
+    ]
+    assert parsed.ambiguous_value_options == []
+
+
+# CPython parses --check-hash-based-pycs by hand and takes only an
+# exact word, so this one choices set is not an ARGMATCH table: measured
+# on 3.11.15, `--check-hash-based-pycs a` and `al` are both refused
+# where gnulib would have resolved them to `always`.
+def test_a_hand_parsed_choices_set_takes_no_prefix():
+    parsed = parse_command(SPECS["python3"],
+                           ["--check-hash-based-pycs=a", "-c", "x"], "/",
+                           "python3")
+    assert parsed.flags["--check-hash-based-pycs"] == "a"
+    assert parsed.invalid_value_options == [
+        ("--check-hash-based-pycs", "a", ("always", "default", "never")),
+    ]
+    assert parsed.ambiguous_value_options == []
+
+
+def test_a_hand_parsed_choices_set_still_takes_the_exact_word():
+    parsed = parse_command(SPECS["python3"],
+                           ["--check-hash-based-pycs=always", "-c", "x"], "/",
+                           "python3")
+    assert parsed.flags["--check-hash-based-pycs"] == "always"
+    assert parsed.invalid_value_options == []
+
+
+# The empty word has no ambiguity wording to reach here either: nothing
+# is an exact match, so it is invalid like any other non-candidate.
+def test_a_hand_parsed_choices_set_reports_the_empty_word_invalid():
+    parsed = parse_command(SPECS["python3"],
+                           ["--check-hash-based-pycs=", "-c", "x"], "/",
+                           "python3")
+    assert parsed.invalid_value_options == [
+        ("--check-hash-based-pycs", "", ("always", "default", "never")),
+    ]
+    assert parsed.ambiguous_value_options == []
+
+
 def test_choices_exempt_bare_optional_value_form():
     parsed = parse_command(SPECS["tee"], ["--output-error", "/f"], "/")
     assert parsed.flags["--output-error"] is True
@@ -387,6 +518,15 @@ def test_choices_check_every_value_of_a_multiple_flag():
         Option(short="-m", type="str", multiple=True, choices=("x", "y")), ))
     parsed = parse_command(spec, ["-m", "x", "-m", "z"], "/")
     assert parsed.invalid_value_options == [("-m", "z", ("x", "y"))]
+
+
+def test_every_value_of_a_multiple_flag_resolves_to_its_canonical_word():
+    spec = CommandSpec(options=(Option(
+        short="-m", type="str", multiple=True, choices=("alpha", "beta")), ))
+    parsed = parse_command(spec, ["-m", "al", "-m", "beta"], "/")
+    assert parsed.flags["-m"] == ["alpha", "beta"]
+    assert parsed.invalid_value_options == []
+    assert parsed.ambiguous_value_options == []
 
 
 def test_required_option_reported_when_absent():
@@ -470,12 +610,66 @@ def test_abbreviated_value_long_takes_the_next_word():
     assert parsed.flags["--exclude"] == "tmp"
 
 
-def test_free_text_commands_keep_exact_only_long_matching():
+# A program with no long-option parser at all (bash's echo builtin,
+# Info-ZIP unzip) never expands an abbreviation, because there is no
+# table to expand against.
+def test_a_program_with_no_long_option_parser_matches_exactly():
     spec = CommandSpec(options=(Option(long="--verbose"), ),
                        rest=Operand(type="str"))
-    parsed = parse_command(spec, ["--verb", "hi"], "/")
+    parsed = parse_command(spec, ["--verb", "hi"], "/", "echo")
     assert "--verbose" not in parsed.flags
     assert parsed.texts() == ["--verb", "hi"]
+
+
+def test_the_same_line_expands_the_abbreviation_for_a_getopt_command():
+    spec = CommandSpec(options=(Option(long="--verbose"), ),
+                       rest=Operand(type="str"))
+    parsed = parse_command(spec, ["--verb", "hi"], "/", "basename")
+    assert parsed.flags["--verbose"] is True
+    assert parsed.texts() == ["hi"]
+
+
+# expr's long options are the two the @command decorator injects into
+# every spec, which is why the spec is built here rather than read from
+# SPECS: the registered spec carries them and the declaration does not.
+_EXPR_SPEC = CommandSpec(options=(Option(long="--help"),
+                                  Option(long="--version")),
+                         rest=Operand(type="str"))
+
+
+# gnulib's parse_long_options guards on `argc == 2`, so expr reads a long
+# option only when it is the whole line. Measured on coreutils 9.4:
+# `expr --help` helps, `expr --help x` is a syntax error on `x`, and
+# `expr -- --help` prints `--help`.
+def test_a_sole_argument_long_option_is_read_as_an_option():
+    parsed = parse_command(_EXPR_SPEC, ["--help"], "/", "expr")
+    assert parsed.flags["--help"] is True
+    assert parsed.texts() == []
+
+
+def test_a_sole_argument_long_option_prefix_resolves():
+    parsed = parse_command(_EXPR_SPEC, ["--h"], "/", "expr")
+    assert parsed.flags["--help"] is True
+
+
+def test_a_sole_argument_word_that_prefixes_nothing_is_an_operand():
+    parsed = parse_command(_EXPR_SPEC, ["--hex"], "/", "expr")
+    assert parsed.flags == {}
+    assert parsed.invalid_options == []
+    assert parsed.texts() == ["--hex"]
+
+
+def test_a_long_option_outside_the_window_is_an_operand():
+    parsed = parse_command(_EXPR_SPEC, ["--help", "x"], "/", "expr")
+    assert parsed.flags == {}
+    assert parsed.invalid_options == []
+    assert parsed.texts() == ["--help", "x"]
+
+
+def test_dash_dash_puts_the_sole_argument_outside_the_window():
+    parsed = parse_command(_EXPR_SPEC, ["--", "--help"], "/", "expr")
+    assert parsed.flags == {}
+    assert parsed.texts() == ["--help"]
 
 
 def test_int_typed_value_is_reported_not_raised():

@@ -786,6 +786,21 @@ describe('parseFlags', () => {
     )
   })
 
+  // `cp --update=al`, `=n` and `=o` all exit 0 (measured, coreutils 9.4).
+  // The prefix is matched against the 9.4 table mirage prints back, so `n`
+  // is `none` rather than an ambiguity with the 9.5-only `none-fail`, which
+  // only an exact word reaches. Mirrors test_cp.py.
+  it.each([
+    ['al', 'all'],
+    ['a', 'all'],
+    ['n', 'none'],
+    ['no', 'none'],
+    ['o', 'older'],
+    ['none-fail', 'none-fail'],
+  ])('accepts the unambiguous --update prefix %s', (value, mode) => {
+    expect(parseFlags(view({ update: value })).update).toBe(mode)
+  })
+
   it('resolves the GNU update and backup grammars', () => {
     expect(parseFlags(view({ update: true })).update).toBe('older')
     expect(parseFlags(view({ update: true })).update).toBe('older')

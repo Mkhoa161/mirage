@@ -224,6 +224,48 @@
         "stdout_text": "😀\n\nb\n",
         "stderr_text": ""
       }
+    },
+    {
+      "id": "sort_check_prefix_resolves_diagnose_first",
+      "cmd": "printf 'b\\na\\n' | sort --check=d",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "sort: -:2: disorder: a\n"
+      }
+    },
+    {
+      "id": "sort_check_empty_value_is_ambiguous",
+      "cmd": "printf 'a\\nb\\n' | sort --check=",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "sort: ambiguous argument '' for '--check'\nValid arguments are:\n  - 'quiet', 'silent'\n  - 'diagnose-first'\nTry 'sort --help' for more information.\n"
+      }
     }
   ]
 }

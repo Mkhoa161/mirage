@@ -26,6 +26,10 @@ import type { BuiltinCall, Result } from '../types.ts'
 import { sessionView } from '../../../session/state.ts'
 import { TARGET_RE } from '../constants.ts'
 
+// bash 5.2.21's own string, which both the usage error and the invalid-option
+// refusal end with.
+const USAGE = 'printf: usage: printf [-v var] format [arguments]\n'
+
 /**
  * Assign `value` to a `printf -v` target (scalar or `name[idx]`).
  *
@@ -90,9 +94,43 @@ export async function handlePrintf(
       ]
     }
   }
+  const first = args[0]
+  if (first !== undefined && !isProgramInvocation(session)) {
+    if (first === '--') {
+      args = args.slice(1)
+      if (args.length === 0) {
+        // `--` ends the options and the FORMAT is still required, so the line
+        // is bash's usage error rather than an empty one (bash 5.2.21:
+        // `printf --` is exit 2 with the usage, where `printf -- --zzz` prints
+        // `--zzz`).
+        const err = new TextEncoder().encode(USAGE)
+        return [
+          null,
+          new IOResult({ exitCode: 2, stderr: err }),
+          new ExecutionNode({ command: 'printf', exitCode: 2, stderr: err }),
+        ]
+      }
+    } else if (first.startsWith('-') && first.length > 1 && first !== '-v') {
+      // bash's `internal_getopt` takes single letters only, so it reports the
+      // first character it does not know spelled with ONE dash: a long
+      // spelling answers for its second dash and its text never reaches the
+      // message, which is why `printf --zzz`, `printf --hel` and
+      // `printf --zzz=é` are all `printf: --: invalid option` (bash 5.2.21).
+      // The coreutils binary is lenient here and prints the word, but mirage
+      // ships printf as a builtin, so the builtin governs. A bare `-v` short
+      // of its NAME is left to the format path, where bash's own `option
+      // requires an argument` is a separate change.
+      const err = new TextEncoder().encode(`printf: -${first[1] ?? ''}: invalid option\n${USAGE}`)
+      return [
+        null,
+        new IOResult({ exitCode: 2, stderr: err }),
+        new ExecutionNode({ command: 'printf', exitCode: 2, stderr: err }),
+      ]
+    }
+  }
   if (args.length === 0) {
     if (target !== null) {
-      const err = new TextEncoder().encode('printf: usage: printf [-v var] format [arguments]\n')
+      const err = new TextEncoder().encode(USAGE)
       return [
         null,
         new IOResult({ exitCode: 2, stderr: err }),

@@ -1,0 +1,72 @@
+{
+  "cases": [
+    {
+      "id": "sleep_unrecognized_long_option",
+      "seq": 991039,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep --zzz",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: unrecognized option '--zzz'\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_operand_diagnostic_octal_escapes_the_value",
+      "seq": 991040,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep -- '--zzz=é'",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '--zzz=\\303\\251'\nTry 'sleep --help' for more information.\n"
+      }
+    }
+  ]
+}

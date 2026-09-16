@@ -13,6 +13,7 @@ from mirage.commands.builtin.utils.output import (format_optional_records,
 from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.argmatch import ArgmatchKind, ArgmatchMatch, argmatch
 from mirage.commands.spec.types import FlagValue, FlagView
 from mirage.commands.spec.usage import (argmatch_error, argmatch_line,
                                         usage_hint)
@@ -82,7 +83,8 @@ _HYPERLINK_GROUPS = (("always", "yes", "force"), ("never", "no", "none"),
 
 
 def _grouped_argument_error(option: str, value: str,
-                            groups: tuple[tuple[str, ...], ...]) -> UsageError:
+                            groups: tuple[tuple[str, ...], ...],
+                            kind: ArgmatchKind) -> UsageError:
     """GNU's ARGMATCH refusal for an option whose values have aliases,
     listed one group per line (``--time``, ``--hyperlink``); exit 1, as
     ls answers it.
@@ -93,8 +95,11 @@ def _grouped_argument_error(option: str, value: str,
             escapes it.
         groups (tuple[tuple[str, ...], ...]): the valid values, aliases
             grouped.
+        kind (ArgmatchKind): the wording the match answered with --
+            ``ls --hyperlink=a`` spans three values and is ambiguous,
+            ``--hyperlink=zzz`` spans none and is invalid.
     """
-    return argmatch_error("ls", option, value, groups, 1)
+    return argmatch_error("ls", option, value, groups, 1, kind)
 
 
 def _sort_flag(fl: FlagView) -> tuple[LsSortBy, bool]:
@@ -111,10 +116,11 @@ def _sort_flag(fl: FlagView) -> tuple[LsSortBy, bool]:
     if last != "sort":
         return _SORT_FLAGS[last], True
     word = fl.as_str("sort") or ""
-    key = _SORT_WORDS.get(word)
-    if key is None:
-        raise argmatch_error("ls", "--sort", word, tuple(_SORT_WORDS), 1)
-    return key, True
+    words = tuple(_SORT_WORDS)
+    match = argmatch(word, words)
+    if not isinstance(match, ArgmatchMatch):
+        raise argmatch_error("ls", "--sort", word, words, 1, match.kind)
+    return _SORT_WORDS[match.word], True
 
 
 def _time_flag(fl: FlagView) -> LsTimeKind:
@@ -133,16 +139,24 @@ def _time_flag(fl: FlagView) -> LsTimeKind:
     if last == "u":
         return LsTimeKind.ATIME
     word = fl.as_str("time") or ""
-    for group in _TIME_GROUPS:
-        if word in group:
-            return _TIME_KINDS[group[0]]
-    raise _grouped_argument_error("--time", word, _TIME_GROUPS)
+    match = argmatch(word, _TIME_GROUPS)
+    if not isinstance(match, ArgmatchMatch):
+        raise _grouped_argument_error("--time", word, _TIME_GROUPS, match.kind)
+    return _TIME_KINDS[match.word]
 
 
 def _time_style_flag(fl: FlagView) -> str:
-    """``--time-style``, its ``posix-`` prefix stripped (the C locale
-    makes the two spellings one), validated the way GNU words it (exit
-    2).
+    """``--time-style``, validated the way GNU words it (exit 2).
+
+    A ``posix-`` prefix short-circuits the whole option: GNU's loop
+    strips each one and, outside a hard LC_TIME locale, jumps straight
+    to the locale style without looking at what follows. mirage has no
+    other locale, so every ``posix-`` spelling is the locale style and
+    none of them is ever refused -- measured on coreutils 9.4, where
+    ``posix-full-iso``, ``posix-l``, ``posix-zzz``, ``posix-`` and
+    ``posix-+%H:%M`` all exit 0 and all print what ``locale`` prints.
+    The matcher therefore has to run after that check, not before: the
+    remainder is not a candidate word at all.
 
     Args:
         fl (FlagView): the ls flag view.
@@ -150,16 +164,21 @@ def _time_style_flag(fl: FlagView) -> str:
     style = fl.as_str("time_style")
     if style is None:
         return "locale"
-    posix = style.startswith("posix-")
-    bare = style[6:] if posix else style
-    if bare in formatting.LS_TIME_STYLES or bare.startswith("+"):
-        return "locale" if posix else bare
+    if style.startswith("posix-"):
+        return "locale"
+    if style.startswith("+"):
+        return style
+    match = argmatch(style, formatting.LS_TIME_STYLES)
+    if isinstance(match, ArgmatchMatch):
+        return match.word
     # ls hand-writes this block rather than letting argmatch print
     # `time_style_args`, so it is the one ARGMATCH refusal in the repo
     # whose candidates are neither quoted nor a subset of the words it
     # accepts -- and the one that exits 2, ls's own `usage (LS_FAILURE)`.
+    # The first line is still argmatch's, so `--time-style=lo` spans
+    # long-iso and locale and reads `ambiguous argument 'lo'`.
     raise UsageError(
-        f"{argmatch_line('ls', 'time style', style)}\n"
+        f"{argmatch_line('ls', 'time style', style, match.kind)}\n"
         "Valid arguments are:\n"
         "  - [posix-]full-iso\n"
         "  - [posix-]long-iso\n"
@@ -183,10 +202,11 @@ def _hyperlink_flag(fl: FlagView) -> bool:
     if raw is True:
         return True
     word = str(raw)
-    for group in _HYPERLINK_GROUPS:
-        if word in group:
-            return group[0] == "always"
-    raise _grouped_argument_error("--hyperlink", word, _HYPERLINK_GROUPS)
+    match = argmatch(word, _HYPERLINK_GROUPS)
+    if not isinstance(match, ArgmatchMatch):
+        raise _grouped_argument_error("--hyperlink", word, _HYPERLINK_GROUPS,
+                                      match.kind)
+    return match.word == "always"
 
 
 def parse_flags(flags: Mapping[str, FlagValue]) -> LsFlags:

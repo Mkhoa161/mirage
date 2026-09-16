@@ -100,6 +100,45 @@ async def test_printf_no_args_is_empty():
     assert await printf_bytes([]) == b""
 
 
+# bash's `internal_getopt` takes single letters, so it reports the first
+# character it does not know spelled with ONE dash: a long spelling
+# answers for its second dash and its own text never reaches the
+# message. Measured on bash 5.2.21, where the coreutils binary of the
+# same name is lenient and prints the word; mirage ships the builtin.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("args,bad", [(["--zzz"], "--"), (["--zzz=x"], "--"),
+                                      (["--hel"], "--"), (["--help"], "--"),
+                                      (["--version"], "--"), (["-Q"], "-Q")])
+async def test_printf_unknown_option_reports_the_first_character(args, bad):
+    _, io, node = await handle_printf(args, Session(session_id="s1"))
+    assert io.exit_code == 2
+    assert io.stderr == (
+        f"printf: {bad}: invalid option\n"
+        f"printf: usage: printf [-v var] format [arguments]\n").encode()
+    assert node.exit_code == 2
+
+
+@pytest.mark.asyncio
+async def test_printf_dash_dash_ends_the_options():
+    assert await printf_bytes(["--", "--zzz"]) == b"--zzz"
+
+
+# `--` ends the options and the FORMAT is still required, so the line is
+# the usage error rather than an empty one.
+@pytest.mark.asyncio
+async def test_printf_dash_dash_alone_is_the_usage_error():
+    _, io, _ = await handle_printf(["--"], Session(session_id="s1"))
+    assert io.exit_code == 2
+    assert io.stderr == b"printf: usage: printf [-v var] format [arguments]\n"
+
+
+# An option-shaped word in OPERAND position is a plain argument: bash
+# stops scanning at the first non-option word.
+@pytest.mark.asyncio
+async def test_printf_option_shaped_operand_is_an_argument():
+    assert await printf_bytes(["%s", "--zzz"]) == b"--zzz"
+
+
 @pytest.mark.asyncio
 async def test_printf_format_reuse_for_excess_args():
     assert await printf_bytes(["%s\n", "c", "a", "b"]) == b"c\na\nb\n"

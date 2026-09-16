@@ -86,6 +86,10 @@ export function parseFlags(
   // env-supplied int would go unchecked and an env-supplied path would
   // stay a bare string.
   env?: Readonly<Record<string, string>>,
+  // The spec is an installed CLI's node rather than a GNU command, so the
+  // program owns any dashed word the node does not declare and the parser
+  // forwards it into a textual rest slot instead of refusing it.
+  installedCli = false,
 ): ParsedCommand {
   const argv: string[] = parts.map((item) => (item instanceof PathSpec ? item.virtual : item))
   const scopeMap = new Map<string, PathSpec>()
@@ -107,7 +111,7 @@ export function parseFlags(
   }
 
   if (spec !== null) {
-    const parsed = parseCommand(spec, argv, cwd, env)
+    const parsed = parseCommand(spec, argv, cwd, cmdName, installedCli, env)
     const flagKwargs = parseToKwargs(parsed)
 
     for (const [key, value] of Object.entries(flagKwargs)) {
@@ -147,6 +151,7 @@ export function parseFlags(
       optionErrorKinds: parsed.optionErrorKinds,
       needsValueOptions: parsed.needsValueOptions,
       invalidValueOptions: parsed.invalidValueOptions,
+      ambiguousValueOptions: parsed.ambiguousValueOptions,
       invalidIntOptions: parsed.invalidIntOptions,
       invalidFloatOptions: parsed.invalidFloatOptions,
       missingRequiredOptions: parsed.missingRequiredOptions,
@@ -172,6 +177,7 @@ export function parseFlags(
     optionErrorKinds: [],
     needsValueOptions: [],
     invalidValueOptions: [],
+    ambiguousValueOptions: [],
     invalidIntOptions: [],
     invalidFloatOptions: [],
     missingRequiredOptions: [],
@@ -221,8 +227,16 @@ export function optionError(cmdName: string, parsed: ParsedCommand): [Uint8Array
   if (badInt !== undefined) return invalidIntError(cmdName, ...badInt)
   const badFloat = parsed.invalidFloatOptions[0]
   if (badFloat !== undefined) return invalidFloatError(cmdName, ...badFloat)
+  // The two ARGMATCH refusals, adjacent because they are one gnulib answer
+  // worded two ways: only one of them can fire for any single option, and
+  // across options both follow declaration order, as every report above
+  // does.
   const badValue = parsed.invalidValueOptions[0]
   if (badValue !== undefined) return invalidArgumentError(cmdName, ...badValue)
+  const ambiguousValue = parsed.ambiguousValueOptions[0]
+  if (ambiguousValue !== undefined) {
+    return invalidArgumentError(cmdName, ...ambiguousValue, undefined, 'ambiguous')
+  }
   if (parsed.missingRequiredOptions.length > 0) {
     return missingRequiredError(cmdName, parsed.missingRequiredOptions[0] ?? '')
   }
