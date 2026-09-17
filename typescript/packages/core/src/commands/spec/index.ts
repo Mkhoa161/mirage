@@ -14,6 +14,6 @@
 
 export { BUILTIN_SPECS as SPECS, specOf } from './builtins.ts'
 
-export { parseCommand } from './parser.ts'
+export { parseCommand, parseKnownCommand } from './parser.ts'
 export { CommandSpec, type FlagValue, Operand, Option } from './types.ts'
 export { FlagView, specFlagNames } from './flag_view.ts'

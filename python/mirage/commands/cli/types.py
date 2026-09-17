@@ -14,7 +14,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Callable, ClassVar, Generic, Literal, TypeVar
+from typing import Any, Callable, Generic, Literal, TypeVar
 
 from pydantic import BaseModel
 
@@ -193,12 +193,6 @@ class CLISpec(CommandSpec):
             message and the exit code sees what it would from the real
             one.
     """
-    # Every level of the tree is a program mirage imitates rather than
-    # one it implements, so the parser hands an undeclared dash word and
-    # an abbreviated choice value to that program instead of answering
-    # in GNU's terms. See CommandSpec.cli_node.
-    cli_node: ClassVar[bool] = True
-
     name: str = ""
     aliases: tuple[str, ...] = ()
     # Any callable is valid, including stateful callable objects whose

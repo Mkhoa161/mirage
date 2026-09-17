@@ -39,13 +39,13 @@ import type { ScriptSource } from '../../../runtime/routing/types.ts'
 import { runOutput } from '../../../commands/builtin/general/interpreter.ts'
 import type { Runtime } from '../../../runtime/base.ts'
 import { LanguageRuntime } from '../../../runtime/language.ts'
-import { optionError, parseFlags } from './flags.ts'
+import { optionError, parseKnownFlags } from './flags.ts'
 
-// A textual rest operand is a CLI node's pass-through form: on a spec whose
-// `cliNode` is true the parser reads undeclared dashed tokens into it instead of
-// refusing them, which is what a program parsing its own argv needs. 'str',
-// not 'path', so nothing is cwd-resolved or routed. Only this tier reads the
-// rest kind that way: a GNU command's textual rest is a list of operands,
+// A textual rest operand is a CLI node's pass-through form: read by
+// parseKnownFlags, it takes the undeclared dashed tokens the node does not
+// refuse, which is what a program parsing its own argv needs. 'str', not
+// 'path', so nothing is cwd-resolved or routed. Only that reader treats the
+// rest kind this way: a GNU command's textual rest is a list of operands,
 // which is why basename has one and still refuses an option it does not know.
 const PASSTHROUGH_REST = new Operand({ type: 'str' })
 
@@ -218,7 +218,7 @@ export async function handleCli(
   // Words re-enter string space as typed (wordText): the walk owns
   // interpretation, so a quoted "Lunch?" must not arrive as the
   // glob-classified absolute /Lunch?. Leaf path operands are resolved
-  // later by parseFlags against the session cwd.
+  // later by parseKnownFlags against the session cwd.
   const words = parts.map((p) => wordText(p))
   const cmdStr = words.join(' ')
   const argv = words.slice(1)
@@ -246,7 +246,13 @@ export async function handleCli(
   // The environment goes into the parse, not on top of it: an option
   // declaring one is coerced, choice-checked, path-resolved and credited
   // against required exactly as a typed value is.
-  const parsed = parseFlags([...result.argv], parseSpec, prog, session.cwd, envSnapshot(session))
+  const parsed = parseKnownFlags(
+    [...result.argv],
+    parseSpec,
+    prog,
+    session.cwd,
+    envSnapshot(session),
+  )
   const { paths, texts, flagKwargs, warnings } = parsed
   if (mirageHelp && flagKwargs.help === true) {
     const helpText = new TextEncoder().encode(renderHelp(prog, parseSpec, [], style))

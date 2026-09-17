@@ -13,15 +13,10 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { CLISpec } from '../cli/types.ts'
 import { specOf } from './builtins.ts'
-import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
+import { ParsedArgs, parseCommand, parseKnownCommand, parseToKwargs } from './parser.ts'
 import { CommandSpec, Operand, Option, VALUE_OCCURRENCES_KEY } from './types.ts'
 import { FlagView } from './flag_view.ts'
-
-function verb(): null {
-  return null
-}
 
 describe('parseCommand — bool short flags', () => {
   const spec = new CommandSpec({
@@ -421,35 +416,33 @@ describe('parseCommand — unknown dash tokens warn and drop', () => {
     expect(parseCommand(specOf('basename'), ['--zzz'], '/').invalidOptions).toEqual(['--zzz'])
   })
 
-  // An installed CLI node is the other tier: the program owns whatever mirage
-  // does not declare, so an undeclared dash word lands in the node's textual
-  // rest slot and no abbreviation is expanded on the program's behalf. With no
-  // slot to forward into, the same tier refuses it: the program cannot be
-  // handed a word the node has nowhere to put.
-  it('forwards dash words into an installed CLI node rest slot', () => {
-    const spec = new CLISpec({
-      name: 'pager',
-      fn: verb,
+  // parseKnownCommand is the other reader, the one an installed CLI's node
+  // takes: the program owns whatever mirage does not declare, so an undeclared
+  // dash word lands in the node's textual rest slot and no abbreviation is
+  // expanded on the program's behalf. With no slot to forward into, the same
+  // reader refuses it: the program cannot be handed a word the node has
+  // nowhere to put.
+  it('forwards dash words into the rest slot for the known reader', () => {
+    const spec = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
       rest: new Operand({ type: 'str' }),
     })
-    const parsed = parseCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager')
+    const parsed = parseKnownCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager')
     expect(parsed.flags).toEqual({})
     expect(parsed.invalidOptions).toEqual([])
     expect(parsed.texts()).toEqual(['--widt', '80', '-n', 'x'])
-    const slotless = new CLISpec({
-      name: 'pager',
-      fn: verb,
+    const slotless = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
     })
-    expect(parseCommand(slotless, ['--frobnicate'], '/', 'pager').invalidOptions).toEqual([
+    expect(parseKnownCommand(slotless, ['--frobnicate'], '/', 'pager').invalidOptions).toEqual([
       '--frobnicate',
     ])
   })
 
-  // The same grammar on a GNU command's spec is the other answer, which is
-  // what makes the tier the deciding fact rather than the shape.
-  it('refuses the same dash word on a CommandSpec', () => {
+  // The very same spec read by parseCommand is the other answer, which is what
+  // makes the reader the deciding fact: nothing about the grammar, and nothing
+  // carried on the spec, tells the two apart.
+  it('refuses the same dash word through parseCommand', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
       rest: new Operand({ type: 'str' }),
@@ -793,27 +786,27 @@ describe('choices violations are reported, never thrown', () => {
   })
 
   // An installed CLI's choices set is clap's or git's, not gnulib's: the
-  // program compares the whole word, so `gh issue list --state=o` is a
-  // refusal there where GNU would resolve it to `open`. The CLI's group level
-  // already enforces its choices exactly (walk's finishNode), so a leaf that
-  // prefix-matched would make one Option.choices mean two things inside one
-  // tree. Mirrors test_parser.py.
-  it('takes no prefix for an installed CLI', () => {
+  // program compares the whole word, which is argparse's own rule, so `gh
+  // issue list --state=o` is a refusal there where GNU would resolve it to
+  // `open`. The CLI's group level already enforces its choices exactly (walk's
+  // finishNode), so a leaf that prefix-matched would make one Option.choices
+  // mean two things inside one tree. Mirrors test_parser.py.
+  it('takes no prefix for the known reader', () => {
     const options = [
       new Option({ long: '--state', type: 'str', choices: ['open', 'closed', 'all'] }),
     ]
-    const spec = new CLISpec({ name: 'list', fn: verb, options })
-    const parsed = parseCommand(spec, ['--state=o'], '/', 'gh')
+    const spec = new CommandSpec({ options })
+    const parsed = parseKnownCommand(spec, ['--state=o'], '/', 'gh')
     expect(parsed.flags['--state']).toBe('o')
     expect(parsed.choiceValueOptions).toEqual([
       ['--state', 'o', ['open', 'closed', 'all'], 'invalid'],
     ])
-    const exact = parseCommand(spec, ['--state=open'], '/', 'gh')
+    const exact = parseKnownCommand(spec, ['--state=open'], '/', 'gh')
     expect(exact.flags['--state']).toBe('open')
     expect(exact.choiceValueOptions).toEqual([])
-    // The same option on a GNU command's spec prefix-matches, so the node's
-    // tier is what decides and nothing about the option does.
-    const gnu = parseCommand(new CommandSpec({ options }), ['--state=o'], '/', 'ls')
+    // The same spec read by parseCommand prefix-matches, so the reader is what
+    // decides and nothing about the option does.
+    const gnu = parseCommand(spec, ['--state=o'], '/', 'ls')
     expect(gnu.flags['--state']).toBe('open')
     expect(gnu.choiceValueOptions).toEqual([])
   })

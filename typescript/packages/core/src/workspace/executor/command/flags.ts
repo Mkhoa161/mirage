@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { parseCommand, parseToKwargs } from '../../../commands/spec/parser.ts'
+import { parseCommand, parseKnownCommand, parseToKwargs } from '../../../commands/spec/parser.ts'
 import {
   ambiguousOptionError,
   invalidArgumentError,
@@ -76,7 +76,40 @@ function takeSpelling(
   return scopeMap.get(value) ?? synthesizePathSpec(value)
 }
 
+/**
+ * Read a line whose every word this spec is answerable for.
+ *
+ * The PathSpec-recovering wrapper around `parseCommand`; see
+ * `parseKnownFlags` for the reader an installed CLI's node takes.
+ */
 export function parseFlags(
+  parts: readonly (string | PathSpec)[],
+  spec: CommandSpec | null,
+  cmdName: string,
+  cwd: string,
+  env?: Readonly<Record<string, string>>,
+): ParsedCommand {
+  return parseParts(parts, spec, cmdName, cwd, env, false)
+}
+
+/**
+ * Read a line this spec shares with the program it is a node of.
+ *
+ * The PathSpec-recovering wrapper around `parseKnownCommand`, so an installed
+ * CLI's node forwards a dashed word it does not declare instead of refusing
+ * it, and compares a choice value whole.
+ */
+export function parseKnownFlags(
+  parts: readonly (string | PathSpec)[],
+  spec: CommandSpec | null,
+  cmdName: string,
+  cwd: string,
+  env?: Readonly<Record<string, string>>,
+): ParsedCommand {
+  return parseParts(parts, spec, cmdName, cwd, env, true)
+}
+
+function parseParts(
   parts: readonly (string | PathSpec)[],
   spec: CommandSpec | null,
   cmdName: string,
@@ -85,7 +118,10 @@ export function parseFlags(
   // from there. Filled inside the parse rather than after it, or an
   // env-supplied int would go unchecked and an env-supplied path would
   // stay a bare string.
-  env?: Readonly<Record<string, string>>,
+  env: Readonly<Record<string, string>> | undefined,
+  // Which reader to run, as argparse picks between parse_args and
+  // parse_known_args.
+  unknownIsOperand: boolean,
 ): ParsedCommand {
   const argv: string[] = parts.map((item) => (item instanceof PathSpec ? item.virtual : item))
   const scopeMap = new Map<string, PathSpec>()
@@ -107,7 +143,8 @@ export function parseFlags(
   }
 
   if (spec !== null) {
-    const parsed = parseCommand(spec, argv, cwd, cmdName, env)
+    const reader = unknownIsOperand ? parseKnownCommand : parseCommand
+    const parsed = reader(spec, argv, cwd, cmdName, env)
     const flagKwargs = parseToKwargs(parsed)
 
     for (const [key, value] of Object.entries(flagKwargs)) {

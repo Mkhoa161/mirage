@@ -14,10 +14,10 @@
 
 import pytest
 
-from mirage.commands.cli.types import CLISpec
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
-from mirage.commands.spec.parser import parse_command, parse_to_kwargs
+from mirage.commands.spec.parser import (parse_command, parse_known_command,
+                                         parse_to_kwargs)
 from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
                                         Operand, Option)
 
@@ -226,38 +226,32 @@ def test_an_unnamed_parse_is_a_strict_getopt_long_parse():
     assert parsed.invalid_options == ["--zzz"]
 
 
-async def _verb(inv):
-    return None
-
-
-# An installed CLI node is the other tier, and the node's own type says
-# so: the program owns whatever mirage does not declare, so an
+# parse_known_command is the other reader, the one an installed CLI's
+# node takes: the program owns whatever mirage does not declare, so an
 # undeclared dash word lands in the node's textual rest slot and no
 # abbreviation is expanded on the program's behalf.
-def test_an_installed_cli_node_forwards_dash_words_into_its_rest_slot():
-    spec = CLISpec(name="pager",
-                   fn=_verb,
-                   options=(Option(long="--width", type="int"), ),
-                   rest=Operand(type="str"))
-    parsed = parse_command(spec, ["--widt", "80", "-n", "x"], "/", "pager")
+def test_the_known_reader_forwards_dash_words_into_the_rest_slot():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ),
+                       rest=Operand(type="str"))
+    parsed = parse_known_command(spec, ["--widt", "80", "-n", "x"], "/",
+                                 "pager")
     assert parsed.flags == {}
     assert parsed.invalid_options == []
     assert parsed.texts() == ["--widt", "80", "-n", "x"]
 
 
-# With no slot to forward into, the same tier refuses it: the program
+# With no slot to forward into, the same reader refuses it: the program
 # cannot be handed a word the node has nowhere to put.
-def test_an_installed_cli_node_without_a_rest_slot_still_refuses():
-    spec = CLISpec(name="pager",
-                   fn=_verb,
-                   options=(Option(long="--width", type="int"), ))
-    parsed = parse_command(spec, ["--frobnicate"], "/", "pager")
+def test_the_known_reader_without_a_rest_slot_still_refuses():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ))
+    parsed = parse_known_command(spec, ["--frobnicate"], "/", "pager")
     assert parsed.invalid_options == ["--frobnicate"]
 
 
-# The same grammar on a GNU command's spec is the other answer, which is
-# what makes the tier the deciding fact rather than the shape.
-def test_the_same_grammar_on_a_command_spec_refuses_the_dash_word():
+# The very same spec read by parse_command is the other answer, which is
+# what makes the reader the deciding fact: nothing about the grammar,
+# and nothing carried on the spec, tells the two apart.
+def test_the_same_spec_read_by_parse_command_refuses_the_dash_word():
     spec = CommandSpec(options=(Option(long="--width", type="int"), ),
                        rest=Operand(type="str"))
     parsed = parse_command(spec, ["--widt", "80", "-n", "x"], "/", "pager")
@@ -519,27 +513,27 @@ def test_a_hand_parsed_choices_set_reports_the_empty_word_invalid():
 
 
 # An installed CLI's choices set is clap's or git's, not gnulib's: the
-# program compares the whole word, so `gh issue list --state=o` is a
-# refusal there where GNU would resolve it to `open`. The CLI's group
-# level already enforces its choices exactly (walk._finish_node), so a
-# leaf that prefix-matched would make one Option.choices mean two things
-# inside one tree.
-def test_an_installed_cli_takes_no_prefix_for_its_choices():
+# program compares the whole word, which is argparse's own rule, so
+# `gh issue list --state=o` is a refusal there where GNU would resolve
+# it to `open`. The CLI's group level already enforces its choices
+# exactly (walk._finish_node), so a leaf that prefix-matched would make
+# one Option.choices mean two things inside one tree.
+def test_the_known_reader_takes_no_prefix_for_its_choices():
     options = (Option(long="--state",
                       type="str",
                       choices=("open", "closed", "all")), )
-    spec = CLISpec(name="list", fn=_verb, options=options)
-    parsed = parse_command(spec, ["--state=o"], "/", "gh")
+    spec = CommandSpec(options=options)
+    parsed = parse_known_command(spec, ["--state=o"], "/", "gh")
     assert parsed.flags["--state"] == "o"
     assert parsed.choice_value_options == [
         ("--state", "o", ("open", "closed", "all"), "invalid"),
     ]
-    exact = parse_command(spec, ["--state=open"], "/", "gh")
+    exact = parse_known_command(spec, ["--state=open"], "/", "gh")
     assert exact.flags["--state"] == "open"
     assert exact.choice_value_options == []
-    # The same option on a GNU command's spec prefix-matches, so the
-    # node's tier is what decides and nothing about the option does.
-    gnu = parse_command(CommandSpec(options=options), ["--state=o"], "/", "ls")
+    # The same spec read by parse_command prefix-matches, so the reader
+    # is what decides and nothing about the option does.
+    gnu = parse_command(spec, ["--state=o"], "/", "ls")
     assert gnu.flags["--state"] == "open"
     assert gnu.choice_value_options == []
 
