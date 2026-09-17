@@ -179,6 +179,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "rm [OPTION]... [FILE]..."
+  }
 }

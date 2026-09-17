@@ -17,6 +17,5 @@
   "description": "Evaluate expressions.",
   "rest": {
     "type": "str"
-  },
-  "usage": "expr EXPRESSION"
+  }
 }

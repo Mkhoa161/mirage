@@ -315,6 +315,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "zgrep [OPTION]... [-e] PATTERN [FILE]..."
+  }
 }

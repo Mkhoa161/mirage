@@ -331,6 +331,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "sha512sum [OPTION]... [FILE]..."
+  }
 }

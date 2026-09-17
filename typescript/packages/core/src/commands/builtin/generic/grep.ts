@@ -30,12 +30,13 @@ import { grepInput, type FlagSet } from '../grep_binary.ts'
 import { fileAdmitted, dirAdmitted, parseFileGlobs } from '../grep_select.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { UsageError } from '../../errors.ts'
+import { SYNOPSES } from '../../spec/synopsis.ts'
 import { usageHint } from '../../spec/usage.ts'
 
 const ENC = new TextEncoder()
 // GNU grep with no pattern prints its synopsis and the help hint, exit 2
 // (grep 3.11; the same two lines follow `option requires an argument`).
-const GREP_NO_PATTERN = `Usage: ${specOf('grep').usage ?? ''}\n${usageHint('grep')}`
+const GREP_NO_PATTERN = `Usage: ${SYNOPSES.grep ?? ''}\n${usageHint('grep')}`
 type Stat = (p: PathSpec) => Promise<FileStat>
 type Readdir = (p: PathSpec) => Promise<string[]>
 type Stream = (p: PathSpec) => AsyncIterable<Uint8Array>

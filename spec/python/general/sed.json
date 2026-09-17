@@ -321,6 +321,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "sed [OPTION]... {script-only-if-no-other-script} [input-file]..."
+  }
 }

@@ -144,6 +144,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "touch [OPTION]... FILE..."
+  }
 }

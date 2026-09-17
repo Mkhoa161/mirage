@@ -294,6 +294,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "realpath [OPTION]... FILE..."
+  }
 }

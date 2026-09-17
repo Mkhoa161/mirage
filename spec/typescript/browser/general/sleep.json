@@ -10,6 +10,5 @@
   "description": "Delay for a specified amount of time.",
   "rest": {
     "type": "str"
-  },
-  "usage": "sleep NUMBER[SUFFIX]..."
+  }
 }

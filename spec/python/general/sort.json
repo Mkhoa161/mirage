@@ -381,6 +381,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "sort [OPTION]... [FILE]..."
+  }
 }

@@ -440,6 +440,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "grep [OPTION]... PATTERNS [FILE]..."
+  }
 }

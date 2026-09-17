@@ -17,7 +17,6 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'tar':
     CommandSpec(
-        usage="tar [OPTION...] [FILE]...",
         options=(
             Option(short="-c"),
             Option(short="-x"),
@@ -51,7 +50,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'gzip':
     CommandSpec(
-        usage="gzip [OPTION]... [FILE]...",
         options=(
             Option(short="-d"),
             Option(short="-k"),
@@ -71,7 +69,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'gunzip':
     CommandSpec(
-        usage="gunzip [OPTION]... [FILE]...",
         options=(
             Option(short="-k"),
             Option(short="-f"),
@@ -113,5 +110,5 @@ SPECS: dict[str, CommandSpec] = {
         rest=Operand(type="str"),
     ),
     'zcat':
-    CommandSpec(usage="zcat [OPTION]... [FILE]...", rest=Operand(type="path")),
+    CommandSpec(rest=Operand(type="path")),
 }

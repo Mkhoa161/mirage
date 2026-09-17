@@ -307,6 +307,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "od [OPTION]... [FILE]..."
+  }
 }

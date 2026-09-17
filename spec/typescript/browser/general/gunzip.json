@@ -99,6 +99,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "gunzip [OPTION]... [FILE]..."
+  }
 }

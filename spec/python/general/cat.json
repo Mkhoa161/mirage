@@ -340,6 +340,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "cat [OPTION]... [FILE]..."
+  }
 }

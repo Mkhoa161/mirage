@@ -296,6 +296,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "expand [OPTION]... [FILE]..."
+  }
 }

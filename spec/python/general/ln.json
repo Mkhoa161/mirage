@@ -77,6 +77,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "ln [OPTION]... [-T] TARGET LINK_NAME"
+  }
 }

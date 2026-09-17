@@ -307,6 +307,5 @@
     {
       "type": "path"
     }
-  ],
-  "usage": "base64 [OPTION]... [FILE]"
+  ]
 }

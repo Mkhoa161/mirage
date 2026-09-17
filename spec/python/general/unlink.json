@@ -109,6 +109,5 @@
   },
   "rest": {
     "type": "path"
-  },
-  "usage": "unlink FILE"
+  }
 }

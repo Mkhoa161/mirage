@@ -331,6 +331,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "md5sum [OPTION]... [FILE]..."
+  }
 }

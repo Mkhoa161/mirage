@@ -144,7 +144,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'mktemp':
     CommandSpec(
-        usage="mktemp [OPTION]... [TEMPLATE]",
         options=(
             Option(short="-d", long="--directory"),
             Option(short="-p", type="path"),
@@ -167,7 +166,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'expr':
     CommandSpec(
-        usage="expr EXPRESSION",
         description="Evaluate expressions.",
         rest=Operand(type="str"),
     ),
@@ -202,7 +200,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'date':
     CommandSpec(
-        usage="date [OPTION]... [+FORMAT]",
         description="Print or set the system date and time.",
         options=(
             Option(
@@ -221,7 +218,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sleep':
     CommandSpec(
-        usage="sleep NUMBER[SUFFIX]...",
         description="Delay for a specified amount of time.",
         rest=Operand(type="str"),
     ),

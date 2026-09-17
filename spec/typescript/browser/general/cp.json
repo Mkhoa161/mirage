@@ -150,6 +150,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "cp [OPTION]... [-T] SOURCE DEST"
+  }
 }

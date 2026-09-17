@@ -154,6 +154,5 @@
   ],
   "rest": {
     "type": "str"
-  },
-  "usage": "csplit [OPTION]... FILE PATTERN..."
+  }
 }

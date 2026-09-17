@@ -331,6 +331,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "sha256sum [OPTION]... [FILE]..."
+  }
 }

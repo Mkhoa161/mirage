@@ -104,6 +104,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "mkdir [OPTION]... DIRECTORY..."
+  }
 }

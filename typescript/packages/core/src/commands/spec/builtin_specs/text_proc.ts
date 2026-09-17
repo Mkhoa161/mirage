@@ -16,7 +16,6 @@ import { CommandSpec, Operand, Option } from '../types.ts'
 
 export const SPECS: Record<string, CommandSpec> = {
   comm: new CommandSpec({
-    usage: 'comm [OPTION]... FILE1 FILE2',
     options: [
       new Option({ short: '-1' }),
       new Option({ short: '-2' }),
@@ -30,7 +29,6 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   csplit: new CommandSpec({
-    usage: 'csplit [OPTION]... FILE PATTERN...',
     options: [
       new Option({ short: '-f', long: '--prefix', type: 'path' }),
       new Option({ short: '-n', long: '--digits', type: 'str' }),
@@ -45,7 +43,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   cut: new CommandSpec({
-    usage: 'cut OPTION... [FILE]...',
     options: [
       new Option({ short: '-f', long: '--fields', type: 'str' }),
       new Option({ short: '-F', type: 'str' }),
@@ -72,7 +69,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   join: new CommandSpec({
-    usage: 'join [OPTION]... FILE1 FILE2',
     options: [
       new Option({ short: '-t', type: 'str' }),
       new Option({ short: '-1', type: 'str' }),
@@ -91,7 +87,6 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   numfmt: new CommandSpec({
-    usage: 'numfmt [OPTION]... [NUMBER]...',
     options: [
       // GNU's argmatch tables, in GNU's order: `--to=auto` is not an
       // output mode, and an unknown word answers with the shared ARGMATCH
@@ -104,7 +99,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   paste: new CommandSpec({
-    usage: 'paste [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-d', long: '--delimiters', type: 'str' }),
       new Option({ short: '-s', long: '--serial' }),
@@ -117,7 +111,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'str' }),
   }),
   seq: new CommandSpec({
-    usage: 'seq [OPTION]... LAST',
     description: 'Print a sequence of numbers.',
     options: [
       new Option({
@@ -142,7 +135,6 @@ export const SPECS: Record<string, CommandSpec> = {
     ],
   }),
   shuf: new CommandSpec({
-    usage: 'shuf [OPTION]... [FILE]',
     options: [
       new Option({ short: '-n', long: '--head-count', type: 'str' }),
       new Option({ short: '-e', long: '--echo' }),
@@ -154,7 +146,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   sort: new CommandSpec({
-    usage: 'sort [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-r', long: '--reverse' }),
       new Option({ short: '-n', long: '--numeric-sort' }),
@@ -179,7 +170,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   split: new CommandSpec({
-    usage: 'split [OPTION]... [FILE [PREFIX]]',
     options: [
       new Option({ short: '-l', long: '--lines', type: 'str' }),
       new Option({ short: '-b', long: '--bytes', type: 'str' }),
@@ -203,7 +193,6 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   tee: new CommandSpec({
-    usage: 'tee [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-a', long: '--append' }),
       new Option({ short: '-i', long: '--ignore-interrupts' }),
@@ -218,7 +207,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   tr: new CommandSpec({
-    usage: 'tr [OPTION]... STRING1 [STRING2]',
     options: [
       new Option({ short: '-d', long: '--delete' }),
       new Option({ short: '-s', long: '--squeeze-repeats' }),
@@ -229,11 +217,9 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'str' }), new Operand({ type: 'str' })],
   }),
   tsort: new CommandSpec({
-    usage: 'tsort [OPTION] [FILE]',
     positional: [new Operand({ type: 'path' })],
   }),
   uniq: new CommandSpec({
-    usage: 'uniq [OPTION]... [INPUT [OUTPUT]]',
     options: [
       new Option({ short: '-c', long: '--count' }),
       new Option({ short: '-d', long: '--repeated' }),
@@ -250,7 +236,6 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' }), new Operand({ type: 'path' })],
   }),
   wc: new CommandSpec({
-    usage: 'wc [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-l', long: '--lines' }),
       new Option({ short: '-w', long: '--words' }),

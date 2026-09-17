@@ -95,6 +95,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "truncate OPTION... FILE..."
+  }
 }

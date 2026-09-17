@@ -16,7 +16,6 @@ import { CommandSpec, Operand, Option } from '../types.ts'
 
 export const SPECS: Record<string, CommandSpec> = {
   cat: new CommandSpec({
-    usage: 'cat [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-n', long: '--number' }),
       new Option({ short: '-b', long: '--number-nonblank' }),
@@ -40,7 +39,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   expand: new CommandSpec({
-    usage: 'expand [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-t', long: '--tabs', type: 'str' }),
       new Option({ short: '-i', long: '--initial' }),
@@ -48,7 +46,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   fmt: new CommandSpec({
-    usage: 'fmt [-WIDTH] [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-w', long: '--width', type: 'str' }),
       new Option({ short: '-g', long: '--goal', type: 'str' }),
@@ -61,7 +58,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   fold: new CommandSpec({
-    usage: 'fold [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-w', long: '--width', type: 'str' }),
       new Option({ short: '-s', long: '--spaces' }),
@@ -71,7 +67,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   head: new CommandSpec({
-    usage: 'head [OPTION]... [FILE]...',
     options: [
       new Option({
         short: '-n',
@@ -92,7 +87,6 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'str' }), new Operand({ type: 'path' })],
   }),
   nl: new CommandSpec({
-    usage: 'nl [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-b', long: '--body-numbering', type: 'str' }),
       new Option({ short: '-d', long: '--section-delimiter', type: 'str' }),
@@ -109,7 +103,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   od: new CommandSpec({
-    usage: 'od [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-A', long: '--address-radix', type: 'str' }),
       new Option({ short: '-j', long: '--skip-bytes', type: 'str' }),
@@ -120,7 +113,6 @@ export const SPECS: Record<string, CommandSpec> = {
   }),
   rev: new CommandSpec({ rest: new Operand({ type: 'path' }) }),
   tac: new CommandSpec({
-    usage: 'tac [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-b', long: '--before' }),
       new Option({ short: '-r', long: '--regex' }),
@@ -129,7 +121,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   tail: new CommandSpec({
-    usage: 'tail [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-n', type: 'str', numericShorthand: true }),
       new Option({ short: '-c', type: 'str' }),
@@ -151,7 +142,6 @@ export const SPECS: Record<string, CommandSpec> = {
     rest: new Operand({ type: 'path' }),
   }),
   unexpand: new CommandSpec({
-    usage: 'unexpand [OPTION]... [FILE]...',
     options: [
       new Option({ short: '-t', long: '--tabs', type: 'str' }),
       new Option({ short: '-a', long: '--all' }),

@@ -17,7 +17,6 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'mkdir':
     CommandSpec(
-        usage="mkdir [OPTION]... DIRECTORY...",
         options=(
             Option(short="-p", long="--parents"),
             Option(short="-v", long="--verbose"),
@@ -31,7 +30,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'touch':
     CommandSpec(
-        usage="touch [OPTION]... FILE...",
         options=(
             Option(short="-c"),
             Option(short="-r", type="path"),
@@ -45,14 +43,12 @@ SPECS: dict[str, CommandSpec] = {
     # against the session cwd, not the mount root).
     'chmod':
     CommandSpec(
-        usage="chmod [OPTION]... MODE[,MODE]... FILE...",
         options=(Option(short="-R"), Option(short="-v"), Option(short="-f")),
         positional=(Operand(type="str"), ),
         rest=Operand(type="path"),
     ),
     'chown':
     CommandSpec(
-        usage="chown [OPTION]... [OWNER][:[GROUP]] FILE...",
         options=(Option(short="-R"), Option(short="-v"), Option(short="-f"),
                  Option(short="-h")),
         positional=(Operand(type="str"), ),
@@ -60,7 +56,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'chgrp':
     CommandSpec(
-        usage="chgrp [OPTION]... GROUP FILE...",
         options=(Option(short="-R"), Option(short="-v"), Option(short="-f"),
                  Option(short="-h")),
         positional=(Operand(type="str"), ),
@@ -68,7 +63,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'cp':
     CommandSpec(
-        usage="cp [OPTION]... [-T] SOURCE DEST",
         options=(
             Option(short="-r"),
             Option(short="-R", long="--recursive"),
@@ -103,7 +97,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'mv':
     CommandSpec(
-        usage="mv [OPTION]... [-T] SOURCE DEST",
         options=(
             # Non-interactive control plane (rm precedent): -f/-i are
             # accepted no-ops — there is no prompt, and an overwrite
@@ -139,7 +132,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'rm':
     CommandSpec(
-        usage="rm [OPTION]... [FILE]...",
         options=(
             Option(short="-r"),
             Option(short="-R"),
@@ -163,21 +155,18 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'rmdir':
     CommandSpec(
-        usage="rmdir [OPTION]... DIRECTORY...",
         options=(Option(short="-v"), ),
         rest=Operand(type="path"),
     ),
     'unlink':
-    CommandSpec(usage="unlink FILE", rest=Operand(type="path")),
+    CommandSpec(rest=Operand(type="path")),
     'truncate':
     CommandSpec(
-        usage="truncate OPTION... FILE...",
         options=(Option(short="-s", long="--size", type="str"), ),
         rest=Operand(type="path"),
     ),
     'basename':
     CommandSpec(
-        usage="basename NAME [SUFFIX]",
         options=(
             Option(short="-a", long="--multiple"),
             Option(short="-s", long="--suffix", type="str"),
@@ -187,13 +176,11 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'dirname':
     CommandSpec(
-        usage="dirname [OPTION] NAME...",
         options=(Option(short="-z", long="--zero"), ),
         rest=Operand(type="str"),
     ),
     'realpath':
     CommandSpec(
-        usage="realpath [OPTION]... FILE...",
         options=(
             Option(short="-e"),
             Option(short="-m"),
@@ -202,7 +189,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'readlink':
     CommandSpec(
-        usage="readlink [OPTION]... FILE...",
         options=(
             Option(short="-f"),
             Option(short="-e"),
@@ -216,7 +202,6 @@ SPECS: dict[str, CommandSpec] = {
     # spec is its grammar authority and no builder binds it.
     'ln':
     CommandSpec(
-        usage="ln [OPTION]... [-T] TARGET LINK_NAME",
         options=(
             Option(short="-s", long="--symbolic"),
             Option(short="-f", long="--force"),

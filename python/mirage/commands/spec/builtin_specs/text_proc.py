@@ -17,7 +17,6 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'wc':
     CommandSpec(
-        usage="wc [OPTION]... [FILE]...",
         options=(
             Option(short="-l", long="--lines"),
             Option(short="-w", long="--words"),
@@ -30,7 +29,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sort':
     CommandSpec(
-        usage="sort [OPTION]... [FILE]...",
         options=(
             Option(short="-r", long="--reverse"),
             Option(short="-n", long="--numeric-sort"),
@@ -56,7 +54,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'uniq':
     CommandSpec(
-        usage="uniq [OPTION]... [INPUT [OUTPUT]]",
         options=(
             Option(short="-c", long="--count"),
             Option(short="-d", long="--repeated"),
@@ -77,7 +74,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'cut':
     CommandSpec(
-        usage="cut OPTION... [FILE]...",
         options=(
             Option(short="-f", long="--fields", type="str"),
             Option(short="-F", type="str"),
@@ -104,7 +100,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'tee':
     CommandSpec(
-        usage="tee [OPTION]... [FILE]...",
         options=(
             Option(short="-a", long="--append"),
             Option(short="-i", long="--ignore-interrupts"),
@@ -118,7 +113,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'tr':
     CommandSpec(
-        usage="tr [OPTION]... STRING1 [STRING2]",
         options=(
             Option(short="-d", long="--delete"),
             Option(short="-s", long="--squeeze-repeats"),
@@ -133,7 +127,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'paste':
     CommandSpec(
-        usage="paste [OPTION]... [FILE]...",
         options=(
             Option(short="-d", long="--delimiters", type="str"),
             Option(short="-s", long="--serial"),
@@ -148,7 +141,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'seq':
     CommandSpec(
-        usage="seq [OPTION]... LAST",
         description="Print a sequence of numbers.",
         options=(
             Option(
@@ -174,7 +166,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'split':
     CommandSpec(
-        usage="split [OPTION]... [FILE [PREFIX]]",
         options=(
             Option(short="-l", long="--lines", type="str"),
             Option(short="-b", long="--bytes", type="str"),
@@ -198,7 +189,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'shuf':
     CommandSpec(
-        usage="shuf [OPTION]... [FILE]",
         options=(
             Option(short="-n", long="--head-count", type="str"),
             Option(short="-e", long="--echo"),
@@ -211,7 +201,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'comm':
     CommandSpec(
-        usage="comm [OPTION]... FILE1 FILE2",
         options=(
             Option(short="-1"),
             Option(short="-2"),
@@ -229,7 +218,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'csplit':
     CommandSpec(
-        usage="csplit [OPTION]... FILE PATTERN...",
         options=(
             Option(short="-f", long="--prefix", type="path"),
             Option(short="-n", long="--digits", type="str"),
@@ -244,11 +232,9 @@ SPECS: dict[str, CommandSpec] = {
         rest=Operand(type="str"),
     ),
     'tsort':
-    CommandSpec(usage="tsort [OPTION] [FILE]",
-                positional=(Operand(type="path"), )),
+    CommandSpec(positional=(Operand(type="path"), )),
     'join':
     CommandSpec(
-        usage="join [OPTION]... FILE1 FILE2",
         options=(
             Option(short="-t", type="str"),
             Option(short="-1", type="str"),
@@ -271,7 +257,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'numfmt':
     CommandSpec(
-        usage="numfmt [OPTION]... [NUMBER]...",
         options=(
             # GNU's argmatch tables, in GNU's order: `--to=auto` is not
             # an output mode, and an unknown word answers with the

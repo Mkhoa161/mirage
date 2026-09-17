@@ -315,6 +315,5 @@
     {
       "type": "str"
     }
-  ],
-  "usage": "tr [OPTION]... STRING1 [STRING2]"
+  ]
 }

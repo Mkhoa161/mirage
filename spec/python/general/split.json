@@ -157,6 +157,5 @@
     {
       "type": "path"
     }
-  ],
-  "usage": "split [OPTION]... [FILE [PREFIX]]"
+  ]
 }

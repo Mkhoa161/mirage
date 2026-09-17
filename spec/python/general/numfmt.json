@@ -315,6 +315,5 @@
   ],
   "rest": {
     "type": "str"
-  },
-  "usage": "numfmt [OPTION]... [NUMBER]..."
+  }
 }

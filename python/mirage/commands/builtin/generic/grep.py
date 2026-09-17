@@ -22,6 +22,7 @@ from mirage.commands.errors import UsageError
 from mirage.commands.resolve import get_extension
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
+from mirage.commands.spec.synopsis import SYNOPSES
 from mirage.commands.spec.usage import usage_hint
 from mirage.io.types import ByteSource, IOResult, materialize
 from mirage.types import FileStat, FileType, PathSpec
@@ -31,7 +32,7 @@ from mirage.utils.path import respell_one
 
 # GNU grep with no pattern prints its synopsis and the help hint, exit 2
 # (grep 3.11; the same two lines follow `option requires an argument`).
-GREP_NO_PATTERN = (f"Usage: {SPECS['grep'].usage}\n" + usage_hint("grep"))
+GREP_NO_PATTERN = f"Usage: {SYNOPSES['grep']}\n" + usage_hint("grep")
 
 
 def binary_mode(fl: FlagView) -> str:

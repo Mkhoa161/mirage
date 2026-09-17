@@ -319,6 +319,5 @@
     {
       "type": "path"
     }
-  ],
-  "usage": "diff [OPTION]... FILES"
+  ]
 }

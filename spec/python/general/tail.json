@@ -330,6 +330,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "tail [OPTION]... [FILE]..."
+  }
 }

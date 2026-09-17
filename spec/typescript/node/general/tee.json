@@ -157,6 +157,5 @@
   ],
   "rest": {
     "type": "path"
-  },
-  "usage": "tee [OPTION]... [FILE]..."
+  }
 }

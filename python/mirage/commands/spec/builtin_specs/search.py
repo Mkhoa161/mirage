@@ -17,7 +17,6 @@ from mirage.commands.spec.types import CommandSpec, Operand, Option
 SPECS: dict[str, CommandSpec] = {
     'grep':
     CommandSpec(
-        usage="grep [OPTION]... PATTERNS [FILE]...",
         options=(
             Option(short="-r"),
             Option(short="-R"),
@@ -102,8 +101,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'sed':
     CommandSpec(
-        usage=
-        "sed [OPTION]... {script-only-if-no-other-script} [input-file]...",
         options=(
             Option(short="-i"),
             # -e takes a script and may repeat; joined with newlines.
@@ -231,7 +228,6 @@ SPECS: dict[str, CommandSpec] = {
     ),
     'zgrep':
     CommandSpec(
-        usage="zgrep [OPTION]... [-e] PATTERN [FILE]...",
         options=(
             Option(short="-i"),
             Option(short="-b", long="--byte-offset"),

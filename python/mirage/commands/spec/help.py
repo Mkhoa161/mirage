@@ -15,6 +15,7 @@
 from collections.abc import Sequence
 
 from mirage.commands.spec.constants import ARG_PLACEHOLDER
+from mirage.commands.spec.synopsis import SYNOPSES
 from mirage.commands.spec.types import CommandSpec, Operand, Option, UsageStyle
 
 # (name, one-line help) rows a CLI group passes for its children.
@@ -120,8 +121,12 @@ def usage_line(name: str, spec: CommandSpec, subcommands: SubcommandRows,
         subcommands (SubcommandRows): child rows, empty for a leaf.
         style (UsageStyle): the dialect.
     """
-    if spec.usage is not None:
-        return "Usage: " + spec.usage
+    synopsis = SYNOPSES.get(name) if style is UsageStyle.ARGPARSE else None
+    if synopsis is not None:
+        # A command that mimics a real program answers with that
+        # program's own first line rather than one synthesized from
+        # its slots.
+        return "Usage: " + synopsis
     clap = style is UsageStyle.CLAP
     bits = [name]
     if spec.options:

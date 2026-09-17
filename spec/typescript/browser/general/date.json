@@ -41,6 +41,5 @@
     {
       "type": "str"
     }
-  ],
-  "usage": "date [OPTION]... [+FORMAT]"
+  ]
 }

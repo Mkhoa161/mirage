@@ -289,7 +289,6 @@ export interface CommandSpecInit {
   ignoreTokens?: Iterable<string>
   description?: string | null
   epilog?: string | null
-  usage?: string | null
   oldOptionStyle?: boolean
   operandBase?: string | null
 }
@@ -301,13 +300,6 @@ export class CommandSpec {
   readonly ignoreTokens: ReadonlySet<string>
   readonly description: string | null
   readonly epilog: string | null
-  // argparse's `usage`: the synopsis printed after `Usage: ` in place of the
-  // one synthesized from the slots, so a command that mimics a real program
-  // answers `--help` with that program's own first line (`grep [OPTION]...
-  // PATTERNS [FILE]...`, measured as the first line of `grep --help` on GNU
-  // grep 3.11). Bare, with no `Usage:` prefix, because the prefix belongs to
-  // the renderer.
-  readonly usage: string | null
   // tar's old option style: a first word with no leading dash is a
   // cluster of option letters whose arguments follow as separate words
   // (`tar xzf a.tgz`). Expanded by expandOldStyle before any other
@@ -334,7 +326,6 @@ export class CommandSpec {
     this.ignoreTokens = new ImmutableSet(init.ignoreTokens ?? [])
     this.description = init.description ?? null
     this.epilog = init.epilog ?? null
-    this.usage = init.usage ?? null
     this.oldOptionStyle = init.oldOptionStyle ?? false
     this.operandBase = init.operandBase ?? null
     // A subclass (CLISpec) still has its own fields to assign, so only
