@@ -116,7 +116,7 @@ export const SPLIT_COUNT_PATTERN = new RegExp(`^${C_SPACE}\\+?[0-9]+$`)
 // rejects both `--numeric-suffixes=+5` and `=" 5"`, so they keep the strict
 // digits-only form.
 export const SPLIT_DIGITS = /^[0-9]+$/
-export const SPLIT_HEX_DIGITS = /^[0-9a-fA-F]+$/
+export const SPLIT_HEX_DIGITS = /^[0-9a-f]+$/
 export const SPLIT_TRY_HELP = "\nTry 'split --help' for more information."
 
 // GNU answers a missing script with its whole thirty-nine line usage block

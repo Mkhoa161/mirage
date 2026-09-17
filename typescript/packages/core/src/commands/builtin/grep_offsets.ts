@@ -69,23 +69,6 @@ export function encodeLine(text: string): Uint8Array {
 }
 
 /**
- * One output line, with every smuggled byte back to U+FFFD.
- *
- * A scan that answers in `string[]` hands its lines to `formatRecords`, whose
- * `TextEncoder` would write a lone surrogate as U+FFFD one code unit at a
- * time where the python twin raises outright; routing both hosts through the
- * byte form first is what keeps them printing the same thing. This is the one
- * place the round-trip is deliberately given up, and it gives up exactly what
- * the replacing decoder used to give up, so what reaches stdout is unchanged;
- * only the offsets computed before it are now right. A streaming path never
- * needs it, because it encodes with `encodeLine` and prints the bytes GNU
- * prints.
- */
-export function printable(text: string): string {
-  return DEC_REPLACE.decode(encodeLine(text))
-}
-
-/**
  * Byte offset of each line's own first byte within the whole input.
  *
  * A line iterator strips the terminator, so the accumulator advances by one

@@ -89,7 +89,9 @@ export const SPECS: Record<string, CommandSpec> = {
     positional: [new Operand({ type: 'path' })],
     rest: new Operand({ type: 'str' }),
   }),
-  zcat: new CommandSpec({ rest: new Operand({ type: 'path' }) }),
+  zcat: new CommandSpec({
+    rest: new Operand({ type: 'path' }),
+  }),
   zip: new CommandSpec({
     options: [
       new Option({ short: '-r' }),

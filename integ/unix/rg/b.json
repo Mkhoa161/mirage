@@ -369,7 +369,8 @@
         "n",
         "A",
         "B"
-      ]
+      ],
+      "note": "ripgrep prints the invalid byte raw; the battery compares a replacing decode, so it reads as U+FFFD here (conformance/cases/rg.json pins the byte)"
     }
   ]
 }

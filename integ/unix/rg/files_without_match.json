@@ -1,0 +1,395 @@
+{
+  "cases": [
+    {
+      "id": "rg_files_without_match_matching_file_exit_1",
+      "seq": 991014,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match hello /data/mixed.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_lists_the_matchless_file_exit_0",
+      "seq": 991015,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match zzz /data/mixed.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/mixed.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_lists_only_the_matchless_operand",
+      "seq": 991016,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_c_prints_counts",
+      "seq": 991017,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match -c world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/mixed.txt:1\n",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match",
+        "c"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_m0_lists_nothing",
+      "seq": 991018,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match -m0 hello /data/mixed.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match",
+        "m"
+      ]
+    },
+    {
+      "id": "rg_l_files_without_match_last_wins",
+      "seq": 991019,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg -l --files-without-match world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "l",
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_l_last_wins",
+      "seq": 991020,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match -l world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/mixed.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "l",
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_walks_a_directory",
+      "seq": 991021,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg --files-without-match zzz /data/disptree | sort",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/disptree/d/y.txt\n/data/disptree/x.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_stdin_is_stdin",
+      "seq": 991022,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | rg --files-without-match hello",
+      "expect": {
+        "exit": 0,
+        "stdout": "<stdin>\n",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "rg_files_without_match_stdin_m0_lists_nothing",
+      "seq": 991083,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | rg --files-without-match -m0 hello",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match",
+        "m"
+      ]
+    },
+    {
+      "id": "rg_c_then_files_without_match_lists_the_matchless_file",
+      "seq": 991088,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg -c --files-without-match world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "c",
+        "files-without-match"
+      ]
+    }
+  ]
+}

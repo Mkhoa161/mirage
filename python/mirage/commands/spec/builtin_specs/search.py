@@ -27,6 +27,7 @@ SPECS: dict[str, CommandSpec] = {
             Option(short="-b", long="--byte-offset"),
             Option(short="-c"),
             Option(short="-l"),
+            Option(short="-L", long="--files-without-match"),
             Option(short="-w"),
             Option(short="-F"),
             Option(short="-E"),
@@ -76,6 +77,8 @@ SPECS: dict[str, CommandSpec] = {
             Option(short="-b", long="--byte-offset"),
             Option(short="-c"),
             Option(short="-l"),
+            # ripgrep spells this long only: its -L is --follow.
+            Option(long="--files-without-match"),
             Option(short="-w"),
             Option(short="-F"),
             Option(short="-o"),
@@ -227,8 +230,10 @@ SPECS: dict[str, CommandSpec] = {
     CommandSpec(
         options=(
             Option(short="-i"),
+            Option(short="-b", long="--byte-offset"),
             Option(short="-c"),
             Option(short="-l"),
+            Option(short="-L", long="--files-without-match"),
             Option(short="-n"),
             Option(short="-v"),
             Option(short="-e", type="str", multiple=True),

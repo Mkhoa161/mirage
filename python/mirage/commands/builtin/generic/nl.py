@@ -249,10 +249,15 @@ def _option_errors(fl: FlagView) -> str | None:
 
     Validation is per OCCURRENCE, not per option: ``nl -b bogus -b t``
     still refuses, because GNU had already reported ``bogus`` when the
-    second ``-b`` overrode it. That is what ``value_occurrences`` is
-    for -- the bag keeps one value per scalar option, so it cannot
-    answer for ``nl -w abc -w 3``, where the value GNU refuses is the
-    one the bag dropped.
+    second ``-b`` overrode it. The validated options are therefore
+    declared ``multiple`` (argparse's ``append``), so every value
+    typed is still there to check; the options are walked in the order
+    their first occurrence was typed, each value in turn. Deliberate
+    divergence: GNU walks the line itself, so an option repeated AFTER
+    a different fatal one is checked too late here (``nl -w 3 -v xyz
+    -w abc`` names the width where GNU names the starting line
+    number). Keeping that order would take a per-occurrence record
+    across options, which neither argparse nor this parser keeps.
 
     Args:
         fl (FlagView): spec-bound view over nl's flag bag.
@@ -266,8 +271,8 @@ def _option_errors(fl: FlagView) -> str | None:
         for dest, label, low, high, overflow_low in _NUMERIC_OPTIONS
     }
     deferred: list[str] = []
-    for dest, raw in fl.value_occurrences(*camps, *_STYLE_OPTIONS,
-                                          _FORMAT_OPTION[0]):
+    dests = fl.typed_order(*camps, *_STYLE_OPTIONS, _FORMAT_OPTION[0])
+    for dest, raw in [(d, raw) for d in dests for raw in fl.as_list(d)]:
         if dest in camps:
             label, low, high, overflow_low = camps[dest]
             fatal = _number_error(label, raw, low, high, overflow_low)
@@ -289,6 +294,17 @@ def _option_errors(fl: FlagView) -> str | None:
     return None
 
 
+def _last(fl: FlagView, name: str) -> str | None:
+    """The value that won for an accumulating option, GNU's last one.
+
+    Args:
+        fl (FlagView): spec-bound view over nl's flag bag.
+        name (str): the option's dest.
+    """
+    values = fl.as_list(name)
+    return values[-1] if values else None
+
+
 def parse_flags(flags: Mapping[str, FlagValue]) -> NlFlags:
     fl = FlagView(flags, spec=SPECS["nl"])
     error = _option_errors(fl)
@@ -296,15 +312,15 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> NlFlags:
         raise ValueError(error)
     raw_delimiter = fl.as_str("section_delimiter")
     return NlFlags(
-        body_numbering_raw=fl.as_str("body_numbering"),
-        start_raw=fl.as_str("starting_line_number"),
-        increment_raw=fl.as_str("line_increment"),
-        width_raw=fl.as_str("number_width"),
+        body_numbering_raw=_last(fl, "body_numbering"),
+        start_raw=_last(fl, "starting_line_number"),
+        increment_raw=_last(fl, "line_increment"),
+        width_raw=_last(fl, "number_width"),
         separator=fl.as_str("number_separator"),
-        footer_numbering_raw=fl.as_str("footer_numbering"),
-        header_numbering_raw=fl.as_str("header_numbering"),
-        join_blank_lines_raw=fl.as_str("join_blank_lines"),
-        number_format=fl.as_str("number_format") or "rn",
+        footer_numbering_raw=_last(fl, "footer_numbering"),
+        header_numbering_raw=_last(fl, "header_numbering"),
+        join_blank_lines_raw=_last(fl, "join_blank_lines"),
+        number_format=_last(fl, "number_format") or "rn",
         # An empty `-d` is not an absent one: GNU disables delimiter
         # matching entirely for it and does NOT fall back to `\\:`, so
         # the default can only be substituted for None. `or` read the

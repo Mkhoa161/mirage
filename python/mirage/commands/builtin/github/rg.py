@@ -13,6 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 from mirage.accessor.github import GitHubAccessor
+from mirage.commands.builtin.generic.rg import RG_NO_PATTERN
 from mirage.commands.builtin.generic.rg import rg as generic_rg
 from mirage.commands.builtin.generic_bind.adapter import bound_op
 from mirage.commands.builtin.github.pushdown import narrow_scope
@@ -36,7 +37,7 @@ async def rg(accessor: GitHubAccessor, paths: list[PathSpec], texts: list[str],
     fl = FlagView(opts.flags, spec=SPECS["rg"])
     pattern_str = pattern_arg(texts, fl)
     if pattern_str is None:
-        raise UsageError("rg: usage: rg [flags] pattern [path]")
+        raise UsageError(RG_NO_PATTERN)
 
     if paths:
         paths[0]

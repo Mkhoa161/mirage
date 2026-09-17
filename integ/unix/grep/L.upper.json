@@ -1,0 +1,569 @@
+{
+  "cases": [
+    {
+      "id": "grep_L_matching_file_prints_nothing_exit_0",
+      "seq": 991000,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L hello /data/mixed.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_lists_the_matchless_file_exit_1",
+      "seq": 991001,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L zzz /data/mixed.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "/data/mixed.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_lists_only_the_matchless_operand",
+      "seq": 991002,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_lists_every_matchless_operand_exit_1",
+      "seq": 991003,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L zzz /data/mixed.txt /data/a.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "/data/mixed.txt\n/data/a.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_outranks_c",
+      "seq": 991004,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L -c world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L",
+        "c"
+      ]
+    },
+    {
+      "id": "grep_L_q_prints_nothing",
+      "seq": 991005,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L -q hello /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "L",
+        "q"
+      ]
+    },
+    {
+      "id": "grep_L_m0_lists_the_file",
+      "seq": 991006,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -m0 -L hello /data/mixed.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "/data/mixed.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L",
+        "m"
+      ]
+    },
+    {
+      "id": "grep_L_v_lists_a_file_every_line_matches",
+      "seq": 991007,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L -v hello /data/oooo.txt /data/a.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "L",
+        "v"
+      ],
+      "note": "a.txt holds lines other than hello, so -v selects them; nothing is listed"
+    },
+    {
+      "id": "grep_l_L_last_wins_L",
+      "seq": 991008,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -l -L world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "l",
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_l_last_wins_l",
+      "seq": 991009,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L -l world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/mixed.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "l",
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_directory_is_listed_and_named",
+      "seq": 991010,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L hello /data/sub",
+      "expect": {
+        "exit": 2,
+        "stdout": "/data/sub\n",
+        "stderr": "grep: /data/sub: Is a directory\n"
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "grep_L_stdin_is_standard_input",
+      "seq": 991011,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | grep -L hello",
+      "expect": {
+        "exit": 1,
+        "stdout": "(standard input)\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
+    },
+    {
+      "id": "grep_files_without_match_long_spelling",
+      "seq": 991012,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep --files-without-match zzz /data/mixed.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "/data/mixed.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match"
+      ]
+    },
+    {
+      "id": "grep_L_r_lists_walked_files",
+      "seq": 991013,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -L -r zzz /data/disptree | sort",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/disptree/d/y.txt\n/data/disptree/x.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L",
+        "r"
+      ],
+      "note": "exit is sort's; grep's own is 1"
+    },
+    {
+      "id": "grep_qL_directory_prints_nothing",
+      "seq": 991093,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -q -L hello /data/sub",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "grep: /data/sub: Is a directory\n"
+      },
+      "flags": [
+        "q",
+        "L"
+      ]
+    }
+  ]
+}

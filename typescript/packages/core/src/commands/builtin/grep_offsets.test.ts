@@ -13,14 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import {
-  decodeLine,
-  encodeLine,
-  lineOffsets,
-  matchOffset,
-  prefixOf,
-  printable,
-} from './grep_offsets.ts'
+import { decodeLine, encodeLine, lineOffsets, matchOffset, prefixOf } from './grep_offsets.ts'
 
 describe('lineOffsets', () => {
   it('counts the terminator the line iterator strips', () => {
@@ -100,23 +93,5 @@ describe('offsets over a smuggled byte', () => {
   it('counts an invalid byte as one byte inside the line', () => {
     // `grep -bo a` over `\xffa\n` is `1:a` on GNU grep 3.11.
     expect(matchOffset(0, decodeLine(new Uint8Array([0xff, 0x61])), 1)).toBe(1)
-  })
-})
-
-describe('printable', () => {
-  it('replaces a smuggled byte', () => {
-    expect(printable(decodeLine(new Uint8Array([0xff, 0x61])))).toBe('\ufffda')
-  })
-
-  it('gives up exactly what a replacing decode gives up', () => {
-    // A truncated multi-byte sequence is one maximal invalid subsequence, so
-    // it comes back as one U+FFFD rather than one per byte, which is what the
-    // python twin's `errors="replace"` answers too.
-    const raw = new Uint8Array([0xe2, 0x82, 0x78])
-    expect(printable(decodeLine(raw))).toBe(new TextDecoder().decode(raw))
-  })
-
-  it('leaves ordinary text alone', () => {
-    expect(printable('café abc')).toBe('café abc')
   })
 })

@@ -15,8 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { specOf } from './builtins.ts'
 import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
-import { CommandSpec, Operand, Option, VALUE_OCCURRENCES_KEY } from './types.ts'
-import { FlagView } from './flag_view.ts'
+import { CommandSpec, Operand, Option } from './types.ts'
 
 describe('parseCommand — bool short flags', () => {
   const spec = new CommandSpec({
@@ -477,82 +476,21 @@ describe('parseToKwargs', () => {
   })
 })
 
-// The per-occurrence record beside the bag. It exists because last-wins
-// throws a value away, and GNU validates every value as getopt hands it
-// over, so a command refusing the leftmost bad one (nl) needs the value the
-// bag dropped.
-describe('parseCommand — value occurrences', () => {
-  it('records every scalar occurrence in scan order', () => {
+// There is no per-occurrence record beside the bag. GNU validates every
+// value as getopt hands it over, so a scalar dest checks the value it is
+// about to drop before the next one replaces it (the int and choices tests
+// under 'choices violations'), and a command that must see every value
+// declares the option `multiple` (argparse's append).
+describe('parseCommand — repeated values', () => {
+  it('keeps every value of an accumulating option for the command', () => {
     const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-v', 'xyz', '-w', '3'], '/')
-    expect(parsed.valueOccurrences).toEqual([
-      ['--number-width', 'abc'],
-      ['--starting-line-number', 'xyz'],
-      ['--number-width', '3'],
-    ])
-    // The bag is untouched: still one value per dest, still last-wins.
-    expect(parsed.flags['--number-width']).toBe('3')
-  })
-
-  it('folds both spellings of one option onto one dest', () => {
-    const parsed = parseCommand(specOf('nl'), ['--number-width=abc', '-w', '3'], '/')
-    expect(parsed.valueOccurrences).toEqual([
-      ['--number-width', 'abc'],
-      ['--number-width', '3'],
-    ])
-  })
-
-  it('skips an accumulating option, whose own list is the record', () => {
-    const parsed = parseCommand(specOf('grep'), ['-e', 'foo', '-e', 'bar', '/a.txt'], '/')
-    expect(parsed.valueOccurrences).toEqual([])
-    expect(parsed.flags['-e']).toEqual(['foo', 'bar'])
-  })
-
-  it('skips boolean flags', () => {
-    const parsed = parseCommand(specOf('grep'), ['-i', '-v', 'pat'], '/')
-    expect(parsed.valueOccurrences).toEqual([])
-  })
-
-  // Every command parses through this machinery, so an unconditional extra
-  // key would land in every handler's flag bag. A line that typed each
-  // scalar option once has lost nothing: the bag is already the record, in
-  // scan order.
-  it('leaves the kwargs bag unchanged when no scalar option repeats', () => {
-    const parsed = parseCommand(specOf('nl'), ['-w', '3', '-v', '5'], '/')
-    expect(parseToKwargs(parsed)).toEqual({ number_width: '3', starting_line_number: '5' })
-  })
-
-  it('carries the record in the kwargs bag once a scalar repeats', () => {
-    const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-w', '3'], '/')
     expect(parseToKwargs(parsed)).toEqual({
-      number_width: '3',
-      [VALUE_OCCURRENCES_KEY]: ['number_width', 'abc', 'number_width', '3'],
+      number_width: ['abc', '3'],
+      starting_line_number: ['xyz'],
     })
   })
 
-  it('reads the record back as typed pairs', () => {
-    const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-v', 'xyz', '-w', '3'], '/')
-    const fl = new FlagView(parseToKwargs(parsed), specOf('nl'))
-    expect(fl.valueOccurrences('number_width', 'starting_line_number')).toEqual([
-      ['number_width', 'abc'],
-      ['starting_line_number', 'xyz'],
-      ['number_width', '3'],
-    ])
-    // Names the caller did not ask about are dropped, positions kept.
-    expect(fl.valueOccurrences('starting_line_number')).toEqual([['starting_line_number', 'xyz']])
-  })
-
-  it('falls back to the bag when nothing repeated', () => {
-    const parsed = parseCommand(specOf('nl'), ['-v', 'xyz', '-w', 'abc'], '/')
-    const kwargs = parseToKwargs(parsed)
-    expect(VALUE_OCCURRENCES_KEY in kwargs).toBe(false)
-    const fl = new FlagView(kwargs, specOf('nl'))
-    expect(fl.valueOccurrences('number_width', 'starting_line_number')).toEqual([
-      ['starting_line_number', 'xyz'],
-      ['number_width', 'abc'],
-    ])
-  })
-
-  it('leaves another option family alone when a repeat arrives', () => {
+  it("carries only the line's options in the kwargs bag", () => {
     const parsed = parseCommand(
       specOf('grep'),
       ['-e', 'a', '-e', 'b', '-m', '1', '-m', '2', 'x'],
@@ -561,7 +499,7 @@ describe('parseCommand — value occurrences', () => {
     const kwargs = parseToKwargs(parsed)
     expect(kwargs.e).toEqual(['a', 'b'])
     expect(kwargs.m).toBe('2')
-    expect(kwargs[VALUE_OCCURRENCES_KEY]).toEqual(['m', '1', 'm', '2'])
+    expect(Object.keys(kwargs).sort()).toEqual(['e', 'm'])
   })
 })
 
@@ -710,6 +648,44 @@ describe('choices violations are reported, never thrown', () => {
     })
     const parsed = parseCommand(spec, ['-m', 'x', '-m', 'z'], '/')
     expect(parsed.invalidValueOptions).toEqual([['-m', 'z', ['x', 'y']]])
+  })
+
+  it('checks every occurrence of a scalar flag', () => {
+    // GNU refuses the argument as it is scanned (`numfmt --to=bogus
+    // --to=si` is refused for bogus), so the value the bag dropped is
+    // checked too, in line order.
+    const parsed = parseCommand(specOf('numfmt'), ['--to=bogus', '--to=si', '1'], '/')
+    expect(parsed.flags['--to']).toBe('si')
+    expect(parsed.invalidValueOptions).toEqual([['--to', 'bogus', ['none', 'si', 'iec', 'iec-i']]])
+    expect(
+      parseCommand(specOf('numfmt'), ['--to=si', '--to=si', '1'], '/').invalidValueOptions,
+    ).toEqual([])
+  })
+
+  it('reports the first refused value on the line first', () => {
+    // GNU stops at the first bad argument it reads, whatever its option
+    // and whatever check refuses it, so the kinds tape carries each
+    // refusal's tag in scan order for the reporter to follow.
+    const spec = new CommandSpec({
+      options: [
+        new Option({ short: '-n', type: 'int' }),
+        new Option({ long: '--mode', type: 'str', choices: ['a', 'b'] }),
+      ],
+    })
+    const parsed = parseCommand(spec, ['--mode', 'bad', '-n', 'abc'], '/')
+    expect(parsed.optionErrorKinds).toEqual(['value', 'int'])
+    expect(parsed.invalidValueOptions).toEqual([['--mode', 'bad', ['a', 'b']]])
+    expect(parsed.invalidIntOptions).toEqual([['-n', 'abc']])
+    const both = parseCommand(specOf('numfmt'), ['--from=bad1', '--to=bad2', '1'], '/')
+    expect(both.optionErrorKinds).toEqual(['value', 'value'])
+    expect(both.invalidValueOptions.map(([dest]) => dest)).toEqual(['--from', '--to'])
+  })
+
+  it('int checks cover every occurrence of a scalar flag', () => {
+    const spec = new CommandSpec({ options: [new Option({ short: '-n', type: 'int' })] })
+    const parsed = parseCommand(spec, ['-n', 'abc', '-n', '3'], '/')
+    expect(parsed.flags['-n']).toBe('3')
+    expect(parsed.invalidIntOptions).toEqual([['-n', 'abc']])
   })
 })
 

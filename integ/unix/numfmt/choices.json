@@ -1,0 +1,159 @@
+{
+  "cases": [
+    {
+      "id": "numfmt_to_auto_is_not_an_output_mode",
+      "seq": 991052,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=auto 1000",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: invalid argument 'auto' for '--to'\nValid arguments are:\n  - 'none'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_from_lists_its_five_modes",
+      "seq": 991053,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=bogus 1",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: invalid argument 'bogus' for '--from'\nValid arguments are:\n  - 'none'\n  - 'auto'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "from"
+      ]
+    },
+    {
+      "id": "numfmt_lower_case_k_is_a_unit",
+      "seq": 991054,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=si 1k",
+      "expect": {
+        "exit": 0,
+        "stdout": "1000\n",
+        "stderr": ""
+      },
+      "flags": [
+        "from"
+      ],
+      "note": "coreutils 9.7 accepts k as kilo (9.4 did not)"
+    },
+    {
+      "id": "numfmt_lower_case_ki_is_a_unit",
+      "seq": 991055,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=iec-i 1ki",
+      "expect": {
+        "exit": 0,
+        "stdout": "1024\n",
+        "stderr": ""
+      },
+      "flags": [
+        "from"
+      ]
+    },
+    {
+      "id": "numfmt_other_lower_case_units_are_refused",
+      "seq": 991056,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=si 1m",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "numfmt: invalid suffix in input: '1m'\n"
+      },
+      "flags": [
+        "from"
+      ]
+    },
+    {
+      "id": "numfmt_iec_i_missing_i_clause_wins_over_junk",
+      "seq": 991057,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=iec-i 1Kx",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "numfmt: missing 'i' suffix in input: '1Kx' (e.g Ki/Mi/Gi)\n"
+      },
+      "flags": [
+        "from"
+      ]
+    },
+    {
+      "id": "numfmt_to_refuses_a_bad_value_the_last_one_replaced",
+      "seq": 991077,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=bogus --to=si 1000",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: invalid argument 'bogus' for '--to'\nValid arguments are:\n  - 'none'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_to_repeated_valid_values_are_fine",
+      "seq": 991078,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=si --to=si 1000",
+      "expect": {
+        "exit": 0,
+        "stdout": "1.0k\n",
+        "stderr": ""
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_first_bad_mode_on_the_line_is_named",
+      "seq": 991090,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=bad1 --to=bad2 1",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: invalid argument 'bad1' for '--from'\nValid arguments are:\n  - 'none'\n  - 'auto'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "from",
+        "to"
+      ]
+    }
+  ]
+}

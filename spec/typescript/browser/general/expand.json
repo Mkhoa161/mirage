@@ -229,6 +229,7 @@
   "options": [
     {
       "long": "--tabs",
+      "multiple": true,
       "short": "-t",
       "type": "str"
     },

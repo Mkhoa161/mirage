@@ -143,3 +143,11 @@ def test_zgrep_bre_backslash_plus_is_the_operator(env):
     env.mirage("gzip /data/f.txt")
     result = env.mirage(r"zgrep 'a\+b' /data/f.txt.gz")
     assert "aab" in result
+
+
+def test_zgrep_L_prints_the_operand_as_typed(env):
+    env.create_file("o.txt", b"foo\n")
+    env.mirage("gzip /data/o.txt")
+    assert env.mirage("zgrep -L hello ./o.txt.gz") == "./o.txt.gz\n"
+    assert env.mirage("zgrep -l foo ./o.txt.gz") == "./o.txt.gz\n"
+    assert env.mirage("zgrep -H foo ./o.txt.gz") == "./o.txt.gz:foo\n"

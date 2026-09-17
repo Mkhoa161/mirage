@@ -284,10 +284,23 @@
   },
   "options": [
     {
+      "choices": [
+        "none",
+        "si",
+        "iec",
+        "iec-i"
+      ],
       "long": "--to",
       "type": "str"
     },
     {
+      "choices": [
+        "none",
+        "auto",
+        "si",
+        "iec",
+        "iec-i"
+      ],
       "long": "--from",
       "type": "str"
     },

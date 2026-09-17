@@ -456,3 +456,37 @@ it.each([
   const bag = parseToKwargs(parseCommand(specOf('grep'), argv, '/'))
   expect(parseFlags(new FlagView(bag, specOf('grep'))).byteOffsets).toBe(want)
 })
+
+// grep -L / --files-without-match, measured on GNU grep 3.11: the listing is
+// inverted but the exit status is not, -l and -L are one mode the later one
+// wins, -L outranks -c, and -m0 lists the file since nothing was selected.
+// Mirrored in test_grep.py.
+describe('grep -L / --files-without-match', () => {
+  it('lists a matchless input and keeps the match status', async () => {
+    expect(await runB('hello\nworld\n', { files_without_match: true }, /hello/, false)).toEqual([
+      '',
+      0,
+    ])
+    expect(await runB('foo\n', { files_without_match: true }, /hello/, false)).toEqual(['f\n', 1])
+  })
+
+  it('outranks -c and lists the file under -m0', async () => {
+    expect(await runB('foo\n', { files_without_match: true, c: true }, /hello/, false)).toEqual([
+      'f\n',
+      1,
+    ])
+    expect(await runB('hello\n', { files_without_match: true, m: '0' }, /hello/, false)).toEqual([
+      'f\n',
+      1,
+    ])
+  })
+
+  it('is one mode with -l, the later one winning', async () => {
+    expect(
+      await runB('hello\n', { args_l: true, files_without_match: true }, /hello/, false),
+    ).toEqual(['', 0])
+    expect(
+      await runB('hello\n', { files_without_match: true, args_l: true }, /hello/, false),
+    ).toEqual(['f\n', 0])
+  })
+})

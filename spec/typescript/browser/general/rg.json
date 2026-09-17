@@ -260,6 +260,10 @@
       "type": "bool"
     },
     {
+      "long": "--files-without-match",
+      "type": "bool"
+    },
+    {
       "short": "-w",
       "type": "bool"
     },

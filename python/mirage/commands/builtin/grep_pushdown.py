@@ -210,8 +210,9 @@ def search_query(pattern: str,
     return extract_required_literal(bre_source(pattern) if basic else pattern)
 
 
-_PUSHDOWN_SHAPING_BOOL = ("v", "n", "byte_offset", "c", "args_l", "w", "o",
-                          "q", "H", "h", "args_I", "text")
+_PUSHDOWN_SHAPING_BOOL = ("v", "n", "byte_offset", "c", "args_l",
+                          "files_without_match", "w", "o", "q", "H", "h",
+                          "args_I", "text")
 _PUSHDOWN_SHAPING_INT = ("m", "A", "B", "C")
 _PUSHDOWN_FILTER_STR = ("type", "glob", "binary_files")
 _PUSHDOWN_FILTER_LIST = ("include", "exclude", "exclude_dir")

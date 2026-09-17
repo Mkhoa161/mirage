@@ -730,6 +730,7 @@
     {
       "id": "nl_repeated_width_around_a_bad_start_names_the_start",
       "cmd": "nl -w 3 -v xyz -w abc",
+      "divergence": "GNU names the starting line number, validating the line in getopt order. Mirage checks every value of an accumulating option in the order the options were first typed, so a repeat landing after a different fatal option speaks first; keeping the line's own order would take a per-occurrence record across options, which neither argparse nor the parser keeps.",
       "matrix": {
         "python": [
           "ram",
@@ -746,7 +747,7 @@
       "expect": {
         "exit": 1,
         "stdout_text": "",
-        "stderr_text": "nl: invalid starting line number: 'xyz'\n"
+        "stderr_text": "nl: invalid line number field width: 'abc'\n"
       }
     },
     {

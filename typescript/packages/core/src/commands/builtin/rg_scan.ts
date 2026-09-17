@@ -20,9 +20,8 @@ import { gnuBasename } from '../../utils/path.ts'
 import { getExtension } from '../resolve.ts'
 import { BINARY_EXTENSIONS } from './constants.ts'
 import { compilePattern } from './grep_pattern.ts'
-import { grepLines } from './grep_scan.ts'
 import { grepContextLines } from './grep_context.ts'
-import { decodeLine, lineOffsets, matchOffset, prefixOf, printable } from './grep_offsets.ts'
+import { decodeLine, lineOffsets, matchOffset, prefixOf } from './grep_offsets.ts'
 import type { IOResult } from '../../io/types.ts'
 import { fnmatch } from '../../utils/fnmatch.ts'
 import { splitLines } from './utils/lines.ts'
@@ -86,6 +85,10 @@ export interface RgFullOptions {
   // -b: prefix each printed line with the byte offset of its own start, or of
   // the match itself under -o.
   byteOffsets?: boolean
+  // --files-without-match: answer with the paths that selected NO line. -c
+  // outranks it, as it does in ripgrep (`rg --files-without-match -c`
+  // prints counts).
+  filesWithoutMatch?: boolean
 }
 
 /**
@@ -110,6 +113,7 @@ function searchFile(
   }
   const count = { n: 0 }
   const byteOffsets = opts.byteOffsets === true
+  const withoutMatch = opts.filesWithoutMatch === true && !opts.countOnly
   const offsets = byteOffsets ? lineOffsets(data) : []
   const globalRe = opts.onlyMatching
     ? new RegExp(
@@ -132,6 +136,7 @@ function searchFile(
     // answer with an empty line here where the python twin answered with the
     // file.
     if (opts.filesOnly) return [prefixPath ?? path]
+    if (withoutMatch) return []
     const lineNo = i + 1
     if (opts.onlyMatching) {
       // GNU -o prints every match on the line, one per line, and prints
@@ -149,20 +154,17 @@ function searchFile(
             globalRe.lastIndex += 1
             continue
           }
-          const only = printable(
+          const only =
             prefixOf(
               opts.lineNumbers ? lineNo : null,
               byteOffsets ? matchOffset(start, line, hit.index) : null,
-            ) + hit[0],
-          )
+            ) + hit[0]
           results.push(prefixPath !== null ? `${prefixPath}:${only}` : only)
         }
         globalRe.lastIndex = 0
       }
     } else {
-      const out = printable(
-        prefixOf(opts.lineNumbers ? lineNo : null, byteOffsets ? start : null) + line,
-      )
+      const out = prefixOf(opts.lineNumbers ? lineNo : null, byteOffsets ? start : null) + line
       results.push(prefixPath !== null ? `${prefixPath}:${out}` : out)
     }
     if (opts.maxCount !== null && count.n >= opts.maxCount) break
@@ -171,6 +173,7 @@ function searchFile(
     if (count.n === 0) return []
     return prefixPath !== null ? [`${prefixPath}:${String(count.n)}`] : [String(count.n)]
   }
+  if (withoutMatch) return [path]
   return results
 }
 
@@ -215,6 +218,7 @@ export async function rgFull(
     if (
       (opts.contextBefore > 0 || opts.contextAfter > 0) &&
       !opts.filesOnly &&
+      !(opts.filesWithoutMatch === true && !opts.countOnly) &&
       !opts.countOnly &&
       !opts.onlyMatching &&
       filePrefix === null
@@ -235,9 +239,9 @@ export async function rgFull(
       )
       if (rendered.length > 0 && io !== null) io.exitCode = 0
       // `decodeLine` because the renderer now puts a smuggled byte back as
-      // itself; `printable` because this branch answers in `string[]`, which
+      // itself, and `formatRecords` puts it out as itself too, which
       // `formatRecords` encodes.
-      return rendered.map((chunk) => printable(decodeLine(chunk).replace(/\n$/, '')))
+      return rendered.map((chunk) => decodeLine(chunk).replace(/\n$/, ''))
     }
     return searchFile(path, data, compiled, opts, filePrefix, io)
   }
@@ -297,110 +301,6 @@ export async function rgFull(
     const walkPrefix = opts.noFilename === true && !opts.filesOnly ? null : entry
     const fileResults = searchFile(entry, data, compiled, opts, walkPrefix, io)
     results.push(...fileResults)
-  }
-
-  return results
-}
-
-export interface RgFolderFiletypeOptions {
-  ignoreCase: boolean
-  invert: boolean
-  lineNumbers: boolean
-  byteOffsets?: boolean
-  countOnly: boolean
-  filesOnly: boolean
-  onlyMatching: boolean
-  maxCount: number | null
-  fixedString: boolean
-  wholeWord: boolean
-  fileType: string | null
-  globPattern: string | null
-  hidden: boolean
-}
-
-/**
- * Walk a folder whose entries render through registered filetype functions.
- *
- * `io`, when given, receives exit status 0 as soon as a line is selected, for
- * the reason `rgFull` takes one: under -o a zero-width match selects the line
- * and prints nothing, so a caller deriving the status from an empty list
- * reports 1 where GNU says 0. This branch has no python counterpart.
- */
-export async function rgFolderFiletype(
-  readdirFn: AsyncReaddirFn,
-  statFn: AsyncStatFn,
-  readBytesFn: AsyncReadBytesFn,
-  path: string,
-  pattern: string,
-  opts: RgFolderFiletypeOptions,
-  warnings: string[] | null,
-  io: IOResult | null = null,
-): Promise<string[]> {
-  const results: string[] = []
-  let entries: string[]
-  try {
-    entries = await readdirFn(path)
-  } catch (err) {
-    if (warnings !== null) warnings.push(`rg: ${path}: ${fsStrerror(err) ?? String(err)}`)
-    return results
-  }
-
-  const pat = compilePattern(pattern, opts.ignoreCase, opts.fixedString, opts.wholeWord)
-
-  for (const entry of entries) {
-    let s: FileStat
-    try {
-      s = await statFn(entry)
-    } catch (err) {
-      if (warnings !== null) warnings.push(`rg: ${entry}: ${fsStrerror(err) ?? String(err)}`)
-      continue
-    }
-
-    if (s.type === FileType.DIRECTORY) {
-      const sub = await rgFolderFiletype(
-        readdirFn,
-        statFn,
-        readBytesFn,
-        entry,
-        pattern,
-        opts,
-        warnings,
-        io,
-      )
-      results.push(...sub)
-      continue
-    }
-    if (s.type === FileType.CHAR_DEVICE) continue
-
-    if (BINARY_EXTENSIONS.has(getExtension(entry) ?? '')) continue
-    if (!rgMatchesFilter(entry, opts.fileType, opts.globPattern, opts.hidden)) continue
-
-    let raw: Uint8Array
-    try {
-      raw = await readBytesFn(entry)
-    } catch (err) {
-      if (warnings !== null) warnings.push(`rg: ${entry}: ${fsStrerror(err) ?? String(err)}`)
-      continue
-    }
-    const textLines = splitLines(decodeLine(raw))
-    const hits = grepLines(entry, textLines, pat, {
-      invert: opts.invert,
-      lineNumbers: opts.lineNumbers,
-      countOnly: opts.countOnly,
-      filesOnly: opts.filesOnly,
-      onlyMatching: opts.onlyMatching,
-      maxCount: opts.maxCount,
-      byteOffsets: opts.byteOffsets === true,
-      ...(io !== null ? { io } : {}),
-    })
-    if (opts.countOnly) {
-      const c = hits[0] ?? '0'
-      if (c !== '0') results.push(`${entry}:${c}`)
-    } else if (opts.filesOnly) {
-      for (const h of hits) results.push(h)
-    } else {
-      for (const h of hits) results.push(`${entry}:${h}`)
-    }
   }
 
   return results

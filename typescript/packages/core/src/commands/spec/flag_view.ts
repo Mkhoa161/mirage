@@ -14,7 +14,7 @@
 
 import { flagKwargName } from './constants.ts'
 import { compareCodePoints } from '../../utils/sort.ts'
-import { VALUE_OCCURRENCES_KEY, type CommandSpec, type FlagValue } from './types.ts'
+import type { CommandSpec, FlagValue } from './types.ts'
 
 /**
  * Collect the kwarg names a spec's options can produce.
@@ -80,45 +80,6 @@ export class FlagView {
   typedOrder(...names: string[]): string[] {
     const wanted = new Set(names.map((n) => this.key(n)))
     return Object.keys(this.flags).filter((k) => wanted.has(k))
-  }
-
-  /**
-   * The named options' occurrences, in the order the line typed them.
-   *
-   * `typedOrder` can only answer out of the bag, which keeps one value
-   * per scalar option — the LAST occurrence of a repeated one. GNU
-   * validates each value the moment getopt hands it over, so a command
-   * that has to answer for the leftmost bad value (`nl -w abc -w 3`
-   * refuses `abc`) needs the occurrences the bag threw away. The parser
-   * records every scalar value-flag occurrence as it scans, and
-   * `parseToKwargs` carries that record in the bag under
-   * `VALUE_OCCURRENCES_KEY` — but only when the bag actually lost
-   * something, i.e. when one dest was typed twice. When it is absent the
-   * bag IS the record: every dest occurred once, so its bag position is
-   * that occurrence and `typedOrder` reproduces the line exactly.
-   *
-   * Values are raw argv text: a PATH-typed option's value is the word as
-   * typed, not the resolved path, and the bare boolean form of an
-   * optional-value flag carries no value and so does not appear.
-   * Mirrors Python's `FlagView.value_occurrences`.
-   */
-  valueOccurrences(...names: string[]): [string, string][] {
-    const wanted = new Set(names.map((n) => this.key(n)))
-    const packed = this.flags[VALUE_OCCURRENCES_KEY]
-    if (Array.isArray(packed)) {
-      const pairs: [string, string][] = []
-      for (let i = 0; i + 1 < packed.length; i += 2) {
-        const dest = packed[i] ?? ''
-        if (wanted.has(dest)) pairs.push([dest, packed[i + 1] ?? ''])
-      }
-      return pairs
-    }
-    const recorded: [string, string][] = []
-    for (const dest of this.typedOrder(...names)) {
-      const value = this.flags[dest]
-      if (typeof value === 'string') recorded.push([dest, value])
-    }
-    return recorded
   }
 
   asBool(name: string): boolean {

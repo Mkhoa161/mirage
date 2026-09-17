@@ -30,10 +30,13 @@ import {
   prefixLines,
   type GrepStreamOptions,
 } from '../grep_scan.ts'
-import { rgFolderFiletype, rgFull } from '../rg_scan.ts'
+import { rgFull } from '../rg_scan.ts'
 import { resolveSource } from '../utils/stream.ts'
+import { formatRecords } from '../utils/output.ts'
 
 const ENC = new TextEncoder()
+// ripgrep's own words for a line with no pattern, exit 2 (14.1.1).
+export const RG_NO_PATTERN = 'rg: ripgrep requires at least one pattern to execute a search'
 const DEC = new TextDecoder()
 
 type Stat = (p: PathSpec) => Promise<FileStat>
@@ -47,6 +50,7 @@ interface RgFlags {
   byteOffsets: boolean
   countOnly: boolean
   filesOnly: boolean
+  filesWithoutMatch: boolean
   wholeWord: boolean
   fixedString: boolean
   onlyMatching: boolean
@@ -61,6 +65,14 @@ interface RgFlags {
 }
 
 function parseFlags(fl: FlagView): RgFlags {
+  // -c, -l and --files-without-match set one output mode in ripgrep, so
+  // the later one on the line wins: `-c --files-without-match` lists the
+  // matchless files and `--files-without-match -c` prints counts (ripgrep
+  // 14.1.1).
+  let listing: string | null = null
+  for (const name of fl.typedOrder('c', 'args_l', 'files_without_match')) {
+    if (fl.asBool(name)) listing = name
+  }
   const a = fl.asInt('A')
   const b = fl.asInt('B')
   const c = fl.asInt('C')
@@ -69,8 +81,9 @@ function parseFlags(fl: FlagView): RgFlags {
     invert: fl.asBool('v'),
     lineNumbers: fl.asBool('n'),
     byteOffsets: fl.asBool('byte_offset'),
-    countOnly: fl.asBool('c'),
-    filesOnly: fl.asBool('args_l'),
+    countOnly: listing === 'c',
+    filesOnly: listing === 'args_l',
+    filesWithoutMatch: listing === 'files_without_match',
     wholeWord: fl.asBool('w'),
     fixedString: fl.asBool('F'),
     onlyMatching: fl.asBool('o'),
@@ -126,10 +139,7 @@ export async function rgGeneric(
   }
   const exprText = resolution.pattern
   if (exprText === null) {
-    return [
-      null,
-      new IOResult({ exitCode: 2, stderr: ENC.encode('rg: usage: rg [flags] pattern [path]\n') }),
-    ]
+    return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${RG_NO_PATTERN}\n`) })]
   }
   const flags = parseFlags(new FlagView(opts.flags, specOf('rg')))
   if (resolution.neverMatch) flags.fixedString = false
@@ -142,7 +152,7 @@ export async function rgGeneric(
   if (first === undefined) {
     let source: AsyncIterable<Uint8Array>
     try {
-      source = resolveSource(opts.stdin, 'rg: usage: rg [flags] pattern [path]')
+      source = resolveSource(opts.stdin, RG_NO_PATTERN)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${msg}\n`) })]
@@ -153,6 +163,22 @@ export async function rgGeneric(
     // seeding here means the status does not depend on the generator having
     // been started.
     const io = new IOResult({ exitCode: 1 })
+    if (flags.filesWithoutMatch && !flags.countOnly) {
+      // ripgrep names a matchless stdin `<stdin>`, exit 0 for the listing,
+      // and lists nothing under -m0, where it reads nothing. The probe
+      // streams through the scanner and stops at the first selected line,
+      // so an unbounded pipe is never buffered whole.
+      if (flags.maxCount === 0) return [new Uint8Array(0), new IOResult({ exitCode: 1 })]
+      const probe = new IOResult({ exitCode: 1 })
+      const scan = grepStream(source, pat, {
+        ...streamOptionsOf(flags, probe),
+        maxCount: 1,
+        countOnly: true,
+      })
+      for await (const _ of scan) void _
+      if (probe.exitCode === 0) return [new Uint8Array(0), new IOResult({ exitCode: 1 })]
+      return [ENC.encode('<stdin>\n'), new IOResult()]
+    }
     return [grepStream(source, pat, streamOptionsOf(flags, io)), io]
   }
 
@@ -183,60 +209,10 @@ export async function rgGeneric(
     }
   }
 
-  if (isDir && opts.filetypeFns !== null && Object.keys(opts.filetypeFns).length > 0) {
-    const warnings: string[] = []
-    const folderOpts = {
-      ignoreCase: flags.ignoreCase,
-      invert: flags.invert,
-      lineNumbers: flags.lineNumbers,
-      byteOffsets: flags.byteOffsets,
-      countOnly: flags.countOnly,
-      filesOnly: flags.filesOnly,
-      onlyMatching: flags.onlyMatching,
-      maxCount: flags.maxCount,
-      fixedString: flags.fixedString,
-      wholeWord: flags.wholeWord,
-      fileType: flags.fileType,
-      globPattern: flags.globPattern,
-      hidden: flags.hidden,
-    }
-    const results: string[] = []
-    // Status comes from selection, not from the printed lines: under -o a
-    // zero-width match selects the line and prints nothing, so an empty
-    // `results` is not "nothing matched". The branch below reads it the same
-    // way, and so does `grep -r`.
-    const folderIO = new IOResult({ exitCode: 1 })
-    for (const p of paths) {
-      results.push(
-        ...(await rgFolderFiletype(
-          readdirFn,
-          statFn,
-          readBytesFn,
-          p.virtual,
-          exprText,
-          folderOpts,
-          warnings,
-          folderIO,
-        )),
-      )
-    }
-    const stderr = warnings.length > 0 ? ENC.encode(warnings.join('\n') + '\n') : undefined
-    const code = exitCodeFor(folderIO.exitCode === 0, warnings.length > 0, false)
-    if (results.length === 0) {
-      const io = new IOResult({ exitCode: code, ...(stderr !== undefined ? { stderr } : {}) })
-      return [new Uint8Array(0), io]
-    }
-    const out: ByteSource = ENC.encode(results.join('\n') + '\n')
-    const io = new IOResult({
-      exitCode: code,
-      ...(stderr !== undefined ? { stderr } : {}),
-    })
-    return [out, io]
-  }
-
   const needsFull =
     isDir ||
     flags.filesOnly ||
+    flags.filesWithoutMatch ||
     flags.beforeContext > 0 ||
     flags.afterContext > 0 ||
     flags.fileType !== null ||
@@ -250,6 +226,7 @@ export async function rgGeneric(
       byteOffsets: flags.byteOffsets,
       countOnly: flags.countOnly,
       filesOnly: flags.filesOnly,
+      filesWithoutMatch: flags.filesWithoutMatch,
       fixedString: flags.fixedString,
       onlyMatching: flags.onlyMatching,
       maxCount: flags.maxCount,
@@ -286,7 +263,12 @@ export async function rgGeneric(
     // search could not read is exit 2 and it outranks a match. This branch
     // answered 1 where the python twin, the multi-operand branch below and
     // `grep` all answer 2.
-    const code = exitCodeFor(fullIO.exitCode === 0, warnings.length > 0, false)
+    // ripgrep's status under --files-without-match follows the listing, not
+    // the matching: 0 when a file was listed, 1 when every file matched
+    // (14.1.1; GNU grep keeps the match status).
+    const selected =
+      flags.filesWithoutMatch && !flags.countOnly ? results.length > 0 : fullIO.exitCode === 0
+    const code = exitCodeFor(selected, warnings.length > 0, false)
     if (results.length === 0) {
       const io = new IOResult({
         exitCode: code,
@@ -294,7 +276,7 @@ export async function rgGeneric(
       })
       return [new Uint8Array(0), io]
     }
-    const out: ByteSource = ENC.encode(results.join('\n') + '\n')
+    const out: ByteSource = formatRecords(results)
     const io = new IOResult({
       exitCode: code,
       ...(stderr !== undefined ? { stderr } : {}),

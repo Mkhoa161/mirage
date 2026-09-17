@@ -34,6 +34,14 @@ MEMORY_EXHAUSTED = "shuf: memory exhausted"
 # C type's and so only ever emits this one. Measured, ground truth SH1.
 OVERFLOW_CLAUSE = ": Value too large for defined data type"
 
+MULTIPLE_RANGES = "shuf: multiple -i options specified"
+
+MULTIPLE_OUTPUTS = "shuf: multiple output files specified"
+
+_TRY_HELP = "\nTry 'shuf --help' for more information."
+
+ECHO_WITH_RANGE = "shuf: cannot combine -e and -i options" + _TRY_HELP
+
 UINTMAX_MAX = 18446744073709551615
 SIZE_MAX = 18446744073709551615
 
@@ -219,8 +227,44 @@ def emit_count(available: int, count: int | None,
     return min(count, available)
 
 
+def _typed_values(fl: FlagView) -> list[tuple[str, str]]:
+    """Every value of -n, -i and -o, by first-typed option then in turn.
+
+    ``-o`` is PATH-typed, so its values are the words as typed, read
+    off the resolved specs, which is what GNU compares two ``-o`` by.
+
+    Args:
+        fl (FlagView): spec-bound view over shuf's flag bag.
+    """
+    pairs: list[tuple[str, str]] = []
+    for dest in fl.typed_order("head_count", "input_range", "output"):
+        if dest == "output":
+            pairs.extend(
+                (dest, p.raw_path or p.virtual) for p in fl.as_paths(dest))
+        else:
+            pairs.extend((dest, raw) for raw in fl.as_list(dest))
+    return pairs
+
+
 def parse_flags(flags: Mapping[str, FlagValue]) -> ShufFlags:
-    """Read shuf's flags once, refusing a head count GNU refuses.
+    """Read shuf's flags once, refusing what GNU refuses in GNU's order.
+
+    GNU validates each option as getopt hands it over, so the refusal
+    that wins is the first bad option ON THE LINE: ``shuf -i 1-x -n abc``
+    names the range and ``shuf -n abc -i 1-x`` names the count (measured
+    on coreutils 9.7). The three value options are therefore declared
+    ``multiple`` (argparse's ``append``) and walked in the order their
+    first occurrence was typed, each value in turn, which is also what
+    makes a repeat visible: a second ``-i`` is refused outright
+    (``multiple -i options specified``, even for the same range), and a
+    second ``-o`` is refused unless it spells the same word (``-o a -o
+    a`` is accepted, ``-o a -o b`` is not). ``-e`` with ``-i`` is
+    checked after the scan, so any per-option refusal outranks it.
+    Deliberate divergence: an option repeated AFTER a different bad one
+    is checked first here (``shuf -i 1-2 -n abc -i 3-4`` refuses the
+    second ``-i`` where GNU names the count), because keeping the
+    line's own order would take a per-occurrence record across options,
+    which neither argparse nor this parser keeps.
 
     GNU quotes the WHOLE ``-n`` argument, not just the unparsed
     remainder the way expand and cut do, and never appends an
@@ -241,21 +285,39 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> ShufFlags:
         flags (Mapping[str, FlagValue]): the dispatcher's flag bag.
 
     Raises:
-        ValueError: the single stderr line to print, exit 1.
+        ValueError: the stderr text to print, exit 1.
     """
     fl = FlagView(flags, spec=SPECS["shuf"])
-    count_raw = fl.as_str("head_count")
-    if count_raw is not None and _UNSIGNED.fullmatch(count_raw) is None:
-        raise ValueError(
-            f"shuf: invalid line count: '{quote_text(count_raw)}'")
+    input_range_raw: str | None = None
+    output_raw: str | None = None
+    for dest, raw in _typed_values(fl):
+        if dest == "head_count":
+            if _UNSIGNED.fullmatch(raw) is None:
+                raise ValueError(
+                    f"shuf: invalid line count: '{quote_text(raw)}'")
+        elif dest == "input_range":
+            if input_range_raw is not None:
+                raise ValueError(MULTIPLE_RANGES)
+            bounds = parse_input_range(raw)
+            if isinstance(bounds, RangeRefusal):
+                raise ValueError(range_error(raw, bounds))
+            input_range_raw = raw
+        elif output_raw is not None and output_raw != raw:
+            raise ValueError(MULTIPLE_OUTPUTS)
+        else:
+            output_raw = raw
+    if fl.as_bool("echo") and input_range_raw is not None:
+        raise ValueError(ECHO_WITH_RANGE)
+    counts = fl.as_list("head_count")
+    count_raw = counts[-1] if counts else None
     outputs = fl.as_paths("output")
     return ShufFlags(
         count=min(int(count_raw), SIZE_MAX) if count_raw is not None else None,
         echo=fl.as_bool("echo"),
         zero_terminated=fl.as_bool("zero_terminated"),
         with_replacement=fl.as_bool("repeat"),
-        input_range=fl.as_str("input_range"),
-        output=outputs[0] if outputs else None,
+        input_range=input_range_raw,
+        output=outputs[-1] if outputs else None,
     )
 
 
@@ -366,6 +428,11 @@ async def shuf(
     sep = "\x00" if zero_terminated else "\n"
 
     if input_range is not None:
+        if paths:
+            # GNU: -i names the input, so a file operand is one too many.
+            word = paths[0].raw_path or paths[0].virtual
+            raise ValueError(f"shuf: extra operand '{quote_text(word)}'" +
+                             _TRY_HELP)
         bounds = parse_input_range(input_range)
         if isinstance(bounds, RangeRefusal):
             raise ValueError(range_error(input_range, bounds))
@@ -404,7 +471,8 @@ async def shuf(
 
 
 __all__ = [
-    "MAX_OUTPUT_LINES", "MEMORY_EXHAUSTED", "NO_WRITE_OP", "OVERFLOW_CLAUSE",
+    "ECHO_WITH_RANGE", "MAX_OUTPUT_LINES", "MEMORY_EXHAUSTED",
+    "MULTIPLE_OUTPUTS", "MULTIPLE_RANGES", "NO_WRITE_OP", "OVERFLOW_CLAUSE",
     "SIZE_MAX", "UINTMAX_MAX", "RangeRefusal", "ShufFlags", "emit_count",
     "parse_flags", "parse_input_range", "range_error", "shuf"
 ]

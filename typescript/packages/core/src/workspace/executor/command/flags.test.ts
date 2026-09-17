@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 
 import { SPECS, specOf } from '../../../commands/spec/index.ts'
 import { PathSpec } from '../../../types.ts'
-import { CommandSpec, Option } from '../../../commands/spec/types.ts'
+import { CommandSpec, Operand, Option } from '../../../commands/spec/types.ts'
 import { optionError, parseFlags } from './flags.ts'
 
 function path(virtual: string): PathSpec {
@@ -129,6 +129,39 @@ describe('optionError scan order', () => {
     const flipped = optionError('grep', invalidFirst)
     expect(flipped).not.toBeNull()
     expect(dec.decode(flipped?.[0]).startsWith("grep: unrecognized option '--bogus'")).toBe(true)
+  })
+
+  it('reports a refused value before a later bad option', () => {
+    // GNU stops at the first offending token whatever kind it is:
+    // coreutils 9.7 `tee --output-error=bad --bogus f` names the value,
+    // the reversed line names --bogus, and a value option that ran out of
+    // line loses to a value refused before it.
+    const dec = new TextDecoder()
+    const spec = new CommandSpec({
+      options: [
+        new Option({ long: '--mode', type: 'str', choices: ['warn', 'exit'] }),
+        new Option({ long: '--count', type: 'int' }),
+      ],
+      rest: new Operand({ type: 'path' }),
+    })
+    const valueFirst = optionError(
+      'tee',
+      parseFlags(['--mode=bad', '--bogus', 'f'], spec, 'tee', '/'),
+    )
+    expect(dec.decode(valueFirst?.[0]).startsWith("tee: invalid argument 'bad' for '--mode'")).toBe(
+      true,
+    )
+    const optionFirst = optionError(
+      'tee',
+      parseFlags(['--bogus', '--mode=bad', 'f'], spec, 'tee', '/'),
+    )
+    expect(dec.decode(optionFirst?.[0]).startsWith("tee: unrecognized option '--bogus'")).toBe(true)
+    const trailing = optionError('tee', parseFlags(['--mode=bad', '--count'], spec, 'tee', '/'))
+    expect(dec.decode(trailing?.[0]).startsWith("tee: invalid argument 'bad' for '--mode'")).toBe(
+      true,
+    )
+    const needy = optionError('tee', parseFlags(['--mode=warn', '--count'], spec, 'tee', '/'))
+    expect(dec.decode(needy?.[0])).toContain("'--count' requires an argument")
   })
 
   it('reports the numeric conversion before the choice list', () => {

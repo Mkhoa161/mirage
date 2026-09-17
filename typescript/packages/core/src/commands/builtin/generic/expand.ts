@@ -206,11 +206,12 @@ export function parseTabStops(occurrences: readonly string[]): TabStops | string
   return { stops: acc.stops, extend: acc.extend, increment: acc.increment }
 }
 
-// Read expand's flags once, refusing a tab list GNU refuses.
+// Read expand's flags once, refusing a tab list GNU refuses. `-t`
+// accumulates across occurrences, so it is declared `multiple` and read as
+// the list it typed.
 export function parseFlags(bag: Record<string, FlagValue>): ExpandFlags | string {
   const fl = new FlagView(bag, specOf('expand'))
-  const occurrences = fl.valueOccurrences('tabs').map(([, raw]) => raw)
-  const tabs = parseTabStops(occurrences)
+  const tabs = parseTabStops(fl.asList('tabs'))
   if (typeof tabs === 'string') return tabs
   return { tabs, initialOnly: fl.asBool('initial') }
 }

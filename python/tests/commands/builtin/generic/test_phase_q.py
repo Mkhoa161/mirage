@@ -2,7 +2,7 @@ import pytest
 
 from mirage.commands.builtin.generic.csplit import csplit
 from mirage.commands.builtin.generic.join import join_cmd
-from mirage.commands.builtin.generic.split import split
+from mirage.commands.builtin.generic.split import parse_chunks_value, split
 from mirage.commands.builtin.generic.tee import tee
 from mirage.types import PathSpec
 
@@ -69,7 +69,7 @@ async def test_split_n_chunks():
                         read_stream=rs,
                         write_bytes=wb,
                         stdin=b"aaaabbbbcc",
-                        n_chunks=3)
+                        chunks=parse_chunks_value("3"))
     assert len(io.writes) == 3
 
 

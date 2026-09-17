@@ -502,7 +502,7 @@
       },
       "expect": {
         "exit": 0,
-        "stdout_text": "2-4-\ufffd\n3:6:two abc\n4-14-three\n",
+        "stdout_base64": "Mi00Lf8KMzo2OnR3byBhYmMKNC0xNC10aHJlZQo=",
         "stderr_text": ""
       }
     },

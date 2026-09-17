@@ -15,10 +15,8 @@
 import pytest
 
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
-from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
-                                        Operand, Option)
+from mirage.commands.spec.types import CommandSpec, Operand, Option
 
 
 def test_grep_positional_pattern_then_path():
@@ -388,6 +386,46 @@ def test_choices_check_every_value_of_a_multiple_flag():
         Option(short="-m", type="str", multiple=True, choices=("x", "y")), ))
     parsed = parse_command(spec, ["-m", "x", "-m", "z"], "/")
     assert parsed.invalid_value_options == [("-m", "z", ("x", "y"))]
+
+
+def test_choices_check_every_occurrence_of_a_scalar_flag():
+    # GNU refuses the argument as it is scanned (`numfmt --to=bogus
+    # --to=si` is refused for bogus), so the value the bag dropped is
+    # checked too, in line order.
+    parsed = parse_command(SPECS["numfmt"], ["--to=bogus", "--to=si", "1"],
+                           "/")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.invalid_value_options == [
+        ("--to", "bogus", ("none", "si", "iec", "iec-i")),
+    ]
+    ok = parse_command(SPECS["numfmt"], ["--to=si", "--to=si", "1"], "/")
+    assert ok.invalid_value_options == []
+
+
+def test_the_first_refused_value_on_the_line_is_reported_first():
+    # GNU stops at the first bad argument it reads, whatever its option
+    # and whatever check refuses it, so the kinds tape carries each
+    # refusal's tag in scan order for the reporter to follow.
+    spec = CommandSpec(options=(
+        Option(short="-n", type="int"),
+        Option(long="--mode", type="str", choices=("a", "b")),
+    ))
+    parsed = parse_command(spec, ["--mode", "bad", "-n", "abc"], "/")
+    assert parsed.option_error_kinds == ["value", "int"]
+    assert parsed.invalid_value_options == [("--mode", "bad", ("a", "b"))]
+    assert parsed.invalid_int_options == [("-n", "abc")]
+    parsed = parse_command(SPECS["numfmt"], ["--from=bad1", "--to=bad2", "1"],
+                           "/")
+    assert parsed.option_error_kinds == ["value", "value"]
+    assert [dest for dest, _, _ in parsed.invalid_value_options
+            ] == ["--from", "--to"]
+
+
+def test_int_check_covers_every_occurrence_of_a_scalar_flag():
+    spec = CommandSpec(options=(Option(short="-n", type="int"), ))
+    parsed = parse_command(spec, ["-n", "abc", "-n", "3"], "/")
+    assert parsed.flags["-n"] == "3"
+    assert parsed.invalid_int_options == [("-n", "abc")]
 
 
 def test_required_option_reported_when_absent():
@@ -815,98 +853,28 @@ def test_js_flags_before_the_first_operand_are_still_the_interpreters():
     assert parsed.texts() == ["a"]
 
 
-# The per-occurrence record beside the bag. It exists because last-wins
-# throws a value away, and GNU validates every value as getopt hands it
-# over, so a command refusing the leftmost bad one (nl) needs the value
-# the bag dropped.
-def test_value_occurrences_record_every_scalar_occurrence_in_scan_order():
+# There is no per-occurrence record beside the bag. GNU validates every
+# value as getopt hands it over, so a scalar dest checks the value it is
+# about to drop before the next one replaces it (the int and choices tests
+# above), and a command that must see every value declares the option
+# `multiple` (argparse's append).
+def test_an_accumulating_option_keeps_every_value_for_the_command():
     parsed = parse_command(SPECS["nl"], ["-w", "abc", "-v", "xyz", "-w", "3"],
                            "/")
-    assert parsed.value_occurrences == [("--number-width", "abc"),
-                                        ("--starting-line-number", "xyz"),
-                                        ("--number-width", "3")]
-    # The bag is untouched: still one value per dest, still last-wins.
-    assert parsed.flags["--number-width"] == "3"
-
-
-def test_value_occurrences_fold_both_spellings_onto_one_dest():
-    parsed = parse_command(SPECS["nl"], ["--number-width=abc", "-w", "3"], "/")
-    assert parsed.value_occurrences == [("--number-width", "abc"),
-                                        ("--number-width", "3")]
-
-
-def test_value_occurrences_skip_an_accumulating_option():
-    """A `multiple` option's own list already is the record."""
-    parsed = parse_command(SPECS["grep"], ["-e", "foo", "-e", "bar", "/a.txt"],
-                           "/")
-    assert parsed.value_occurrences == []
-    assert parsed.flags["-e"] == ["foo", "bar"]
-
-
-def test_value_occurrences_skip_boolean_flags():
-    parsed = parse_command(SPECS["grep"], ["-i", "-v", "pat"], "/")
-    assert parsed.value_occurrences == []
-
-
-def test_the_kwargs_bag_is_unchanged_when_no_scalar_option_repeats():
-    """The record rides the bag only when the bag lost something.
-
-    Every command parses through this machinery, so an unconditional
-    extra key would land in every handler's flag bag. A line that typed
-    each scalar option once has lost nothing: the bag is already the
-    record, in scan order.
-    """
-    parsed = parse_command(SPECS["nl"], ["-w", "3", "-v", "5"], "/")
     assert parse_to_kwargs(parsed) == {
-        "number_width": "3",
-        "starting_line_number": "5",
+        "number_width": ["abc", "3"],
+        "starting_line_number": ["xyz"],
     }
 
 
-def test_the_kwargs_bag_carries_the_record_once_a_scalar_repeats():
-    parsed = parse_command(SPECS["nl"], ["-w", "abc", "-w", "3"], "/")
-    assert parse_to_kwargs(parsed) == {
-        "number_width": "3",
-        VALUE_OCCURRENCES_KEY: ["number_width", "abc", "number_width", "3"],
-    }
-
-
-def test_the_record_in_the_bag_is_read_back_as_typed_pairs():
-    parsed = parse_command(SPECS["nl"], ["-w", "abc", "-v", "xyz", "-w", "3"],
-                           "/")
-    fl = FlagView(parse_to_kwargs(parsed), spec=SPECS["nl"])
-    assert fl.value_occurrences("number_width", "starting_line_number") == [
-        ("number_width", "abc"),
-        ("starting_line_number", "xyz"),
-        ("number_width", "3"),
-    ]
-    # Names the caller did not ask about are dropped, positions kept.
-    assert fl.value_occurrences("starting_line_number") == [
-        ("starting_line_number", "xyz")
-    ]
-
-
-def test_occurrences_fall_back_to_the_bag_when_nothing_repeated():
-    """Without a repeat each dest sits at its own occurrence's position."""
-    parsed = parse_command(SPECS["nl"], ["-v", "xyz", "-w", "abc"], "/")
-    kwargs = parse_to_kwargs(parsed)
-    assert VALUE_OCCURRENCES_KEY not in kwargs
-    fl = FlagView(kwargs, spec=SPECS["nl"])
-    assert fl.value_occurrences("number_width", "starting_line_number") == [
-        ("starting_line_number", "xyz"),
-        ("number_width", "abc"),
-    ]
-
-
-def test_a_repeat_elsewhere_does_not_disturb_another_option_family():
-    """grep's accumulating options are untouched by the record's arrival."""
+def test_the_kwargs_bag_carries_only_the_line_s_options():
     parsed = parse_command(SPECS["grep"],
                            ["-e", "a", "-e", "b", "-m", "1", "-m", "2", "x"],
                            "/")
     kwargs = parse_to_kwargs(parsed)
     assert kwargs["e"] == ["a", "b"]
     assert kwargs["m"] == "2"
-    assert kwargs[VALUE_OCCURRENCES_KEY] == ["m", "1", "m", "2"]
+    assert set(kwargs) == {"e", "m"}
 
 
 # A boolean long handed a value is reported as its own kind, not as an

@@ -35,7 +35,21 @@ import {
 } from '../constants.ts'
 
 const ENC = new TextEncoder()
-const CHUNK_KIND_PREFIXES = ['l/', 'r/'] as const
+// The three -n modes: byte chunks, line-preserving chunks, round robin.
+type ChunkKind = 'bytes' | 'l' | 'r'
+const CHUNK_KIND_PREFIXES: readonly (readonly [string, ChunkKind])[] = [
+  ['l/', 'l'],
+  ['r/', 'r'],
+]
+
+// A parsed -n value: how the input is cut, N, and K of `K/N` (the one
+// chunk written to stdout, with no output file created at all; null
+// writes every chunk to its own file). Mirrors Python's `ChunkSpec`.
+export interface ChunkSpec {
+  kind: ChunkKind
+  count: number
+  only: number | null
+}
 
 function parseBytesValue(value: string): number {
   const suffix = SPLIT_BYTE_SUFFIXES.find((u) => value.endsWith(u))
@@ -62,18 +76,45 @@ function parseLinesValue(value: string): number {
 // carries a kind prefix. mirage used to name the whole spec for every
 // malformed head and credited that to 9.7; 9.4 disagrees, and so does the
 // accepted set -- a third component is N's problem, not a head component.
-function parseChunksValue(value: string): number {
-  const prefix = CHUNK_KIND_PREFIXES.find((p) => value.startsWith(p))
-  const spec = prefix === undefined ? value : value.slice(prefix.length)
+// GNU strips ONE leading `l/` or `r/` and then cuts what is left at its
+// FIRST slash into K and N: a K it cannot parse names the whole remainder,
+// and every other refusal names N. A K that parses but is 0 or past N is
+// its own refusal, `invalid chunk number`, checked after N (coreutils 9.7:
+// `4/3` and `0/3` name K, `3/0` names N). Mirrors `parse_chunks_value`.
+export function parseChunksValue(value: string): ChunkSpec {
+  let kind: ChunkKind = 'bytes'
+  let spec = value
+  for (const [prefix, prefixedKind] of CHUNK_KIND_PREFIXES) {
+    if (value.startsWith(prefix)) {
+      kind = prefixedKind
+      spec = value.slice(prefix.length)
+      break
+    }
+  }
   const slash = spec.indexOf('/')
-  if (slash >= 0 && !SPLIT_COUNT_PATTERN.test(spec.slice(0, slash))) {
+  const head = slash >= 0 ? spec.slice(0, slash) : spec
+  if (slash >= 0 && !SPLIT_COUNT_PATTERN.test(head)) {
     throw new UsageError(`split: invalid number of chunks: '${quoteText(spec)}'`, 1)
   }
-  const count = slash >= 0 ? spec.slice(slash + 1) : spec
-  if (!SPLIT_COUNT_PATTERN.test(count) || Number.parseInt(count, 10) === 0) {
-    throw new UsageError(`split: invalid number of chunks: '${quoteText(count)}'`, 1)
+  const countRaw = slash >= 0 ? spec.slice(slash + 1) : spec
+  if (!SPLIT_COUNT_PATTERN.test(countRaw) || Number.parseInt(countRaw, 10) === 0) {
+    throw new UsageError(`split: invalid number of chunks: '${quoteText(countRaw)}'`, 1)
   }
-  return Number.parseInt(count, 10)
+  const count = Number.parseInt(countRaw, 10)
+  if (!Number.isSafeInteger(count)) {
+    // Deliberate divergence: GNU saturates a count past uintmax and then
+    // creates files without end. A count past 2^53 cannot even be
+    // counted here, so it is refused in the same words as a malformed one.
+    throw new UsageError(`split: invalid number of chunks: '${quoteText(countRaw)}'`, 1)
+  }
+  let only: number | null = null
+  if (slash >= 0) {
+    only = Number.parseInt(head, 10)
+    if (only === 0 || only > count) {
+      throw new UsageError(`split: invalid chunk number: '${quoteText(head)}'`, 1)
+    }
+  }
+  return { kind, count, only }
 }
 
 function parseSuffixLength(value: string): number {
@@ -98,7 +139,13 @@ function parseSuffixLength(value: string): number {
 // split reports, and it comes FIRST in this clause where the four count
 // clauses put it last (measured on coreutils 9.4:
 // `split: 'x\303\251': invalid start value for numerical suffix`).
+// Hex digits are lower case only, as GNU's own suffixes are:
+// `--hex-suffixes=A` is refused (coreutils 9.7). An empty value
+// (`--numeric-suffixes=`) is a start of 0 that still pins the width, since
+// GNU checks `strspn` over an empty string and keeps the pointer; only an
+// absent value auto-lengthens.
 function parseSuffixStart(value: string, hexMode: boolean, suffixLen: number): number {
+  if (value === '') return 0
   if (!(hexMode ? SPLIT_HEX_DIGITS : SPLIT_DIGITS).test(value)) {
     const kind = hexMode ? 'hexadecimal' : 'numerical'
     throw new UsageError(
@@ -135,6 +182,148 @@ function parseSeparator(value: string | undefined): number {
     throw new UsageError(`split: multi-character separator '${value}'`, 1)
   }
   return encoded[0] ?? 0x0a
+}
+
+// Cut `data` into `count` byte chunks the way GNU sizes them: `size /
+// count` bytes each, with the remainder spread one byte at a time over the
+// FIRST chunks (7 bytes in 3 are 3, 2, 2 on coreutils 9.7), and an input
+// shorter than the count leaves the tail chunks empty rather than absent.
+// Byte offset where chunk `index` (1-based) ends: GNU sizes chunks `base`
+// bytes each with the remainder spread one byte at a time over the FIRST
+// chunks, so the end is a closed form rather than a table of N prefix sums.
+function chunkEnd(index: number, base: number, rem: number): number {
+  return base * index + Math.min(index, rem)
+}
+
+// The byte chunks of `data` in order, the way GNU sizes them: `size / count`
+// bytes each, with the remainder spread one byte at a time over the FIRST
+// chunks (7 bytes in 3 are 3, 2, 2 on coreutils 9.7). Stops once the input
+// is used up, because every chunk after that is empty; `chunkParts` pads and
+// `chunkAt` reads past the end, so a huge N never costs N slices.
+function* byteChunks(data: Uint8Array, count: number): Generator<Uint8Array> {
+  const base = Math.floor(data.byteLength / count)
+  const rem = data.byteLength % count
+  let pos = 0
+  for (let index = 0; index < count; index++) {
+    if (pos >= data.byteLength) return
+    const size = base + (index < rem ? 1 : 0)
+    yield data.slice(pos, pos + size)
+    pos += size
+  }
+}
+
+function concatParts(parts: readonly Uint8Array[]): Uint8Array {
+  let total = 0
+  for (const part of parts) total += part.byteLength
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const part of parts) {
+    out.set(part, offset)
+    offset += part.byteLength
+  }
+  return out
+}
+
+// The line chunks of `data` in order, no record cut: GNU's
+// `lines_chunk_split`. The byte boundaries are those of `byteChunks` over
+// `max(size, count)`, and a chunk runs to the first terminator at or after
+// its own last byte, so a record that straddles a boundary goes whole to
+// the chunk it started in. A record long enough to cover a whole later
+// chunk leaves that chunk empty, and a chunk that begins exactly where the
+// previous one ended takes the next record. Measured on coreutils 9.7
+// (`-n l/7` over five 6-byte lines is line1, line2, line3, empty, line4,
+// line5, empty). Stops once the input is used up, like `byteChunks`.
+// Mirrors `_line_chunks`.
+function* lineChunks(data: Uint8Array, count: number, eol: number): Generator<Uint8Array> {
+  const size = Math.max(data.byteLength, count)
+  const base = Math.floor(size / count)
+  const rem = size % count
+  let buf: Uint8Array[] = []
+  let pos = 0
+  let chunk = 0
+  while (pos < data.byteLength && chunk < count) {
+    const start = Math.max(pos, chunkEnd(chunk + 1, base, rem) - 1)
+    const found = start < data.byteLength ? data.indexOf(eol, start) : -1
+    const end = found >= 0 ? found + 1 : data.byteLength
+    let terminated = found >= 0
+    buf.push(data.slice(pos, end))
+    pos = end
+    while (terminated || chunkEnd(chunk + 1, base, rem) <= pos) {
+      if (!terminated && pos >= data.byteLength) break
+      yield concatParts(buf)
+      buf = []
+      chunk += 1
+      if (chunk >= count) break
+      if (chunkEnd(chunk + 1, base, rem) > pos) terminated = false
+    }
+  }
+  if (chunk < count) yield concatParts(buf)
+}
+
+// The records of `data`, a final unterminated one included.
+function records(data: Uint8Array, eol: number): Uint8Array[] {
+  const out: Uint8Array[] = []
+  let pos = 0
+  while (pos < data.byteLength) {
+    const found = data.indexOf(eol, pos)
+    const end = found >= 0 ? found + 1 : data.byteLength
+    out.push(data.slice(pos, end))
+    pos = end
+  }
+  return out
+}
+
+// The chunks of `data` dealt record by record in turn: chunk k holds every
+// count-th record from the k-th, and a chunk past the last record is empty,
+// so the walk stops there.
+function* roundRobinChunks(data: Uint8Array, count: number, eol: number): Generator<Uint8Array> {
+  const dealt = records(data, eol)
+  const filled = Math.min(count, dealt.length)
+  for (let index = 0; index < filled; index++) {
+    const own: Uint8Array[] = []
+    for (let at = index; at < dealt.length; at += count) own.push(dealt[at] ?? new Uint8Array(0))
+    yield concatParts(own)
+  }
+}
+
+function cut(data: Uint8Array, chunks: ChunkSpec, separator: number): Generator<Uint8Array> {
+  if (chunks.kind === 'l') return lineChunks(data, chunks.count, separator)
+  if (chunks.kind === 'r') return roundRobinChunks(data, chunks.count, separator)
+  return byteChunks(data, chunks.count)
+}
+
+// Every chunk of `data` under one -n spec, in order: exactly N chunks, the
+// empty tail included, one at a time, so N files never mean N chunks held
+// at once. Mirrors `chunk_parts`.
+export function* chunkParts(
+  data: Uint8Array,
+  chunks: ChunkSpec,
+  separator: number,
+): Generator<Uint8Array> {
+  let produced = 0
+  for (const part of cut(data, chunks, separator)) {
+    yield part
+    produced += 1
+  }
+  for (; produced < chunks.count; produced++) yield new Uint8Array(0)
+}
+
+// Chunk `index` (1-based) of `data` under one -n spec. `K/N` wants one
+// chunk, so only the chunks before it are cut, and a K past the input's
+// last byte is empty at no cost per skipped chunk (`-n 2/1000000000` over
+// 8 bytes is `b`, instant in GNU). Mirrors `chunk_at`.
+export function chunkAt(
+  data: Uint8Array,
+  chunks: ChunkSpec,
+  separator: number,
+  index: number,
+): Uint8Array {
+  let seen = 0
+  for (const part of cut(data, chunks, separator)) {
+    seen += 1
+    if (seen === index) return part
+  }
+  return new Uint8Array(0)
 }
 
 const ALPHA_SUFFIXES = 'abcdefghijklmnopqrstuvwxyz'
@@ -298,7 +487,7 @@ export async function splitGeneric(
   const linesPerFile =
     linesFlag !== null ? parseLinesValue(linesFlag) : bFlag === null && nFlag === null ? 1000 : 0
   const byteLimit = bFlag !== null ? parseBytesValue(bFlag) : 0
-  const nChunks = nFlag !== null ? parseChunksValue(nFlag) : 0
+  const chunks = nFlag !== null ? parseChunksValue(nFlag) : null
   const suffixFn = suffixNamer(
     xFlag ? HEX_SUFFIXES : dFlag ? NUMERIC_SUFFIXES : ALPHA_SUFFIXES,
     suffixAuto,
@@ -317,28 +506,22 @@ export async function splitGeneric(
   const writes: Record<string, Uint8Array> = {}
   let fileIdx = 0
 
-  if (nChunks > 0) {
-    const chunks: Uint8Array[] = []
-    let total = 0
-    for await (const c of source) {
-      chunks.push(c)
-      total += c.byteLength
+  if (chunks !== null) {
+    const gathered: Uint8Array[] = []
+    for await (const c of source) gathered.push(c)
+    const all = concatParts(gathered)
+    if (chunks.only !== null) {
+      // `K/N` writes the one chunk to stdout and no file at all.
+      return [chunkAt(all, chunks, separator, chunks.only), new IOResult()]
     }
-    const allData = new Uint8Array(total)
-    let offset = 0
-    for (const c of chunks) {
-      allData.set(c, offset)
-      offset += c.byteLength
-    }
-    const chunkSize = Math.max(1, Math.ceil(total / nChunks))
-    offset = 0
-    for (let i = 0; i < nChunks; i++) {
-      const part = allData.slice(offset, offset + chunkSize)
-      if (part.byteLength === 0) break
+    // Every chunk gets its file, an empty one included: GNU creates N files
+    // for `-n N` however short the input is.
+    let i = 0
+    for (const part of chunkParts(all, chunks, separator)) {
       const outPath = outputPath(prefixPath, suffixFn, i, additionalSuffix)
+      i += 1
       await write(makePathSpec(outPath), part)
       writes[outPath] = part
-      offset += chunkSize
     }
   } else if (byteLimit > 0) {
     let buf = new Uint8Array(0)

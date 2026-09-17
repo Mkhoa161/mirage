@@ -86,6 +86,14 @@ export const MEMORY_EXHAUSTED = 'shuf: memory exhausted'
 // emits this one. Measured, ground truth SH1.
 export const OVERFLOW_CLAUSE = ': Value too large for defined data type'
 
+export const MULTIPLE_RANGES = 'shuf: multiple -i options specified'
+
+export const MULTIPLE_OUTPUTS = 'shuf: multiple output files specified'
+
+const TRY_HELP = "\nTry 'shuf --help' for more information."
+
+export const ECHO_WITH_RANGE = `shuf: cannot combine -e and -i options${TRY_HELP}`
+
 export const UINTMAX_MAX = 18446744073709551615n
 export const SIZE_MAX = 18446744073709551615n
 
@@ -282,20 +290,58 @@ export interface ShufFlags {
 // what `-i` does with the same overflow: `xstrtoumax` answering
 // LONGINT_OVERFLOW is fatal for `-i` and is quietly read as SIZE_MAX for `-n`,
 // so `shuf -n 99999999999999999999999999` exits 0. Measured, ground truth SH6.
+// Read shuf's flags once, refusing what GNU refuses in GNU's order.
+//
+// GNU validates each option as getopt hands it over, so the refusal that
+// wins is the first bad option ON THE LINE: `shuf -i 1-x -n abc` names the
+// range and `shuf -n abc -i 1-x` names the count (measured on coreutils
+// 9.7). The three value options are therefore declared `multiple`
+// (argparse's `append`) and walked in the order their first occurrence was
+// typed, each value in turn, which is also what makes a repeat visible: a
+// second `-i` is refused outright (`multiple -i options specified`, even
+// for the same range), and a second `-o` is refused unless it spells the
+// same word. `-e` with `-i` is checked after the scan, so any per-option
+// refusal outranks it. Deliberate divergence: an option repeated AFTER a
+// different bad one is checked first here (`shuf -i 1-2 -n abc -i 3-4`
+// refuses the second `-i` where GNU names the count), because keeping the
+// line's own order would take a per-occurrence record across options,
+// which neither argparse nor this parser keeps. Mirrors `parse_flags` in
+// shuf.py.
 export function parseFlags(bag: Record<string, FlagValue>): ShufFlags | string {
   const fl = new FlagView(bag, specOf('shuf'))
-  const countValue = fl.asStr('head_count')
-  if (countValue !== undefined && !UNSIGNED.test(countValue)) {
-    return `shuf: invalid line count: '${quoteText(countValue)}'\n`
+  let inputRangeRaw: string | null = null
+  let outputRaw: string | null = null
+  const typed = fl
+    .typedOrder('head_count', 'input_range', 'output')
+    .flatMap((dest) => fl.asList(dest).map((raw): [string, string] => [dest, raw]))
+  for (const [dest, raw] of typed) {
+    if (dest === 'head_count') {
+      if (!UNSIGNED.test(raw)) return `shuf: invalid line count: '${quoteText(raw)}'\n`
+    } else if (dest === 'input_range') {
+      if (inputRangeRaw !== null) return `${MULTIPLE_RANGES}\n`
+      const bounds = parseInputRange(raw)
+      if (typeof bounds === 'string') return rangeError(raw, bounds)
+      inputRangeRaw = raw
+    } else if (outputRaw !== null && outputRaw !== raw) {
+      // Deliberate divergence: the TypeScript bag carries a PATH option's
+      // resolved virtual path, not the word typed, so `-o out -o ./out`
+      // reads as one output here where GNU (and the python twin, which
+      // still sees the raw word) refuses it as two.
+      return `${MULTIPLE_OUTPUTS}\n`
+    } else {
+      outputRaw = raw
+    }
   }
+  if (fl.asBool('echo') && inputRangeRaw !== null) return `${ECHO_WITH_RANGE}\n`
+  const countValue = fl.asList('head_count').at(-1)
   const count = countValue === undefined ? null : BigInt(countValue)
   return {
     count: count === null || count <= SIZE_MAX ? count : SIZE_MAX,
     echo: fl.asBool('echo'),
     zeroTerminated: fl.asBool('zero_terminated'),
     withReplacement: fl.asBool('repeat'),
-    inputRange: fl.asStr('input_range') ?? null,
-    output: fl.asStr('output') ?? null,
+    inputRange: inputRangeRaw,
+    output: outputRaw,
   }
 }
 
@@ -328,6 +374,18 @@ export async function shufGeneric(
   // range it names can hold 2**64 values (SH5).
   let out: string[] | null = null
   if (inputRange !== null) {
+    const extra = paths[0]
+    if (extra !== undefined) {
+      // GNU: -i names the input, so a file operand is one too many.
+      const word = extra.rawPath !== '' ? extra.rawPath : extra.virtual
+      return [
+        null,
+        new IOResult({
+          exitCode: 1,
+          stderr: ENC.encode(`shuf: extra operand '${quoteText(word)}'${TRY_HELP}\n`),
+        }),
+      ]
+    }
     // `-i` takes two unsigned bounds with the low one no greater than the
     // high one. Every other shape is one message, so a negative low bound
     // (`-2-1`) and a decreasing range (`3-1`) are refused here rather than
