@@ -18,6 +18,7 @@ from typing import Any
 
 from mirage.commands.spec.argmatch import (ArgmatchChoices, ArgmatchMatch,
                                            argmatch, value_classes)
+from mirage.commands.spec.builtin_specs import SPECS
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
 from mirage.commands.spec.constants import (ARG_PLACEHOLDER,
@@ -27,8 +28,58 @@ from mirage.commands.spec.constants import (ARG_PLACEHOLDER,
                                             SOLE_ARGUMENT_LONG_OPTIONS,
                                             flag_kwarg_name)
 from mirage.commands.spec.oldstyle import expand_old_style
-from mirage.commands.spec.types import CommandSpec, ParsedFlagValue, ValueType
+from mirage.commands.spec.types import (CommandSpec, Option, ParsedFlagValue,
+                                        ValueType)
 from mirage.utils.path import resolve_path
+
+
+def _argmatch_options() -> tuple[Option, ...]:
+    """The builtin ``Option`` objects whose choices are ARGMATCH tables.
+
+    ARGMATCH_CHOICE_OPTIONS names them as (command, spelling) pairs
+    because that is how the measurement reads; this resolves each pair
+    to the one object the builtin spec declares, so ``_argmatch_dests``
+    can test ``is`` rather than compare strings. A pair that names no
+    option is a rotted entry and fails loudly here, at import.
+    """
+    found: list[Option] = []
+    for name, spelling in sorted(ARGMATCH_CHOICE_OPTIONS):
+        options = [
+            o for o in SPECS[name].options
+            if (o.long if o.long else o.short) == spelling
+        ]
+        if not options:
+            raise ValueError(f"ARGMATCH_CHOICE_OPTIONS names {name} "
+                             f"{spelling}, which that spec does not declare")
+        found.extend(options)
+    return tuple(found)
+
+
+_ARGMATCH_OPTIONS = _argmatch_options()
+
+
+def _argmatch_dests(spec: CommandSpec) -> frozenset[str]:
+    """Which of this spec's choice sets are gnulib ARGMATCH tables.
+
+    Decided by ``Option`` identity, not by the command's name: a mount
+    may register its own `tee` (commands/registry.py), and a name is not
+    an identity. Identity is also the only signal that survives
+    registration, which parses an enriched COPY of the spec (config.py
+    appends --help/--version, once per backend), while every declared
+    Option stays the same object.
+
+    Read off the spec rather than cached on its CompiledSpec because
+    ``compile_spec`` keys on a frozen dataclass, so its cache is
+    STRUCTURAL: a custom spec that merely looked like tee's would share
+    the builtin's compiled tables, and an identity-derived fact stored
+    in there would be whichever of the two compiled first.
+
+    Args:
+        spec (CommandSpec): the grammar being parsed.
+    """
+    return frozenset(
+        (o.long if o.long else o.short) or "" for o in spec.options
+        if o.choices and any(o is table for table in _ARGMATCH_OPTIONS))
 
 
 @dataclass
@@ -134,8 +185,8 @@ class _Refusals:
         default_factory=list)
 
 
-def _check_value(refusals: _Refusals, cs: CompiledSpec, cmd_name: str,
-                 dest: str, value: str) -> str:
+def _check_value(refusals: _Refusals, cs: CompiledSpec,
+                 argmatch_dests: frozenset[str], dest: str, value: str) -> str:
     """Run one value through its dest's int, float and choices checks.
 
     Int-typed values are refused before choices, argparse's order (type
@@ -144,17 +195,20 @@ def _check_value(refusals: _Refusals, cs: CompiledSpec, cmd_name: str,
     choices reports the conversion failure, not the choice list.
 
     A declared ``choices`` set compares the WHOLE word, argparse's rule,
-    unless this command's option is named in ARGMATCH_CHOICE_OPTIONS, in
-    which case it is one of the three gnulib ARGMATCH tables the parser
-    owns and an unambiguous prefix resolves to its candidate. The
-    resolved word is what the caller stores, so a command reads `none`
-    where the line typed `non` and never learns the difference.
+    unless the option declaring it is one of the three gnulib ARGMATCH
+    tables the parser owns, in which case an unambiguous prefix resolves
+    to its candidate. The resolved word is what the caller stores, so a
+    command reads `none` where the line typed `non` and never learns the
+    difference. Which sets those are was settled by ``compile_spec``, by
+    ``Option`` identity rather than by the command's name, so a
+    registered command that borrows the name `tee` still compares the
+    whole word. ``_argmatch_dests`` settled which they are.
 
     Args:
         refusals (_Refusals): the lists to report into.
         cs (CompiledSpec): compiled spec tables.
-        cmd_name (str): the program name, which with ``dest`` decides
-            whether this set is an ARGMATCH table.
+        argmatch_dests (frozenset[str]): this spec's ARGMATCH sets, from
+            _argmatch_dests.
         dest (str): the value's dest.
         value (str): the raw value.
 
@@ -173,7 +227,7 @@ def _check_value(refusals: _Refusals, cs: CompiledSpec, cmd_name: str,
     allowed = cs.choices_by_dest.get(dest)
     if allowed is None:
         return value
-    if (cmd_name, dest) in ARGMATCH_CHOICE_OPTIONS:
+    if dest in argmatch_dests:
         match = argmatch(value, allowed)
         if isinstance(match, ArgmatchMatch):
             return match.word
@@ -196,7 +250,7 @@ def _set_value_flag(
     flags: dict[str, ParsedFlagValue],
     refusals: _Refusals,
     cs: CompiledSpec,
-    cmd_name: str,
+    argmatch_dests: frozenset[str],
     spelling: str,
     value: str,
 ) -> None:
@@ -217,12 +271,12 @@ def _set_value_flag(
         flags (dict): parsed flag bag, updated in place.
         refusals (_Refusals): where a dropped value's refusal lands.
         cs (CompiledSpec): compiled spec tables.
-        cmd_name (str): the program name, for the ARGMATCH table.
+        argmatch_dests (frozenset[str]): this spec's ARGMATCH sets.
         spelling (str): dashed spelling as typed.
         value (str): the flag's value.
     """
     name = cs.dest_of(spelling)
-    stored = _check_value(refusals, cs, cmd_name, name, value)
+    stored = _check_value(refusals, cs, argmatch_dests, name, value)
     if name in cs.multiple_dests:
         prev = flags.get(name)
         if isinstance(prev, list):
@@ -378,14 +432,17 @@ def parse_command(
             rather than about the spec, and nothing on CommandSpec may
             say it: the shared grammar stays what POSIX and argparse can
             both express. It says nothing about ``choices``, which
-            compares the whole word for every spec unless the command's
-            option is one of the three ARGMATCH_CHOICE_OPTIONS.
+            compares the whole word for every spec unless the option
+            declaring the set is one of the three builtin ARGMATCH
+            declarations -- an identity the spec itself settles, so
+            it is not a fact about the caller at all.
 
     Returns:
         ParsedArgs: the flag bag, operands, and every refusal the line
             earned.
     """
     cs = compile_spec(spec)
+    argmatch_dests = _argmatch_dests(spec)
 
     # tar's old option style is expanded before anything else reads the
     # line, so classification, routing and dispatch all scan the same
@@ -541,9 +598,9 @@ def parse_command(
             elif is_pair and eq == -1 and i + 2 < len(filtered_argv):
                 # Two tokens, both recorded under the one dest, so the
                 # command reads the accumulated list in twos.
-                _set_value_flag(flags, refusals, cs, cmd_name, spelling,
+                _set_value_flag(flags, refusals, cs, argmatch_dests, spelling,
                                 filtered_argv[i + 1])
-                _set_value_flag(flags, refusals, cs, cmd_name, spelling,
+                _set_value_flag(flags, refusals, cs, argmatch_dests, spelling,
                                 filtered_argv[i + 2])
                 # The first token names the value and is always textual;
                 # the option's own kind describes the second.
@@ -552,7 +609,7 @@ def parse_command(
                 i += 3
             elif (not is_pair and etok in cs.long_value_spellings
                   and i + 1 < len(filtered_argv)):
-                _set_value_flag(flags, refusals, cs, cmd_name, etok,
+                _set_value_flag(flags, refusals, cs, argmatch_dests, etok,
                                 filtered_argv[i + 1])
                 word_kinds[orig_indices[i + 1]] = cs.kind_of[etok]
                 if cs.dest_of(etok) == cs.base_dest:
@@ -572,8 +629,8 @@ def parse_command(
             else:
                 if eq != -1 and (spelling in cs.long_value_spellings
                                  or spelling in cs.long_optional_spellings):
-                    _set_value_flag(flags, refusals, cs, cmd_name, spelling,
-                                    tok[eq + 1:])
+                    _set_value_flag(flags, refusals, cs, argmatch_dests,
+                                    spelling, tok[eq + 1:])
                     base = _rebase(flags, cs, spelling, tok[eq + 1:], base)
                 elif etok in cs.long_value_spellings:
                     # Declared value flag at end of line with no argument.
@@ -613,7 +670,7 @@ def parse_command(
             matched_optional = False
             for vf in cs.attach_spellings:
                 if tok.startswith(vf) and len(tok) > len(vf):
-                    _set_value_flag(flags, refusals, cs, cmd_name, vf,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vf,
                                     tok[len(vf):])
                     base = _rebase(flags, cs, vf, tok[len(vf):], base)
                     i += 1
@@ -624,7 +681,7 @@ def parse_command(
             matched_value = False
             for vf in cs.value_spellings:
                 if tok == vf and i + 1 < len(filtered_argv):
-                    _set_value_flag(flags, refusals, cs, cmd_name, vf,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vf,
                                     filtered_argv[i + 1])
                     word_kinds[orig_indices[i + 1]] = cs.kind_of[vf]
                     if cs.dest_of(vf) == cs.base_dest:
@@ -634,7 +691,7 @@ def parse_command(
                     matched_value = True
                     break
                 if tok.startswith(vf) and len(tok) > len(vf):
-                    _set_value_flag(flags, refusals, cs, cmd_name, vf,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vf,
                                     tok[len(vf):])
                     base = _rebase(flags, cs, vf, tok[len(vf):], base)
                     i += 1
@@ -665,7 +722,7 @@ def parse_command(
                 if attached is not None:
                     for name in cluster_bools:
                         _set_bool_flag(flags, cs, name)
-                    _set_value_flag(flags, refusals, cs, cmd_name, vflag,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vflag,
                                     attached)
                     base = _rebase(flags, cs, vflag, attached, base)
                     i += 1
@@ -673,7 +730,7 @@ def parse_command(
                 if i + 1 < len(filtered_argv):
                     for name in cluster_bools:
                         _set_bool_flag(flags, cs, name)
-                    _set_value_flag(flags, refusals, cs, cmd_name, vflag,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vflag,
                                     filtered_argv[i + 1])
                     word_kinds[orig_indices[i + 1]] = cs.kind_of[vflag]
                     if cs.dest_of(vflag) == cs.base_dest:
@@ -768,7 +825,7 @@ def parse_command(
             continue
         values = _bag_values(flags, dest_name)
         stored = [
-            _check_value(refusals, cs, cmd_name, dest_name, part)
+            _check_value(refusals, cs, argmatch_dests, dest_name, part)
             for part in values
         ]
         if stored and stored != values:

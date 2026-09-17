@@ -61,7 +61,7 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "sleep -- '--zzz=\u00e9'",
+      "command": "sleep -- '--zzz=é'",
       "expect": {
         "exit": 1,
         "stdout": "",
@@ -98,7 +98,7 @@
       "command": "sleep --help",
       "expect": {
         "exit": 0,
-        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep [<text>...]\n",
+        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep NUMBER[SUFFIX]...\n\nFlags:\n  --help     Show this help and exit\n  --version  Show version information and exit\n",
         "stderr": ""
       }
     },
@@ -132,7 +132,7 @@
       "command": "sleep --h",
       "expect": {
         "exit": 0,
-        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep [<text>...]\n",
+        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep NUMBER[SUFFIX]...\n\nFlags:\n  --help     Show this help and exit\n  --version  Show version information and exit\n",
         "stderr": ""
       }
     },
@@ -166,7 +166,7 @@
       "command": "sleep 0 --help",
       "expect": {
         "exit": 0,
-        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep [<text>...]\n",
+        "stdout": "sleep: Delay for a specified amount of time.\n\nUsage: sleep NUMBER[SUFFIX]...\n\nFlags:\n  --help     Show this help and exit\n  --version  Show version information and exit\n",
         "stderr": ""
       }
     },

@@ -12,11 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { versionLine } from '../../../../commands/config.ts'
+import { helpPage, versionLine } from '../../../../commands/config.ts'
 import { quoteText } from '../../../../commands/quote.ts'
 import { specOf } from '../../../../commands/spec/index.ts'
 import { NUMERIC_SHORT } from '../../../../commands/spec/constants.ts'
-import { renderHelp } from '../../../../commands/spec/help.ts'
 import {
   ambiguousOptionError,
   unexpectedValueError,
@@ -52,11 +51,16 @@ function standardMatches(name: string): string[] {
 /**
  * sleep's answer to `--help` or `--version`: stdout, exit 0.
  *
- * The page is the spec's, rendered by the one renderer every other mirage
- * command answers `--help` with (commands/config.ts), so the two cannot drift.
+ * The page is built by `helpPage`, the one function every registered
+ * command's `--help` goes through (commands/config.ts), so the two cannot
+ * drift. That matters here because sleep is a shell builtin rather than a
+ * registered command: nothing injects the two standard options into its
+ * spec, so rendering that spec directly produced a page documenting neither
+ * of the options this arm exists to answer, under a synthesized
+ * `sleep [<text>...]` in place of GNU's own `sleep NUMBER[SUFFIX]...`.
  */
 function standardResponse(option: string): Result {
-  const text = option === '--help' ? renderHelp('sleep', specOf('sleep')) : versionLine('sleep')
+  const text = option === '--help' ? helpPage('sleep', specOf('sleep')) : versionLine('sleep')
   return [
     yieldBytes(new TextEncoder().encode(text)),
     new IOResult(),

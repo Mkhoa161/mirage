@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { versionLine } from '../../commands/config.ts'
+import { helpPage, versionLine } from '../../commands/config.ts'
 import { HELP as PRINTF_HELP } from './builtins/printf/printf.ts'
 import { specOf } from '../../commands/spec/index.ts'
 import { renderHelp } from '../../commands/spec/help.ts'
@@ -781,10 +781,25 @@ describe('handleSleep', () => {
       const [out, io, node] = await handleSleep(args)
       expect(io.exitCode).toBe(0)
       expect(io.stderr).toBeNull()
-      expect(await readBody(out)).toBe(renderHelp('sleep', specOf('sleep')))
+      expect(await readBody(out)).toBe(helpPage('sleep', specOf('sleep')))
       expect(node.exitCode).toBe(0)
     },
   )
+
+  // The page has to document the grammar this arm implements, which the
+  // declared spec alone cannot: sleep is a shell builtin, so nothing injects
+  // the two standard options into specOf('sleep'), and rendering that spec
+  // produced a page naming neither of the options it was answering. Asserted
+  // on the CONTENT rather than against the renderer, because the version that
+  // asserted renderHelp(spec) was true of the page whatever the page said.
+  // Mirrors test_sleep.py.
+  it("documents both options under GNU's own synopsis", async () => {
+    const [out] = await handleSleep(['--help'])
+    const page = await readBody(out)
+    expect(page).toContain('Usage: sleep NUMBER[SUFFIX]...\n')
+    expect(page).not.toContain('[<text>...]')
+    for (const option of ['--help', '--version']) expect(page).toContain(`  ${option}`)
+  })
 
   it.each([[['--version']], [['--v']], [['0', '--version']]])(
     'answers %j with the version line on stdout',

@@ -2,9 +2,8 @@ import time
 
 import pytest
 
-from mirage.commands.config import version_line
+from mirage.commands.config import help_page, version_line
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.help import render_help
 from mirage.workspace.executor.builtins.sleep import handle_sleep
 
 
@@ -53,8 +52,28 @@ async def test_sleep_help_prints_to_stdout_and_exits_0(args):
     out, io, node = await handle_sleep(args)
     assert io.exit_code == 0
     assert not io.stderr
-    assert await _stdout(out) == render_help("sleep", SPECS["sleep"]).encode()
+    assert await _stdout(out) == help_page("sleep", SPECS["sleep"])
     assert node.exit_code == 0
+
+
+# The page has to document the grammar this arm implements, which the
+# declared spec alone cannot: sleep is a shell builtin, so nothing
+# injects the two standard options into SPECS["sleep"], and rendering
+# that spec produced a page naming neither of the options it was
+# answering. Asserted on the CONTENT rather than against the renderer,
+# because the version that asserted `render_help(spec)` was true of the
+# page whatever the page said.
+@pytest.mark.asyncio
+async def test_sleep_help_documents_both_options_under_gnus_synopsis():
+    out, _, _ = await handle_sleep(["--help"])
+    page = (await _stdout(out)).decode()
+    # coreutils 9.7 heads the page `Usage: sleep NUMBER[SUFFIX]...` and
+    # lists both options; mirage renders its own layout under GNU's own
+    # synopsis line rather than copying the page verbatim.
+    assert "Usage: sleep NUMBER[SUFFIX]...\n" in page
+    assert "[<text>...]" not in page
+    for option in ("--help", "--version"):
+        assert f"  {option}" in page
 
 
 @pytest.mark.asyncio

@@ -14,7 +14,9 @@
 
 import pytest
 
+from mirage.commands.config import help_spec
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.compile import compile_spec
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
 from mirage.commands.spec.types import CommandSpec, Operand, Option
 
@@ -540,7 +542,7 @@ def test_a_choices_set_outside_the_table_reports_the_empty_word_invalid():
 # A mount author's own command is not a GNU program, so its choices are
 # argparse's: `--mode=rem` is refused rather than resolved to `remove`.
 # Nothing the author can write opts a custom spec into the table, which
-# is keyed by command name and holds three GNU entries.
+# names three builtin Option OBJECTS and is tested by identity.
 def test_a_custom_spec_never_inherits_argmatch():
     spec = CommandSpec(
         options=(Option(long="--mode", type="str", choices=("read",
@@ -550,14 +552,79 @@ def test_a_custom_spec_never_inherits_argmatch():
     assert parsed.invalid_value_options == [
         ("--mode", "rem", ("read", "remove")),
     ]
-    # Even naming it after a real ARGMATCH option changes nothing: the
-    # table is keyed by the pair, so `mycmd --to` is not `numfmt --to`.
+    # Even naming it after a real ARGMATCH option changes nothing.
     named = CommandSpec(
         options=(Option(long="--to", type="str", choices=("none", "si")), ))
     assert parse_command(named, ["--to=s"], "/",
                          "mycmd").invalid_value_options == [
                              ("--to", "s", ("none", "si")),
                          ]
+
+
+# A mount may register a command under a builtin's own name, so the
+# name is not the identity. A custom `tee` that reproduces GNU tee's
+# `--output-error` field for field still compares the whole word: the
+# option it declares is its own object, not the one the builtin spec
+# holds. Option is a frozen dataclass, so this lookalike is `==` to the
+# builtin's and hashes with it -- only `is` tells them apart, which is
+# why the table is not a frozenset of options.
+def test_a_command_that_borrows_a_builtin_name_does_not_borrow_argmatch():
+    lookalike = Option(long="--output-error",
+                       type="str",
+                       value_optional=True,
+                       choices=("warn", "warn-nopipe", "exit", "exit-nopipe"))
+    builtin = next(o for o in SPECS["tee"].options
+                   if o.long == "--output-error")
+    assert lookalike == builtin and lookalike is not builtin
+    parsed = parse_command(CommandSpec(options=(lookalike, )),
+                           ["--output-error=exit-n"], "/", "tee")
+    assert parsed.flags["--output-error"] == "exit-n"
+    assert parsed.invalid_value_options == [
+        ("--output-error", "exit-n", ("warn", "warn-nopipe", "exit",
+                                      "exit-nopipe")),
+    ]
+
+
+# The registry never hands the parser the spec the builtin declared: it
+# appends --help/--version and parses the COPY (commands/config.py), so
+# `spec is SPECS[name]` is False for every builtin by the time a line is
+# read. Identity of the Option survives that copy, which is the whole
+# reason the table names options rather than specs -- keying on the spec
+# would disable ARGMATCH everywhere while every unit test that passes
+# SPECS[name] straight in kept passing.
+def test_argmatch_survives_the_copy_the_registry_parses():
+    tee = SPECS["tee"]
+    registered = help_spec(tee)
+    assert registered is not tee
+    parsed = parse_command(registered, ["--output-error=exit-n"], "/", "tee")
+    assert parsed.flags["--output-error"] == "exit-nopipe"
+    assert parsed.invalid_value_options == []
+
+
+# compile_spec caches on a frozen dataclass, so its key is STRUCTURAL: a
+# spec built to look exactly like tee's shares the builtin's CompiledSpec
+# object. The ARGMATCH decision is therefore read off the spec and never
+# stored in there -- stored, it would be whichever of the two compiled
+# first, and the order is whatever the process happened to do. Both
+# directions are checked because the wrong one is order-dependent: the
+# clone inheriting argmatch, and the real tee losing it.
+def test_a_structural_twin_of_a_builtin_spec_shares_no_argmatch():
+    tee = SPECS["tee"]
+    twin = CommandSpec(options=tuple(
+        Option(**{f: getattr(o, f)
+                  for f in o.__dataclass_fields__}) for o in tee.options),
+                       rest=tee.rest,
+                       description=tee.description)
+    assert twin == tee and twin is not tee
+    assert compile_spec(twin) is compile_spec(tee)
+    assert parse_command(twin, ["--output-error=exit-n"], "/",
+                         "tee").invalid_value_options == [
+                             ("--output-error", "exit-n",
+                              ("warn", "warn-nopipe", "exit", "exit-nopipe")),
+                         ]
+    # and the builtin still resolves, whichever was compiled first
+    assert parse_command(tee, ["--output-error=exit-n"], "/",
+                         "tee").flags["--output-error"] == "exit-nopipe"
 
 
 # An installed CLI's node is outside the table for the same reason, so

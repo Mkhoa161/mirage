@@ -319,30 +319,49 @@ export function hasInjectedVersion(spec: CommandSpec | null): boolean {
  * prints to stdout, and exits 0 without running the command body.
  * A command declaring its own --version handles that flag itself.
  */
+/**
+ * The spec plus whichever of --help / --version it does not declare.
+ *
+ * Mirrors GNU coreutils: every command accepts both, so both have to parse
+ * before the handler can short-circuit them. A command declaring either
+ * keeps its own. `help_spec` in config.py is the twin.
+ */
+export function helpSpec(spec: CommandSpec): CommandSpec {
+  const extras: Option[] = []
+  if (!spec.options.some((o) => o.long === '--help')) extras.push(HELP_OPTION)
+  if (!spec.options.some((o) => o.long === '--version')) extras.push(VERSION_OPTION)
+  if (extras.length === 0) return spec
+  // Instance spread mirrors Python's dataclasses.replace: every CommandSpec
+  // field rides along, including ones added after this code was written.
+  // The prototype loss the lint warns about is the point: init wants a
+  // plain field bag, and the constructor rebuilds the class.
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread
+  return new CommandSpec({ ...spec, options: [...spec.options, ...extras] })
+}
+
+/**
+ * One command's `--help` page.
+ *
+ * Rendered from `helpSpec`, not from the declared spec, so it documents the
+ * two options every command answers rather than only the ones its author
+ * wrote down. Only the builtin itself gets GNU's own synopsis line: a
+ * registered command that borrowed the name keeps the line its own spec
+ * synthesizes, which is why this asks for the spec OBJECT rather than
+ * trusting the name. `help_page` in config.py is the twin.
+ */
+export function helpPage(name: string, spec: CommandSpec): string {
+  const synopsis = BUILTIN_SPECS[name] === spec ? SYNOPSES[name] : undefined
+  return renderHelp(name, helpSpec(spec), [], UsageStyle.ARGPARSE, synopsis)
+}
+
 function withHelpSupport(
   name: string,
   spec: CommandSpec,
   fn: CommandFn,
 ): { spec: CommandSpec; fn: CommandFn } {
-  const hasHelp = spec.options.some((o) => o.long === '--help')
   const hasVersion = spec.options.some((o) => o.long === '--version')
-  const extras: Option[] = []
-  if (!hasHelp) extras.push(HELP_OPTION)
-  if (!hasVersion) extras.push(VERSION_OPTION)
-  // Instance spread mirrors Python's dataclasses.replace: every CommandSpec
-  // field rides along, including ones added after this code was written.
-  // The prototype loss the lint warns about is the point: init wants a
-  // plain field bag, and the constructor rebuilds the class.
-  const newSpec =
-    extras.length === 0
-      ? spec
-      : // eslint-disable-next-line @typescript-eslint/no-misused-spread
-        new CommandSpec({ ...spec, options: [...spec.options, ...extras] })
-  // Only the builtin itself answers --help with GNU's synopsis; a
-  // registered command that borrowed the name keeps the line its own spec
-  // synthesizes.
-  const synopsis = BUILTIN_SPECS[name] === spec ? SYNOPSES[name] : undefined
-  const helpText = renderHelp(name, newSpec, [], UsageStyle.ARGPARSE, synopsis)
+  const newSpec = helpSpec(spec)
+  const helpText = helpPage(name, spec)
   const versionText = versionLine(name)
   const wrappedFn: CommandFn = async (accessor, paths, texts, opts) => {
     if (opts.flags.help === true) {

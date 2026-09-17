@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
+import { helpSpec } from '../config.ts'
 import { specOf } from './builtins.ts'
 import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
 import { CommandSpec, Operand, Option } from './types.ts'
@@ -726,8 +727,9 @@ describe('choices violations are reported, never thrown', () => {
 
   // A mount author's own command is not a GNU program, so its choices are
   // argparse's: `--mode=rem` is refused rather than resolved to `remove`.
-  // Nothing the author can write opts a custom spec into the table, which is
-  // keyed by command name and holds three GNU entries. Mirrors test_parser.py.
+  // Nothing the author can write opts a custom spec into the table, which
+  // names three builtin Option OBJECTS and is tested by identity. Mirrors
+  // test_parser.py.
   it('never lets a custom spec inherit argmatch', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--mode', type: 'str', choices: ['read', 'remove'] })],
@@ -735,14 +737,90 @@ describe('choices violations are reported, never thrown', () => {
     const parsed = parseCommand(spec, ['--mode=rem'], '/', 'mycmd')
     expect(parsed.flags['--mode']).toBe('rem')
     expect(parsed.invalidValueOptions).toEqual([['--mode', 'rem', ['read', 'remove']]])
-    // Even naming it after a real ARGMATCH option changes nothing: the table
-    // is keyed by the pair, so `mycmd --to` is not `numfmt --to`.
+    // Even naming it after a real ARGMATCH option changes nothing.
     const named = new CommandSpec({
       options: [new Option({ long: '--to', type: 'str', choices: ['none', 'si'] })],
     })
     expect(parseCommand(named, ['--to=s'], '/', 'mycmd').invalidValueOptions).toEqual([
       ['--to', 's', ['none', 'si']],
     ])
+  })
+
+  // A mount may register a command under a builtin's own name, so the name is
+  // not the identity. A custom `tee` that reproduces GNU tee's
+  // `--output-error` field for field still compares the whole word: the
+  // option it declares is its own object, not the one the builtin spec holds.
+  // Mirrors test_parser.py.
+  it('does not let a command that borrows a builtin name borrow argmatch', () => {
+    const lookalike = new Option({
+      long: '--output-error',
+      type: 'str',
+      valueOptional: true,
+      choices: ['warn', 'warn-nopipe', 'exit', 'exit-nopipe'],
+    })
+    const builtin = specOf('tee').options.find((o) => o.long === '--output-error')
+    expect(lookalike).toEqual(builtin)
+    expect(lookalike).not.toBe(builtin)
+    const parsed = parseCommand(
+      new CommandSpec({ options: [lookalike] }),
+      ['--output-error=exit-n'],
+      '/',
+      'tee',
+    )
+    expect(parsed.flags['--output-error']).toBe('exit-n')
+    expect(parsed.invalidValueOptions).toEqual([
+      ['--output-error', 'exit-n', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']],
+    ])
+  })
+
+  // The registry never hands the parser the spec the builtin declared: it
+  // appends --help/--version and parses the COPY (commands/config.ts), so
+  // `spec === BUILTIN_SPECS[name]` is false for every builtin by the time a
+  // line is read. Identity of the Option survives that copy, which is the
+  // whole reason the table names options rather than specs -- keying on the
+  // spec would disable ARGMATCH everywhere while every unit test that passes
+  // specOf(name) straight in kept passing. Mirrors test_parser.py.
+  it('keeps argmatch through the copy the registry parses', () => {
+    const tee = specOf('tee')
+    const registered = helpSpec(tee)
+    expect(registered).not.toBe(tee)
+    const parsed = parseCommand(registered, ['--output-error=exit-n'], '/', 'tee')
+    expect(parsed.flags['--output-error']).toBe('exit-nopipe')
+    expect(parsed.invalidValueOptions).toEqual([])
+  })
+
+  // python's compileSpec twin caches on a frozen dataclass, so ITS key is
+  // structural and a spec built to look exactly like tee's shares the
+  // builtin's compiled tables. The ARGMATCH decision is therefore read off
+  // the spec in both languages and never stored on the compiled tables,
+  // which is the only way the two answer alike here. Mirrors test_parser.py.
+  it('gives a structural twin of a builtin spec no argmatch', () => {
+    const tee = specOf('tee')
+    // Declared the long way round, exactly as builtin_specs/text_proc.ts
+    // declares it, so the twin is equal field for field and shares not one
+    // Option object with the builtin.
+    const twin = new CommandSpec({
+      options: [
+        new Option({ short: '-a', long: '--append' }),
+        new Option({ short: '-i', long: '--ignore-interrupts' }),
+        new Option({ short: '-p' }),
+        new Option({
+          long: '--output-error',
+          type: 'str',
+          valueOptional: true,
+          choices: ['warn', 'warn-nopipe', 'exit', 'exit-nopipe'],
+        }),
+      ],
+      rest: new Operand({ type: 'path' }),
+    })
+    expect(twin).toEqual(tee)
+    expect(twin).not.toBe(tee)
+    expect(parseCommand(twin, ['--output-error=exit-n'], '/', 'tee').invalidValueOptions).toEqual([
+      ['--output-error', 'exit-n', ['warn', 'warn-nopipe', 'exit', 'exit-nopipe']],
+    ])
+    expect(parseCommand(tee, ['--output-error=exit-n'], '/', 'tee').flags['--output-error']).toBe(
+      'exit-nopipe',
+    )
   })
 
   // An installed CLI's node is outside the table for the same reason, so `gh

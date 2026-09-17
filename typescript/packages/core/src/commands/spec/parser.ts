@@ -13,7 +13,9 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { resolvePath } from '../../utils/path.ts'
+import { compareCodePoints } from '../../utils/sort.ts'
 import { type ArgmatchChoices, argmatch, valueClasses } from './argmatch.ts'
+import { BUILTIN_SPECS } from './builtins.ts'
 import { type CompiledSpec, compileSpec, expandLong } from './compile.ts'
 import {
   ARG_PLACEHOLDER,
@@ -26,7 +28,64 @@ import {
   SOLE_ARGUMENT_LONG_OPTIONS,
 } from './constants.ts'
 import { expandOldStyle } from './oldstyle.ts'
-import type { CommandSpec, ValueType, FlagValue } from './types.ts'
+import type { CommandSpec, Option, ValueType, FlagValue } from './types.ts'
+
+/**
+ * The builtin `Option` objects whose choices are gnulib ARGMATCH tables.
+ *
+ * ARGMATCH_CHOICE_OPTIONS names them as "<command> <spelling>" because that
+ * is how the measurement reads; this resolves each entry to the one object
+ * the builtin spec declares, so `argmatchDests` can test `===` rather than
+ * compare strings. An entry naming no option is a rotted table and throws
+ * here, at module load. `_argmatch_options` in parser.py is the twin.
+ */
+function argmatchOptions(): readonly Option[] {
+  const found: Option[] = []
+  for (const key of [...ARGMATCH_CHOICE_OPTIONS].sort(compareCodePoints)) {
+    const sep = key.indexOf(' ')
+    const name = key.slice(0, sep)
+    const spelling = key.slice(sep + 1)
+    const options = (BUILTIN_SPECS[name]?.options ?? []).filter(
+      (o) => (o.long ?? o.short) === spelling,
+    )
+    if (options.length === 0) {
+      throw new Error(
+        `ARGMATCH_CHOICE_OPTIONS names ${name} ${spelling}, which that spec does not declare`,
+      )
+    }
+    found.push(...options)
+  }
+  return found
+}
+
+const ARGMATCH_OPTIONS = argmatchOptions()
+
+/**
+ * Which of this spec's choice sets are gnulib ARGMATCH tables.
+ *
+ * Decided by `Option` identity, not by the command's name: a mount may
+ * register its own `tee` (commands/registry.ts), and a name is not an
+ * identity. Identity is also the only signal that survives registration,
+ * which parses an enriched COPY of the spec (config.ts appends
+ * --help/--version, once per backend), while every declared Option stays the
+ * same object.
+ *
+ * Read off the spec rather than cached on its CompiledSpec so that the two
+ * languages answer alike: python's `compile_spec` caches on a frozen
+ * dataclass, so its key is structural and a spec that merely LOOKED like
+ * tee's would share the builtin's compiled tables. This WeakMap is keyed by
+ * reference and would not, and a fact that depended on which cache it sat in
+ * is exactly the kind that drifts. `_argmatch_dests` in parser.py is the
+ * twin.
+ */
+function argmatchDests(spec: CommandSpec): ReadonlySet<string> {
+  const dests = new Set<string>()
+  for (const o of spec.options) {
+    if (o.choices.length === 0) continue
+    if (ARGMATCH_OPTIONS.some((table) => table === o)) dests.add(o.long ?? o.short ?? '')
+  }
+  return dests
+}
 
 export interface ParsedArgsInit {
   flags: Record<string, FlagValue>
@@ -189,15 +248,18 @@ interface Refusals {
 // failure, not the choice list.
 //
 // A declared `choices` set compares the WHOLE word, argparse's rule, unless
-// this command's option is named in ARGMATCH_CHOICE_OPTIONS, in which case
-// it is one of the three gnulib ARGMATCH tables the parser owns and an
-// unambiguous prefix resolves to its candidate. The returned word is what
-// the caller stores, so a command reads `none` where the line typed `non`
-// and never learns the difference. `_check_value` in parser.py is the twin.
+// the option declaring it is one of the three gnulib ARGMATCH tables the
+// parser owns, in which case an unambiguous prefix resolves to its
+// candidate. The returned word is what the caller stores, so a command reads
+// `none` where the line typed `non` and never learns the difference. Which
+// sets those are was settled by `compileSpec`, by `Option` identity rather
+// than by the command's name, so a registered command that borrows the name
+// `tee` still compares the whole word. `_check_value` in parser.py is the
+// twin.
 function checkValue(
   refusals: Refusals,
   cs: CompiledSpec,
-  cmdName: string,
+  argmatchDestSet: ReadonlySet<string>,
   dest: string,
   value: string,
 ): string {
@@ -213,7 +275,7 @@ function checkValue(
   }
   const allowed = cs.choicesByDest.get(dest)
   if (allowed === undefined) return value
-  if (ARGMATCH_CHOICE_OPTIONS.has(`${cmdName} ${dest}`)) {
+  if (argmatchDestSet.has(dest)) {
     const match = argmatch(value, allowed)
     if (match.matched) return match.word
     if (match.kind === 'ambiguous') {
@@ -248,12 +310,12 @@ function setValueFlag(
   flags: Record<string, FlagValue>,
   refusals: Refusals,
   cs: CompiledSpec,
-  cmdName: string,
+  argmatchDestSet: ReadonlySet<string>,
   spelling: string,
   value: string,
 ): void {
   const name = cs.destOf(spelling)
-  const stored = checkValue(refusals, cs, cmdName, name, value)
+  const stored = checkValue(refusals, cs, argmatchDestSet, name, value)
   if (cs.multipleDests.has(name)) {
     const prev = flags[name]
     if (Array.isArray(prev)) {
@@ -358,7 +420,9 @@ function matchMixedCluster(tok: string, cs: CompiledSpec): MixedCluster | null {
  * the call rather than about the spec, and nothing on CommandSpec may say it:
  * the shared grammar stays what POSIX and argparse can both express. It says
  * nothing about `choices`, which compares the whole word for every spec
- * unless the command's option is one of the three ARGMATCH_CHOICE_OPTIONS.
+ * unless the option declaring the set is one of the three builtin ARGMATCH
+ * declarations -- an identity the spec itself settles, so it is not a fact
+ * about the caller at all.
  *
  * `parse_command` in parser.py is the twin.
  */
@@ -371,6 +435,7 @@ export function parseCommand(
   unknownIsOperand = false,
 ): ParsedArgs {
   const cs = compileSpec(spec)
+  const argmatchDestSet = argmatchDests(spec)
 
   // tar's old option style is expanded before anything else reads the
   // line, so classification, routing and dispatch all scan the same
@@ -554,15 +619,15 @@ export function parseCommand(
       } else if (isPair && eqPos === -1 && i + 2 < filteredArgv.length) {
         // Two tokens, both recorded under the one dest, so the command
         // reads the accumulated list in twos.
-        setValueFlag(flags, refusals, cs, cmdName, spelling, filteredArgv[i + 1] ?? '')
-        setValueFlag(flags, refusals, cs, cmdName, spelling, filteredArgv[i + 2] ?? '')
+        setValueFlag(flags, refusals, cs, argmatchDestSet, spelling, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, refusals, cs, argmatchDestSet, spelling, filteredArgv[i + 2] ?? '')
         // The first token names the value and is always textual; the
         // option's own kind describes the second.
         wordKinds[origIndices[i + 1] ?? -1] = 'str'
         wordKinds[origIndices[i + 2] ?? -1] = cs.kindOf.get(spelling) ?? null
         i += 3
       } else if (!isPair && cs.longValueSpellings.has(etok) && i + 1 < filteredArgv.length) {
-        setValueFlag(flags, refusals, cs, cmdName, etok, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, refusals, cs, argmatchDestSet, etok, filteredArgv[i + 1] ?? '')
         wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(etok) ?? null
         if (cs.destOf(etok) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
         base = rebase(flags, cs, etok, filteredArgv[i + 1] ?? '', base)
@@ -583,7 +648,7 @@ export function parseCommand(
           eqPos !== -1 &&
           (cs.longValueSpellings.has(spelling) || cs.longOptionalSpellings.has(spelling))
         ) {
-          setValueFlag(flags, refusals, cs, cmdName, spelling, tok.slice(eqPos + 1))
+          setValueFlag(flags, refusals, cs, argmatchDestSet, spelling, tok.slice(eqPos + 1))
           base = rebase(flags, cs, spelling, tok.slice(eqPos + 1), base)
         } else if (cs.longValueSpellings.has(etok)) {
           // Declared value flag at end of line with no argument.
@@ -623,7 +688,7 @@ export function parseCommand(
       let matchedOptional = false
       for (const vf of cs.attachSpellings) {
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, refusals, cs, cmdName, vf, tok.slice(vf.length))
+          setValueFlag(flags, refusals, cs, argmatchDestSet, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedOptional = true
@@ -634,7 +699,7 @@ export function parseCommand(
       let matchedValue = false
       for (const vf of cs.valueSpellings) {
         if (tok === vf && i + 1 < filteredArgv.length) {
-          setValueFlag(flags, refusals, cs, cmdName, vf, filteredArgv[i + 1] ?? '')
+          setValueFlag(flags, refusals, cs, argmatchDestSet, vf, filteredArgv[i + 1] ?? '')
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(vf) ?? null
           if (cs.destOf(vf) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
           base = rebase(flags, cs, vf, filteredArgv[i + 1] ?? '', base)
@@ -643,7 +708,7 @@ export function parseCommand(
           break
         }
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, refusals, cs, cmdName, vf, tok.slice(vf.length))
+          setValueFlag(flags, refusals, cs, argmatchDestSet, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedValue = true
@@ -677,14 +742,21 @@ export function parseCommand(
       if (mixed !== null) {
         if (mixed.attached !== null) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, refusals, cs, cmdName, mixed.valueFlag, mixed.attached)
+          setValueFlag(flags, refusals, cs, argmatchDestSet, mixed.valueFlag, mixed.attached)
           base = rebase(flags, cs, mixed.valueFlag, mixed.attached, base)
           i += 1
           continue
         }
         if (i + 1 < filteredArgv.length) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, refusals, cs, cmdName, mixed.valueFlag, filteredArgv[i + 1] ?? '')
+          setValueFlag(
+            flags,
+            refusals,
+            cs,
+            argmatchDestSet,
+            mixed.valueFlag,
+            filteredArgv[i + 1] ?? '',
+          )
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(mixed.valueFlag) ?? null
           if (cs.destOf(mixed.valueFlag) === cs.baseDest) {
             wordBases[origIndices[i + 1] ?? -1] = base
@@ -771,7 +843,7 @@ export function parseCommand(
   for (const destName of checked) {
     if (typedDests.includes(destName)) continue
     const values = bagValues(flags, destName)
-    const stored = values.map((part) => checkValue(refusals, cs, cmdName, destName, part))
+    const stored = values.map((part) => checkValue(refusals, cs, argmatchDestSet, destName, part))
     if (stored.length > 0 && stored.some((word, at) => word !== values[at])) {
       flags[destName] = Array.isArray(flags[destName]) ? stored : (stored[0] ?? '')
     }

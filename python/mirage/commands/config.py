@@ -268,6 +268,45 @@ def version_request(name: str, spec: CommandSpec | None,
     return None
 
 
+def help_spec(spec: CommandSpec) -> CommandSpec:
+    """The spec plus whichever of --help / --version it does not declare.
+
+    Mirrors GNU coreutils: every command accepts both, so both have to
+    parse before the handler can short-circuit them. A command declaring
+    either keeps its own.
+
+    Args:
+        spec (CommandSpec): the command's declared grammar.
+    """
+    extras: list[Option] = []
+    if not any(o.long == "--help" for o in spec.options):
+        extras.append(HELP_OPTION)
+    if not any(o.long == "--version" for o in spec.options):
+        extras.append(_VERSION_OPTION)
+    if not extras:
+        return spec
+    return replace(spec, options=spec.options + tuple(extras))
+
+
+def help_page(name: str, spec: CommandSpec) -> bytes:
+    """One command's ``--help`` page.
+
+    The page is rendered from ``help_spec``, not from the declared spec,
+    so it documents the two options every command answers rather than
+    only the ones its author wrote down. Only the builtin itself gets
+    GNU's own synopsis line: a registered command that borrowed the name
+    keeps the line its own spec synthesizes, which is why this asks for
+    the spec OBJECT rather than trusting the name.
+
+    Args:
+        name (str): command name as invoked.
+        spec (CommandSpec): the command's declared grammar, before the
+            two standard options are injected.
+    """
+    synopsis = SYNOPSES.get(name) if SPECS.get(name) is spec else None
+    return render_help(name, help_spec(spec), synopsis=synopsis).encode()
+
+
 def _with_help_support(
         name: str, spec: CommandSpec,
         fn: Callable[..., Any]) -> tuple[CommandSpec, CommandFn]:
@@ -277,19 +316,9 @@ def _with_help_support(
     prints to stdout, and exits 0 without running the command body.
     A command declaring its own --version handles that flag itself.
     """
-    extras: list[Option] = []
-    if not any(o.long == "--help" for o in spec.options):
-        extras.append(HELP_OPTION)
     has_version = any(o.long == "--version" for o in spec.options)
-    if not has_version:
-        extras.append(_VERSION_OPTION)
-    new_spec = (spec if not extras else replace(
-        spec, options=spec.options + tuple(extras)))
-    # Only the builtin itself answers --help with GNU's synopsis; a
-    # registered command that borrowed the name keeps the line its own
-    # spec synthesizes.
-    synopsis = SYNOPSES.get(name) if SPECS.get(name) is spec else None
-    help_text = render_help(name, new_spec, synopsis=synopsis).encode()
+    new_spec = help_spec(spec)
+    help_text = help_page(name, spec)
     version_text = version_line(name)
 
     @functools.wraps(fn)

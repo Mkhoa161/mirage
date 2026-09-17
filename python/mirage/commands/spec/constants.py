@@ -91,10 +91,17 @@ SOLE_ARGUMENT_LONG_OPTIONS = frozenset({"expr"})
 # --to=s` resolves to `si` and `--to=ie` is ambiguous between `iec` and
 # `iec-i`.
 #
-# Keyed by (command, canonical long spelling), not by spelling alone, so
-# a custom spec that happens to name an option `--to` does not inherit
-# numfmt's rule. This is the same per-program keying NO_LONG_OPTIONS and
-# SOLE_ARGUMENT_LONG_OPTIONS use.
+# Written as (command, canonical long spelling) because that is how the
+# measurement reads, but it NAMES the three builtin `Option` objects
+# rather than keying on the two strings: the parser resolves each pair
+# once and then asks whether the option declaring a set IS one of them.
+# A name is not identity, and a mount may register its own `tee`
+# (commands/registry.py) whose `--output-error` would otherwise inherit
+# gnulib's rule from a spelling collision alone. Identity is also the
+# only signal that survives registration, which hands the parser an
+# enriched COPY of the spec (config.py appends --help/--version), so
+# `spec is SPECS[name]` is False for every builtin by the time a line is
+# parsed while every declared Option is still the same object.
 ARGMATCH_CHOICE_OPTIONS = frozenset({
     ("tee", "--output-error"),
     ("numfmt", "--to"),

@@ -15,11 +15,10 @@
 import asyncio
 import math
 
-from mirage.commands.config import version_line
+from mirage.commands.config import help_page, version_line
 from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.constants import NUMERIC_SHORT
-from mirage.commands.spec.help import render_help
 from mirage.commands.spec.usage import (ambiguous_option_error,
                                         unexpected_value_error,
                                         unknown_option_error, usage_hint)
@@ -58,14 +57,19 @@ def _standard_response(
         option: str) -> tuple[ByteSource | None, IOResult, ExecutionNode]:
     """sleep's answer to `--help` or `--version`: stdout, exit 0.
 
-    The page is the spec's, rendered by the one renderer every other
-    mirage command answers `--help` with (commands/config.py), so the
-    two cannot drift.
+    The page is built by ``help_page``, the one function every
+    registered command's `--help` goes through (commands/config.py), so
+    the two cannot drift. That matters here because sleep is a shell
+    builtin rather than a registered command: nothing injects the two
+    standard options into its spec, so rendering that spec directly
+    produced a page documenting neither of the options this arm exists
+    to answer, under a synthesized `sleep [<text>...]` in place of
+    GNU's own `sleep NUMBER[SUFFIX]...`.
 
     Args:
         option (str): the canonical spelling, from _standard_option.
     """
-    text = (render_help("sleep", SPECS["sleep"]).encode()
+    text = (help_page("sleep", SPECS["sleep"])
             if option == "--help" else version_line("sleep"))
     return yield_bytes(text), IOResult(), ExecutionNode(command="sleep",
                                                         exit_code=0)
