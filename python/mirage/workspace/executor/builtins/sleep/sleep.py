@@ -194,6 +194,16 @@ async def handle_sleep(
         if seconds is None:
             bad.append(raw)
             continue
+        # The SUM is what gets slept, so an operand that carries it past
+        # the representable range is refused exactly like one that is
+        # not finite on its own: `sleep 1e308 1e308` overflows to inf,
+        # and an inf total slipped past the check each operand passes
+        # alone. GNU sleeps forever on it (measured on 9.7, as it does
+        # on `sleep inf`); refusing it is the same deliberate divergence
+        # SLEEP_INTERVAL already carries, for the same reason.
+        if not math.isfinite(total + seconds):
+            bad.append(raw)
+            continue
         total += seconds
     if bad:
         # coreutils calls `error()` per offending operand and only then

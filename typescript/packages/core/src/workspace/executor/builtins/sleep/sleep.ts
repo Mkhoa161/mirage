@@ -178,6 +178,17 @@ export async function handleSleep(args: string[], signal?: AbortSignal): Promise
       bad.push(raw)
       continue
     }
+    // The SUM is what gets slept, so an operand that carries it past the
+    // representable range is refused exactly like one that is not finite on
+    // its own: `sleep 1e308 1e308` overflows to Infinity, and an infinite
+    // total slipped past the check each operand passes alone. GNU sleeps
+    // forever on it (measured on 9.7, as it does on `sleep inf`); refusing it
+    // is the same deliberate divergence SLEEP_INTERVAL already carries, for
+    // the same reason.
+    if (!Number.isFinite(total + seconds)) {
+      bad.push(raw)
+      continue
+    }
     total += seconds
   }
   if (bad.length > 0) {

@@ -119,6 +119,15 @@ export function mergeSignals(
   return a ?? b ?? undefined
 }
 
+// `setTimeout` holds a 32-bit signed delay, so anything longer is not merely
+// imprecise: node warns (`TimeoutOverflowWarning`) and clamps it to 1ms, which
+// turns a long wait into an immediate return. 2147483647ms is just under 25
+// days, which python's `asyncio.sleep` reaches without a word, so a delay past
+// it is served by re-arming rather than by one timer. `tail`'s own pause
+// (commands/builtin/generic/tail.ts) documents the infinite case of the same
+// trap.
+const MAX_TIMEOUT_MS = 2_147_483_647
+
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted === true) {
@@ -126,14 +135,24 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       return
     }
     let timer: ReturnType<typeof setTimeout> | null = null
+    let left = ms
     const onAbort = (): void => {
       if (timer !== null) clearTimeout(timer)
       reject(makeAbortError())
     }
-    timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
+    const arm = (): void => {
+      const step = Math.min(left, MAX_TIMEOUT_MS)
+      left -= step
+      timer = setTimeout(() => {
+        if (left > 0) {
+          arm()
+          return
+        }
+        signal?.removeEventListener('abort', onAbort)
+        resolve()
+      }, step)
+    }
+    arm()
     signal?.addEventListener('abort', onAbort, { once: true })
   })
 }

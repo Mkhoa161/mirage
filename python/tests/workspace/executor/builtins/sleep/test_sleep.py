@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import pytest
@@ -242,6 +243,36 @@ async def test_sleep_refuses_any_bad_operand_naming_every_one(args, named):
     lines = "".join(f"sleep: invalid time interval '{w}'\n" for w in named)
     assert io.stderr == (
         f"{lines}Try 'sleep --help' for more information.\n").encode()
+
+
+# The SUM is what gets slept, so an operand that carries it past the
+# representable range is refused like one that is not finite on its own.
+# Each 1e308 passes the per-operand check, and the total overflowed to
+# inf, which `asyncio.sleep` waits on forever -- the hang SLEEP_INTERVAL's
+# `inf` divergence exists to prevent. GNU sleeps forever here too
+# (measured on 9.7, as it does on `sleep inf`); refusing is the same
+# deliberate divergence. The operand that overflowed is the one named,
+# so a third one is a second diagnostic.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("args,named", [
+    (["1e308", "1e308"], ["1e308"]),
+    (["1e308", "1e308", "1e308"], ["1e308", "1e308"]),
+])
+async def test_sleep_refuses_a_sum_that_overflows(args, named):
+    _, io, node = await asyncio.wait_for(handle_sleep(args), timeout=5)
+    assert io.exit_code == 1
+    assert node.exit_code == 1
+    lines = "".join(f"sleep: invalid time interval '{w}'\n" for w in named)
+    assert io.stderr == (
+        f"{lines}Try 'sleep --help' for more information.\n").encode()
+
+
+# A total that stays representable is still slept, however large: only
+# the overflow is refused, not a big number.
+@pytest.mark.asyncio
+async def test_sleep_keeps_a_large_but_representable_total():
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(handle_sleep(["1e308"]), timeout=0.2)
 
 
 # The check runs over every operand before any of them is slept, so a

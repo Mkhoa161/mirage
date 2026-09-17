@@ -966,6 +966,46 @@ describe('handleSleep', () => {
     )
   })
 
+  // The SUM is what gets slept, so an operand that carries it past the
+  // representable range is refused like one that is not finite on its own.
+  // Each 1e308 passes the per-operand check, and the total overflowed to
+  // Infinity, which node's setTimeout clamps to 1ms (returning at once, where
+  // python's asyncio.sleep waits forever) -- both halves of the hang that
+  // SLEEP_INTERVAL's `inf` divergence exists to prevent. GNU sleeps forever
+  // here too (measured on 9.7, as it does on `sleep inf`); refusing is the
+  // same deliberate divergence. The operand that overflowed is the one named,
+  // so a third one is a second diagnostic. Mirrors test_sleep.py.
+  it.each([
+    [['1e308', '1e308'], ['1e308']],
+    [
+      ['1e308', '1e308', '1e308'],
+      ['1e308', '1e308'],
+    ],
+  ])('refuses %j, a sum that overflows', async (args, named) => {
+    const [, io] = await handleSleep(args)
+    expect(io.exitCode).toBe(1)
+    const lines = named.map((w) => `sleep: invalid time interval '${w}'\n`).join('')
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `${lines}Try 'sleep --help' for more information.\n`,
+    )
+  })
+
+  // A total that stays representable is still slept, however large: only the
+  // overflow is refused, not a big number. node's setTimeout holds a 32-bit
+  // delay and clamps anything longer to 1ms, so `sleep 1e308` returned at once
+  // where python waited; `sleep()` (workspace/abort.ts) re-arms instead.
+  // Mirrors test_sleep.py.
+  it('keeps a large but representable total', async () => {
+    const started = Date.now()
+    let settled = false
+    void handleSleep(['1e308']).then(() => {
+      settled = true
+    })
+    await new Promise((r) => setTimeout(r, 150))
+    expect(settled).toBe(false)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(150)
+  })
+
   // The check runs over every operand before any of them is slept, so a bad
   // one does not cost the wait its predecessors would have taken (measured on
   // 9.7: `sleep 0.2 x 0.2` exits 1 immediately). Mirrors test_sleep.py.

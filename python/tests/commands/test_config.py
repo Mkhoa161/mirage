@@ -15,7 +15,8 @@
 import asyncio
 
 from mirage.commands.config import (CommandOpts, RegisteredCommand, command,
-                                    cross_command, version_request)
+                                    cross_command, has_injected_version,
+                                    version_request)
 from mirage.commands.spec import SPECS, CommandSpec, Operand, Option
 from mirage.commands.spec.builtin_specs import registered_spec
 from mirage.version import __version__
@@ -348,6 +349,40 @@ class TestVersionRequest:
         assert version_request("grep", spec, ["-e", "--version"]) is None
         assert version_request("grep", spec,
                                ["--include", "--version"]) is None
+
+    # A declared remainder slot is argparse's REMAINDER: the first
+    # operand ends option parsing, so every word after it belongs to the
+    # program being run rather than to mirage. Verified against argparse
+    # itself -- `add_argument("--version", action="store_true")` plus
+    # `add_argument("rest", nargs=REMAINDER)` answers `["operand",
+    # "--version"]` with `version=False` and the flag in `rest`. mirage's
+    # parser already agreed; only this scan did not, so `mytool operand
+    # --version` printed mirage's version and the handler never ran.
+    def test_a_remainder_operand_keeps_the_words_after_it(self):
+        spec = CommandSpec(rest=Operand(type="str", remainder=True))
+        registered = command("mytool", resource="disk",
+                             spec=spec)(_noop_handler)
+        rest_spec = registered._registered_commands[0].spec
+        assert version_request("mytool", rest_spec,
+                               ["operand", "--version"]) is None
+        assert version_request("mytool", rest_spec,
+                               ["operand", "--vers"]) is None
+        # Ahead of the first operand it is still an option, as argparse
+        # answers `["--version", "operand"]` with version=True.
+        assert version_request("mytool", rest_spec, ["--version", "operand"])
+        assert version_request("mytool", rest_spec, ["--version"])
+
+    # The four builtin specs that declare a remainder (python, python3,
+    # node, js) all declare their own --version too, so none of them ever
+    # reaches the scan: the wrapper injects nothing and this declines on
+    # the first line. Pinned so a spec losing its own --version cannot
+    # quietly hand its program's argv to mirage.
+    def test_the_builtin_remainder_specs_never_reach_the_scan(self):
+        for name in ("python", "python3", "node", "js"):
+            spec = registered_spec(name, SPECS[name])
+            assert not has_injected_version(spec)
+            assert version_request(name, spec,
+                                   ["-c", "code", "--vers"]) is None
 
     # Both tables name one real program, so both are gated on the spec
     # being that program's own grammar. A mount may register a command

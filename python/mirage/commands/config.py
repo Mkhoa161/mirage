@@ -29,7 +29,7 @@ from mirage.commands.spec.constants import (SOLE_ARGUMENT_LONG_OPTIONS,
                                             VERSION_AFTER_SCAN,
                                             VERSION_BEFORE_SCAN)
 from mirage.commands.spec.help import render_help
-from mirage.commands.spec.parser import parse_command
+from mirage.commands.spec.parser import ParsedArgs, parse_command
 from mirage.commands.spec.synopsis import SYNOPSES
 from mirage.commands.spec.types import FlagValue
 from mirage.io.stream import yield_bytes
@@ -264,24 +264,33 @@ def _version_index(spec: CommandSpec, argv: list[str]) -> int | None:
     return None
 
 
-def _scan_refuses(name: str, spec: CommandSpec, words: list[str]) -> bool:
-    """Whether the parser refuses an option in these words.
+def _scan(name: str, spec: CommandSpec, words: list[str]) -> ParsedArgs:
+    """Read these words the way the line is read downstream.
 
-    The same parse the line gets downstream, so the two agree by
-    construction rather than by a second reading of the grammar; only
-    the option reports are read, which is why a cwd the caller does not
-    have is not one it needs (nothing here consumes a resolved path).
-    ``missing_required_options`` is deliberately not read: these words
-    are a PREFIX of the line for every command but the two that defer,
-    so an option declared later has not been reached yet.
+    The same parse, so the two agree by construction rather than by a
+    second reading of the grammar. Only the option reports and the
+    typed dests are consumed, which is why a cwd the caller does not
+    have is not one it needs: nothing here looks at a resolved path.
 
     Args:
         name (str): command name as invoked, for the per-program rules
             the grammar cannot state.
         spec (CommandSpec): the registered spec.
-        words (list[str]): the words the scan has read.
+        words (list[str]): the words to read.
     """
-    parsed = parse_command(spec, words, ROOT_CWD.virtual, name)
+    return parse_command(spec, words, ROOT_CWD.virtual, name)
+
+
+def _scan_refuses(parsed: ParsedArgs) -> bool:
+    """Whether the scan refused an option in the words it read.
+
+    ``missing_required_options`` is deliberately not read: the words are
+    a PREFIX of the line for every command but the two that defer, so an
+    option declared later has not been reached yet.
+
+    Args:
+        parsed (ParsedArgs): one ``_scan`` result.
+    """
     return bool(parsed.option_error_kinds
                 or parsed.old_option_needs_value is not None)
 
@@ -290,9 +299,9 @@ def version_request(name: str, spec: CommandSpec | None,
                     argv: list[str]) -> bytes | None:
     """Version output when argv asks a command for the injected --version.
 
-    None when the command declares its own --version, when the flag is
-    absent, when it sits after the `--` end-of-options marker, or when
-    an option the scan reads first is one the parser refuses.
+    None when the command declares its own --version, when the parser
+    does not read the word as that option at all, or when an option the
+    scan reads first is one the parser refuses.
 
     This runs on raw argv, ahead of the parser, so it has to honor the
     two rules the parser states about a long option's POSITION.
@@ -346,20 +355,26 @@ def version_request(name: str, spec: CommandSpec | None,
     index = _version_index(spec, argv)
     if index is None:
         return None
+    # The parser has to read that word as this option, which is the one
+    # question this scan cannot answer on its own. A declared remainder
+    # slot is where the two part company: it is argparse's REMAINDER, so
+    # the first operand ends option parsing and every later word belongs
+    # to the program being run (`argparse` answers `['operand',
+    # '--version']` with `version=False`). Asking the parser covers that
+    # without restating the rule, and covers `--` and a word a
+    # value-taking option swallowed for the same reason.
+    whole = _scan(name, spec, argv)
+    if "--version" not in whole.typed_dests:
+        return None
     if builtin and name in VERSION_BEFORE_SCAN:
         return version_line(name)
-    # Everything ahead of the option has to scan cleanly, which is both
-    # halves of "the scan reaches this word as an option": a refusal
-    # among those words is what GNU reports instead, and a value-taking
-    # option that swallowed this one (`grep -e --version`) leaves its
-    # own refusal there, so declining hands the word back to the
-    # ordinary path to read as that option's value, as GNU does.
-    if _scan_refuses(name, spec, argv[:index]):
+    # Everything ahead of the option has to scan cleanly too: a refusal
+    # among those words is what GNU reports instead of the version.
+    if _scan_refuses(_scan(name, spec, argv[:index])):
         return None
     # A program that answers only after the whole scan needs the rest of
-    # the line to be clean too.
-    if (builtin and name in VERSION_AFTER_SCAN
-            and _scan_refuses(name, spec, argv)):
+    # the line to be clean as well.
+    if builtin and name in VERSION_AFTER_SCAN and _scan_refuses(whole):
         return None
     return version_line(name)
 

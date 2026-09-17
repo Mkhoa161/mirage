@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { IOResult } from '../io/types.ts'
 import type { DispatchFn } from '../runtime/types.ts'
 import { PathSpec } from '../types.ts'
-import { abortable, guardDispatch, joinOrAbort, makeAbortError } from './abort.ts'
+import { abortable, guardDispatch, joinOrAbort, makeAbortError, sleep } from './abort.ts'
 
 function never(): Promise<never> {
   return new Promise<never>(() => undefined)
@@ -140,5 +140,49 @@ describe('guardDispatch', () => {
     const seen: string[] = []
     const inner = recording(seen)
     expect(guardDispatch(inner, undefined)).toBe(inner)
+  })
+})
+
+describe('sleep', () => {
+  it('waits the requested delay and resolves', async () => {
+    const started = Date.now()
+    await sleep(40)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(30)
+  })
+
+  it('resolves immediately for a zero delay', async () => {
+    await expect(sleep(0)).resolves.toBeUndefined()
+  })
+
+  // `setTimeout` holds a 32-bit signed delay, so node warns and clamps
+  // anything longer to 1ms -- a long wait becomes an immediate return, which
+  // is how `sleep 1e308` exited 0 at once here while python waited. A delay
+  // past the ceiling is served by re-arming, so it must NOT settle early.
+  it('does not settle early past the 32-bit timeout ceiling', async () => {
+    let settled = false
+    void sleep(5_000_000_000).then(() => {
+      settled = true
+    })
+    await sleep(120)
+    expect(settled).toBe(false)
+  })
+
+  // The abort still wins over a re-armed timer, which is the property the
+  // re-arming could have dropped: the listener is attached once, around the
+  // whole wait, not per step.
+  it('aborts a re-armed wait', async () => {
+    const ac = new AbortController()
+    const started = Date.now()
+    setTimeout(() => {
+      ac.abort()
+    }, 40)
+    await expect(sleep(5_000_000_000, ac.signal)).rejects.toThrow()
+    expect(Date.now() - started).toBeLessThan(3000)
+  })
+
+  it('rejects at once when the signal has already fired', async () => {
+    const ac = new AbortController()
+    ac.abort()
+    await expect(sleep(5_000_000_000, ac.signal)).rejects.toThrow()
   })
 })

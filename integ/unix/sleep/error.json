@@ -240,6 +240,40 @@
         "stdout": "",
         "stderr": "sleep: invalid time interval '1x'\nsleep: invalid time interval '2y'\nTry 'sleep --help' for more information.\n"
       }
+    },
+    {
+      "id": "sleep_sum_overflow_is_refused",
+      "seq": 991105,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep 1e308 1e308",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '1e308'\nTry 'sleep --help' for more information.\n"
+      }
     }
   ]
 }

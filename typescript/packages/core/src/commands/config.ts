@@ -31,7 +31,7 @@ import {
   VERSION_OPTION,
 } from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
-import { parseCommand } from './spec/parser.ts'
+import { type ParsedArgs, parseCommand } from './spec/parser.ts'
 import { SYNOPSES } from './spec/synopsis.ts'
 import type { CommandSpec } from './spec/types.ts'
 import { UsageStyle, type FlagValue } from './spec/types.ts'
@@ -289,26 +289,33 @@ function versionIndex(spec: CommandSpec, argv: string[]): number | null {
 }
 
 /**
- * Whether the parser refuses an option in these words.
+ * Read these words the way the line is read downstream.
  *
- * The same parse the line gets downstream, so the two agree by construction
- * rather than by a second reading of the grammar; only the option reports are
- * read, which is why a cwd the caller does not have is not one it needs
- * (nothing here consumes a resolved path). `missingRequiredOptions` is
- * deliberately not read: these words are a PREFIX of the line for every
- * command but the two that defer, so an option declared later has not been
- * reached yet. `_scan_refuses` in config.py is the twin.
+ * The same parse, so the two agree by construction rather than by a second
+ * reading of the grammar. Only the option reports and the typed dests are
+ * consumed, which is why a cwd the caller does not have is not one it needs:
+ * nothing here looks at a resolved path. `_scan` in config.py is the twin.
  */
-function scanRefuses(name: string, spec: CommandSpec, words: string[]): boolean {
-  const parsed = parseCommand(spec, words, ROOT_CWD, name)
+function scan(name: string, spec: CommandSpec, words: string[]): ParsedArgs {
+  return parseCommand(spec, words, ROOT_CWD, name)
+}
+
+/**
+ * Whether the scan refused an option in the words it read.
+ *
+ * `missingRequiredOptions` is deliberately not read: the words are a PREFIX of
+ * the line for every command but the two that defer, so an option declared
+ * later has not been reached yet. `_scan_refuses` in config.py is the twin.
+ */
+function scanRefuses(parsed: ParsedArgs): boolean {
   return parsed.optionErrorKinds.length > 0 || parsed.oldOptionNeedsValue !== null
 }
 
 /**
  * Version output when argv asks a command for the injected --version.
- * Null when the command declares its own --version, when the flag is absent,
- * when it sits after the `--` end-of-options marker, or when an option the
- * scan reads first is one the parser refuses.
+ * Null when the command declares its own --version, when the parser does not
+ * read the word as that option at all, or when an option the scan reads first
+ * is one the parser refuses.
  *
  * This runs on raw argv, ahead of the parser, so it has to honor the two rules
  * the parser states about a long option's POSITION.
@@ -356,17 +363,22 @@ export function versionRequest(
   }
   const index = versionIndex(spec, argv)
   if (index === null) return null
+  // The parser has to read that word as this option, which is the one question
+  // this scan cannot answer on its own. A declared remainder slot is where the
+  // two part company: it is argparse's REMAINDER, so the first operand ends
+  // option parsing and every later word belongs to the program being run
+  // (`argparse` answers `['operand', '--version']` with `version=False`).
+  // Asking the parser covers that without restating the rule, and covers `--`
+  // and a word a value-taking option swallowed for the same reason.
+  const whole = scan(name, spec, argv)
+  if (!whole.typedDests.includes('--version')) return null
   if (builtin && VERSION_BEFORE_SCAN.has(name)) return HELP_ENC.encode(versionLine(name))
-  // Everything ahead of the option has to scan cleanly, which is both halves
-  // of "the scan reaches this word as an option": a refusal among those words
-  // is what GNU reports instead, and a value-taking option that swallowed this
-  // one (`grep -e --version`) leaves its own refusal there, so declining hands
-  // the word back to the ordinary path to read as that option's value, as GNU
-  // does.
-  if (scanRefuses(name, spec, argv.slice(0, index))) return null
+  // Everything ahead of the option has to scan cleanly too: a refusal among
+  // those words is what GNU reports instead of the version.
+  if (scanRefuses(scan(name, spec, argv.slice(0, index)))) return null
   // A program that answers only after the whole scan needs the rest of the
-  // line to be clean too.
-  if (builtin && VERSION_AFTER_SCAN.has(name) && scanRefuses(name, spec, argv)) return null
+  // line to be clean as well.
+  if (builtin && VERSION_AFTER_SCAN.has(name) && scanRefuses(whole)) return null
   return HELP_ENC.encode(versionLine(name))
 }
 
