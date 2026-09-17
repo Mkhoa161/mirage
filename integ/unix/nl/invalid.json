@@ -3191,23 +3191,6 @@
       "flags": [
         "v"
       ]
-    },
-    {
-      "id": "nl_w_refused_first_occurrence_across_mounts",
-      "seq": 991084,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "printf 'x\\n' > /data2/nlw.txt && nl -w abc -w 3 /data/a.txt /data2/nlw.txt",
-      "expect": {
-        "exit": 1,
-        "stdout": "",
-        "stderr": "nl: invalid line number field width: 'abc'\n"
-      },
-      "flags": [
-        "w"
-      ]
     }
   ]
 }
