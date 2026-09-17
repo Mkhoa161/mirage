@@ -995,15 +995,28 @@ describe('handleSleep', () => {
   // delay and clamps anything longer to 1ms, so `sleep 1e308` returned at once
   // where python waited; `sleep()` (workspace/abort.ts) re-arms instead.
   // Mirrors test_sleep.py.
+  //
+  // The assertion is that the wait has NOT settled, never on the elapsed time:
+  // an `elapsed >= 150` line here would only be asserting that this test's own
+  // wait lasted as long as it asked for, which a timer is allowed to undershoot
+  // (CI measured 149). The signal it stands in for has a 75x margin instead,
+  // since the clamped version settled in 1-2ms.
   it('keeps a large but representable total', async () => {
-    const started = Date.now()
+    const ac = new AbortController()
     let settled = false
-    void handleSleep(['1e308']).then(() => {
-      settled = true
-    })
+    const done = handleSleep(['1e308'], ac.signal).then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
     await new Promise((r) => setTimeout(r, 150))
     expect(settled).toBe(false)
-    expect(Date.now() - started).toBeGreaterThanOrEqual(150)
+    // Cancel rather than leaving a re-armed timer behind for the worker.
+    ac.abort()
+    await done
   })
 
   // The check runs over every operand before any of them is slept, so a bad

@@ -159,12 +159,19 @@ describe('sleep', () => {
   // is how `sleep 1e308` exited 0 at once here while python waited. A delay
   // past the ceiling is served by re-arming, so it must NOT settle early.
   it('does not settle early past the 32-bit timeout ceiling', async () => {
+    const ac = new AbortController()
     let settled = false
-    void sleep(5_000_000_000).then(() => {
-      settled = true
-    })
+    const done = sleep(5_000_000_000, ac.signal).then(
+      () => {
+        settled = true
+      },
+      () => undefined,
+    )
     await sleep(120)
     expect(settled).toBe(false)
+    // Cancel rather than leaving a re-armed timer behind for the worker.
+    ac.abort()
+    await done
   })
 
   // The abort still wins over a re-armed timer, which is the property the

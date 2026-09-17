@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { command, hasInjectedVersion, RegisteredCommand, versionRequest } from './config.ts'
+import { command, hasInjectedVersion, RegisteredCommand, standardRequest } from './config.ts'
 import { BUILTIN_SPECS, registeredSpec } from './spec/builtins.ts'
 import { CommandSpec, Operand, Option } from './spec/types.ts'
 import { IOResult } from '../io/types.ts'
@@ -155,27 +155,27 @@ describe('command() registers multiple resources', () => {
   })
 })
 
-describe('versionRequest', () => {
+describe('standardRequest', () => {
   it('matches the injected option', () => {
-    const out = versionRequest('tsort', specFor('tsort'), ['--version'])
+    const out = standardRequest('tsort', specFor('tsort'), ['--version'])
     expect(decode(out)).toMatch(/^tsort \(Mirage\) \d+\.\d+\.\d+(?:-[\w.]+)?\n$/)
   })
 
   it('is null without the flag', () => {
-    expect(versionRequest('tsort', specFor('tsort'), ['/data/a.txt'])).toBeNull()
+    expect(standardRequest('tsort', specFor('tsort'), ['/data/a.txt'])).toBeNull()
   })
 
   it('is null after the end-of-options marker', () => {
-    expect(versionRequest('grep', specFor('grep'), ['--', '--version'])).toBeNull()
+    expect(standardRequest('grep', specFor('grep'), ['--', '--version'])).toBeNull()
   })
 
   it('is null for an unregistered command', () => {
-    expect(versionRequest('nope', null, ['--version'])).toBeNull()
+    expect(standardRequest('nope', null, ['--version'])).toBeNull()
   })
 
   it('is null when the command declares its own --version', () => {
     const own = new CommandSpec({ options: [new Option({ long: '--version' })] })
-    expect(versionRequest('custom', specFor('custom', own), ['--version'])).toBeNull()
+    expect(standardRequest('custom', specFor('custom', own), ['--version'])).toBeNull()
   })
 
   // This runs ahead of the parser, and the parser expands an abbreviation, so
@@ -185,7 +185,7 @@ describe('versionRequest', () => {
   // `cat --vers /ram/a` and refused `cat --vers /ram/a /disk/b`.
   it('matches an unambiguous abbreviation', () => {
     for (const word of ['--vers', '--versio', '--v']) {
-      const out = versionRequest('tsort', specFor('tsort'), [word, '/data/a.txt'])
+      const out = standardRequest('tsort', specFor('tsort'), [word, '/data/a.txt'])
       expect(decode(out)).toMatch(/^tsort \(Mirage\)/)
     }
   })
@@ -194,20 +194,20 @@ describe('versionRequest', () => {
   // (`option '--version' doesn't allow an argument`), and an abbreviation
   // naming two options is not this option at all.
   it('is null for an abbreviation carrying a value or naming two options', () => {
-    expect(versionRequest('tsort', specFor('tsort'), ['--versio=x'])).toBeNull()
-    expect(versionRequest('tsort', specFor('tsort'), ['--version=x'])).toBeNull()
+    expect(standardRequest('tsort', specFor('tsort'), ['--versio=x'])).toBeNull()
+    expect(standardRequest('tsort', specFor('tsort'), ['--version=x'])).toBeNull()
     const two = new CommandSpec({ options: [new Option({ long: '--verbose' })] })
-    expect(versionRequest('custom', specFor('custom', two), ['--ver'])).toBeNull()
+    expect(standardRequest('custom', specFor('custom', two), ['--ver'])).toBeNull()
   })
 
   // expr reads a long option only when it is the whole line, and only for
   // expr's own grammar: a registered command that borrowed the name answers
   // wherever the word sits, like every other command.
   it('holds the sole-argument window for the builtin alone', () => {
-    expect(versionRequest('expr', builtinSpec('expr'), ['--versio'])).not.toBeNull()
-    expect(versionRequest('expr', builtinSpec('expr'), ['--version', 'x'])).toBeNull()
+    expect(standardRequest('expr', builtinSpec('expr'), ['--versio'])).not.toBeNull()
+    expect(standardRequest('expr', builtinSpec('expr'), ['--version', 'x'])).toBeNull()
     const borrowed = specFor('expr', new CommandSpec({ rest: new Operand({ type: 'str' }) }))
-    expect(versionRequest('expr', borrowed, ['--version', 'x'])).not.toBeNull()
+    expect(standardRequest('expr', borrowed, ['--version', 'x'])).not.toBeNull()
   })
 
   // `--version` is an option like any other, so an option error the scan meets
@@ -216,8 +216,8 @@ describe('versionRequest', () => {
   // --version` is sort's own (exit 2).
   it('lets a refusal the scan meets first outrank the version', () => {
     for (const name of ['cat', 'sort', 'tee']) {
-      expect(versionRequest(name, builtinSpec(name), ['--bogus', '--vers'])).toBeNull()
-      expect(versionRequest(name, builtinSpec(name), ['--bogus', '--version'])).toBeNull()
+      expect(standardRequest(name, builtinSpec(name), ['--bogus', '--vers'])).toBeNull()
+      expect(standardRequest(name, builtinSpec(name), ['--bogus', '--version'])).toBeNull()
     }
   })
 
@@ -225,8 +225,8 @@ describe('versionRequest', () => {
   // and exiting there, so a word the scan never reaches cannot outrank it
   // (`cat --version --bogus` prints the version and exits 0 on 9.7).
   it('does not let a refusal the scan never reaches outrank it', () => {
-    expect(versionRequest('cat', builtinSpec('cat'), ['--version', '--bogus'])).not.toBeNull()
-    expect(versionRequest('cat', builtinSpec('cat'), ['--vers', '--bogus'])).not.toBeNull()
+    expect(standardRequest('cat', builtinSpec('cat'), ['--version', '--bogus'])).not.toBeNull()
+    expect(standardRequest('cat', builtinSpec('cat'), ['--vers', '--bogus'])).not.toBeNull()
   })
 
   // grep sets `show_version` and keeps scanning, printing after the loop, so a
@@ -235,9 +235,9 @@ describe('versionRequest', () => {
   // `--version --bogus` lines exit 2.
   it('makes the deferred family read the whole line', () => {
     for (const name of ['grep', 'rg']) {
-      expect(versionRequest(name, builtinSpec(name), ['--version'])).not.toBeNull()
-      expect(versionRequest(name, builtinSpec(name), ['--version', '--bogus'])).toBeNull()
-      expect(versionRequest(name, builtinSpec(name), ['--bogus', '--version'])).toBeNull()
+      expect(standardRequest(name, builtinSpec(name), ['--version'])).not.toBeNull()
+      expect(standardRequest(name, builtinSpec(name), ['--version', '--bogus'])).toBeNull()
+      expect(standardRequest(name, builtinSpec(name), ['--bogus', '--version'])).toBeNull()
     }
   })
 
@@ -246,15 +246,77 @@ describe('versionRequest', () => {
   // --version f.gz` prints the version, exit 0, where `zgrep --bogus f.gz`
   // reaches grep and exits 2).
   it('lets zgrep answer ahead of every refusal', () => {
-    expect(versionRequest('zgrep', builtinSpec('zgrep'), ['--bogus', '--version'])).not.toBeNull()
+    expect(standardRequest('zgrep', builtinSpec('zgrep'), ['--bogus', '--version'])).not.toBeNull()
   })
 
   // A value-taking option swallows the word, so it is that option's value and
   // never an option at all: `grep -e --version f` greps for the pattern
   // `--version` and exits 1 on grep 3.11.
   it('lets a value-taking option swallow the word', () => {
-    expect(versionRequest('grep', builtinSpec('grep'), ['-e', '--version'])).toBeNull()
-    expect(versionRequest('grep', builtinSpec('grep'), ['--include', '--version'])).toBeNull()
+    expect(standardRequest('grep', builtinSpec('grep'), ['-e', '--version'])).toBeNull()
+    expect(standardRequest('grep', builtinSpec('grep'), ['--include', '--version'])).toBeNull()
+  })
+
+  // GNU answers both standard options from one long_options table, so they are
+  // ordered against each other by scan position like any other pair: measured
+  // on coreutils 9.7, `cat --help --version` is the help page and
+  // `cat --version --help` is the version line. The version half used to be
+  // the only one served here, so it won wherever it sat. Mirrors test_config.py.
+  it('lets the first standard option the scan reaches win', () => {
+    const spec = builtinSpec('cat')
+    const page = decode(standardRequest('cat', spec, ['--help', '--version']))
+    expect(page).toContain('Usage: cat')
+    expect(decode(standardRequest('cat', spec, ['--version', '--help']))).toMatch(/^cat \(Mirage\)/)
+    expect(decode(standardRequest('cat', spec, ['--h', '--v']))).toContain('Usage: cat')
+  })
+
+  // --help is served here for the same reason --version is: the cross-mount
+  // branch bypasses the registered wrapper that answers it, so
+  // `mv --help /ram/a /disk/b` ran the relay and moved the file. The page must
+  // be the one the wrapper would have printed, GNU's synopsis line included,
+  // which is why helpPage takes either form of the builtin's grammar.
+  // Mirrors test_config.py.
+  it('serves help from either form of the grammar', () => {
+    for (const name of ['mv', 'cp', 'cat', 'rm']) {
+      const page = decode(standardRequest(name, builtinSpec(name), ['--help']))
+      expect(page).toContain(`Usage: ${name}`)
+    }
+  })
+
+  // The scan-order and family rules hold for help exactly as for the version,
+  // measured rather than assumed: on coreutils 9.7 `cat --bogus --help`
+  // reports the option and `cat --help --bogus` prints the page; on grep 3.11
+  // BOTH orders report the option; on gzip 1.13 `zgrep --bogus --help` prints
+  // zgrep's own usage and exits 0. Mirrors test_config.py.
+  it('follows the same scan order and families for help', () => {
+    const cat = builtinSpec('cat')
+    expect(standardRequest('cat', cat, ['--bogus', '--help'])).toBeNull()
+    expect(standardRequest('cat', cat, ['--help', '--bogus'])).not.toBeNull()
+    for (const name of ['grep', 'rg']) {
+      const spec = builtinSpec(name)
+      expect(standardRequest(name, spec, ['--help'])).not.toBeNull()
+      expect(standardRequest(name, spec, ['--help', '--bogus'])).toBeNull()
+      expect(standardRequest(name, spec, ['--bogus', '--help'])).toBeNull()
+    }
+    expect(standardRequest('zgrep', builtinSpec('zgrep'), ['--bogus', '--help'])).not.toBeNull()
+  })
+
+  // The position comes from the parser, not from a raw lookalike: `-e` takes
+  // `--` as its pattern, so the line is NOT ended and the `--version` after it
+  // is the option; `-o` takes the first `--version` as its output file and the
+  // second is the option. The raw scan stopped at the consumed word and
+  // declined, which on a cross-mount line let the fan-out print one version
+  // page per operand. Mirrors test_config.py.
+  it('takes the position from the parser, not a lookalike', () => {
+    const grep = builtinSpec('grep')
+    expect(decode(standardRequest('grep', grep, ['-e', '--', '--version']))).toMatch(
+      /^grep \(Mirage\)/,
+    )
+    expect(
+      decode(standardRequest('sort', builtinSpec('sort'), ['-o', '--version', '--version'])),
+    ).toMatch(/^sort \(Mirage\)/)
+    // A real end-of-options marker still ends the scan.
+    expect(standardRequest('grep', grep, ['--', '--version'])).toBeNull()
   })
 
   // A declared remainder slot is argparse's REMAINDER: the first operand ends
@@ -270,12 +332,12 @@ describe('versionRequest', () => {
       'mytool',
       new CommandSpec({ rest: new Operand({ type: 'str', remainder: true }) }),
     )
-    expect(versionRequest('mytool', rest, ['operand', '--version'])).toBeNull()
-    expect(versionRequest('mytool', rest, ['operand', '--vers'])).toBeNull()
+    expect(standardRequest('mytool', rest, ['operand', '--version'])).toBeNull()
+    expect(standardRequest('mytool', rest, ['operand', '--vers'])).toBeNull()
     // Ahead of the first operand it is still an option, as argparse answers
     // `["--version", "operand"]` with version=true.
-    expect(versionRequest('mytool', rest, ['--version', 'operand'])).not.toBeNull()
-    expect(versionRequest('mytool', rest, ['--version'])).not.toBeNull()
+    expect(standardRequest('mytool', rest, ['--version', 'operand'])).not.toBeNull()
+    expect(standardRequest('mytool', rest, ['--version'])).not.toBeNull()
   })
 
   // The four builtin specs that declare a remainder (python, python3, node,
@@ -287,7 +349,7 @@ describe('versionRequest', () => {
     for (const name of ['python', 'python3', 'node', 'js']) {
       const spec = builtinSpec(name)
       expect(hasInjectedVersion(spec)).toBe(false)
-      expect(versionRequest(name, spec, ['-c', 'code', '--vers'])).toBeNull()
+      expect(standardRequest(name, spec, ['-c', 'code', '--vers'])).toBeNull()
     }
   })
 
@@ -298,8 +360,8 @@ describe('versionRequest', () => {
   it('does not let a borrowed name borrow the family', () => {
     for (const name of ['grep', 'zgrep']) {
       const borrowed = specFor(name, new CommandSpec({ rest: new Operand({ type: 'str' }) }))
-      expect(versionRequest(name, borrowed, ['--version', '--bogus'])).not.toBeNull()
-      expect(versionRequest(name, borrowed, ['--bogus', '--version'])).toBeNull()
+      expect(standardRequest(name, borrowed, ['--version', '--bogus'])).not.toBeNull()
+      expect(standardRequest(name, borrowed, ['--bogus', '--version'])).toBeNull()
     }
   })
 })

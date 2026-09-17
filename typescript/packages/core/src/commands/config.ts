@@ -22,12 +22,11 @@ import type { NamespaceView, ReaddirPath, SessionView, StatPath } from '../ops/t
 import { VERSION } from '../version.ts'
 import type { AggregateResult } from './builtin/aggregators.ts'
 import { ROOT_CWD } from './constants.ts'
-import { BUILTIN_SPECS, isBuiltinGrammar, registeredSpec } from './spec/builtins.ts'
-import { compileSpec, expandLong } from './spec/compile.ts'
+import { isBuiltinGrammar, registeredSpec } from './spec/builtins.ts'
 import {
-  SOLE_ARGUMENT_LONG_OPTIONS,
-  VERSION_AFTER_SCAN,
-  VERSION_BEFORE_SCAN,
+  HELP_OPTION,
+  STANDARD_AFTER_SCAN,
+  STANDARD_BEFORE_SCAN,
   VERSION_OPTION,
 } from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
@@ -273,20 +272,11 @@ export function versionLine(name: string): string {
   return `${name} (Mirage) ${VERSION}\n`
 }
 
-/**
- * Where the scan would read the injected --version, if anywhere.
- *
- * Null when no word names it, or when the first one sits after the `--`
- * end-of-options marker, which ends the scan. `_version_index` in config.py
- * is the twin.
- */
-function versionIndex(spec: CommandSpec, argv: string[]): number | null {
-  for (const [index, arg] of argv.entries()) {
-    if (arg === '--') return null
-    if (isInjectedVersion(spec, arg)) return index
-  }
-  return null
-}
+// gnulib's two standard options, in the order `helpSpec` injects them. Both
+// are answered INSIDE the getopt loop, so the one the scan reaches FIRST
+// decides the line: measured on coreutils 9.7, `cat --help --version` prints
+// the help page and `cat --version --help` prints the version line.
+const STANDARD_DESTS = ['--help', '--version'] as const
 
 /**
  * Read these words the way the line is read downstream.
@@ -312,89 +302,101 @@ function scanRefuses(parsed: ParsedArgs): boolean {
 }
 
 /**
- * Version output when argv asks a command for the injected --version.
- * Null when the command declares its own --version, when the parser does not
- * read the word as that option at all, or when an option the scan reads first
- * is one the parser refuses.
+ * Where the parser reads one injected standard option, if anywhere.
  *
- * This runs on raw argv, ahead of the parser, so it has to honor the two rules
- * the parser states about a long option's POSITION.
- *
- * The first is which words the scan has read when it answers, because
- * `--version` is an option like any other and an option error the scan meets
- * first is what GNU reports: measured on coreutils 9.7 and grep 3.11,
- * `cat --bogus --vers` is `unrecognized option '--bogus'` (exit 1) and
- * `grep --bogus --vers` is grep's own (exit 2), where `cat --version --bogus`
- * prints the version and exits 0 because coreutils answers INSIDE the scan
- * loop. So the words ahead of the option are re-read through the parser, and a
- * refusal among them declines the answer and leaves the ordinary path to word
- * it. Two families answer elsewhere and carry their own tables:
- * VERSION_AFTER_SCAN finishes the whole line first, VERSION_BEFORE_SCAN
- * answers ahead of every option. Both are gated on the spec being the
- * builtin's own grammar, since a mount may register a command under one of
- * those names.
- *
- * The second is gnulib's `parse_long_options`, which reads argv[1] only when
- * it is the whole line (`argc == 2`), so for a SOLE_ARGUMENT_LONG_OPTIONS
- * command `--version` is an ordinary operand as soon as another word joins it.
- * Measured on coreutils 9.7: `expr --version` is the version and
- * `expr --version x` is `expr: syntax error: unexpected argument 'x'`.
- *
- * A word is the injected option when it resolves to it the way getopt_long
- * would, not only when it is spelled out in full, because the parser
- * downstream expands an abbreviation and the two have to agree: a line that
- * spans mounts is parsed against the SHARED spec, which carries no injected
- * --version, so `cat --vers /ram/a /disk/b` refused the prefix while
- * `cat --vers /ram/a` expanded it and exited 0. Resolution is against the
- * registered spec, the one the parser would use, so an abbreviation that is
- * ambiguous there (or carries a value) is declined here and refused
- * downstream in getopt_long's own words rather than answered.
+ * Deliberately not a raw scan over argv. A word that only looks like the
+ * option can be an earlier option's value, and a lookalike stops at the wrong
+ * one: `grep -e -- --version` hands `--` to -e, so the line is not ended and
+ * the `--version` after it really is the option, while
+ * `sort -o --version --version` hands the first spelling to -o's output file
+ * and only the second is read. Reading each prefix in turn puts the answer
+ * where the grammar already lives, so `--`, a declared remainder and a
+ * consumed value all follow from the parser rather than from three rules
+ * restated here. Adding words never un-types a dest, so the first prefix that
+ * carries it is the position. `_standard_index` in config.py is the twin.
  */
-export function versionRequest(
+function standardIndex(
+  name: string,
+  spec: CommandSpec,
+  argv: string[],
+  dest: string,
+): number | null {
+  for (let index = 0; index < argv.length; index++) {
+    if (scan(name, spec, argv.slice(0, index + 1)).typedDests.includes(dest)) return index
+  }
+  return null
+}
+
+/** What one standard option answers with. `_standard_output` is the twin. */
+function standardOutput(name: string, spec: CommandSpec, dest: string): Uint8Array {
+  return HELP_ENC.encode(dest === '--help' ? helpPage(name, spec) : versionLine(name))
+}
+
+/**
+ * Output when argv asks a command for an injected standard option.
+ * Null when the command declares that option itself, when the parser does not
+ * read any word as one, or when an option the scan reads first is one the
+ * parser refuses.
+ *
+ * This is the one door both standard options come through, and it runs ahead
+ * of routing because neither answer belongs to a backend: `rm --version /ro/x`
+ * would otherwise meet the read-only refusal, and `mv --help /ram/a /disk/b`
+ * would otherwise reach the cross-mount relay, which bypasses the registered
+ * wrapper that answers help and MOVED THE FILE instead of printing the page.
+ * The two are one mechanism rather than two because GNU answers both from the
+ * same long_options table, so they are ordered against each other by scan
+ * position like any other pair of options: measured on coreutils 9.7,
+ * `cat --help --version` is the help page and `cat --version --help` is the
+ * version line.
+ *
+ * Three rules about position, all of them GNU's and none of them restated
+ * here. Which words the scan has read when it answers, because a standard
+ * option is an option like any other and an error the scan meets first is what
+ * GNU reports (`cat --bogus --vers` is `unrecognized option '--bogus'`), with
+ * STANDARD_AFTER_SCAN and STANDARD_BEFORE_SCAN for the two families that
+ * answer elsewhere. Whether that word is the option at all, which only the
+ * parser can say: a declared remainder slot is argparse's REMAINDER, `--` ends
+ * the scan, and a value-taking option swallows the word after it. And gnulib's
+ * `parse_long_options` window, which the parser already applies for
+ * SOLE_ARGUMENT_LONG_OPTIONS, so this reads its answer rather than carrying a
+ * second copy of the rule. `standard_request` in config.py is the twin.
+ */
+export function standardRequest(
   name: string,
   spec: CommandSpec | null,
   argv: string[],
 ): Uint8Array | null {
-  if (spec === null || !hasInjectedVersion(spec)) return null
-  const builtin = isBuiltinGrammar(name, spec)
-  if (builtin && SOLE_ARGUMENT_LONG_OPTIONS.has(name)) {
-    const sole = argv.length === 1 && isInjectedVersion(spec, argv[0] ?? '')
-    return sole ? HELP_ENC.encode(versionLine(name)) : null
+  if (spec === null) return null
+  const injected: Record<string, boolean> = {
+    '--help': hasInjectedHelp(spec),
+    '--version': hasInjectedVersion(spec),
   }
-  const index = versionIndex(spec, argv)
-  if (index === null) return null
-  // The parser has to read that word as this option, which is the one question
-  // this scan cannot answer on its own. A declared remainder slot is where the
-  // two part company: it is argparse's REMAINDER, so the first operand ends
-  // option parsing and every later word belongs to the program being run
-  // (`argparse` answers `['operand', '--version']` with `version=False`).
-  // Asking the parser covers that without restating the rule, and covers `--`
-  // and a word a value-taking option swallowed for the same reason.
+  if (!STANDARD_DESTS.some((d) => injected[d] === true)) return null
   const whole = scan(name, spec, argv)
-  if (!whole.typedDests.includes('--version')) return null
-  if (builtin && VERSION_BEFORE_SCAN.has(name)) return HELP_ENC.encode(versionLine(name))
-  // Everything ahead of the option has to scan cleanly too: a refusal among
-  // those words is what GNU reports instead of the version.
-  if (scanRefuses(scan(name, spec, argv.slice(0, index)))) return null
+  const found: { index: number; dest: string }[] = []
+  for (const dest of STANDARD_DESTS) {
+    if (injected[dest] !== true || !whole.typedDests.includes(dest)) continue
+    const index = standardIndex(name, spec, argv, dest)
+    if (index !== null) found.push({ index, dest })
+  }
+  if (found.length === 0) return null
+  // The one the scan reaches first decides; no two options share a word, so
+  // the positions cannot tie.
+  const first = found.reduce((a, b) => (a.index <= b.index ? a : b))
+  const builtin = isBuiltinGrammar(name, spec)
+  if (builtin && STANDARD_BEFORE_SCAN.has(name)) return standardOutput(name, spec, first.dest)
+  // Everything ahead of the option has to scan cleanly: a refusal among those
+  // words is what GNU reports instead of the answer.
+  if (scanRefuses(scan(name, spec, argv.slice(0, first.index)))) return null
   // A program that answers only after the whole scan needs the rest of the
   // line to be clean as well.
-  if (builtin && VERSION_AFTER_SCAN.has(name) && scanRefuses(whole)) return null
-  return HELP_ENC.encode(versionLine(name))
+  if (builtin && STANDARD_AFTER_SCAN.has(name) && scanRefuses(whole)) return null
+  return standardOutput(name, spec, first.dest)
 }
 
-/**
- * Whether one raw word names the injected --version.
- *
- * getopt_long's rule, so an unambiguous abbreviation counts and an ambiguous
- * one does not. A word carrying a value is declined: GNU answers
- * `--version=x` with `option '--version' doesn't allow an argument`, which is
- * the parser's to say, not this function's. `_is_injected_version` in
- * config.py is the twin.
- */
-function isInjectedVersion(spec: CommandSpec, arg: string): boolean {
-  if (!arg.startsWith('--') || arg.includes('=')) return false
-  const matches = expandLong(compileSpec(spec), arg)
-  return matches.length === 1 && matches[0] === '--version'
+/** Whether the wrapper supplies this spec's help response. */
+export function hasInjectedHelp(spec: CommandSpec | null): boolean {
+  return spec?.options.some((o) => o === HELP_OPTION) ?? false
 }
 
 /** Whether the wrapper supplies this spec's version response. */
@@ -413,7 +415,13 @@ export function hasInjectedVersion(spec: CommandSpec | null): boolean {
  * trusting the name. `help_page` in config.py is the twin.
  */
 export function helpPage(name: string, spec: CommandSpec): string {
-  const synopsis = BUILTIN_SPECS[name] === spec ? SYNOPSES[name] : undefined
+  // Either form of the builtin's own grammar answers the same page: the
+  // declared spec the wrapper holds, and the one enriched copy the registry
+  // parses, which is what a caller reaching this from the routing door has.
+  // That is exactly what `isBuiltinGrammar` settles, and asking it rather than
+  // `BUILTIN_SPECS[name] === spec` is what keeps a cross-mount `--help` from
+  // losing GNU's synopsis line.
+  const synopsis = isBuiltinGrammar(name, spec) ? SYNOPSES[name] : undefined
   return renderHelp(name, registeredSpec(name, spec), [], UsageStyle.ARGPARSE, synopsis)
 }
 
