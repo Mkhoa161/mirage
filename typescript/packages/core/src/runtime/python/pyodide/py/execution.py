@@ -116,7 +116,13 @@ def run(request, arm_interrupt, disarm_interrupt):
             sys.stdout = out_text
             sys.stderr = err_text
             sys.argv = list(argv)
-            user_globals = {}
+            user_globals = {
+                '__name__': '__main__',
+                '__doc__': None,
+                '__package__': None,
+                '__spec__': None,
+                '__annotations__': {},
+            }
             if script_cli:
                 user_globals.update(argv=list(argv),
                                     stdin=bytes(stdin_bytes)

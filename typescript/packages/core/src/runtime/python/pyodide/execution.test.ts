@@ -21,6 +21,32 @@ import { PrefixResolver } from '../../resolver.ts'
 import { loadPyodideRuntime } from './loader.ts'
 import { PyodideExecution } from './execution.ts'
 describe('Python guest module', { timeout: 120_000 }, () => {
+  it('executes main guards with fresh globals on every run', async () => {
+    const guest = new PyodideExecution(await loadPyodideRuntime())
+    try {
+      for (const prog of ['submission.py', '-c', '-']) {
+        const result = guest.run(
+          {
+            code: "assert 'previous_run' not in globals()\nprevious_run = True\nif __name__ == '__main__':\n    print('submission result')\n    raise SystemExit(7)",
+            argv: [prog],
+            cwd: '/',
+            flags: {},
+            script_cli: false,
+            env: {},
+            stdin: null,
+          },
+          () => undefined,
+          () => undefined,
+        )
+        expect(new TextDecoder().decode(result[0])).toBe('submission result\n')
+        expect(new TextDecoder().decode(result[1])).toBe('')
+        expect(result[2]).toBe(7)
+      }
+    } finally {
+      guest.close()
+    }
+  })
+
   it('restores process globals after closing output and reporting SystemExit', async () => {
     const pyodide = await loadPyodideRuntime()
     const guest = new PyodideExecution(pyodide)
