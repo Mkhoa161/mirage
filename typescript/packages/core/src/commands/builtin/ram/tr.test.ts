@@ -154,6 +154,19 @@ describe('tr', () => {
     expect(sq.out).toBe('abc')
   })
 
+  it('-d without -s names the second operand as extra', async () => {
+    const resource = new RAMResource()
+    const two = await runTr(resource, [], ['a', 'b'], { delete: true }, ENC.encode('x'))
+    expect(two.exitCode).toBe(1)
+    await expect(runTr(resource, [], ['a', 'b', 'c'], { delete: true })).rejects.toThrow(
+      "tr: extra operand 'b'",
+    )
+    await expect(
+      runTr(resource, [], ['a', 'b', 'c'], { delete: true, squeeze_repeats: true }),
+    ).rejects.toThrow("tr: extra operand 'c'")
+    await expect(runTr(resource, [], ['a', 'b', 'c'])).rejects.toThrow("tr: extra operand 'c'")
+  })
+
   it('missing arguments returns error', async () => {
     const resource = new RAMResource()
     const r = await runTr(resource, [], [])

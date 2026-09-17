@@ -160,14 +160,14 @@ export async function zgrepGeneric(
     for (const p of paths) {
       const compressed = await materialize(stream(p))
       const data = await gunzip(compressed)
-      const fname = showFilename ? p.virtual : null
+      const fname = showFilename ? p.rawPath : null
       if (filesOnly || filesWithoutMatch) {
         // -L lists the files that selected nothing; the status still
         // follows the matching, as GNU grep's does. -m0 selects no line at
         // all, so -l lists nothing and -L lists every archive, exit 1
         // (zgrep 3.11).
         const matched = maxCount !== 0 && anyLineSelected(data, pattern, invert)
-        if (matched === filesOnly) allResults.push(p.virtual)
+        if (matched === filesOnly) allResults.push(p.rawPath)
         anyMatch ||= matched
       } else {
         const [result, hadMatch] = zgrepSearch(

@@ -18,6 +18,7 @@ import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { interpretEscapes } from '../utils/escapes.ts'
 import { resolveSource } from '../utils/stream.ts'
 import { extraOperandError, usageHint } from '../../spec/usage.ts'
+import { UsageError } from '../../errors.ts'
 import { quoteText } from '../../quote.ts'
 import { CommandName, type FlagValue } from '../../spec/types.ts'
 import { FlagView } from '../../spec/flag_view.ts'
@@ -100,6 +101,18 @@ function buildOptions(texts: readonly string[], bag: Record<string, FlagValue>):
   const del = fl.asBool('delete')
   const squeeze = fl.asBool('squeeze_repeats')
   const truncateSet1 = fl.asBool('truncate_set1')
+  // -d without -s takes one string, so the extra operand is the second one:
+  // `tr -d a b c` names b (tr.c reports argv[optind + max_operands]).
+  const maxOperands = del && !squeeze ? 1 : 2
+  if (texts.length > maxOperands) {
+    if (texts.length === 2) {
+      throw new Error(
+        `tr: extra operand '${quoteText(texts[1] ?? '')}'\n` +
+          `Only one string may be given when deleting without squeezing repeats.${TRY_HELP}`,
+      )
+    }
+    throw extraOperandError(CommandName.TR, texts[maxOperands] ?? '')
+  }
   let set1 = expandRanges(interpretEscapes(texts[0] ?? ''))
   if (complement) {
     let allChars = ''
@@ -130,12 +143,6 @@ function buildOptions(texts: readonly string[], bag: Record<string, FlagValue>):
         `Two strings must be given when translating.${TRY_HELP}`,
     )
   }
-  if (del && !squeeze && texts.length >= 2) {
-    throw new Error(
-      `tr: extra operand '${quoteText(texts[1] ?? '')}'\n` +
-        `Only one string may be given when deleting without squeezing repeats.${TRY_HELP}`,
-    )
-  }
   return { set1, set2, del, squeeze, table }
 }
 
@@ -146,11 +153,11 @@ export async function trGeneric(
   opts: CommandOpts,
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
 ): Promise<CommandFnResult> {
-  if (texts.length > 2) throw extraOperandError(CommandName.TR, texts[2] ?? '')
   let trOpts: TrOptions
   try {
     trOpts = buildOptions(texts, opts.flags)
   } catch (err) {
+    if (err instanceof UsageError) throw err
     const msg = err instanceof Error ? err.message : String(err)
     return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(`${msg}\n`) })]
   }

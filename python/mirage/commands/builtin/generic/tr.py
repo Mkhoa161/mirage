@@ -86,11 +86,19 @@ async def tr(
     stdin: ByteSource | None = None,
     flags: Mapping[str, FlagValue] | None = None,
 ) -> tuple[ByteSource | None, IOResult]:
-    if len(texts) > 2:
-        raise extra_operand_error(CommandName.TR, texts[2])
     if not texts:
         raise ValueError("tr: missing operand" + _TRY_HELP)
     parsed = parse_flags(flags or {})
+    # -d without -s takes one string, so the extra operand is the second
+    # one: `tr -d a b c` names b (tr.c reports argv[optind + max_operands]).
+    max_operands = 1 if parsed.delete and not parsed.squeeze else 2
+    if len(texts) > max_operands:
+        if len(texts) == 2:
+            raise ValueError(
+                f"tr: extra operand '{quote_text(texts[1])}'\n"
+                "Only one string may be given when deleting without "
+                "squeezing repeats." + _TRY_HELP)
+        raise extra_operand_error(CommandName.TR, texts[max_operands])
     set1 = _expand_ranges(interpret_escapes(texts[0]))
     if parsed.complement:
         all_chars = "".join(chr(i) for i in range(128))
@@ -110,10 +118,6 @@ async def tr(
         raise ValueError(
             f"tr: missing operand after '{quote_text(texts[0])}'\n"
             "Two strings must be given when translating." + _TRY_HELP)
-    if parsed.delete and not parsed.squeeze and len(texts) >= 2:
-        raise ValueError(f"tr: extra operand '{quote_text(texts[1])}'\n"
-                         "Only one string may be given when deleting without "
-                         "squeezing repeats." + _TRY_HELP)
 
     cache: list[str] = []
     if paths:

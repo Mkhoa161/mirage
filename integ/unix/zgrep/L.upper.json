@@ -132,6 +132,39 @@
         "m",
         "L"
       ]
+    },
+    {
+      "id": "zgrep_L_prints_the_operand_as_typed",
+      "seq": 991096,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zl5 && printf 'foo\\n' | gzip > /data/zl5/o.gz && (cd /data/zl5 && zgrep -L hello ./o.gz)",
+      "expect": {
+        "exit": 1,
+        "stdout": "./o.gz\n",
+        "stderr": ""
+      },
+      "flags": [
+        "L"
+      ]
     }
   ]
 }
