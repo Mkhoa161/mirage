@@ -121,8 +121,12 @@ export function parseBlockSize(text: string): BlockSize | BlockSizeRefusal {
   if (text === 'human-readable') return { divisor: 1024, suffix: '', humanBase: 1024 }
   if (text === 'si') return { divisor: 1000, suffix: '', humanBase: 1000 }
   let body = text
+  // strtol's prefix: leading C blanks and one `+` are skipped only in front
+  // of a digit (`' +1'` is 1) and never in front of a bare unit (`+K` and
+  // `' K'` are refused, coreutils 9.7).
   while (body !== '' && C_SPACE.includes(body.charAt(0))) body = body.slice(1)
   if (body.startsWith('+')) body = body.slice(1)
+  if (body !== text && !/^[0-9]/.test(body)) return 'invalid'
   let i = 0
   while (i < body.length && /[0-9]/.test(body.charAt(i))) i += 1
   const digits = body.slice(0, i)
@@ -145,7 +149,7 @@ export function parseBlockSize(text: string): BlockSize | BlockSizeRefusal {
       shown = (upper === 'K' ? 'k' : upper) + 'B'
     } else if (rest === 'iB') {
       factor = 1024n ** BigInt(power)
-      shown = upper
+      shown = upper + 'iB'
     } else {
       return 'invalid suffix'
     }
@@ -153,7 +157,10 @@ export function parseBlockSize(text: string): BlockSize | BlockSizeRefusal {
   const divisor = count * factor
   if (divisor > UINTMAX) return 'too large'
   if (count === 0n) return 'invalid'
-  return { divisor: Number(divisor), suffix: count === 1n ? shown : '', humanBase: null }
+  // The unit is echoed after each size only when the value was a bare
+  // unit: `K` prints `4K`, `KiB` prints `4KiB`, `1K` and `2K` print `4` and
+  // `2` (coreutils 9.7).
+  return { divisor: Number(divisor), suffix: digits === '' ? shown : '', humanBase: null }
 }
 
 // The size column under -h or --block-size, bytes otherwise.

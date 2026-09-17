@@ -323,6 +323,10 @@ export function parseFlags(bag: Record<string, FlagValue>): ShufFlags | string {
       if (typeof bounds === 'string') return rangeError(raw, bounds)
       inputRangeRaw = raw
     } else if (outputRaw !== null && outputRaw !== raw) {
+      // Deliberate divergence: the TypeScript bag carries a PATH option's
+      // resolved virtual path, not the word typed, so `-o out -o ./out`
+      // reads as one output here where GNU (and the python twin, which
+      // still sees the raw word) refuses it as two.
       return `${MULTIPLE_OUTPUTS}\n`
     } else {
       outputRaw = raw

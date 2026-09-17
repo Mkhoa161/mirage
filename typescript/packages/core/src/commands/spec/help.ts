@@ -13,7 +13,6 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { ARG_PLACEHOLDER } from './constants.ts'
-import { SYNOPSES } from './synopsis.ts'
 import { type CommandSpec, type Operand, type Option, UsageStyle } from './types.ts'
 import { compareCodePoints } from '../../utils/sort.ts'
 
@@ -93,10 +92,10 @@ function usageLine(
   spec: CommandSpec,
   subcommands: readonly [string, string][],
   style: UsageStyle,
+  synopsis?: string,
 ): string {
-  // A command that mimics a real program answers with that program's own
-  // first line rather than one synthesized from its slots.
-  const synopsis = style === UsageStyle.ARGPARSE ? SYNOPSES[name] : undefined
+  // The builtin that mimics a real program answers with that program's
+  // own first line rather than one synthesized from its slots.
   if (synopsis !== undefined) return `Usage: ${synopsis}`
   const clap = style === UsageStyle.CLAP
   const bits = [name]
@@ -117,6 +116,7 @@ export function renderHelp(
   spec: CommandSpec,
   subcommands: readonly [string, string][] = [],
   style: UsageStyle = UsageStyle.ARGPARSE,
+  synopsis?: string,
 ): string {
   const clap = style === UsageStyle.CLAP
   const lines: string[] = []
@@ -129,7 +129,7 @@ export function renderHelp(
   }
   lines.push('')
 
-  lines.push(usageLine(name, spec, subcommands, style))
+  lines.push(usageLine(name, spec, subcommands, style, synopsis))
 
   if (subcommands.length > 0) {
     lines.push('')

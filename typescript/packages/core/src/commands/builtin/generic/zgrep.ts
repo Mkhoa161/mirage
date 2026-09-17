@@ -163,8 +163,10 @@ export async function zgrepGeneric(
       const fname = showFilename ? p.virtual : null
       if (filesOnly || filesWithoutMatch) {
         // -L lists the files that selected nothing; the status still
-        // follows the matching, as GNU grep's does.
-        const matched = anyLineSelected(data, pattern, invert)
+        // follows the matching, as GNU grep's does. -m0 selects no line at
+        // all, so -l lists nothing and -L lists every archive, exit 1
+        // (zgrep 3.11).
+        const matched = maxCount !== 0 && anyLineSelected(data, pattern, invert)
         if (matched === filesOnly) allResults.push(p.virtual)
         anyMatch ||= matched
       } else {
@@ -191,7 +193,7 @@ export async function zgrepGeneric(
     const data =
       stdinData === null || stdinData.byteLength === 0 ? new Uint8Array(0) : await gunzip(stdinData)
     if (filesOnly || filesWithoutMatch) {
-      const matched = anyLineSelected(data, pattern, invert)
+      const matched = maxCount !== 0 && anyLineSelected(data, pattern, invert)
       if (matched === filesOnly) allResults.push('(standard input)')
       anyMatch ||= matched
     } else {

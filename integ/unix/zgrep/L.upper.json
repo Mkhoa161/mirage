@@ -98,6 +98,40 @@
       "flags": [
         "L"
       ]
+    },
+    {
+      "id": "zgrep_m0_L_lists_every_archive_exit_1",
+      "seq": 991089,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "box"
+      ],
+      "command": "mkdir -p /data/zl4 && printf 'hello\\n' | gzip > /data/zl4/m.gz && printf 'foo\\n' | gzip > /data/zl4/o.gz && zgrep -m0 -L hello /data/zl4/m.gz /data/zl4/o.gz",
+      "expect": {
+        "exit": 1,
+        "stdout": "/data/zl4/m.gz\n/data/zl4/o.gz\n",
+        "stderr": ""
+      },
+      "flags": [
+        "m",
+        "L"
+      ]
     }
   ]
 }

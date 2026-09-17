@@ -102,7 +102,14 @@ class ParsedArgs:
 
 @dataclass(slots=True)
 class _Refusals:
-    """The values the per-value checks refused, in the order read."""
+    """The values the per-value checks refused, in the order read.
+
+    ``kinds`` is the scan's shared ``option_error_kinds`` tape: every
+    refusal also drops its tag (``int``, ``float``, ``value``) there, so
+    the reporter can tell which of the three lists holds the FIRST bad
+    value on the line, the one GNU stops at.
+    """
+    kinds: list[str]
     ints: list[tuple[str, str]] = field(default_factory=list)
     floats: list[tuple[str, str]] = field(default_factory=list)
     values: list[tuple[str, str, tuple[str,
@@ -114,7 +121,9 @@ def _check_value(refusals: _Refusals, cs: CompiledSpec, dest: str,
     """Run one value through its dest's int, float and choices checks.
 
     Int-typed values are refused before choices, argparse's order (type
-    conversion runs before the choices test).
+    conversion runs before the choices test), and one value is refused
+    once: a non-numeric value on an int option that also declares
+    choices reports the conversion failure, not the choice list.
 
     Args:
         refusals (_Refusals): the lists to report into.
@@ -124,11 +133,16 @@ def _check_value(refusals: _Refusals, cs: CompiledSpec, dest: str,
     """
     if dest in cs.int_dests and not INT_VALUE.match(value):
         refusals.ints.append((dest, value))
+        refusals.kinds.append("int")
+        return
     if dest in cs.float_dests and not FLOAT_VALUE.match(value):
         refusals.floats.append((dest, value))
+        refusals.kinds.append("float")
+        return
     allowed = cs.choices_by_dest.get(dest)
     if allowed is not None and value not in allowed:
         refusals.values.append((dest, value, allowed))
+        refusals.kinds.append("value")
 
 
 def _set_value_flag(
@@ -145,11 +159,11 @@ def _set_value_flag(
     is ``--update=older``) and ``multiple`` options accumulate in true
     command-line order (``sort -k1 --key=2`` is ``[1, 2]``).
 
-    GNU validated the value it is about to drop the moment getopt read
-    it, so a scalar dest checks that value before the new one replaces
-    it: ``numfmt --to=bogus --to=si`` is refused for ``bogus`` although
-    the bag keeps only ``si``. What survives in the bag is checked
-    after the scan, with the defaults and environment values.
+    Every value is checked the moment it is read, as GNU's getopt loop
+    and argparse's ``type=`` do, so ``numfmt --to=bogus --to=si`` is
+    refused for ``bogus`` although the bag keeps only ``si``, and
+    ``--from=bad1 --to=bad2`` names ``bad1``. Only what the environment
+    or a default fills in afterwards is checked after the scan.
 
     Args:
         flags (dict): parsed flag bag, updated in place.
@@ -159,6 +173,7 @@ def _set_value_flag(
         value (str): the flag's value.
     """
     name = cs.dest_of(spelling)
+    _check_value(refusals, cs, name, value)
     if name in cs.multiple_dests:
         prev = flags.get(name)
         if isinstance(prev, list):
@@ -166,9 +181,7 @@ def _set_value_flag(
         else:
             flags[name] = [value]
     else:
-        dropped = flags.pop(name, None)
-        if isinstance(dropped, str):
-            _check_value(refusals, cs, name, dropped)
+        flags.pop(name, None)
         flags[name] = value
 
 
@@ -319,7 +332,6 @@ def parse_command(
     # Every scalar value-flag occurrence, in scan order, beside the bag
     # that keeps only the last of each. Appended to by _set_value_flag
     # and read by nobody here: it leaves on the parse result.
-    refusals = _Refusals()
     raw_args: list[str] = []
     # raw_indices[k] = argv position of raw_args[k]
     raw_indices: list[int] = []
@@ -350,6 +362,7 @@ def parse_command(
     invalid_options: list[str] = []
     ambiguous_options: list[tuple[str, tuple[str, ...]]] = []
     option_error_kinds: list[str] = []
+    refusals = _Refusals(kinds=option_error_kinds)
     needs_value_options: list[str] = []
     # Free-text commands (echo/python/bash-style TEXT rest) keep unknown
     # dash tokens verbatim; elsewhere they are dropped with a warning so a
@@ -610,12 +623,13 @@ def parse_command(
             else:
                 flags[dest_name] = default
 
-    # What the bag kept: the surviving scalar value, every value of an
-    # accumulating dest, and what a default or the environment filled
-    # in. A value a later occurrence replaced was checked as it went.
+    # Every typed value was checked as it was read; what a default or
+    # the environment filled in afterwards is checked here.
     checked = dict.fromkeys(
         [*cs.int_dests, *cs.float_dests, *cs.choices_by_dest])
     for dest_name in checked:
+        if dest_name in typed_dests:
+            continue
         for part in _bag_values(flags, dest_name):
             _check_value(refusals, cs, dest_name, part)
 

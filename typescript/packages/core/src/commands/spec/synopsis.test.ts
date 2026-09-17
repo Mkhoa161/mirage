@@ -13,18 +13,16 @@ describe('SYNOPSES', () => {
     }
   })
 
-  it('is what --help prints for a listed command', () => {
-    expect(renderHelp('grep', specOf('grep'))).toContain(
+  it('replaces the synthesized line when handed in', () => {
+    expect(renderHelp('grep', specOf('grep'), [], UsageStyle.ARGPARSE, SYNOPSES.grep)).toContain(
       'Usage: grep [OPTION]... PATTERNS [FILE]...\n',
     )
   })
 
-  it('leaves an unlisted command on the synthesized line', () => {
-    expect(renderHelp('nosuch', new CommandSpec({}))).toContain('Usage: nosuch\n')
-  })
-
-  it('does not reach a listed name rendered in another dialect', () => {
-    const rendered = renderHelp('grep', new CommandSpec({}), [], UsageStyle.CLAP)
+  it('leaves a spec rendered without one on the synthesized line', () => {
+    // The registration site hands the synopsis in only for the builtin's
+    // own spec object, so a custom `grep` renders what its spec says.
+    const rendered = renderHelp('grep', new CommandSpec({}))
     expect(rendered).toContain('Usage: grep\n')
     expect(rendered).not.toContain('PATTERNS')
   })

@@ -65,10 +65,12 @@ interface RgFlags {
 }
 
 function parseFlags(fl: FlagView): RgFlags {
-  // -l and --files-without-match set one mode in ripgrep too, so the later
-  // one on the line wins (ripgrep 14.1.1).
+  // -c, -l and --files-without-match set one output mode in ripgrep, so
+  // the later one on the line wins: `-c --files-without-match` lists the
+  // matchless files and `--files-without-match -c` prints counts (ripgrep
+  // 14.1.1).
   let listing: string | null = null
-  for (const name of fl.typedOrder('args_l', 'files_without_match')) {
+  for (const name of fl.typedOrder('c', 'args_l', 'files_without_match')) {
     if (fl.asBool(name)) listing = name
   }
   const a = fl.asInt('A')
@@ -79,7 +81,7 @@ function parseFlags(fl: FlagView): RgFlags {
     invert: fl.asBool('v'),
     lineNumbers: fl.asBool('n'),
     byteOffsets: fl.asBool('byte_offset'),
-    countOnly: fl.asBool('c'),
+    countOnly: listing === 'c',
     filesOnly: listing === 'args_l',
     filesWithoutMatch: listing === 'files_without_match',
     wholeWord: fl.asBool('w'),

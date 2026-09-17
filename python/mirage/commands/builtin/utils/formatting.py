@@ -133,7 +133,12 @@ def parse_block_size(text: str) -> BlockSize | BlockSizeRefusal:
         return BlockSize(1024, "", 1024)
     if text == "si":
         return BlockSize(1000, "", 1000)
+    # strtol's prefix: leading C blanks and one `+` are skipped only in
+    # front of a digit (`' +1'` is 1) and never in front of a bare unit
+    # (`+K` and `' K'` are refused, coreutils 9.7).
     body = text.lstrip(_C_SPACE).removeprefix("+")
+    if body != text and not body[:1].isdigit():
+        return BlockSizeRefusal.INVALID
     i = 0
     while i < len(body) and body[i] in "0123456789":
         i += 1
@@ -154,14 +159,17 @@ def parse_block_size(text: str) -> BlockSize | BlockSizeRefusal:
         elif rest == "B":
             factor, shown = 1000**power, ("k" if upper == "K" else upper) + "B"
         elif rest == "iB":
-            factor, shown = 1024**power, upper
+            factor, shown = 1024**power, upper + "iB"
         else:
             return BlockSizeRefusal.INVALID_SUFFIX
     if count * factor > UINTMAX:
         return BlockSizeRefusal.TOO_LARGE
     if count == 0:
         return BlockSizeRefusal.INVALID
-    return BlockSize(count * factor, shown if count == 1 else "")
+    # The unit is echoed after each size only when the value was a bare
+    # unit: `K` prints `4K`, `KiB` prints `4KiB`, `1K` and `2K` print
+    # `4` and `2` (coreutils 9.7).
+    return BlockSize(count * factor, shown if not digits else "")
 
 
 def scaled_size(n: int, block: BlockSize | None, human: bool) -> str:

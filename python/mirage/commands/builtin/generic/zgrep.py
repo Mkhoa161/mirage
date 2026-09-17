@@ -184,8 +184,10 @@ async def zgrep(
             data = gziplib.decompress(raw)
             fname = p.virtual if show_filename else None
             if f.files_only or f.files_without_match:
-                matched = _files_only_match(data, compiled, f.ignore_case,
-                                            f.invert)
+                # -m0 selects no line at all, so -l lists nothing and -L
+                # lists every archive, exit 1 (zgrep 3.11).
+                matched = f.max_count != 0 and _files_only_match(
+                    data, compiled, f.ignore_case, f.invert)
                 # -L lists the files that selected nothing; the status
                 # still follows the matching, as GNU grep's does.
                 if matched == f.files_only:
@@ -204,8 +206,8 @@ async def zgrep(
         stdin_raw = await read_stdin_async(stdin)
         data = gziplib.decompress(stdin_raw) if stdin_raw else b""
         if f.files_only or f.files_without_match:
-            matched = _files_only_match(data, compiled, f.ignore_case,
-                                        f.invert)
+            matched = f.max_count != 0 and _files_only_match(
+                data, compiled, f.ignore_case, f.invert)
             if matched == f.files_only:
                 all_results.append("(standard input)")
             any_match = any_match or matched

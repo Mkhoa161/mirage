@@ -73,10 +73,12 @@ def parse_flags(fl: FlagView, never_match: bool) -> RgFlags:
     if c_ctx is not None:
         # rg family: -C overrides -A/-B (grep keeps -A/-B precedence)
         context_before = context_after = c_ctx
-    # -l and --files-without-match set one mode in ripgrep too, so the
-    # later one on the line wins (ripgrep 14.1.1).
+    # -c, -l and --files-without-match set one output mode in ripgrep,
+    # so the later one on the line wins: `-c --files-without-match`
+    # lists the matchless files and `--files-without-match -c` prints
+    # counts (ripgrep 14.1.1).
     listing: str | None = None
-    for name in fl.typed_order("args_l", "files_without_match"):
+    for name in fl.typed_order("c", "args_l", "files_without_match"):
         if fl.as_bool(name):
             listing = name
     return RgFlags(
@@ -84,7 +86,7 @@ def parse_flags(fl: FlagView, never_match: bool) -> RgFlags:
         invert=fl.as_bool("v"),
         line_numbers=fl.as_bool("n"),
         byte_offsets=fl.as_bool("byte_offset"),
-        count_only=fl.as_bool("c"),
+        count_only=listing == "c",
         files_only=listing == "args_l",
         files_without_match=listing == "files_without_match",
         whole_word=fl.as_bool("w"),

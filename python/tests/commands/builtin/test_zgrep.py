@@ -112,3 +112,17 @@ def test_zgrep_L_lists_the_matchless_archive_with_grep_status():
     assert io.exit_code == 1
     stdout, io = _run_raw(ws, "zgrep -L -l hello /data/m.gz /data/o.gz")
     assert _bytes(stdout) == b"/data/m.gz\n"
+
+
+def test_zgrep_m0_lists_every_archive_under_L_and_none_under_l():
+    # zgrep 3.11: -m0 selects no line at all, so -L lists every archive
+    # and exits 1, and -l lists nothing.
+    ws, _ = _ws()
+    _run_raw(ws, "tee /data/m.gz", stdin=gzip.compress(b"hello\n"))
+    _run_raw(ws, "tee /data/o.gz", stdin=gzip.compress(b"foo\n"))
+    stdout, io = _run_raw(ws, "zgrep -m0 -L hello /data/m.gz /data/o.gz")
+    assert _bytes(stdout) == b"/data/m.gz\n/data/o.gz\n"
+    assert io.exit_code == 1
+    stdout, io = _run_raw(ws, "zgrep -m0 -l hello /data/m.gz /data/o.gz")
+    assert _bytes(stdout) == b""
+    assert io.exit_code == 1

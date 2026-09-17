@@ -354,6 +354,42 @@
         "files-without-match",
         "m"
       ]
+    },
+    {
+      "id": "rg_c_then_files_without_match_lists_the_matchless_file",
+      "seq": 991088,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "rg -c --files-without-match world /data/mixed.txt /data/b.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/b.txt\n",
+        "stderr": ""
+      },
+      "flags": [
+        "c",
+        "files-without-match"
+      ]
     }
   ]
 }

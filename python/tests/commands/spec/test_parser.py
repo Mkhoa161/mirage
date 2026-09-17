@@ -402,6 +402,25 @@ def test_choices_check_every_occurrence_of_a_scalar_flag():
     assert ok.invalid_value_options == []
 
 
+def test_the_first_refused_value_on_the_line_is_reported_first():
+    # GNU stops at the first bad argument it reads, whatever its option
+    # and whatever check refuses it, so the kinds tape carries each
+    # refusal's tag in scan order for the reporter to follow.
+    spec = CommandSpec(options=(
+        Option(short="-n", type="int"),
+        Option(long="--mode", type="str", choices=("a", "b")),
+    ))
+    parsed = parse_command(spec, ["--mode", "bad", "-n", "abc"], "/")
+    assert parsed.option_error_kinds == ["value", "int"]
+    assert parsed.invalid_value_options == [("--mode", "bad", ("a", "b"))]
+    assert parsed.invalid_int_options == [("-n", "abc")]
+    parsed = parse_command(SPECS["numfmt"], ["--from=bad1", "--to=bad2", "1"],
+                           "/")
+    assert parsed.option_error_kinds == ["value", "value"]
+    assert [dest for dest, _, _ in parsed.invalid_value_options
+            ] == ["--from", "--to"]
+
+
 def test_int_check_covers_every_occurrence_of_a_scalar_flag():
     spec = CommandSpec(options=(Option(short="-n", type="int"), ))
     parsed = parse_command(spec, ["-n", "abc", "-n", "3"], "/")

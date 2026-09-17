@@ -811,3 +811,26 @@ async def test_rg_files_without_match_stdin_m0_lists_nothing():
         )
         assert await _drain_async(output) == b""
         assert io.exit_code == 1
+
+
+def test_rg_output_mode_is_the_last_of_c_l_and_files_without_match():
+    # ripgrep 14.1.1: `-c --files-without-match` lists the matchless
+    # files, `--files-without-match -c` prints counts, `-l -c` counts.
+    later = parse_flags(FlagView({
+        "c": True,
+        "files_without_match": True
+    }),
+                        never_match=False)
+    assert (later.count_only, later.files_without_match) == (False, True)
+    earlier = parse_flags(FlagView({
+        "files_without_match": True,
+        "c": True
+    }),
+                          never_match=False)
+    assert (earlier.count_only, earlier.files_without_match) == (True, False)
+    counted = parse_flags(FlagView({
+        "args_l": True,
+        "c": True
+    }),
+                          never_match=False)
+    assert (counted.files_only, counted.count_only) == (False, True)

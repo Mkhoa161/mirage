@@ -662,6 +662,25 @@ describe('choices violations are reported, never thrown', () => {
     ).toEqual([])
   })
 
+  it('reports the first refused value on the line first', () => {
+    // GNU stops at the first bad argument it reads, whatever its option
+    // and whatever check refuses it, so the kinds tape carries each
+    // refusal's tag in scan order for the reporter to follow.
+    const spec = new CommandSpec({
+      options: [
+        new Option({ short: '-n', type: 'int' }),
+        new Option({ long: '--mode', type: 'str', choices: ['a', 'b'] }),
+      ],
+    })
+    const parsed = parseCommand(spec, ['--mode', 'bad', '-n', 'abc'], '/')
+    expect(parsed.optionErrorKinds).toEqual(['value', 'int'])
+    expect(parsed.invalidValueOptions).toEqual([['--mode', 'bad', ['a', 'b']]])
+    expect(parsed.invalidIntOptions).toEqual([['-n', 'abc']])
+    const both = parseCommand(specOf('numfmt'), ['--from=bad1', '--to=bad2', '1'], '/')
+    expect(both.optionErrorKinds).toEqual(['value', 'value'])
+    expect(both.invalidValueOptions.map(([dest]) => dest)).toEqual(['--from', '--to'])
+  })
+
   it('int checks cover every occurrence of a scalar flag', () => {
     const spec = new CommandSpec({ options: [new Option({ short: '-n', type: 'int' })] })
     const parsed = parseCommand(spec, ['-n', 'abc', '-n', '3'], '/')

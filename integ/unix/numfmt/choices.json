@@ -136,6 +136,24 @@
       "flags": [
         "to"
       ]
+    },
+    {
+      "id": "numfmt_first_bad_mode_on_the_line_is_named",
+      "seq": 991090,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=bad1 --to=bad2 1",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: invalid argument 'bad1' for '--from'\nValid arguments are:\n  - 'none'\n  - 'auto'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "from",
+        "to"
+      ]
     }
   ]
 }

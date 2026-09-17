@@ -151,8 +151,13 @@ export class ParsedArgs {
   }
 }
 
-// The values the per-value checks refused, in the order read.
+// The values the per-value checks refused, in the order read. `kinds` is
+// the scan's shared `optionErrorKinds` tape: every refusal also drops its
+// tag (`int`, `float`, `value`) there, so the reporter can tell which of
+// the three lists holds the FIRST bad value on the line, the one GNU stops
+// at.
 interface Refusals {
+  kinds: string[]
   ints: [string, string][]
   floats: [string, string][]
   values: [string, string, readonly string[]][]
@@ -160,13 +165,25 @@ interface Refusals {
 
 // Run one value through its dest's int, float and choices checks. Int-typed
 // values are refused before choices, argparse's order (type conversion runs
-// before the choices test).
+// before the choices test), and one value is refused once: a non-numeric
+// value on an int option that also declares choices reports the conversion
+// failure, not the choice list.
 function checkValue(refusals: Refusals, cs: CompiledSpec, dest: string, value: string): void {
-  if (cs.intDests.has(dest) && !INT_VALUE.test(value)) refusals.ints.push([dest, value])
-  if (cs.floatDests.has(dest) && !FLOAT_VALUE.test(value)) refusals.floats.push([dest, value])
+  if (cs.intDests.has(dest) && !INT_VALUE.test(value)) {
+    refusals.ints.push([dest, value])
+    refusals.kinds.push('int')
+    return
+  }
+  if (cs.floatDests.has(dest) && !FLOAT_VALUE.test(value)) {
+    refusals.floats.push([dest, value])
+    refusals.kinds.push('float')
+    return
+  }
   const allowed = cs.choicesByDest.get(dest)
-  if (allowed !== undefined && !allowed.includes(value))
+  if (allowed !== undefined && !allowed.includes(value)) {
     refusals.values.push([dest, value, allowed])
+    refusals.kinds.push('value')
+  }
 }
 
 // Record a value flag occurrence under its canonical dest. Both spellings
@@ -175,11 +192,11 @@ function checkValue(refusals: Refusals, cs: CompiledSpec, dest: string, value: s
 // and `multiple` options accumulate in true command-line order
 // (`sort -k1 --key=2` is `[1, 2]`).
 //
-// GNU validated the value it is about to drop the moment getopt read it, so
-// a scalar dest checks that value before the new one replaces it:
-// `numfmt --to=bogus --to=si` is refused for `bogus` although the bag keeps
-// only `si`. What survives in the bag is checked after the scan, with the
-// defaults and environment values.
+// Every value is checked the moment it is read, as GNU's getopt loop and
+// argparse's `type=` do, so `numfmt --to=bogus --to=si` is refused for
+// `bogus` although the bag keeps only `si`, and `--from=bad1 --to=bad2`
+// names `bad1`. Only what the environment or a default fills in afterwards
+// is checked after the scan.
 function setValueFlag(
   flags: Record<string, FlagValue>,
   refusals: Refusals,
@@ -188,6 +205,7 @@ function setValueFlag(
   value: string,
 ): void {
   const name = cs.destOf(spelling)
+  checkValue(refusals, cs, name, value)
   if (cs.multipleDests.has(name)) {
     const prev = flags[name]
     if (Array.isArray(prev)) {
@@ -196,8 +214,6 @@ function setValueFlag(
       flags[name] = [value]
     }
   } else {
-    const dropped = flags[name]
-    if (typeof dropped === 'string') checkValue(refusals, cs, name, dropped)
     Reflect.deleteProperty(flags, name)
     flags[name] = value
   }
@@ -324,7 +340,6 @@ export function parseCommand(
   // Every scalar value-flag occurrence, in scan order, beside the bag that
   // keeps only the last of each. Appended to by setValueFlag and read by
   // nobody here: it leaves on the parse result.
-  const refusals: Refusals = { ints: [], floats: [], values: [] }
   const rawArgs: string[] = []
   // rawIndices[k] = argv position of rawArgs[k]
   const rawIndices: number[] = []
@@ -356,6 +371,7 @@ export function parseCommand(
   const invalidOptions: string[] = []
   const ambiguousOptions: [string, readonly string[]][] = []
   const optionErrorKinds: string[] = []
+  const refusals: Refusals = { kinds: optionErrorKinds, ints: [], floats: [], values: [] }
   const needsValueOptions: string[] = []
   // Free-text commands (echo/python/bash-style TEXT rest) keep unknown dash
   // tokens verbatim; elsewhere they are dropped with a warning so a stray
@@ -627,11 +643,11 @@ export function parseCommand(
     }
   }
 
-  // What the bag kept: the surviving scalar value, every value of an
-  // accumulating dest, and what a default or the environment filled in. A
-  // value a later occurrence replaced was checked as it went.
+  // Every typed value was checked as it was read; what a default or the
+  // environment filled in afterwards is checked here.
   const checked = new Set([...cs.intDests, ...cs.floatDests, ...cs.choicesByDest.keys()])
   for (const destName of checked) {
+    if (typedDests.includes(destName)) continue
     for (const part of bagValues(flags, destName)) checkValue(refusals, cs, destName, part)
   }
 
