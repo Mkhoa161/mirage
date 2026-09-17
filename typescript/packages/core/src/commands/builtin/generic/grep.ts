@@ -257,8 +257,9 @@ export async function grepGeneric(
         if (!f.recursive) {
           warn(`${name}: ${p.rawPath}: Is a directory`)
           // GNU 3.11 still lists it under -L: nothing was read from it, so
-          // nothing in it matched.
-          if (f.filesWithoutMatch) yield ENC.encode(p.rawPath + '\n')
+          // nothing in it matched. -q suppresses the row like every other
+          // normal output.
+          if (f.filesWithoutMatch && !f.quiet) yield ENC.encode(p.rawPath + '\n')
           return
         }
         for (const entry of await rd(p.virtual)) {

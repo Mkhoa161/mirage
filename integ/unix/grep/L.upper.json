@@ -526,6 +526,44 @@
         "r"
       ],
       "note": "exit is sort's; grep's own is 1"
+    },
+    {
+      "id": "grep_qL_directory_prints_nothing",
+      "seq": 991093,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -q -L hello /data/sub",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "grep: /data/sub: Is a directory\n"
+      },
+      "flags": [
+        "q",
+        "L"
+      ]
     }
   ]
 }

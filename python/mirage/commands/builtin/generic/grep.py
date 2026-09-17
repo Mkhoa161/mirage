@@ -234,8 +234,9 @@ async def grep(
                 if not f.recursive:
                     warn(f"grep: {p.raw_path}: Is a directory")
                     # GNU 3.11 still lists it under -L: nothing was read
-                    # from it, so nothing in it matched.
-                    if f.files_without_match:
+                    # from it, so nothing in it matched. -q suppresses
+                    # the row like every other normal output.
+                    if f.files_without_match and not f.quiet:
                         yield p.raw_path.encode() + b"\n"
                     return
                 for entry in await rd(p.virtual):
