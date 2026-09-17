@@ -157,6 +157,10 @@ async def test_sleep_invalid_interval_exits_1(raw):
 # their sum (measured on 9.7: `sleep 0.3 0.3` takes 0.6s, `sleep 0 1`
 # takes 1s). Reading only the first operand made `sleep -- 0 1` return
 # at once.
+# The bound is 0.09 rather than 0.1 because the bug this guards against
+# sleeps 0.05 (only the first operand), so 0.09 still separates the two by
+# 40ms, while a timer is allowed to land a millisecond early. Mirrors the
+# TypeScript twin, where CI measured 99ms for a 100ms wait.
 @pytest.mark.asyncio
 async def test_sleep_sums_every_operand():
     started = time.monotonic()
@@ -164,7 +168,7 @@ async def test_sleep_sums_every_operand():
     elapsed = time.monotonic() - started
     assert io.exit_code == 0
     assert node.exit_code == 0
-    assert elapsed >= 0.1
+    assert elapsed >= 0.09
 
 
 # Every operand is validated, and the FIRST bad one is named. Reading

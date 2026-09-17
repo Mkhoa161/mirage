@@ -26,9 +26,9 @@ from mirage.commands.cli.refusal import (CLAP_EXIT, clap_missing_operands,
                                          leaf_refusal)
 from mirage.commands.cli.types import CLIDoors, CLIInvocation, CLISpec
 from mirage.commands.cli.walk import owns_argv, walk
-from mirage.commands.config import HELP_OPTION
 from mirage.commands.errors import CommandTimeoutError, UsageError
 from mirage.commands.spec import flag_kwarg_name
+from mirage.commands.spec.constants import HELP_OPTION
 from mirage.commands.spec.help import render_help
 from mirage.commands.spec.types import FlagValue, Operand, UsageStyle
 from mirage.io import IOResult

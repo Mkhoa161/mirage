@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { registeredSpec } from '../../commands/spec/builtins.ts'
 import { SPECS } from '../../commands/spec/index.ts'
 import { concatBytes } from '../../core/jq/format.ts'
 import type { ByteSource } from '../../io/types.ts'
@@ -336,7 +337,18 @@ export async function handleCommand(
     // to the generic as the search pattern. The bound single-mount runner
     // lets the strategy runners execute each operand natively on its
     // owning mount.
-    const csParsed = parseFlags(parts.slice(1), SPECS[cmdName] ?? null, cmdName, session.cwd)
+    // Registered, not declared: the registry injects --help/--version into
+    // every spec, so parsing the declaration here made the same word mean
+    // two things by mount count -- `cat --vers=x /ram/a` was
+    // `option '--version' doesn't allow an argument` and the two-mount line
+    // was `unrecognized option '--vers=x'`.
+    const sharedSpec = SPECS[cmdName]
+    const csParsed = parseFlags(
+      parts.slice(1),
+      sharedSpec !== undefined ? registeredSpec(cmdName, sharedSpec) : null,
+      cmdName,
+      session.cwd,
+    )
     const csFlags = csParsed.flagKwargs
     const csTexts = findExprTokens ?? csParsed.texts
     const csRefusal = optionError(cmdName, csParsed)

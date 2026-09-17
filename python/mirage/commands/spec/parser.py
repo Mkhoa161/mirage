@@ -18,7 +18,7 @@ from typing import Any
 
 from mirage.commands.spec.argmatch import (ArgmatchChoices, ArgmatchMatch,
                                            argmatch, value_classes)
-from mirage.commands.spec.builtin_specs import SPECS
+from mirage.commands.spec.builtin_specs import SPECS, is_builtin_grammar
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
 from mirage.commands.spec.constants import (ARG_PLACEHOLDER,
@@ -529,19 +529,24 @@ def parse_command(
         # program with no long-option parser prints a dash word it does
         # not know instead of refusing it, and never expands an
         # abbreviation.
-        no_long_option_parser = cmd_name in NO_LONG_OPTIONS
+        # Both tables name one real program, so both are gated on this
+        # spec being that program's own grammar: a mount may register a
+        # command under a builtin's name (nothing refuses it), and the
+        # sole-argument rule turns such a spec's declared `--mode=x`
+        # into an operand its handler then never sees.
+        builtin = is_builtin_grammar(cmd_name, spec)
+        no_long_option_parser = builtin and cmd_name in NO_LONG_OPTIONS
         # gnulib's parse_long_options reads argv[1] only when it is the
         # whole line, so outside that one-argument window the program
         # has no long options AT ALL and even an exact `--help` is an
         # operand. Counted over filtered_argv because `--cache` is
         # mirage's own out-of-band word and not part of the command line
         # being emulated.
-        outside_sole_argument = (cmd_name in SOLE_ARGUMENT_LONG_OPTIONS
-                                 and len(filtered_argv) != 1)
+        sole_argument = builtin and cmd_name in SOLE_ARGUMENT_LONG_OPTIONS
+        outside_sole_argument = sole_argument and len(filtered_argv) != 1
         # A dash-leading word this program answers by printing it as an
         # operand rather than by refusing it.
-        lenient_dash_operands = (no_long_option_parser
-                                 or cmd_name in SOLE_ARGUMENT_LONG_OPTIONS)
+        lenient_dash_operands = no_long_option_parser or sole_argument
     i = 0
     end_of_flags = False
 

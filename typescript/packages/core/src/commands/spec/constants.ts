@@ -12,6 +12,27 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { Option } from './types.ts'
+
+// The two options every registered command answers, as GNU coreutils does.
+// They live here rather than beside the wrapper that injects them because
+// they are grammar: `commands/config.ts` appends them to a spec before the
+// parser reads the line, and a CLI node appends --help the same way. Shared
+// SINGLETONS, so `o === HELP_OPTION` identifies one through any copy of a
+// spec, which is what tells a builtin's grammar apart from a registered
+// command that borrowed its name.
+export const HELP_OPTION = new Option({
+  long: '--help',
+  type: 'bool',
+  description: 'Show this help and exit',
+})
+
+export const VERSION_OPTION = new Option({
+  long: '--version',
+  type: 'bool',
+  description: 'Show version information and exit',
+})
+
 // Stand-in name for a required operand whose slot declares none, so a
 // refusal that has to name the slot always has a word for it. Bare like
 // every operand name: the brackets are the renderer's.

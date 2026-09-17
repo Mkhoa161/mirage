@@ -14,6 +14,27 @@
 
 import re
 
+from mirage.commands.spec.types import Option
+
+# The two options every registered command answers, as GNU coreutils
+# does. They live here rather than beside the wrapper that injects them
+# because they are grammar: `commands/config.py` appends them to a spec
+# before the parser reads the line, and a CLI node appends --help the
+# same way. Shared SINGLETONS, so `o is HELP_OPTION` identifies one
+# through any copy of a spec, which is what tells a builtin's grammar
+# apart from a registered command that borrowed its name.
+HELP_OPTION = Option(
+    long="--help",
+    type="bool",
+    description="Show this help and exit",
+)
+
+VERSION_OPTION = Option(
+    long="--version",
+    type="bool",
+    description="Show version information and exit",
+)
+
 AMBIGUOUS_NAMES = {"l": "args_l", "O": "args_O", "I": "args_I", "1": "args_1"}
 
 # Stand-in name for a required operand whose slot declares none, so a

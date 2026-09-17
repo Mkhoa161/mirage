@@ -21,10 +21,14 @@ from mirage.accessor.base import Accessor
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.commands.constants import ROOT_CWD
 from mirage.commands.spec import SPECS, CommandSpec
+from mirage.commands.spec.builtin_specs import (VERSION_OPTION,
+                                                is_builtin_grammar,
+                                                registered_spec)
+from mirage.commands.spec.compile import compile_spec, expand_long
 from mirage.commands.spec.constants import SOLE_ARGUMENT_LONG_OPTIONS
 from mirage.commands.spec.help import render_help
 from mirage.commands.spec.synopsis import SYNOPSES
-from mirage.commands.spec.types import FlagValue, Option
+from mirage.commands.spec.types import FlagValue
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource, IOResult
 from mirage.ops.types import NamespaceView, ReaddirPath, SessionView, StatPath
@@ -202,19 +206,6 @@ class ProvisionFn(Protocol):
         ...
 
 
-HELP_OPTION = Option(
-    long="--help",
-    type="bool",
-    description="Show this help and exit",
-)
-
-_VERSION_OPTION = Option(
-    long="--version",
-    type="bool",
-    description="Show version information and exit",
-)
-
-
 def version_line(name: str) -> bytes:
     """Render the GNU-style version line for a command.
 
@@ -230,7 +221,25 @@ def has_injected_version(spec: CommandSpec | None) -> bool:
     Args:
         spec (CommandSpec | None): the registered command spec.
     """
-    return spec is not None and any(o is _VERSION_OPTION for o in spec.options)
+    return spec is not None and any(o is VERSION_OPTION for o in spec.options)
+
+
+def _is_injected_version(spec: CommandSpec, arg: str) -> bool:
+    """Whether one raw word names the injected --version.
+
+    getopt_long's rule, so an unambiguous abbreviation counts and an
+    ambiguous one does not. A word carrying a value is declined: GNU
+    answers `--version=x` with `option '--version' doesn't allow an
+    argument`, which is the parser's to say, not this function's.
+
+    Args:
+        spec (CommandSpec): the registered spec, --version already
+            injected.
+        arg (str): one word of argv, as typed.
+    """
+    if not arg.startswith("--") or "=" in arg:
+        return False
+    return expand_long(compile_spec(spec), arg) == ("--version", )
 
 
 def version_request(name: str, spec: CommandSpec | None,
@@ -251,41 +260,33 @@ def version_request(name: str, spec: CommandSpec | None,
     still answers (`expr --versio`), which is why this only has to
     decline rather than re-match.
 
+    A word is the injected option when it resolves to it the way
+    getopt_long would, not only when it is spelled out in full, because
+    the parser downstream expands an abbreviation and the two have to
+    agree: a line that spans mounts is parsed against the SHARED spec,
+    which carries no injected --version, so `cat --vers /ram/a /disk/b`
+    refused the prefix while `cat --vers /ram/a` expanded it and exited
+    0. Resolution is against the registered spec, the one the parser
+    would use, so an abbreviation that is ambiguous there (or carries a
+    value) is declined here and refused downstream in getopt_long's own
+    words rather than answered.
+
     Args:
         name (str): command name as invoked.
         spec (CommandSpec | None): the command's registered spec.
         argv (list[str]): the words after the command name.
     """
-    if not has_injected_version(spec):
+    if spec is None or not has_injected_version(spec):
         return None
-    if name in SOLE_ARGUMENT_LONG_OPTIONS:
-        return version_line(name) if argv == ["--version"] else None
+    if name in SOLE_ARGUMENT_LONG_OPTIONS and is_builtin_grammar(name, spec):
+        return (version_line(name) if len(argv) == 1
+                and _is_injected_version(spec, argv[0]) else None)
     for arg in argv:
         if arg == "--":
             return None
-        if arg == "--version":
+        if _is_injected_version(spec, arg):
             return version_line(name)
     return None
-
-
-def help_spec(spec: CommandSpec) -> CommandSpec:
-    """The spec plus whichever of --help / --version it does not declare.
-
-    Mirrors GNU coreutils: every command accepts both, so both have to
-    parse before the handler can short-circuit them. A command declaring
-    either keeps its own.
-
-    Args:
-        spec (CommandSpec): the command's declared grammar.
-    """
-    extras: list[Option] = []
-    if not any(o.long == "--help" for o in spec.options):
-        extras.append(HELP_OPTION)
-    if not any(o.long == "--version" for o in spec.options):
-        extras.append(_VERSION_OPTION)
-    if not extras:
-        return spec
-    return replace(spec, options=spec.options + tuple(extras))
 
 
 def help_page(name: str, spec: CommandSpec) -> bytes:
@@ -304,7 +305,8 @@ def help_page(name: str, spec: CommandSpec) -> bytes:
             two standard options are injected.
     """
     synopsis = SYNOPSES.get(name) if SPECS.get(name) is spec else None
-    return render_help(name, help_spec(spec), synopsis=synopsis).encode()
+    return render_help(name, registered_spec(name, spec),
+                       synopsis=synopsis).encode()
 
 
 def _with_help_support(
@@ -317,7 +319,7 @@ def _with_help_support(
     A command declaring its own --version handles that flag itself.
     """
     has_version = any(o.long == "--version" for o in spec.options)
-    new_spec = help_spec(spec)
+    new_spec = registered_spec(name, spec)
     help_text = help_page(name, spec)
     version_text = version_line(name)
 

@@ -21,11 +21,13 @@ import type { DispatchFn } from '../runtime/types.ts'
 import type { NamespaceView, ReaddirPath, SessionView, StatPath } from '../ops/types.ts'
 import { VERSION } from '../version.ts'
 import type { AggregateResult } from './builtin/aggregators.ts'
-import { BUILTIN_SPECS } from './spec/builtins.ts'
-import { SOLE_ARGUMENT_LONG_OPTIONS } from './spec/constants.ts'
+import { BUILTIN_SPECS, isBuiltinGrammar, registeredSpec } from './spec/builtins.ts'
+import { compileSpec, expandLong } from './spec/compile.ts'
+import { SOLE_ARGUMENT_LONG_OPTIONS, VERSION_OPTION } from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
 import { SYNOPSES } from './spec/synopsis.ts'
-import { CommandSpec, Option, UsageStyle, type FlagValue } from './spec/types.ts'
+import type { CommandSpec } from './spec/types.ts'
+import { UsageStyle, type FlagValue } from './spec/types.ts'
 
 /**
  * The execution context `Mount.executeCmd` takes: everything the
@@ -257,18 +259,6 @@ export interface CommandOptions<A extends Accessor = Accessor> {
   limit?: Limit | null
 }
 
-export const HELP_OPTION = new Option({
-  long: '--help',
-  type: 'bool',
-  description: 'Show this help and exit',
-})
-
-const VERSION_OPTION = new Option({
-  long: '--version',
-  type: 'bool',
-  description: 'Show version information and exit',
-})
-
 const HELP_ENC = new TextEncoder()
 
 /** Render the GNU-style version line for a command. */
@@ -287,56 +277,53 @@ export function versionLine(name: string): string {
  * (`argc == 2`), so for a SOLE_ARGUMENT_LONG_OPTIONS command `--version` is an
  * ordinary operand as soon as another word joins it. Measured on coreutils
  * 9.7: `expr --version` is the version and `expr --version x` is
- * `expr: syntax error: unexpected argument 'x'`. Inside that window the
- * parser's own prefix expansion still answers (`expr --versio`), which is why
- * this only has to decline rather than re-match.
+ * `expr: syntax error: unexpected argument 'x'`.
+ *
+ * A word is the injected option when it resolves to it the way getopt_long
+ * would, not only when it is spelled out in full, because the parser
+ * downstream expands an abbreviation and the two have to agree: a line that
+ * spans mounts is parsed against the SHARED spec, which carries no injected
+ * --version, so `cat --vers /ram/a /disk/b` refused the prefix while
+ * `cat --vers /ram/a` expanded it and exited 0. Resolution is against the
+ * registered spec, the one the parser would use, so an abbreviation that is
+ * ambiguous there (or carries a value) is declined here and refused
+ * downstream in getopt_long's own words rather than answered.
  */
 export function versionRequest(
   name: string,
   spec: CommandSpec | null,
   argv: string[],
 ): Uint8Array | null {
-  if (!hasInjectedVersion(spec)) return null
-  if (SOLE_ARGUMENT_LONG_OPTIONS.has(name)) {
-    const sole = argv.length === 1 && argv[0] === '--version'
+  if (spec === null || !hasInjectedVersion(spec)) return null
+  if (SOLE_ARGUMENT_LONG_OPTIONS.has(name) && isBuiltinGrammar(name, spec)) {
+    const sole = argv.length === 1 && isInjectedVersion(spec, argv[0] ?? '')
     return sole ? HELP_ENC.encode(versionLine(name)) : null
   }
   for (const arg of argv) {
     if (arg === '--') return null
-    if (arg === '--version') return HELP_ENC.encode(versionLine(name))
+    if (isInjectedVersion(spec, arg)) return HELP_ENC.encode(versionLine(name))
   }
   return null
+}
+
+/**
+ * Whether one raw word names the injected --version.
+ *
+ * getopt_long's rule, so an unambiguous abbreviation counts and an ambiguous
+ * one does not. A word carrying a value is declined: GNU answers
+ * `--version=x` with `option '--version' doesn't allow an argument`, which is
+ * the parser's to say, not this function's. `_is_injected_version` in
+ * config.py is the twin.
+ */
+function isInjectedVersion(spec: CommandSpec, arg: string): boolean {
+  if (!arg.startsWith('--') || arg.includes('=')) return false
+  const matches = expandLong(compileSpec(spec), arg)
+  return matches.length === 1 && matches[0] === '--version'
 }
 
 /** Whether the wrapper supplies this spec's version response. */
 export function hasInjectedVersion(spec: CommandSpec | null): boolean {
   return spec?.options.some((o) => o === VERSION_OPTION) ?? false
-}
-
-/**
- * Inject --help / --version and short-circuit them before the handler.
- * Mirrors GNU coreutils: every registered command accepts both flags,
- * prints to stdout, and exits 0 without running the command body.
- * A command declaring its own --version handles that flag itself.
- */
-/**
- * The spec plus whichever of --help / --version it does not declare.
- *
- * Mirrors GNU coreutils: every command accepts both, so both have to parse
- * before the handler can short-circuit them. A command declaring either
- * keeps its own. `help_spec` in config.py is the twin.
- */
-export function helpSpec(spec: CommandSpec): CommandSpec {
-  const extras: Option[] = []
-  if (!spec.options.some((o) => o.long === '--help')) extras.push(HELP_OPTION)
-  if (!spec.options.some((o) => o.long === '--version')) extras.push(VERSION_OPTION)
-  if (extras.length === 0) return spec
-  // Instance spread mirrors Python's dataclasses.replace: every CommandSpec
-  // field rides along, including ones added after this code was written.
-  // The prototype loss the lint warns about is the point: init wants a
-  // plain field bag, and the constructor rebuilds the class.
-  // eslint-disable-next-line @typescript-eslint/no-misused-spread
-  return new CommandSpec({ ...spec, options: [...spec.options, ...extras] })
 }
 
 /**
@@ -351,16 +338,22 @@ export function helpSpec(spec: CommandSpec): CommandSpec {
  */
 export function helpPage(name: string, spec: CommandSpec): string {
   const synopsis = BUILTIN_SPECS[name] === spec ? SYNOPSES[name] : undefined
-  return renderHelp(name, helpSpec(spec), [], UsageStyle.ARGPARSE, synopsis)
+  return renderHelp(name, registeredSpec(name, spec), [], UsageStyle.ARGPARSE, synopsis)
 }
 
+/**
+ * Inject --help / --version and short-circuit them before the handler.
+ * Mirrors GNU coreutils: every registered command accepts both flags,
+ * prints to stdout, and exits 0 without running the command body.
+ * A command declaring its own --version handles that flag itself.
+ */
 function withHelpSupport(
   name: string,
   spec: CommandSpec,
   fn: CommandFn,
 ): { spec: CommandSpec; fn: CommandFn } {
   const hasVersion = spec.options.some((o) => o.long === '--version')
-  const newSpec = helpSpec(spec)
+  const newSpec = registeredSpec(name, spec)
   const helpText = helpPage(name, spec)
   const versionText = versionLine(name)
   const wrappedFn: CommandFn = async (accessor, paths, texts, opts) => {

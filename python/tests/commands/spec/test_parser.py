@@ -14,11 +14,20 @@
 
 import pytest
 
-from mirage.commands.config import help_spec
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.builtin_specs import registered_spec
 from mirage.commands.spec.compile import compile_spec
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
 from mirage.commands.spec.types import CommandSpec, Operand, Option
+
+
+def _registered(name: str) -> CommandSpec:
+    """The spec the registry parses for a builtin, --help/--version and all.
+
+    Args:
+        name (str): the builtin's name.
+    """
+    return registered_spec(name, SPECS[name])
 
 
 def test_grep_positional_pattern_then_path():
@@ -594,7 +603,7 @@ def test_a_command_that_borrows_a_builtin_name_does_not_borrow_argmatch():
 # SPECS[name] straight in kept passing.
 def test_argmatch_survives_the_copy_the_registry_parses():
     tee = SPECS["tee"]
-    registered = help_spec(tee)
+    registered = registered_spec("tee", tee)
     assert registered is not tee
     parsed = parse_command(registered, ["--output-error=exit-n"], "/", "tee")
     assert parsed.flags["--output-error"] == "exit-nopipe"
@@ -809,27 +818,39 @@ def test_abbreviated_value_long_takes_the_next_word():
 # Info-ZIP unzip) never expands an abbreviation, because there is no
 # table to expand against.
 def test_a_program_with_no_long_option_parser_matches_exactly():
-    spec = CommandSpec(options=(Option(long="--verbose"), ),
-                       rest=Operand(type="str"))
-    parsed = parse_command(spec, ["--verb", "hi"], "/", "echo")
-    assert "--verbose" not in parsed.flags
-    assert parsed.texts() == ["--verb", "hi"]
+    parsed = parse_command(_registered("echo"), ["--hel", "hi"], "/", "echo")
+    assert parsed.flags == {}
+    assert parsed.texts() == ["--hel", "hi"]
 
 
 def test_the_same_line_expands_the_abbreviation_for_a_getopt_command():
-    spec = CommandSpec(options=(Option(long="--verbose"), ),
-                       rest=Operand(type="str"))
-    parsed = parse_command(spec, ["--verb", "hi"], "/", "basename")
-    assert parsed.flags["--verbose"] is True
+    parsed = parse_command(_registered("basename"), ["--hel", "hi"], "/",
+                           "basename")
+    assert parsed.flags["--help"] is True
     assert parsed.texts() == ["hi"]
 
 
-# expr's long options are the two the @command decorator injects into
-# every spec, which is why the spec is built here rather than read from
-# SPECS: the registered spec carries them and the declaration does not.
-_EXPR_SPEC = CommandSpec(options=(Option(long="--help"),
-                                  Option(long="--version")),
-                         rest=Operand(type="str"))
+# Both tables describe one real program, so a spec that is not that
+# program's own grammar does not get the rule however the line names it.
+# A mount may register a command under a builtin's name: nothing refuses
+# that, and here the rule would swallow the flag the author declared.
+def test_a_custom_spec_never_inherits_a_per_program_parsing_rule():
+    spec = CommandSpec(options=(Option(long="--mode", type="str"), ),
+                       rest=Operand(type="str"))
+    parsed = parse_command(spec, ["--mode=x", "value"], "/", "expr")
+    assert parsed.flags == {"--mode": "x"}
+    assert parsed.texts() == ["value"]
+    # ... and the same spec keeps its long options where echo has none.
+    lenient = CommandSpec(options=(Option(long="--verbose"), ),
+                          rest=Operand(type="str"))
+    assert parse_command(lenient, ["--verb", "hi"], "/",
+                         "echo").flags["--verbose"] is True
+
+
+# expr's long options are the two the registry injects into every spec,
+# so the spec has to be the registered one: the declaration carries
+# neither, and a hand-built lookalike is no longer expr's grammar.
+_EXPR_SPEC = _registered("expr")
 
 
 # gnulib's parse_long_options guards on `argc == 2`, so expr reads a long

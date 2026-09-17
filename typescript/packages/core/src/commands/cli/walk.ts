@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { HELP_OPTION } from '../config.ts'
+import { HELP_OPTION } from '../spec/constants.ts'
 import { compileSpec, type CompiledSpec, expandLong } from '../spec/compile.ts'
 import { FLOAT_VALUE, INT_VALUE } from '../spec/constants.ts'
 import { clapGroupRefusal, clapUnexpectedArgument, renderHelp } from '../spec/help.ts'

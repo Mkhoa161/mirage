@@ -13,10 +13,14 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { helpSpec } from '../config.ts'
-import { specOf } from './builtins.ts'
+import { helpSpec, registeredSpec, specOf } from './builtins.ts'
 import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
 import { CommandSpec, Operand, Option } from './types.ts'
+
+/** The spec the registry parses for a builtin, --help/--version and all. */
+function registered(name: string): CommandSpec {
+  return registeredSpec(name, specOf(name))
+}
 
 describe('parseCommand — bool short flags', () => {
   const spec = new CommandSpec({
@@ -1081,31 +1085,45 @@ describe('long-option abbreviation', () => {
   // Info-ZIP unzip) never expands an abbreviation, because there is no table
   // to expand against -- and the same line expands it for a getopt command.
   it('matches exactly for a program with no long-option parser', () => {
-    const spec = new CommandSpec({
-      options: [new Option({ long: '--verbose' })],
-      rest: new Operand({ type: 'str' }),
-    })
-    const parsed = parseCommand(spec, ['--verb', 'hi'], '/', 'echo')
-    expect(parsed.flags['--verbose']).toBeUndefined()
-    expect(parsed.texts()).toEqual(['--verb', 'hi'])
-    const strict = parseCommand(spec, ['--verb', 'hi'], '/', 'basename')
-    expect(strict.flags['--verbose']).toBe(true)
+    const parsed = parseCommand(registered('echo'), ['--hel', 'hi'], '/', 'echo')
+    expect(parsed.flags).toEqual({})
+    expect(parsed.texts()).toEqual(['--hel', 'hi'])
+    const strict = parseCommand(registered('basename'), ['--hel', 'hi'], '/', 'basename')
+    expect(strict.flags['--help']).toBe(true)
     expect(strict.texts()).toEqual(['hi'])
   })
 
-  // expr's long options are the two the @command decorator injects into every
-  // spec, which is why the spec is built here rather than read from SPECS:
-  // the registered spec carries them and the declaration does not.
+  // Both tables describe one real program, so a spec that is not that
+  // program's own grammar does not get the rule however the line names it. A
+  // mount may register a command under a builtin's name: nothing refuses
+  // that, and here the rule would swallow the flag the author declared.
+  // Mirrors test_parser.py.
+  it('never lets a custom spec inherit a per-program parsing rule', () => {
+    const spec = new CommandSpec({
+      options: [new Option({ long: '--mode', type: 'str' })],
+      rest: new Operand({ type: 'str' }),
+    })
+    const parsed = parseCommand(spec, ['--mode=x', 'value'], '/', 'expr')
+    expect(parsed.flags).toEqual({ '--mode': 'x' })
+    expect(parsed.texts()).toEqual(['value'])
+    // ... and the same spec keeps its long options where echo has none.
+    const lenient = new CommandSpec({
+      options: [new Option({ long: '--verbose' })],
+      rest: new Operand({ type: 'str' }),
+    })
+    expect(parseCommand(lenient, ['--verb', 'hi'], '/', 'echo').flags['--verbose']).toBe(true)
+  })
+
+  // expr's long options are the two the registry injects into every spec, so
+  // the spec has to be the registered one: the declaration carries neither,
+  // and a hand-built lookalike is no longer expr's grammar.
   //
   // gnulib's parse_long_options guards on `argc == 2`, so expr reads a long
   // option only when it is the whole line. Measured on coreutils 9.4:
   // `expr --help` helps, `expr --help x` is a syntax error on `x`, and
   // `expr -- --help` prints `--help`.
   it('reads a sole-argument long option, prefix and all', () => {
-    const spec = new CommandSpec({
-      options: [new Option({ long: '--help' }), new Option({ long: '--version' })],
-      rest: new Operand({ type: 'str' }),
-    })
+    const spec = registered('expr')
     const exact = parseCommand(spec, ['--help'], '/', 'expr')
     expect(exact.flags['--help']).toBe(true)
     expect(exact.texts()).toEqual([])
@@ -1117,10 +1135,7 @@ describe('long-option abbreviation', () => {
   })
 
   it('makes a long option outside the window an operand', () => {
-    const spec = new CommandSpec({
-      options: [new Option({ long: '--help' }), new Option({ long: '--version' })],
-      rest: new Operand({ type: 'str' }),
-    })
+    const spec = registered('expr')
     const outside = parseCommand(spec, ['--help', 'x'], '/', 'expr')
     expect(outside.flags).toEqual({})
     expect(outside.invalidOptions).toEqual([])

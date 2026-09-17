@@ -880,11 +880,15 @@ describe('handleSleep', () => {
   // sum (measured on 9.7: `sleep 0.3 0.3` takes 0.6s, `sleep 0 1` takes 1s).
   // Reading only the first operand made `sleep -- 0 1` return at once.
   // Mirrors test_sleep.py.
+  // The bound is 90 rather than 100 because the bug this guards against
+  // sleeps 50ms (only the first operand), so 90 still separates the two by
+  // 40ms, while a timer is allowed to land a millisecond early: CI measured
+  // 99ms for a 100ms wait, libuv scheduling against a cached loop time.
   it('sums every operand', async () => {
     const started = Date.now()
     const [, io] = await handleSleep(['--', '0.05', '0.05'])
     expect(io.exitCode).toBe(0)
-    expect(Date.now() - started).toBeGreaterThanOrEqual(100)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(90)
   })
 
   // Every operand is validated, and the FIRST bad one is named. Reading only

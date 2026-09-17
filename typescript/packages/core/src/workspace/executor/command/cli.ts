@@ -18,7 +18,7 @@ import { CLISpec, type CLIInvocation, type CLIDoors } from '../../../commands/cl
 import { ownsArgv, walk } from '../../../commands/cli/walk.ts'
 import type { DispatchFn } from '../../../runtime/types.ts'
 import type { NamespaceView, SessionView, StatPath } from '../../../ops/types.ts'
-import { HELP_OPTION } from '../../../commands/config.ts'
+import { HELP_OPTION } from '../../../commands/spec/constants.ts'
 import { flagKwargName } from '../../../commands/spec/constants.ts'
 import { UsageStyle } from '../../../commands/spec/types.ts'
 import { renderHelp } from '../../../commands/spec/help.ts'

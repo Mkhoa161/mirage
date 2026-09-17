@@ -15,7 +15,7 @@
 import { resolvePath } from '../../utils/path.ts'
 import { compareCodePoints } from '../../utils/sort.ts'
 import { type ArgmatchChoices, argmatch, valueClasses } from './argmatch.ts'
-import { BUILTIN_SPECS } from './builtins.ts'
+import { BUILTIN_SPECS, isBuiltinGrammar } from './builtins.ts'
 import { type CompiledSpec, compileSpec, expandLong } from './compile.ts'
 import {
   ARG_PLACEHOLDER,
@@ -535,16 +535,23 @@ export function parseCommand(
     // for why #1107's "declares no long options" predicate cannot work. A
     // program with no long-option parser prints a dash word it does not know
     // instead of refusing it, and never expands an abbreviation.
-    noLongOptionParser = NO_LONG_OPTIONS.has(cmdName)
+    // Both tables name one real program, so both are gated on this spec
+    // being that program's own grammar: a mount may register a command under
+    // a builtin's name (nothing refuses it), and the sole-argument rule turns
+    // such a spec's declared `--mode=x` into an operand its handler then
+    // never sees.
+    const builtin = isBuiltinGrammar(cmdName, spec)
+    noLongOptionParser = builtin && NO_LONG_OPTIONS.has(cmdName)
     // gnulib's parse_long_options reads argv[1] only when it is the whole
     // line, so outside that one-argument window the program has no long
     // options AT ALL and even an exact `--help` is an operand. Counted over
     // filteredArgv because `--cache` is mirage's own out-of-band word and not
     // part of the command line being emulated.
-    outsideSoleArgument = SOLE_ARGUMENT_LONG_OPTIONS.has(cmdName) && filteredArgv.length !== 1
+    const soleArgument = builtin && SOLE_ARGUMENT_LONG_OPTIONS.has(cmdName)
+    outsideSoleArgument = soleArgument && filteredArgv.length !== 1
     // A dash-leading word this program answers by printing it as an operand
     // rather than by refusing it.
-    lenientDashOperands = noLongOptionParser || SOLE_ARGUMENT_LONG_OPTIONS.has(cmdName)
+    lenientDashOperands = noLongOptionParser || soleArgument
   }
   i = 0
   let endOfFlags = false

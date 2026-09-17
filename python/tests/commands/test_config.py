@@ -16,7 +16,8 @@ import asyncio
 
 from mirage.commands.config import (CommandOpts, RegisteredCommand, command,
                                     cross_command, version_request)
-from mirage.commands.spec import CommandSpec, Operand, Option
+from mirage.commands.spec import SPECS, CommandSpec, Operand, Option
+from mirage.commands.spec.builtin_specs import registered_spec
 from mirage.version import __version__
 
 _HANDLER_CALLS: list[str] = []
@@ -244,3 +245,54 @@ class TestVersionRequest:
         assert version_request("custom",
                                registered._registered_commands[0].spec,
                                ["--version"]) is None
+
+    # This runs ahead of the parser, and the parser expands an
+    # abbreviation, so the two have to agree on what named the option: a
+    # line that spans mounts never reaches the enriched spec (it parses
+    # against the shared SPECS entry, which carries no --version), so an
+    # exact-match-only check answered `cat --vers /ram/a` and refused
+    # `cat --vers /ram/a /disk/b`.
+    def test_matches_an_unambiguous_abbreviation(self):
+        registered = command("tsort", resource="disk",
+                             spec=CommandSpec())(_noop_handler)
+        spec = registered._registered_commands[0].spec
+        for word in ("--vers", "--versio", "--v"):
+            assert version_request(
+                "tsort", spec,
+                [word, "/data/a.txt"
+                 ]) == f"tsort (Mirage) {__version__}\n".encode()
+
+    # A value is the parser's to refuse, in getopt_long's own words
+    # (`option '--version' doesn't allow an argument`), so this declines
+    # rather than answering.
+    def test_none_for_an_abbreviation_carrying_a_value(self):
+        registered = command("tsort", resource="disk",
+                             spec=CommandSpec())(_noop_handler)
+        spec = registered._registered_commands[0].spec
+        assert version_request("tsort", spec, ["--versio=x"]) is None
+        assert version_request("tsort", spec, ["--version=x"]) is None
+
+    # An abbreviation that names two options is not this option, and the
+    # parser reports the ambiguity with both candidates.
+    def test_none_for_an_ambiguous_abbreviation(self):
+        spec = CommandSpec(options=(Option(long="--verbose"), ))
+        registered = command("custom", resource="disk",
+                             spec=spec)(_noop_handler)
+        assert version_request("custom",
+                               registered._registered_commands[0].spec,
+                               ["--ver"]) is None
+
+    # expr reads a long option only when it is the whole line, and only
+    # for expr's own grammar: a registered command that borrowed the
+    # name answers wherever the word sits, like every other command.
+    def test_the_sole_argument_window_is_the_builtins_alone(self):
+        assert version_request("expr", registered_spec("expr", SPECS["expr"]),
+                               ["--versio"]) is not None
+        assert version_request("expr", registered_spec("expr", SPECS["expr"]),
+                               ["--version", "x"]) is None
+        borrowed = command(
+            "expr",
+            resource="disk",
+            spec=CommandSpec(rest=Operand(type="str")))(_noop_handler)
+        assert version_request("expr", borrowed._registered_commands[0].spec,
+                               ["--version", "x"]) is not None
