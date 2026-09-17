@@ -315,7 +315,6 @@ export function parseCommand(
   argv: string[],
   cwd: string,
   cmdName = '',
-  installedCli = false,
   env?: Readonly<Record<string, string>>,
 ): ParsedArgs {
   const cs = compileSpec(spec)
@@ -390,12 +389,12 @@ export function parseCommand(
   const optionErrorKinds: string[] = []
   const needsValueOptions: string[] = []
   // Who owns a dashed word the spec does not declare. The two tiers answer
-  // differently, and only the caller knows which tier it is in, which is what
-  // `installedCli` states.
+  // differently, and the spec's own type says which tier this is
+  // (`CommandSpec.cliNode`).
   let noLongOptionParser: boolean
   let outsideSoleArgument: boolean
   let lenientDashOperands: boolean
-  if (installedCli) {
+  if (spec.cliNode) {
     // An installed CLI is not a GNU tool and mirage is not its only parser:
     // the node declares the flags mirage enforces and the program owns the
     // rest, so an undeclared dash word lands in a textual rest slot when the
@@ -735,7 +734,7 @@ export function parseCommand(
   // An installed CLI's table is not one: it is clap's or git's, which
   // compare the whole word, so `ntn` and `gh` refuse `--state=o` where
   // gnulib would resolve it to `open`. The tier is the same fact
-  // `installedCli` already states above, and it keeps the two levels of one
+  // `cliNode` already answers above, and it keeps the two levels of one
   // tree saying one thing -- a group node's choices are enforced exactly by
   // walk's finishNode, so deriving the leaf's rule from anything else would
   // make one `Option.choices` mean two things inside one CLI.
@@ -744,7 +743,7 @@ export function parseCommand(
     const value = flags[destName]
     // The bare boolean form of an optional-value flag is exempt.
     const candidates = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
-    const exactOnly = installedCli || EXACT_CHOICE_OPTIONS.has(destName)
+    const exactOnly = spec.cliNode || EXACT_CHOICE_OPTIONS.has(destName)
     const resolved: string[] = []
     for (const part of candidates) {
       const match = matchChoice(part, allowed, exactOnly)

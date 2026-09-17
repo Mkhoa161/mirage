@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from typing import Literal, TypeAlias
+from typing import ClassVar, Literal, TypeAlias
 
 from mirage.types import PathSpec
 
@@ -277,3 +277,13 @@ class CommandSpec:
     # every other path-valued flag keeps resolving against the session
     # cwd, which is what GNU does with -f.
     operand_base: str | None = None
+    # Whose parser owns a word this spec does not declare. A GNU command
+    # is mirage's own program, so mirage answers for it in gnulib's
+    # terms: an undeclared dash word is `unrecognized option`, and an
+    # abbreviated choice value resolves by ARGMATCH. An installed CLI's
+    # node is a program mirage imitates, so neither answer is mirage's
+    # to give, and CLISpec sets this True for every level of its tree.
+    # A ClassVar, not a field: the tier is a fact about the spec's type,
+    # so no author declares it, no caller states it, and it stays out of
+    # fields(), asdict() and the emitted spec JSON.
+    cli_node: ClassVar[bool] = False

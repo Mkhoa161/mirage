@@ -18,8 +18,7 @@ import { FLOAT_VALUE, INT_VALUE } from '../spec/constants.ts'
 import { clapGroupRefusal, clapUnexpectedArgument, renderHelp } from '../spec/help.ts'
 import { UsageStyle } from '../spec/types.ts'
 import { resolvePath } from '../../utils/path.ts'
-import { CommandSpec } from '../spec/types.ts'
-import { WalkResult, type CLISpec, type WalkFlagBag } from './types.ts'
+import { CLISpec, WalkResult, type WalkFlagBag } from './types.ts'
 
 import { CLAP_EXIT, USAGE_EXIT } from './constants.ts'
 
@@ -274,10 +273,13 @@ function rowsOf(node: CLISpec, visible?: (verb: string) => boolean): [string, st
 // declares its own or answers the flag itself (ownsArgv), where advertising it
 // would promise a page mirage no longer renders. A refusal renders the same
 // node a help page would, or its usage line would disagree with `--help`'s.
-function listedNode(node: CLISpec): CommandSpec {
+function listedNode(node: CLISpec): CLISpec {
   if (node.options.some((option) => option.long === '--help') || ownsArgv(node)) return node
+  // CLISpec, not CommandSpec: a rebuild that drops the class drops the tier
+  // with it (CommandSpec.cliNode), which is python's answer here too since
+  // dataclasses.replace keeps the subclass.
   // eslint-disable-next-line @typescript-eslint/no-misused-spread -- init wants a plain field bag
-  return new CommandSpec({ ...node, options: [...node.options, HELP_OPTION] })
+  return new CLISpec({ ...node, options: [...node.options, HELP_OPTION] })
 }
 
 /**

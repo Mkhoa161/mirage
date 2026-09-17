@@ -312,6 +312,31 @@ export class CommandSpec {
   // every other path-valued flag keeps resolving against the session
   // cwd, which is what GNU does with -f.
   readonly operandBase: string | null
+  /**
+   * Whose parser owns a word this spec does not declare. A GNU command
+   * is mirage's own program, so mirage answers for it in gnulib's
+   * terms: an undeclared dash word is `unrecognized option`, and an
+   * abbreviated choice value resolves by ARGMATCH. An installed CLI's
+   * node is a program mirage imitates, so neither answer is mirage's to
+   * give, and CLISpec overrides this to true for every level of its
+   * tree.
+   *
+   * A prototype getter, not a constructor field: the tier is a fact
+   * about the spec's class, so no author declares it and no caller
+   * states it. The lint rule below wants a readonly field, but a field
+   * is an own enumerable property, and a spec is spread into an init
+   * bag in three places (`withHelpSupport` in commands/config.ts,
+   * `listedNode` in the CLI walk, `parseSpecFor` in the executor) whose
+   * Init interfaces do not declare this and must not grow it. A getter
+   * rides none of those spreads, so each rebuild takes the tier from
+   * the class it names. Mirrors python's `CommandSpec.cli_node`
+   * ClassVar, which
+   * `fields()`, `asdict()` and `replace()` skip for the same reason.
+   */
+  // eslint-disable-next-line @typescript-eslint/class-literal-property-style
+  get cliNode(): boolean {
+    return false
+  }
   // python3's rule: parse options strictly until the first operand,
   // then take every remaining word verbatim. An interpreter needs both
   // halves at once -- an unknown flag before the script is a usage

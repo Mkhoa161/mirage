@@ -13,10 +13,15 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
+import { CLISpec } from '../cli/types.ts'
 import { specOf } from './builtins.ts'
 import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
 import { CommandSpec, Operand, Option, VALUE_OCCURRENCES_KEY } from './types.ts'
 import { FlagView } from './flag_view.ts'
+
+function verb(): null {
+  return null
+}
 
 describe('parseCommand — bool short flags', () => {
   const spec = new CommandSpec({
@@ -422,20 +427,36 @@ describe('parseCommand — unknown dash tokens warn and drop', () => {
   // slot to forward into, the same tier refuses it: the program cannot be
   // handed a word the node has nowhere to put.
   it('forwards dash words into an installed CLI node rest slot', () => {
+    const spec = new CLISpec({
+      name: 'pager',
+      fn: verb,
+      options: [new Option({ long: '--width', type: 'int' })],
+      rest: new Operand({ type: 'str' }),
+    })
+    const parsed = parseCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager')
+    expect(parsed.flags).toEqual({})
+    expect(parsed.invalidOptions).toEqual([])
+    expect(parsed.texts()).toEqual(['--widt', '80', '-n', 'x'])
+    const slotless = new CLISpec({
+      name: 'pager',
+      fn: verb,
+      options: [new Option({ long: '--width', type: 'int' })],
+    })
+    expect(parseCommand(slotless, ['--frobnicate'], '/', 'pager').invalidOptions).toEqual([
+      '--frobnicate',
+    ])
+  })
+
+  // The same grammar on a GNU command's spec is the other answer, which is
+  // what makes the tier the deciding fact rather than the shape.
+  it('refuses the same dash word on a CommandSpec', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
       rest: new Operand({ type: 'str' }),
     })
-    const parsed = parseCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager', true)
-    expect(parsed.flags).toEqual({})
-    expect(parsed.invalidOptions).toEqual([])
-    expect(parsed.texts()).toEqual(['--widt', '80', '-n', 'x'])
-    const slotless = new CommandSpec({
-      options: [new Option({ long: '--width', type: 'int' })],
-    })
-    expect(parseCommand(slotless, ['--frobnicate'], '/', 'pager', true).invalidOptions).toEqual([
-      '--frobnicate',
-    ])
+    const parsed = parseCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager')
+    expect(parsed.flags).toEqual({ '--width': '80' })
+    expect(parsed.invalidOptions).toEqual(['n'])
   })
 
   it('keeps numeric dash tokens as operands', () => {
@@ -778,17 +799,23 @@ describe('choices violations are reported, never thrown', () => {
   // prefix-matched would make one Option.choices mean two things inside one
   // tree. Mirrors test_parser.py.
   it('takes no prefix for an installed CLI', () => {
-    const spec = new CommandSpec({
-      options: [new Option({ long: '--state', type: 'str', choices: ['open', 'closed', 'all'] })],
-    })
-    const parsed = parseCommand(spec, ['--state=o'], '/', 'gh', true)
+    const options = [
+      new Option({ long: '--state', type: 'str', choices: ['open', 'closed', 'all'] }),
+    ]
+    const spec = new CLISpec({ name: 'list', fn: verb, options })
+    const parsed = parseCommand(spec, ['--state=o'], '/', 'gh')
     expect(parsed.flags['--state']).toBe('o')
     expect(parsed.choiceValueOptions).toEqual([
       ['--state', 'o', ['open', 'closed', 'all'], 'invalid'],
     ])
-    const exact = parseCommand(spec, ['--state=open'], '/', 'gh', true)
+    const exact = parseCommand(spec, ['--state=open'], '/', 'gh')
     expect(exact.flags['--state']).toBe('open')
     expect(exact.choiceValueOptions).toEqual([])
+    // The same option on a GNU command's spec prefix-matches, so the node's
+    // tier is what decides and nothing about the option does.
+    const gnu = parseCommand(new CommandSpec({ options }), ['--state=o'], '/', 'ls')
+    expect(gnu.flags['--state']).toBe('open')
+    expect(gnu.choiceValueOptions).toEqual([])
   })
 
   it('exempts the bare optional-value form', () => {
@@ -1339,13 +1366,11 @@ describe('options an environment variable supplies', () => {
   })
 
   it('fills an option the line omitted', () => {
-    expect(parseCommand(versioned, [], '/', '', false, { X_VERSION: '9' }).flags['--version']).toBe(
-      '9',
-    )
+    expect(parseCommand(versioned, [], '/', '', { X_VERSION: '9' }).flags['--version']).toBe('9')
   })
 
   it('yields to what the line typed', () => {
-    const parsed = parseCommand(versioned, ['--version', 'typed'], '/', '', false, {
+    const parsed = parseCommand(versioned, ['--version', 'typed'], '/', '', {
       X_VERSION: '9',
     })
     expect(parsed.flags['--version']).toBe('typed')
@@ -1357,18 +1382,16 @@ describe('options an environment variable supplies', () => {
         new Option({ long: '--version', type: 'str', default: 'fallback', env: 'X_VERSION' }),
       ],
     })
-    expect(parseCommand(spec, [], '/', '', false, { X_VERSION: '9' }).flags['--version']).toBe('9')
-    expect(parseCommand(spec, [], '/', '', false, {}).flags['--version']).toBe('fallback')
+    expect(parseCommand(spec, [], '/', '', { X_VERSION: '9' }).flags['--version']).toBe('9')
+    expect(parseCommand(spec, [], '/', '', {}).flags['--version']).toBe('fallback')
   })
 
   it('satisfies a required option before it is refused', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--version', type: 'str', env: 'X_VERSION', required: true })],
     })
-    expect(
-      parseCommand(spec, [], '/', '', false, { X_VERSION: '9' }).missingRequiredOptions,
-    ).toEqual([])
-    expect(parseCommand(spec, [], '/', '', false, {}).missingRequiredOptions).toEqual(['--version'])
+    expect(parseCommand(spec, [], '/', '', { X_VERSION: '9' }).missingRequiredOptions).toEqual([])
+    expect(parseCommand(spec, [], '/', '', {}).missingRequiredOptions).toEqual(['--version'])
   })
 
   it('is coerced and choice-checked like a typed value', () => {
@@ -1377,24 +1400,22 @@ describe('options an environment variable supplies', () => {
     const ints = new CommandSpec({
       options: [new Option({ long: '--count', type: 'int', env: 'X_COUNT' })],
     })
-    expect(parseCommand(ints, [], '/', '', false, { X_COUNT: 'nope' }).invalidIntOptions).toEqual([
+    expect(parseCommand(ints, [], '/', '', { X_COUNT: 'nope' }).invalidIntOptions).toEqual([
       ['--count', 'nope'],
     ])
-    expect(parseCommand(ints, [], '/', '', false, { X_COUNT: '4' }).invalidIntOptions).toEqual([])
+    expect(parseCommand(ints, [], '/', '', { X_COUNT: '4' }).invalidIntOptions).toEqual([])
     const picks = new CommandSpec({
       options: [new Option({ long: '--mode', type: 'str', choices: ['a', 'b'], env: 'X_MODE' })],
     })
-    expect(
-      parseCommand(picks, [], '/', '', false, { X_MODE: 'zzz' }).choiceValueOptions.length,
-    ).toBe(1)
-    expect(parseCommand(picks, [], '/', '', false, { X_MODE: 'a' }).choiceValueOptions).toEqual([])
+    expect(parseCommand(picks, [], '/', '', { X_MODE: 'zzz' }).choiceValueOptions.length).toBe(1)
+    expect(parseCommand(picks, [], '/', '', { X_MODE: 'a' }).choiceValueOptions).toEqual([])
   })
 
   it('resolves a path value against the cwd like a typed one', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--conf', type: 'path', env: 'X_CONF' })],
     })
-    expect(parseCommand(spec, [], '/work', '', false, { X_CONF: 'rel.json' }).flags['--conf']).toBe(
+    expect(parseCommand(spec, [], '/work', '', { X_CONF: 'rel.json' }).flags['--conf']).toBe(
       '/work/rel.json',
     )
   })
@@ -1402,7 +1423,7 @@ describe('options an environment variable supplies', () => {
   it('does not count as typed', () => {
     // clap's usage line echoes what the line carried; an env-supplied option
     // is supplied but not typed.
-    const parsed = parseCommand(versioned, [], '/', '', false, { X_VERSION: '9' })
+    const parsed = parseCommand(versioned, [], '/', '', { X_VERSION: '9' })
     expect(parsed.flags['--version']).toBe('9')
     expect(parsed.typedDests).toEqual([])
   })

@@ -82,7 +82,6 @@ def parse_flags(
     cwd: str,
     str_flag_paths: bool = False,
     env: Mapping[str, str] | None = None,
-    installed_cli: bool = False,
 ) -> ParsedCommand:
     """Parse flags from classified parts, recovering PathSpec for PATH values.
 
@@ -107,10 +106,6 @@ def parse_flags(
             virtual-path strings instead of PathSpec. Cross-mount
             strategies read flags through FlagView, which type-checks
             str, so they get the string view.
-        installed_cli (bool): the spec is an installed CLI's node rather
-            than a GNU command, so the program owns any dashed word the
-            node does not declare and the parser forwards it into a
-            textual rest slot instead of refusing it.
 
     Returns:
         ParsedCommand: positional paths, positional texts, parsed flag dict
@@ -134,12 +129,7 @@ def parse_flags(
             spellings[item.virtual.rstrip("/") or "/"].append(item)
 
     if spec is not None:
-        parsed = parse_command(spec,
-                               argv,
-                               cwd=cwd,
-                               cmd_name=cmd_name,
-                               installed_cli=installed_cli,
-                               env=env)
+        parsed = parse_command(spec, argv, cwd=cwd, cmd_name=cmd_name, env=env)
         # Widens from ParsedFlagValue to FlagValue: PATH values
         # become PathSpec just below.
         flag_kwargs: dict[str, FlagValue] = dict(parse_to_kwargs(parsed))

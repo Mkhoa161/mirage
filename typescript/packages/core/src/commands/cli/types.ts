@@ -168,6 +168,16 @@ export type CLIConfigModel = ZodObject<ZodRawShape> | ((input: Record<string, un
  * `script`.
  */
 export class CLISpec extends CommandSpec {
+  /**
+   * Every level of the tree is a program mirage imitates rather than
+   * one it implements, so the parser hands an undeclared dash word and
+   * an abbreviated choice value to that program instead of answering in
+   * GNU's terms. See CommandSpec.cliNode.
+   */
+  override get cliNode(): boolean {
+    return true
+  }
+
   readonly name: string
   readonly aliases: readonly string[]
   readonly fn: CLIVerbFn | null

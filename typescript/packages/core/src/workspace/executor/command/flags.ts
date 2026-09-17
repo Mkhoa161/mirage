@@ -86,10 +86,6 @@ export function parseFlags(
   // env-supplied int would go unchecked and an env-supplied path would
   // stay a bare string.
   env?: Readonly<Record<string, string>>,
-  // The spec is an installed CLI's node rather than a GNU command, so the
-  // program owns any dashed word the node does not declare and the parser
-  // forwards it into a textual rest slot instead of refusing it.
-  installedCli = false,
 ): ParsedCommand {
   const argv: string[] = parts.map((item) => (item instanceof PathSpec ? item.virtual : item))
   const scopeMap = new Map<string, PathSpec>()
@@ -111,7 +107,7 @@ export function parseFlags(
   }
 
   if (spec !== null) {
-    const parsed = parseCommand(spec, argv, cwd, cmdName, installedCli, env)
+    const parsed = parseCommand(spec, argv, cwd, cmdName, env)
     const flagKwargs = parseToKwargs(parsed)
 
     for (const [key, value] of Object.entries(flagKwargs)) {

@@ -47,10 +47,10 @@ from mirage.workspace.executor.command.run import exec_node
 from mirage.workspace.session import Session, env_snapshot
 from mirage.workspace.types import ExecutionNode
 
-# A textual rest operand is a CLI node's pass-through form: under
-# ``installed_cli`` the parser reads undeclared dashed tokens into it
-# instead of refusing them, which is what a program parsing its own argv
-# needs. "str", not "path", so nothing is cwd-resolved or routed. Only
+# A textual rest operand is a CLI node's pass-through form: on a spec
+# whose ``cli_node`` is True the parser reads undeclared dashed tokens
+# into it instead of refusing them, which is what a program parsing its
+# own argv needs. "str", not "path", so nothing is cwd-resolved or routed. Only
 # this tier reads the rest kind that way: a GNU command's textual rest
 # is a list of operands, which is why basename has one and still refuses
 # an option it does not know.
@@ -322,8 +322,7 @@ async def handle_cli(
                          parse_spec,
                          prog,
                          session.cwd,
-                         env=env_snapshot(session),
-                         installed_cli=True)
+                         env=env_snapshot(session))
     if mirage_help and parsed.flag_kwargs.get("help") is True:
         help_text = render_help(prog, parse_spec, style=style).encode()
         return help_text, IOResult(), ExecutionNode(command=cmd_str,

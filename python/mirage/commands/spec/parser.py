@@ -298,7 +298,6 @@ def parse_command(
     argv: list[str],
     cwd: str,
     cmd_name: str = "",
-    installed_cli: bool = False,
     env: Mapping[str, str] | None = None,
 ) -> ParsedArgs:
     cs = compile_spec(spec)
@@ -364,9 +363,9 @@ def parse_command(
     option_error_kinds: list[str] = []
     needs_value_options: list[str] = []
     # Who owns a dashed word the spec does not declare. The two tiers
-    # answer differently, and only the caller knows which tier it is in,
-    # which is what ``installed_cli`` states.
-    if installed_cli:
+    # answer differently, and the spec's own type says which tier this
+    # is (``CommandSpec.cli_node``).
+    if spec.cli_node:
         # An installed CLI is not a GNU tool and mirage is not its only
         # parser: the node declares the flags mirage enforces and the
         # program owns the rest, so an undeclared dash word lands in a
@@ -701,7 +700,7 @@ def parse_command(
     # An installed CLI's table is not one: it is clap's or git's, which
     # compare the whole word, so `ntn` and `gh` refuse `--state=o` where
     # gnulib would resolve it to `open`. The tier is the same fact
-    # ``installed_cli`` already states above, and it keeps the two
+    # ``cli_node`` already answers above, and it keeps the two
     # levels of one tree saying one thing -- a group node's choices are
     # enforced exactly by walk._finish_node, so deriving the leaf's rule
     # from anything else would make one `Option.choices` mean two things
@@ -713,7 +712,7 @@ def parse_command(
         # The bare boolean form of an optional-value flag is exempt.
         candidates = value if isinstance(
             value, list) else ([value] if isinstance(value, str) else [])
-        exact_only = installed_cli or dest_name in EXACT_CHOICE_OPTIONS
+        exact_only = spec.cli_node or dest_name in EXACT_CHOICE_OPTIONS
         canonical: list[str] = []
         for part in candidates:
             match = _match_choice(part, allowed, exact_only)
