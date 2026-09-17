@@ -47,6 +47,88 @@ describe('Python guest module', { timeout: 120_000 }, () => {
     }
   })
 
+  it('registers an isolated main module for imports and pickling across exits', async () => {
+    const pyodide = await loadPyodideRuntime()
+    const guest = new PyodideExecution(pyodide)
+    pyodide.runPython("import sys; saved_main = sys.modules['__main__']")
+    try {
+      for (const [mutation, ending, exitCode] of [
+        ["sys.modules['__main__'] = None", '', 0],
+        ["del sys.modules['__main__']", 'raise SystemExit(7)', 7],
+        ['', "raise ValueError('expected failure')", 1],
+      ] as const) {
+        const result = guest.run(
+          {
+            code: `import __main__, pickle, sys
+assert __main__.__dict__ is globals()
+assert not hasattr(__main__, 'run_only')
+class Record:
+    value = 42
+def identity(value):
+    return value
+assert pickle.loads(pickle.dumps(Record())).__class__ is Record
+assert pickle.loads(pickle.dumps(identity)) is identity
+__main__.run_only = 'guest value'
+assert run_only == 'guest value'
+print('main identity works')
+${mutation}
+${ending}`,
+            argv: ['submission.py'],
+            cwd: '/',
+            flags: {},
+            script_cli: false,
+            env: {},
+            stdin: null,
+          },
+          () => undefined,
+          () => undefined,
+        )
+        expect(new TextDecoder().decode(result[0])).toBe('main identity works\n')
+        expect(result[2]).toBe(exitCode)
+        expect(new TextDecoder().decode(result[1])).toEqual(
+          exitCode === 1 ? expect.stringContaining('ValueError: expected failure') : '',
+        )
+        expect(pyodide.runPython("sys.modules['__main__'] is saved_main")).toBe(true)
+        expect(pyodide.runPython("hasattr(saved_main, 'run_only')")).toBe(false)
+      }
+    } finally {
+      guest.close()
+    }
+  })
+
+  it('restores absent and null host main-module entries', async () => {
+    const pyodide = await loadPyodideRuntime()
+    const guest = new PyodideExecution(pyodide)
+    pyodide.runPython("import sys; saved_main = sys.modules['__main__']")
+    try {
+      for (const missing of [false, true]) {
+        pyodide.runPython(
+          missing ? "sys.modules.pop('__main__', None)" : "sys.modules['__main__'] = None",
+        )
+        const result = guest.run(
+          {
+            code: 'import __main__; assert __main__.__dict__ is globals()',
+            argv: ['-c'],
+            cwd: '/',
+            flags: {},
+            script_cli: false,
+            env: {},
+            stdin: null,
+          },
+          () => undefined,
+          () => undefined,
+        )
+        expect(new TextDecoder().decode(result[1])).toBe('')
+        expect(result[2]).toBe(0)
+        expect(pyodide.runPython("'__main__' not in sys.modules")).toBe(missing)
+        if (!missing) expect(pyodide.runPython("sys.modules['__main__'] is None")).toBe(true)
+      }
+    } finally {
+      pyodide.runPython("sys.modules['__main__'] = saved_main")
+      guest.close()
+    }
+  })
+
   it('restores process globals after closing output and reporting SystemExit', async () => {
     const pyodide = await loadPyodideRuntime()
     const guest = new PyodideExecution(pyodide)
