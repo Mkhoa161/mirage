@@ -147,6 +147,48 @@
         "stdout_text": "2.0Ki\n",
         "stderr_text": ""
       }
+    },
+    {
+      "id": "numfmt_unrecognized_option_keeps_the_value_raw",
+      "cmd": "numfmt --zzz='é'",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "numfmt: unrecognized option '--zzz=é'\nTry 'numfmt --help' for more information.\n"
+      }
+    },
+    {
+      "id": "numfmt_operand_diagnostic_octal_escapes_the_same_bytes",
+      "cmd": "numfmt -- '--zzz=é'",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "numfmt: invalid number: '--zzz=\\303\\251'\n"
+      }
     }
   ]
 }

@@ -200,3 +200,21 @@ def test_fields_to_skip_refusal_stays_raw(value):
     with pytest.raises(ValueError) as exc:
         _parse_count(value)
     assert value in str(exc.value)
+
+
+# Neither option's candidates share a prefix that spans two values, so
+# `uniq --group=p` and `--all-repeated=n` both exit 0 (measured,
+# coreutils 9.4).
+def test_group_and_all_repeated_accept_an_unambiguous_prefix():
+    assert parse_flags({"group": "p"}).group == "prepend"
+    assert parse_flags({"group": "b"}).group == "both"
+    assert parse_flags({"group": "se"}).group == "separate"
+    assert parse_flags({"all_repeated": "n"}).all_repeated == "none"
+    assert parse_flags({"all_repeated": "p"}).all_repeated == "prepend"
+
+
+def test_group_still_refuses_an_unmatched_word():
+    with pytest.raises(UsageError) as exc:
+        parse_flags({"group": "pp"})
+    assert str(
+        exc.value).startswith("uniq: invalid argument 'pp' for '--group'\n")

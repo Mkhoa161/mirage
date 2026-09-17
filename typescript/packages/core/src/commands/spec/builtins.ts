@@ -13,7 +13,8 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { SPECS as SPEC_TABLE } from './builtin_specs/index.ts'
-import type { CommandSpec } from './types.ts'
+import { HELP_OPTION, VERSION_OPTION } from './constants.ts'
+import { CommandSpec, type Option } from './types.ts'
 
 export function specOf(name: string): CommandSpec {
   const spec = BUILTIN_SPECS[name]
@@ -27,3 +28,67 @@ export function specOf(name: string): CommandSpec {
 export const BUILTIN_SPECS: Readonly<Record<string, CommandSpec>> = Object.freeze(
   Object.setPrototypeOf(SPEC_TABLE, null) as Record<string, CommandSpec>,
 )
+
+/**
+ * The spec plus whichever of --help / --version it does not declare.
+ *
+ * Mirrors GNU coreutils: every command accepts both, so both have to parse
+ * before a handler can short-circuit them. A command declaring either keeps
+ * its own. `help_spec` in builtin_specs/__init__.py is the twin.
+ */
+export function helpSpec(spec: CommandSpec): CommandSpec {
+  const extras: Option[] = []
+  if (!spec.options.some((o) => o.long === '--help')) extras.push(HELP_OPTION)
+  if (!spec.options.some((o) => o.long === '--version')) extras.push(VERSION_OPTION)
+  if (extras.length === 0) return spec
+  // Instance spread mirrors Python's dataclasses.replace: every CommandSpec
+  // field rides along, including ones added after this code was written.
+  // The prototype loss the lint warns about is the point: init wants a plain
+  // field bag, and the constructor rebuilds the class.
+  // eslint-disable-next-line @typescript-eslint/no-misused-spread
+  return new CommandSpec({ ...spec, options: [...spec.options, ...extras] })
+}
+
+// The builtin specs in the form the registry actually parses. Built once so
+// there is ONE enriched object per builtin rather than one per backend that
+// registers the command, which is what makes the identity test below a
+// pointer compare instead of a field-by-field probe.
+export const BUILTIN_HELP_SPECS: Readonly<Record<string, CommandSpec>> = Object.freeze(
+  Object.setPrototypeOf(
+    Object.fromEntries(Object.entries(BUILTIN_SPECS).map(([n, s]) => [n, helpSpec(s)])),
+    null,
+  ) as Record<string, CommandSpec>,
+)
+
+/**
+ * The spec the registry parses for this command.
+ *
+ * `helpSpec`, except that a builtin gets the one shared copy rather than a
+ * fresh one per registration, so `isBuiltinGrammar` can answer with a pointer
+ * compare. `registered_spec` in builtin_specs/__init__.py is the twin.
+ */
+export function registeredSpec(name: string, spec: CommandSpec): CommandSpec {
+  const shared = BUILTIN_HELP_SPECS[name]
+  if (shared !== undefined && spec === BUILTIN_SPECS[name]) return shared
+  return helpSpec(spec)
+}
+
+/**
+ * Whether `spec` is the builtin `name`'s own grammar.
+ *
+ * The measured per-program rules (NO_LONG_OPTIONS,
+ * SOLE_ARGUMENT_LONG_OPTIONS) describe one real program, so a mount that
+ * registers its own command under a builtin's name must not inherit them:
+ * nothing refuses that registration, and `expr` is the sharp case, where the
+ * rule turns a declared `--mode=x` into an operand its handler then never
+ * sees.
+ *
+ * A name is not an identity, and neither is the declared spec on its own:
+ * the registry parses an enriched COPY (config.ts appends the two standard
+ * options), so both forms count and both are compared by object.
+ * `is_builtin_grammar` in builtin_specs/__init__.py is the twin.
+ */
+export function isBuiltinGrammar(name: string, spec: CommandSpec | null): boolean {
+  if (spec === null) return false
+  return spec === BUILTIN_SPECS[name] || spec === BUILTIN_HELP_SPECS[name]
+}

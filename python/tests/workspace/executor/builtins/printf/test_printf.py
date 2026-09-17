@@ -1,8 +1,11 @@
 import pytest
 
+from mirage.commands.spec import SPECS
+from mirage.commands.spec.help import render_help
 from mirage.shell.bytes import byte_char
 from mirage.shell.variable import VarAttr
 from mirage.workspace.executor.builtins.printf import handle_printf
+from mirage.workspace.executor.builtins.printf.printf import _HELP
 from mirage.workspace.session import Session
 from mirage.workspace.session.state import seed_var, set_attr
 
@@ -98,6 +101,85 @@ async def test_printf_matches_gnu(args, expected, code):
 @pytest.mark.asyncio
 async def test_printf_no_args_is_empty():
     assert await printf_bytes([]) == b""
+
+
+# bash's `internal_getopt` takes single letters, so it reports the first
+# character it does not know spelled with ONE dash: a long spelling
+# answers for its second dash and its own text never reaches the
+# message. Measured on bash 5.2.21, where the coreutils binary of the
+# same name is lenient and prints the word; mirage ships the builtin.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("args,bad", [(["--zzz"], "--"), (["--zzz=x"], "--"),
+                                      (["--hel"], "--"), (["--help=x"], "--"),
+                                      (["--version"], "--"), (["-Q"], "-Q")])
+async def test_printf_unknown_option_reports_the_first_character(args, bad):
+    _, io, node = await handle_printf(args, Session(session_id="s1"))
+    assert io.exit_code == 2
+    assert io.stderr == (
+        f"printf: {bad}: invalid option\n"
+        f"printf: usage: printf [-v var] format [arguments]\n").encode()
+    assert node.exit_code == 2
+
+
+# bash answers the EXACT word `--help` for every builtin ahead of
+# `internal_getopt`, writing the page to STDOUT and exiting 2, where
+# `--hel` and `--version` take the invalid-option path above (measured
+# on bash 5.2.37).
+@pytest.mark.asyncio
+async def test_printf_help_prints_the_page_to_stdout_and_exits_2():
+    out, io, node = await handle_printf(["--help"], Session(session_id="s1"))
+    assert io.exit_code == 2
+    assert not io.stderr
+    assert b"".join([chunk async for chunk in out]) == _HELP.encode()
+    assert node.exit_code == 2
+
+
+# The page is the BUILTIN's, so it is bash's own text and not the
+# spec-rendered one every other command answers --help with: the
+# spec-rendered page cannot mention `-v`, which is the builtin's option
+# alone and so is absent from CommandSpec by design. The first line is
+# bash's synopsis, not GNU's `Usage:` line.
+def test_printf_help_is_the_bash_builtin_page_not_the_spec_page():
+    assert _HELP.startswith("printf: printf [-v var] format [arguments]\n")
+    assert "  -v var\tassign the output to shell variable VAR" in _HELP
+    assert _HELP != render_help("printf", SPECS["printf"])
+    assert not _HELP.startswith("printf\n\nUsage:")
+
+
+# Byte for byte bash 5.2.37's page, minus the two conversions mirage
+# does not implement. Keeping the check explicit means adding `%Q` or
+# `%(fmt)T` to the engine without adding it to the page fails here.
+def test_printf_help_drops_only_the_conversions_mirage_lacks():
+    assert "      %b\texpand backslash escape sequences" in _HELP
+    assert "      %q\tquote the argument in a way" in _HELP
+    assert "%Q" not in _HELP
+    assert "%(fmt)T" not in _HELP
+    # Everything else bash writes is present, in bash's words.
+    assert _HELP.endswith("    Exit Status:\n"
+                          "    Returns success unless an invalid option is "
+                          "given or a write or assignment\n"
+                          "    error occurs.\n")
+
+
+@pytest.mark.asyncio
+async def test_printf_dash_dash_ends_the_options():
+    assert await printf_bytes(["--", "--zzz"]) == b"--zzz"
+
+
+# `--` ends the options and the FORMAT is still required, so the line is
+# the usage error rather than an empty one.
+@pytest.mark.asyncio
+async def test_printf_dash_dash_alone_is_the_usage_error():
+    _, io, _ = await handle_printf(["--"], Session(session_id="s1"))
+    assert io.exit_code == 2
+    assert io.stderr == b"printf: usage: printf [-v var] format [arguments]\n"
+
+
+# An option-shaped word in OPERAND position is a plain argument: bash
+# stops scanning at the first non-option word.
+@pytest.mark.asyncio
+async def test_printf_option_shaped_operand_is_an_argument():
+    assert await printf_bytes(["%s", "--zzz"]) == b"--zzz"
 
 
 @pytest.mark.asyncio

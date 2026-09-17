@@ -231,6 +231,132 @@
         "stdout_text": "",
         "stderr_text": "ls: invalid argument 'x\\001' for 'time style'\nValid arguments are:\n  - [posix-]full-iso\n  - [posix-]long-iso\n  - [posix-]iso\n  - [posix-]locale\n  - +FORMAT (e.g., +%H:%M) for a 'date'-style format\nTry 'ls --help' for more information.\n"
       }
+    },
+    {
+      "id": "ls_sort_prefix_resolves_none",
+      "cmd": "ls -1 --sort=non /data/b.txt /data/a.txt",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 0,
+        "stdout_text": "/data/b.txt\n/data/a.txt\n",
+        "stderr_text": ""
+      }
+    },
+    {
+      "id": "ls_sort_empty_value_is_ambiguous",
+      "cmd": "ls --sort= /data",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "ls: ambiguous argument '' for '--sort'\nValid arguments are:\n  - 'none'\n  - 'time'\n  - 'size'\n  - 'extension'\n  - 'version'\n  - 'width'\nTry 'ls --help' for more information.\n"
+      }
+    },
+    {
+      "id": "ls_sort_prefix_matching_is_case_sensitive",
+      "cmd": "ls --sort=NON /data",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "ls: invalid argument 'NON' for '--sort'\nValid arguments are:\n  - 'none'\n  - 'time'\n  - 'size'\n  - 'extension'\n  - 'version'\n  - 'width'\nTry 'ls --help' for more information.\n"
+      }
+    },
+    {
+      "id": "ls_time_prefix_spanning_two_values_is_ambiguous",
+      "cmd": "ls -l --time=c /data/a.txt",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "ls: ambiguous argument 'c' for '--time'\nValid arguments are:\n  - 'atime', 'access', 'use'\n  - 'ctime', 'status'\n  - 'mtime', 'modification'\n  - 'birth', 'creation'\nTry 'ls --help' for more information.\n"
+      }
+    },
+    {
+      "id": "ls_time_ambiguous_and_invalid_share_one_candidate_block",
+      "cmd": "ls -l --time=zzz /data/a.txt",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 1,
+        "stdout_text": "",
+        "stderr_text": "ls: invalid argument 'zzz' for '--time'\nValid arguments are:\n  - 'atime', 'access', 'use'\n  - 'ctime', 'status'\n  - 'mtime', 'modification'\n  - 'birth', 'creation'\nTry 'ls --help' for more information.\n"
+      }
+    },
+    {
+      "id": "ls_time_style_empty_value_is_ambiguous_and_exits_two",
+      "cmd": "ls -l --time-style= /data/a.txt",
+      "matrix": {
+        "python": [
+          "ram",
+          "disk",
+          "redis"
+        ],
+        "typescript": [
+          "ram",
+          "disk",
+          "redis"
+        ]
+      },
+      "expect": {
+        "exit": 2,
+        "stdout_text": "",
+        "stderr_text": "ls: ambiguous argument '' for 'time style'\nValid arguments are:\n  - [posix-]full-iso\n  - [posix-]long-iso\n  - [posix-]iso\n  - [posix-]locale\n  - +FORMAT (e.g., +%H:%M) for a 'date'-style format\nTry 'ls --help' for more information.\n"
+      }
     }
   ]
 }

@@ -26,9 +26,9 @@ from mirage.commands.cli.refusal import (CLAP_EXIT, clap_missing_operands,
                                          leaf_refusal)
 from mirage.commands.cli.types import CLIDoors, CLIInvocation, CLISpec
 from mirage.commands.cli.walk import owns_argv, walk
-from mirage.commands.config import HELP_OPTION
 from mirage.commands.errors import CommandTimeoutError, UsageError
 from mirage.commands.spec import flag_kwarg_name
+from mirage.commands.spec.constants import HELP_OPTION
 from mirage.commands.spec.help import render_help
 from mirage.commands.spec.types import FlagValue, Operand, UsageStyle
 from mirage.io import IOResult
@@ -47,10 +47,13 @@ from mirage.workspace.executor.command.run import exec_node
 from mirage.workspace.session import Session, env_snapshot
 from mirage.workspace.types import ExecutionNode
 
-# A textual rest operand is the spec's pass-through form: the parser
-# reads undeclared dashed tokens as operands instead of refusing them
-# (lenient_dash_operands), which is what a program parsing its own argv
-# needs. "str", not "path", so nothing is cwd-resolved or routed.
+# A textual rest operand is a CLI node's pass-through form: parsed under
+# unknown_is_operand, it takes the undeclared dashed tokens the node does
+# not refuse, which is what a program parsing its own argv needs. "str",
+# not "path", so nothing is cwd-resolved or routed. Only that parse
+# reads the rest kind this way: a GNU command's textual rest is a list
+# of operands, which is why basename has one and still refuses an option
+# it does not know.
 PASSTHROUGH_REST = Operand(type="str")
 
 
@@ -319,7 +322,8 @@ async def handle_cli(
                          parse_spec,
                          prog,
                          session.cwd,
-                         env=env_snapshot(session))
+                         env=env_snapshot(session),
+                         unknown_is_operand=True)
     if mirage_help and parsed.flag_kwargs.get("help") is True:
         help_text = render_help(prog, parse_spec, style=style).encode()
         return help_text, IOResult(), ExecutionNode(command=cmd_str,

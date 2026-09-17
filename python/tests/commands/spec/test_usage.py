@@ -1,3 +1,4 @@
+from mirage.commands.spec.argmatch import ArgmatchRefusal, argmatch
 from mirage.commands.spec.usage import (  # yapf: disable
     ambiguous_option_error, argmatch_error, argmatch_line,
     argmatch_valid_block, extra_operand_error, invalid_argument_error,
@@ -308,25 +309,77 @@ def test_invalid_argument_escapes_the_word_through_quote():
 def test_an_empty_argmatch_value_is_ambiguous_not_invalid():
     """GNU: `tee --output-error=` is `ambiguous argument ''`, exit 1.
 
-    gnulib's argmatch matches on a prefix and `""` is a prefix of every
-    candidate, so it comes back ambiguous. Measured the same way at
+    And it is ambiguous through the ordinary rule, not a special case:
+    the empty word is a prefix of all four candidates, which are four
+    different values, so `argmatch` refuses it as ambiguous and the
+    renderer is only told which wording to use. Measured the same way at
     `tail --follow=`, `sort --check=`, `wc --total=`,
     `uniq --all-repeated=`, `uniq --group=`, `ls --format=`,
     `ls -l --time-style=` and `cp --update=`.
     """
-    stderr, code = invalid_argument_error(
-        "tee", "--output-error", "",
-        ("warn", "warn-nopipe", "exit", "exit-nopipe"))
+    choices = ("warn", "warn-nopipe", "exit", "exit-nopipe")
+    refusal = argmatch("", choices)
+    assert refusal == ArgmatchRefusal("ambiguous")
+    stderr, code = invalid_argument_error("tee",
+                                          "--output-error",
+                                          "",
+                                          choices,
+                                          kind=refusal.kind)
     assert stderr.startswith(
         b"tee: ambiguous argument '' for '--output-error'\n")
     assert code == 1
 
 
-def test_argmatch_line_words_both_kinds_and_quotes_the_slot():
+def test_argmatch_line_words_the_kind_the_caller_matched():
+    """The wording is the caller's match result, not a re-derivation.
+
+    `argmatch_line` has no empty-string branch: the empty word above is
+    ambiguous because of what it matched, and a slot with one candidate
+    value accepts it instead, so only the caller holding the candidates
+    can tell.
+    """
     assert argmatch_line("ls", "time style",
                          "x") == ("ls: invalid argument 'x' for 'time style'")
-    assert argmatch_line("ls", "time style",
-                         "") == ("ls: ambiguous argument '' for 'time style'")
+    assert argmatch_line(
+        "ls", "time style", "x",
+        "ambiguous") == ("ls: ambiguous argument 'x' for 'time style'")
+    assert argmatch_line(
+        "ls", "time style", "",
+        "ambiguous") == ("ls: ambiguous argument '' for 'time style'")
+
+
+# Measured on coreutils 9.4 by stripping the first line from each pair of
+# refusals: `ls --quoting-style=l` vs `=zzz`, `ls -l --time=c` vs `=zzz`,
+# `ls --color=a` vs `=zzz`, `wc --total=a` vs `=zzz` and
+# `ls -l --time-style=l` vs `=zzz` all agree byte for byte below line 1.
+def test_ambiguous_and_invalid_differ_only_in_the_first_line():
+    choices = (("atime", "access", "use"), ("ctime", "status"))
+    ambiguous, amb_code = invalid_argument_error("du",
+                                                 "--time",
+                                                 "a",
+                                                 choices,
+                                                 kind="ambiguous")
+    invalid, inv_code = invalid_argument_error("du", "--time", "zzz", choices)
+    assert ambiguous.split(
+        b"\n", 1)[0] == (b"du: ambiguous argument 'a' for '--time'")
+    assert invalid.split(b"\n",
+                         1)[0] == (b"du: invalid argument 'zzz' for '--time'")
+    assert ambiguous.split(b"\n", 1)[1] == invalid.split(b"\n", 1)[1]
+    assert amb_code == inv_code == 1
+
+
+def test_argmatch_error_words_the_ambiguous_kind_too():
+    err = argmatch_error("sort",
+                         "--check",
+                         "", (("quiet", "silent"), ("diagnose-first", )),
+                         1,
+                         kind="ambiguous")
+    assert str(err) == ("sort: ambiguous argument '' for '--check'\n"
+                        "Valid arguments are:\n"
+                        "  - 'quiet', 'silent'\n"
+                        "  - 'diagnose-first'\n"
+                        "Try 'sort --help' for more information.")
+    assert err.exit_code == 1
 
 
 def test_argmatch_valid_block_joins_aliases_of_one_value():

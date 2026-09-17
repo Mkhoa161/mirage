@@ -74,3 +74,24 @@ def test_an_empty_check_is_ambiguous():
     assert str(
         exc.value).startswith("sort: ambiguous argument '' for '--check'\n")
     assert exc.value.exit_code == 1
+
+
+# gnulib's argmatch resolves an unambiguous prefix of one candidate, so
+# `sort --check=q`, `=s` and `=d` all exit 0 (measured, coreutils 9.4).
+# `quiet` and `silent` are one value, so its canonical word decides
+# whether the check is quiet.
+def test_check_accepts_an_unambiguous_prefix():
+    assert parse_flags({"check": "q"}).check_quiet
+    assert parse_flags({"check": "s"}).check_quiet
+    assert parse_flags({"check": "silent"}).check_quiet
+    assert parse_flags({"check": "quiet"}).check_quiet
+    assert not parse_flags({"check": "d"}).check_quiet
+    assert not parse_flags({"check": "diagnose"}).check_quiet
+    assert parse_flags({"check": "d"}).check
+
+
+def test_check_still_refuses_a_word_no_candidate_starts_with():
+    with pytest.raises(UsageError) as exc:
+        parse_flags({"check": "qu1et"})
+    assert str(
+        exc.value).startswith("sort: invalid argument 'qu1et' for '--check'\n")

@@ -31,8 +31,32 @@ async function stderrOf(flags: CommandOpts['flags']): Promise<[string, number]> 
   })
   if (result === null) throw new Error('uniq returned no result')
   const io = result[1]
-  return [DEC.decode(io.stderr as Uint8Array), io.exitCode]
+  // stderr is null on a run that was not refused, which the prefix cases
+  // below are.
+  return [DEC.decode((io.stderr ?? new Uint8Array()) as Uint8Array), io.exitCode]
 }
+
+// Neither option's candidates share a prefix that spans two values, so
+// `uniq --group=p` and `--all-repeated=n` both exit 0 (measured, coreutils
+// 9.4). Mirrors test_uniq.py.
+describe('uniq accepts an unambiguous prefix', () => {
+  it.each(['p', 'a', 'se', 'b'])('accepts --group=%s', async (value) => {
+    const [stderr, code] = await stderrOf({ group: value })
+    expect(stderr).toBe('')
+    expect(code).toBe(0)
+  })
+
+  it.each(['n', 'p', 'se'])('accepts --all-repeated=%s', async (value) => {
+    const [stderr, code] = await stderrOf({ all_repeated: value })
+    expect(stderr).toBe('')
+    expect(code).toBe(0)
+  })
+
+  it('still refuses an unmatched word', async () => {
+    const [stderr] = await stderrOf({ group: 'pp' })
+    expect(stderr.split('\n')[0]).toBe("uniq: invalid argument 'pp' for '--group'")
+  })
+})
 
 // Both of uniq's ARGMATCH refusals name the refused word through gnulib's
 // quote(), so a byte outside 0x20-0x7e comes back escaped rather than

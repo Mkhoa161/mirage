@@ -8,6 +8,7 @@ from mirage.commands.builtin.utils.lines import split_lines
 from mirage.commands.builtin.utils.stream import read_stdin_async
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import argmatch_error
@@ -45,8 +46,14 @@ class SortFlags:
 def parse_flags(flags: Mapping[str, FlagValue]) -> SortFlags:
     fl = FlagView(flags, spec=SPECS["sort"])
     raw_check = fl.raw("check")
-    if raw_check not in (None, True, "diagnose-first", "quiet", "silent"):
-        raise argmatch_error("sort", "--check", str(raw_check), CHECK_ARGS, 1)
+    check_word: str | None = None
+    if raw_check is not None and raw_check is not True:
+        word = str(raw_check)
+        match = argmatch(word, CHECK_ARGS)
+        if not isinstance(match, ArgmatchMatch):
+            raise argmatch_error("sort", "--check", word, CHECK_ARGS, 1,
+                                 match.kind)
+        check_word = match.word
     raw_output = fl.raw("output")
     output = raw_output if isinstance(raw_output, PathSpec) else None
     return SortFlags(
@@ -62,7 +69,9 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> SortFlags:
         ignore_blanks=fl.as_bool("ignore_leading_blanks"),
         stable=fl.as_bool("stable"),
         check=fl.as_bool("c") or raw_check is not None,
-        check_quiet=raw_check in ("quiet", "silent"),
+        # The canonical word of the ('quiet', 'silent') value is
+        # `quiet`, so `--check=s` and `--check=silent` both land here.
+        check_quiet=check_word == "quiet",
         dictionary=fl.as_bool("dictionary_order"),
         general_numeric=fl.as_bool("general_numeric_sort"),
         ignore_nonprinting=fl.as_bool("ignore_nonprinting"),

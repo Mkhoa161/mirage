@@ -137,7 +137,7 @@ def accepts_line(name: str, args: tuple[str, ...], items: list[str | PathSpec],
     spec = SPECS.get(name)
     if spec is None:
         return True
-    parsed = parse_command(spec, list(args), cwd)
+    parsed = parse_command(spec, list(args), cwd, name)
     if parsed.invalid_options or parsed.ambiguous_options:
         return False
     if name == "unlink":
@@ -197,7 +197,7 @@ async def strip_link_operands(
     force = False
     if name == "rm":
         force = bool(
-            parse_command(SPECS["rm"], list(args), cwd).flags.get("-f"))
+            parse_command(SPECS["rm"], list(args), cwd, "rm").flags.get("-f"))
     verb = "remove" if name == "rm" else "unlink"
     handled = 0
     errors: list[str] = []
@@ -325,7 +325,8 @@ async def prepare_mv(
     # are read off the parsed line rather than guessed from the parts,
     # since a path-shaped flag value is classified into a PathSpec there
     # exactly as an operand is.
-    fl = FlagView(parse_to_kwargs(parse_command(SPECS["mv"], list(args), cwd)),
+    fl = FlagView(parse_to_kwargs(
+        parse_command(SPECS["mv"], list(args), cwd, "mv")),
                   spec=SPECS["mv"])
     if fl.raw("target_directory") is not None:
         return items, None, None, None

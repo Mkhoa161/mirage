@@ -781,3 +781,29 @@ def test_update_lists_gnu_candidates(command, value, kind):
 def test_update_accepts_each_advertised_candidate(command, value):
     assert update_mode(command, FlagView({"update": value},
                                          spec=SPECS[command])) == value
+
+
+# Measured against GNU coreutils 9.7 on debian:stable-slim, LC_ALL=C.
+@pytest.mark.parametrize("command", ["cp", "mv"])
+@pytest.mark.parametrize("value,mode", [
+    ("a", "all"),
+    ("al", "all"),
+    ("o", "older"),
+    ("old", "older"),
+    ("none-", "none-fail"),
+])
+def test_update_accepts_an_unambiguous_prefix(command, value, mode):
+    assert update_mode(command, FlagView({"update": value},
+                                         spec=SPECS[command])) == mode
+
+
+# `n` is a prefix of `none` and of `none-fail`, which are two values, so
+# 9.7 refuses it rather than reading it as `none`.
+@pytest.mark.parametrize("command", ["cp", "mv"])
+@pytest.mark.parametrize("value", ["n", "no", "non"])
+def test_update_refuses_a_prefix_spanning_two_values(command, value):
+    with pytest.raises(UsageError) as exc:
+        update_mode(command, FlagView({"update": value}, spec=SPECS[command]))
+    assert str(exc.value).startswith(
+        f"{command}: ambiguous argument '{value}' for '--update'\n")
+    assert exc.value.exit_code == 1

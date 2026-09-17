@@ -12,6 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { helpPage, versionLine } from '../../commands/config.ts'
+import { HELP as PRINTF_HELP } from './builtins/printf/printf.ts'
+import { specOf } from '../../commands/spec/index.ts'
+import { renderHelp } from '../../commands/spec/help.ts'
 import { makeVar } from '../../shell/variable.ts'
 import { seedVar, sessionView, setAttr } from '../../workspace/session/state.ts'
 import { VarAttr } from '../../shell/variable.ts'
@@ -513,6 +517,89 @@ describe('handlePrintf', () => {
     expect((out as Uint8Array).byteLength).toBe(0)
   })
 
+  // bash's `internal_getopt` takes single letters, so it reports the first
+  // character it does not know spelled with ONE dash: a long spelling answers
+  // for its second dash and its own text never reaches the message. Measured
+  // on bash 5.2.21, where the coreutils binary of the same name is lenient
+  // and prints the word; mirage ships the builtin. Mirrors test_printf.py.
+  it.each([
+    [['--zzz'], '--'],
+    [['--zzz=x'], '--'],
+    [['--hel'], '--'],
+    [['--help=x'], '--'],
+    [['--version'], '--'],
+    [['-Q'], '-Q'],
+  ])('refuses %j as an invalid option', async (args, bad) => {
+    const [, io, node] = await handlePrintf(args, new Session({ sessionId: 'test' }))
+    expect(io.exitCode).toBe(2)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `printf: ${bad}: invalid option\nprintf: usage: printf [-v var] format [arguments]\n`,
+    )
+    expect(node.exitCode).toBe(2)
+  })
+
+  // bash answers the EXACT word `--help` for every builtin ahead of
+  // `internal_getopt`, writing the page to STDOUT and exiting 2, where `--hel`
+  // and `--version` take the invalid-option path above (measured on bash
+  // 5.2.37). Mirrors test_printf.py.
+  it('prints the help page to stdout and exits 2', async () => {
+    const [out, io, node] = await handlePrintf(['--help'], new Session({ sessionId: 'test' }))
+    expect(io.exitCode).toBe(2)
+    expect(io.stderr).toBeNull()
+    expect(await readBody(out)).toBe(PRINTF_HELP)
+    expect(node.exitCode).toBe(2)
+  })
+
+  // The page is the BUILTIN's, so it is bash's own text and not the
+  // spec-rendered one every other command answers --help with: the
+  // spec-rendered page cannot mention `-v`, which is the builtin's option
+  // alone and so is absent from CommandSpec by design. The first line is
+  // bash's synopsis, not GNU's `Usage:` line. Mirrors test_printf.py.
+  it('answers with the bash builtin page, not the spec page', () => {
+    expect(PRINTF_HELP.startsWith('printf: printf [-v var] format [arguments]\n')).toBe(true)
+    expect(PRINTF_HELP).toContain('  -v var\tassign the output to shell variable VAR')
+    expect(PRINTF_HELP).not.toBe(renderHelp('printf', specOf('printf')))
+    expect(PRINTF_HELP.startsWith('printf\n\nUsage:')).toBe(false)
+  })
+
+  // Byte for byte bash 5.2.37's page, minus the two conversions mirage does
+  // not implement. Keeping the check explicit means adding `%Q` or `%(fmt)T`
+  // to the engine without adding it to the page fails here. Mirrors
+  // test_printf.py.
+  it('drops only the conversions mirage lacks', () => {
+    expect(PRINTF_HELP).toContain('      %b\texpand backslash escape sequences')
+    expect(PRINTF_HELP).toContain('      %q\tquote the argument in a way')
+    expect(PRINTF_HELP).not.toContain('%Q')
+    expect(PRINTF_HELP).not.toContain('%(fmt)T')
+    expect(
+      PRINTF_HELP.endsWith(
+        '    Exit Status:\n' +
+          '    Returns success unless an invalid option is given or a write or assignment\n' +
+          '    error occurs.\n',
+      ),
+    ).toBe(true)
+  })
+
+  it('takes -- as the end of the options', async () => {
+    expect(await stdout(['--', '--zzz'])).toBe('--zzz')
+  })
+
+  // `--` ends the options and the FORMAT is still required, so the line is
+  // the usage error rather than an empty one.
+  it('refuses a bare -- with the usage error', async () => {
+    const [, io] = await handlePrintf(['--'], new Session({ sessionId: 'test' }))
+    expect(io.exitCode).toBe(2)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      'printf: usage: printf [-v var] format [arguments]\n',
+    )
+  })
+
+  // An option-shaped word in OPERAND position is a plain argument: bash stops
+  // scanning at the first non-option word.
+  it('keeps an option-shaped operand as an argument', async () => {
+    expect(await stdout(['%s', '--zzz'])).toBe('--zzz')
+  })
+
   it('reuses the format for excess args, drops excess when no conversion', async () => {
     expect(await stdout(['%s\n', 'c', 'a', 'b'])).toBe('c\na\nb\n')
     expect(await stdout(['hello\n', 'a', 'b', 'c'])).toBe('hello\n')
@@ -651,13 +738,131 @@ describe('handleSleep', () => {
   it('rejects invalid seconds', async () => {
     const [, io] = await handleSleep(['abc'])
     expect(io.exitCode).toBe(1)
-    expect(decode(io.stderr as Uint8Array)).toBe("sleep: invalid time interval 'abc'\n")
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: invalid time interval 'abc'\nTry 'sleep --help' for more information.\n",
+    )
   })
 
+  // Measured on coreutils 9.4: the missing operand is the same
+  // `usage (EXIT_FAILURE)` refusal the invalid interval is, so it carries the
+  // same Try-help line.
   it('rejects missing operand', async () => {
     const [, io] = await handleSleep([])
     expect(io.exitCode).toBe(1)
-    expect(decode(io.stderr as Uint8Array)).toBe('sleep: missing operand\n')
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: missing operand\nTry 'sleep --help' for more information.\n",
+    )
+  })
+
+  // sleep declares no options and reads the line through a real getopt_long
+  // loop, so a dash word it does not know is the option refusal and never the
+  // interval one, wherever it sits (measured on 9.4: `sleep --zzz 0` and
+  // `sleep 0 --zzz` both report the option). Mirrors test_sleep.py.
+  it.each([[['--zzz']], [['--zzz', '0']], [['0', '--zzz']]])(
+    'refuses %j as an unrecognized option',
+    async (args) => {
+      const [, io, node] = await handleSleep(args)
+      expect(io.exitCode).toBe(1)
+      expect(decode(io.stderr as Uint8Array)).toBe(
+        "sleep: unrecognized option '--zzz'\nTry 'sleep --help' for more information.\n",
+      )
+      expect(node.exitCode).toBe(1)
+    },
+  )
+
+  // sleep's only options are gnulib's two standard ones, and they go through a
+  // real getopt_long loop: measured on 9.7, `--help`, `--h`, `--version` and
+  // `--v` all print to stdout and exit 0, wherever on the line they sit, and
+  // the first dash word decides (`sleep --help --zzz` is help,
+  // `sleep --zzz --help` is the refusal). Mirrors test_sleep.py.
+  it.each([[['--help']], [['--h']], [['--hel']], [['0', '--help']], [['--help', '--zzz']]])(
+    'answers %j with the help page on stdout',
+    async (args) => {
+      const [out, io, node] = await handleSleep(args)
+      expect(io.exitCode).toBe(0)
+      expect(io.stderr).toBeNull()
+      expect(await readBody(out)).toBe(helpPage('sleep', specOf('sleep')))
+      expect(node.exitCode).toBe(0)
+    },
+  )
+
+  // The page has to document the grammar this arm implements, which the
+  // declared spec alone cannot: sleep is a shell builtin, so nothing injects
+  // the two standard options into specOf('sleep'), and rendering that spec
+  // produced a page naming neither of the options it was answering. Asserted
+  // on the CONTENT rather than against the renderer, because the version that
+  // asserted renderHelp(spec) was true of the page whatever the page said.
+  // Mirrors test_sleep.py.
+  it("documents both options under GNU's own synopsis", async () => {
+    const [out] = await handleSleep(['--help'])
+    const page = await readBody(out)
+    expect(page).toContain('Usage: sleep NUMBER[SUFFIX]...\n')
+    expect(page).not.toContain('[<text>...]')
+    for (const option of ['--help', '--version']) expect(page).toContain(`  ${option}`)
+  })
+
+  it.each([[['--version']], [['--v']], [['0', '--version']]])(
+    'answers %j with the version line on stdout',
+    async (args) => {
+      const [out, io] = await handleSleep(args)
+      expect(io.exitCode).toBe(0)
+      expect(await readBody(out)).toBe(versionLine('sleep'))
+    },
+  )
+
+  // getopt_long recognized the option and refused the VALUE, so the message
+  // names the canonical spelling and drops the value.
+  it.each([
+    ['--help=x', '--help'],
+    ['--hel=x', '--help'],
+    ['--version=x', '--version'],
+  ])('refuses %j for its value', async (arg, canonical) => {
+    const [, io] = await handleSleep([arg])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `sleep: option '${canonical}' doesn't allow an argument\n` +
+        "Try 'sleep --help' for more information.\n",
+    )
+  })
+
+  // An empty long name prefixes both standard options, and getopt_long quotes
+  // the WHOLE token in that refusal where the value one quotes the canonical
+  // spelling (measured on 9.7).
+  it('refuses an empty long name as ambiguous', async () => {
+    const [, io] = await handleSleep(['--=x'])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: option '--=x' is ambiguous; possibilities: '--help' '--version'\n" +
+        "Try 'sleep --help' for more information.\n",
+    )
+  })
+
+  // Prefix matching is byte-exact: a longer dash run and a different case both
+  // prefix nothing (measured on 9.7).
+  it.each(['---help', '--HELP'])('reports %s as unrecognized', async (arg) => {
+    const [, io] = await handleSleep([arg])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `sleep: unrecognized option '${arg}'\nTry 'sleep --help' for more information.\n`,
+    )
+  })
+
+  // `--` ends the scan, so the word after it is an interval, not a help
+  // request (measured on 9.7).
+  it('reads --help after the end of options as an interval', async () => {
+    const [, io] = await handleSleep(['--', '--help'])
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: invalid time interval '--help'\nTry 'sleep --help' for more information.\n",
+    )
+  })
+
+  // A short one names the offending character, GNU's other wording.
+  it('names the character of an unknown short option', async () => {
+    const [, io] = await handleSleep(['-Q'])
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      "sleep: invalid option -- 'Q'\nTry 'sleep --help' for more information.\n",
+    )
   })
 
   it.each(['-1', 'inf', 'Infinity', 'nan', 'NaN', '0x10', '1_0', '1e309', ''])(
@@ -665,9 +870,178 @@ describe('handleSleep', () => {
     async (raw) => {
       const [, io] = await handleSleep([raw])
       expect(io.exitCode).toBe(1)
-      expect(decode(io.stderr as Uint8Array)).toBe(`sleep: invalid time interval '${raw}'\n`)
+      expect(decode(io.stderr as Uint8Array)).toBe(
+        `sleep: invalid time interval '${raw}'\nTry 'sleep --help' for more information.\n`,
+      )
     },
   )
+
+  // `NUMBER[SUFFIX]...`: sleep takes any number of intervals and sleeps their
+  // sum (measured on 9.7: `sleep 0.3 0.3` takes 0.6s, `sleep 0 1` takes 1s).
+  // Reading only the first operand made `sleep -- 0 1` return at once.
+  // Mirrors test_sleep.py.
+  // The bound is 90 rather than 100 because the bug this guards against
+  // sleeps 50ms (only the first operand), so 90 still separates the two by
+  // 40ms, while a timer is allowed to land a millisecond early: CI measured
+  // 99ms for a 100ms wait, libuv scheduling against a cached loop time.
+  it('sums every operand', async () => {
+    const started = Date.now()
+    const [, io] = await handleSleep(['--', '0.05', '0.05'])
+    expect(io.exitCode).toBe(0)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(90)
+  })
+
+  // The page this arm prints heads with GNU's own
+  // `Usage: sleep NUMBER[SUFFIX]...`, and gnulib's `apply_suffix` is what that
+  // promises: one trailing character, multiplying by 1, 60, 3600 or 86400.
+  // Measured on coreutils 9.7 -- `sleep 0.3s` and `sleep 0.005m` each take
+  // 0.3s, `sleep 0.0001h` takes 0.36s -- and asserted on the elapsed time
+  // rather than on the parse, because reading the suffix and then dropping the
+  // multiplier would satisfy any check of the exit code alone. The 10ms of
+  // slack is the sum test's, for a timer that lands early. Mirrors
+  // test_sleep.py.
+  it.each([
+    ['0.3s', 300],
+    ['0.005m', 300],
+    ['0.0001h', 360],
+    ['0.0000035d', 302],
+  ])('scales %s by the advertised suffix', async (raw, ms) => {
+    const started = Date.now()
+    const [, io] = await handleSleep([raw])
+    expect(io.exitCode).toBe(0)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(ms - 10)
+  })
+
+  // A suffixed operand sums with a bare one like any other.
+  it('sums suffixed and bare operands', async () => {
+    const started = Date.now()
+    const [, io] = await handleSleep(['0.05', '0.05s'])
+    expect(io.exitCode).toBe(0)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(90)
+  })
+
+  // gnulib allows exactly ONE character after the number and switches on it in
+  // lowercase, so everything here is `invalid time interval` on 9.7: an
+  // uppercase suffix, two of them, a suffix with anything after it, a letter
+  // that is not one, and a bare suffix with no number. Mirrors test_sleep.py.
+  it.each(['0S', '0M', '0H', '0D', '0.5S', '0ss', '0sx', '0n', '0b', 's', '1_0s', '0 s'])(
+    'refuses %j, a suffix gnulib does not take',
+    async (raw) => {
+      const [, io] = await handleSleep(['--', raw])
+      expect(io.exitCode).toBe(1)
+      expect(decode(io.stderr as Uint8Array)).toBe(
+        `sleep: invalid time interval '${raw}'\nTry 'sleep --help' for more information.\n`,
+      )
+    },
+  )
+
+  // Every operand is validated and EVERY bad one is named: coreutils calls
+  // `error()` per offending operand and only then `usage (EXIT_FAILURE)`, so
+  // the lines come in line order, a repeat repeats, and one Try-help line
+  // closes them (measured on 9.7: `sleep 1x 2y` is three lines, `sleep 1x 1x`
+  // names 1x twice, `sleep 1x 0 2y` skips the good one). Reading only the
+  // first operand made `sleep -- 0 bogus` exit 0. Mirrors test_sleep.py.
+  it.each([
+    [['--', '0', 'bogus'], ['bogus']],
+    [['0', 'bogus'], ['bogus']],
+    [['bogus', '0'], ['bogus']],
+    [
+      ['--', '0.2', 'x', 'y'],
+      ['x', 'y'],
+    ],
+    [
+      ['1x', '1x'],
+      ['1x', '1x'],
+    ],
+    [
+      ['1x', '0', '2y'],
+      ['1x', '2y'],
+    ],
+  ])('refuses %j naming every bad operand', async (args, named) => {
+    const [, io] = await handleSleep(args)
+    expect(io.exitCode).toBe(1)
+    const lines = named.map((w) => `sleep: invalid time interval '${w}'\n`).join('')
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `${lines}Try 'sleep --help' for more information.\n`,
+    )
+  })
+
+  // The SUM is what gets slept, so an operand that carries it past the
+  // representable range is refused like one that is not finite on its own.
+  // Each 1e308 passes the per-operand check, and the total overflowed to
+  // Infinity, which node's setTimeout clamps to 1ms (returning at once, where
+  // python's asyncio.sleep waits forever) -- both halves of the hang that
+  // SLEEP_INTERVAL's `inf` divergence exists to prevent. GNU sleeps forever
+  // here too (measured on 9.7, as it does on `sleep inf`); refusing is the
+  // same deliberate divergence. The operand that overflowed is the one named,
+  // so a third one is a second diagnostic. Mirrors test_sleep.py.
+  it.each([
+    [['1e308', '1e308'], ['1e308']],
+    [
+      ['1e308', '1e308', '1e308'],
+      ['1e308', '1e308'],
+    ],
+  ])('refuses %j, a sum that overflows', async (args, named) => {
+    const [, io] = await handleSleep(args)
+    expect(io.exitCode).toBe(1)
+    const lines = named.map((w) => `sleep: invalid time interval '${w}'\n`).join('')
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `${lines}Try 'sleep --help' for more information.\n`,
+    )
+  })
+
+  // A total that stays representable is still slept, however large: only the
+  // overflow is refused, not a big number. node's setTimeout holds a 32-bit
+  // delay and clamps anything longer to 1ms, so `sleep 1e308` returned at once
+  // where python waited; `sleep()` (workspace/abort.ts) re-arms instead.
+  // Mirrors test_sleep.py.
+  //
+  // The assertion is that the wait has NOT settled, never on the elapsed time:
+  // an `elapsed >= 150` line here would only be asserting that this test's own
+  // wait lasted as long as it asked for, which a timer is allowed to undershoot
+  // (CI measured 149). The signal it stands in for has a 75x margin instead,
+  // since the clamped version settled in 1-2ms.
+  it('keeps a large but representable total', async () => {
+    const ac = new AbortController()
+    let settled = false
+    const done = handleSleep(['1e308'], ac.signal).then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
+    await new Promise((r) => setTimeout(r, 150))
+    expect(settled).toBe(false)
+    // Cancel rather than leaving a re-armed timer behind for the worker.
+    ac.abort()
+    await done
+  })
+
+  // The check runs over every operand before any of them is slept, so a bad
+  // one does not cost the wait its predecessors would have taken (measured on
+  // 9.7: `sleep 0.2 x 0.2` exits 1 immediately). Mirrors test_sleep.py.
+  it('checks every operand before sleeping any', async () => {
+    const started = Date.now()
+    const [, io] = await handleSleep(['0.3', 'bogus'])
+    expect(io.exitCode).toBe(1)
+    expect(Date.now() - started).toBeLessThan(200)
+  })
+
+  // The operand is named through gnulib's `quote()`, like every other
+  // coreutils operand diagnostic: measured on 9.4, `sleep -- é` is
+  // `sleep: invalid time interval '\303\251'`. Mirrors test_sleep.py.
+  it.each([
+    ['xé', 'x\\303\\251'],
+    ['x\r', 'x\\r'],
+    ['--zzz=é', '--zzz=\\303\\251'],
+  ])('quotes %j in the sleep interval clause', async (raw, escaped) => {
+    const [, io] = await handleSleep(['--', raw])
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `sleep: invalid time interval '${escaped}'\nTry 'sleep --help' for more information.\n`,
+    )
+  })
 
   it.each(['0', '0.', '.01', '+0.01', '1e-3'])('accepts %j and exits 0', async (raw) => {
     const [, io] = await handleSleep([raw])

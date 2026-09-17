@@ -31,7 +31,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: invalid time interval 'abc'\n"
+        "stderr": "sleep: invalid time interval 'abc'\nTry 'sleep --help' for more information.\n"
       }
     },
     {
@@ -65,7 +65,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: missing operand\n"
+        "stderr": "sleep: missing operand\nTry 'sleep --help' for more information.\n"
       }
     },
     {
@@ -99,7 +99,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: invalid time interval '-1'\n"
+        "stderr": "sleep: invalid time interval '-1'\nTry 'sleep --help' for more information.\n"
       },
       "flags": [
         "1"
@@ -136,7 +136,143 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "sleep: invalid time interval 'Infinity'\n"
+        "stderr": "sleep: invalid time interval 'Infinity'\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_unknown_suffix",
+      "seq": 991099,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep 1x",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '1x'\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_uppercase_suffix",
+      "seq": 991100,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep 1S",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '1S'\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_names_every_bad_operand",
+      "seq": 991104,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep 1x 0 2y",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '1x'\nsleep: invalid time interval '2y'\nTry 'sleep --help' for more information.\n"
+      }
+    },
+    {
+      "id": "sleep_sum_overflow_is_refused",
+      "seq": 991105,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "sleep 1e308 1e308",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "sleep: invalid time interval '1e308'\nTry 'sleep --help' for more information.\n"
       }
     }
   ]

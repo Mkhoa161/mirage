@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { PathSpec, type ReaddirFn } from '../../../types.ts'
+import type { UsageError } from '../../errors.ts'
 import { backupControl, backupTarget, parentPath, siblingPath } from './backup.ts'
 
 function spec(path: string): PathSpec {
@@ -45,6 +46,40 @@ describe('backupControl', () => {
     expect(backupControl('cp', '', null)).toBe('existing')
     // -S SUFFIX alone enables backups (GNU 9.7).
     expect(backupControl('cp', undefined, '.bak')).toBe('existing')
+  })
+
+  // gnulib resolves an unambiguous prefix, and each control's canonical
+  // word IS the control, so `--backup=e` is `existing` and `=t` is
+  // `numbered`. Measured on coreutils 9.4: `cp --backup=e`, `=s` and `=t`
+  // all exit 0. Mirrors test_backup.py.
+  it('accepts an unambiguous prefix', () => {
+    expect(backupControl('cp', 'e', null)).toBe('existing')
+    expect(backupControl('cp', 's', null)).toBe('simple')
+    expect(backupControl('cp', 't', null)).toBe('numbered')
+    expect(backupControl('cp', 'nu', null)).toBe('numbered')
+    expect(backupControl('cp', 'of', null)).toBe('none')
+  })
+
+  // `cp --backup=n` starts none, never, nil and numbered, which are four
+  // different controls, so gnulib refuses it rather than picking one
+  // (measured: `ambiguous argument 'n'`, exit 1).
+  it('rejects a prefix spanning two values as ambiguous', () => {
+    let message = ''
+    let code = 0
+    try {
+      backupControl('cp', 'n', null)
+    } catch (err) {
+      message = (err as Error).message
+      code = (err as UsageError).exitCode
+    }
+    expect(message).toBe(
+      "cp: ambiguous argument 'n' for 'backup type'\n" +
+        'Valid arguments are:\n' +
+        "  - 'none', 'off'\n  - 'simple', 'never'\n" +
+        "  - 'existing', 'nil'\n  - 'numbered', 't'\n" +
+        "Try 'cp --help' for more information.",
+    )
+    expect(code).toBe(1)
   })
 
   it('rejects an invalid control with the GNU listing', () => {

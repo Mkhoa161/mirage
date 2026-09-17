@@ -14,6 +14,7 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.quote import quote_text
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import argmatch_error
@@ -69,8 +70,13 @@ def _follow_flags(fl: FlagView) -> tuple[bool, bool, bool]:
         fl (FlagView): the tail flag view.
     """
     raw = fl.raw("follow")
-    if isinstance(raw, str) and raw not in FOLLOW_ARGS:
-        raise argmatch_error("tail", "--follow", raw, FOLLOW_ARGS)
+    how: str | None = None
+    if isinstance(raw, str):
+        match = argmatch(raw, FOLLOW_ARGS)
+        if not isinstance(match, ArgmatchMatch):
+            raise argmatch_error("tail", "--follow", raw, FOLLOW_ARGS, None,
+                                 match.kind)
+        how = match.word
     # -F is --follow=name --retry. The mode is whichever of -f/--follow
     # and -F came last, GNU's own order (`-F --follow=descriptor` follows
     # the descriptor), while -F's --retry half stays on either way.
@@ -81,7 +87,7 @@ def _follow_flags(fl: FlagView) -> tuple[bool, bool, bool]:
     ]
     if not typed:
         return False, False, fl.as_bool("retry")
-    by_name = raw == "name" if typed[-1] == "follow" else True
+    by_name = how == "name" if typed[-1] == "follow" else True
     return True, by_name, fl.as_bool("retry") or "F" in typed
 
 

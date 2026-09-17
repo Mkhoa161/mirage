@@ -11,6 +11,7 @@ from mirage.commands.builtin.utils.stream import resolve_source
 from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import argmatch_error
@@ -42,9 +43,12 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> WCFlags:
     # of every candidate and answers `ambiguous argument ''` (exit 1).
     # The old `or "auto"` took it as `auto` and exited 0, which was also
     # the one py/ts split here -- TypeScript refused it.
-    total = "auto" if raw_total is None else raw_total
-    if total not in TOTAL_ARGS:
-        raise argmatch_error("wc", "--total", total, TOTAL_ARGS)
+    word = "auto" if raw_total is None else raw_total
+    match = argmatch(word, TOTAL_ARGS)
+    if not isinstance(match, ArgmatchMatch):
+        raise argmatch_error("wc", "--total", word, TOTAL_ARGS, None,
+                             match.kind)
+    total = match.word
     return WCFlags(
         lines=fl.as_bool("lines"),
         words=fl.as_bool("words"),

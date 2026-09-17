@@ -178,6 +178,71 @@ describe('optionError scan order', () => {
   })
 })
 
+// The spec-driven ARGMATCH path, end to end through the executor's
+// renderer. Measured on coreutils 9.4: `tee --output-error=warn-` exits 0,
+// `=w` is `ambiguous argument 'w'` and `=zzz` is `invalid argument 'zzz'`,
+// over one shared candidate block. Mirrors test_flags.py.
+describe('optionError — the two ARGMATCH refusals', () => {
+  it('accepts an unambiguous prefix', () => {
+    const parsed = parseFlags(['--output-error=warn-', '/f'], specOf('tee'), 'tee', '/')
+    expect(optionError('tee', parsed)).toBeNull()
+    expect(parsed.flagKwargs.output_error).toBe('warn-nopipe')
+  })
+
+  it('words an ambiguous value as GNU does', () => {
+    const parsed = parseFlags(['--output-error=w', '/f'], specOf('tee'), 'tee', '/')
+    const refusal = optionError('tee', parsed)
+    expect(refusal).not.toBeNull()
+    expect(new TextDecoder().decode(refusal?.[0])).toBe(
+      "tee: ambiguous argument 'w' for '--output-error'\n" +
+        'Valid arguments are:\n' +
+        "  - 'warn'\n  - 'warn-nopipe'\n  - 'exit'\n  - 'exit-nopipe'\n" +
+        "Try 'tee --help' for more information.\n",
+    )
+    expect(refusal?.[1]).toBe(1)
+  })
+
+  // The two wordings are one report, so the FIRST refused value on the LINE
+  // wins whichever wording it carries. Ordering them by which list they
+  // landed in would make a later invalid value outrank an earlier ambiguous
+  // one, which no other report here does. numfmt declares both ARGMATCH
+  // tables, so one line can carry one of each. Mirrors test_flags.py.
+  it('follows line order between the two wordings', () => {
+    const dec = new TextDecoder()
+    const parsed = parseFlags(['--from=ie', '--to=bogus', '1'], specOf('numfmt'), 'numfmt', '/')
+    const refusal = optionError('numfmt', parsed)
+    expect(refusal).not.toBeNull()
+    expect(
+      dec.decode(refusal?.[0]).startsWith("numfmt: ambiguous argument 'ie' for '--from'\n"),
+    ).toBe(true)
+    const other = optionError(
+      'numfmt',
+      parseFlags(['--from=bogus', '--to=ie', '1'], specOf('numfmt'), 'numfmt', '/'),
+    )
+    expect(other).not.toBeNull()
+    expect(
+      dec.decode(other?.[0]).startsWith("numfmt: invalid argument 'bogus' for '--from'\n"),
+    ).toBe(true)
+  })
+
+  it('differs from the invalid refusal only in the first line', () => {
+    const dec = new TextDecoder()
+    const ambiguous = optionError(
+      'tee',
+      parseFlags(['--output-error=w', '/f'], specOf('tee'), 'tee', '/'),
+    )
+    const invalid = optionError(
+      'tee',
+      parseFlags(['--output-error=zzz', '/f'], specOf('tee'), 'tee', '/'),
+    )
+    const ambText = dec.decode(ambiguous?.[0])
+    const invText = dec.decode(invalid?.[0])
+    expect(ambText.slice(ambText.indexOf('\n'))).toBe(invText.slice(invText.indexOf('\n')))
+    expect(ambiguous?.[1]).toBe(1)
+    expect(invalid?.[1]).toBe(1)
+  })
+})
+
 describe("optionError — tar's old option style", () => {
   it('reports a missing cluster argument ahead of an undeclared letter', () => {
     // GNU tar counts the cluster's argument needs before argp validates a

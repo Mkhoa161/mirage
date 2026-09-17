@@ -747,6 +747,31 @@ describe('tail --follow= is ambiguous, not invalid', () => {
   })
 })
 
+// `tail --follow=d` and `--follow=n` both exit 0 (measured, coreutils 9.4):
+// the two candidates share no prefix, so one letter is enough. Mirrors
+// test_tail.py.
+describe('tail --follow accepts an unambiguous prefix', () => {
+  it.each([
+    ['d', false],
+    ['de', false],
+    ['descriptor', false],
+    ['n', true],
+    ['na', true],
+    ['name', true],
+  ])('resolves --follow=%s', (value, byName) => {
+    const answer = followFlags(new FlagView({ follow: value }, specOf('tail')))
+    expect(typeof answer === 'string' ? answer : answer.follow).toBe(true)
+    expect(typeof answer === 'string' ? answer : answer.byName).toBe(byName)
+  })
+
+  it('still refuses an unmatched word', () => {
+    const answer = followFlags(new FlagView({ follow: 'nn' }, specOf('tail')))
+    expect(typeof answer === 'string' ? answer.split('\n')[0] : answer).toBe(
+      "tail: invalid argument 'nn' for '--follow'",
+    )
+  })
+})
+
 // `-s` is `xstrtod` plus `0 <= s`, and the two halves answer separately.
 // Every row measured on GNU coreutils 9.4 with a raw `bytes` argv
 // (`tail -s <v> f`). Mirrors test_tail.py.

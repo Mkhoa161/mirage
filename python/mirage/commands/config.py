@@ -20,10 +20,16 @@ from typing import Any, Callable, Protocol, cast
 from mirage.accessor.base import Accessor
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.commands.constants import ROOT_CWD
-from mirage.commands.spec import SPECS, CommandSpec
+from mirage.commands.spec import CommandSpec
+from mirage.commands.spec.builtin_specs import (HELP_OPTION, VERSION_OPTION,
+                                                is_builtin_grammar,
+                                                registered_spec)
+from mirage.commands.spec.constants import (STANDARD_AFTER_SCAN,
+                                            STANDARD_BEFORE_SCAN)
 from mirage.commands.spec.help import render_help
+from mirage.commands.spec.parser import ParsedArgs, parse_command
 from mirage.commands.spec.synopsis import SYNOPSES
-from mirage.commands.spec.types import FlagValue, Option
+from mirage.commands.spec.types import FlagValue
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource, IOResult
 from mirage.ops.types import NamespaceView, ReaddirPath, SessionView, StatPath
@@ -201,20 +207,7 @@ class ProvisionFn(Protocol):
         ...
 
 
-HELP_OPTION = Option(
-    long="--help",
-    type="bool",
-    description="Show this help and exit",
-)
-
-_VERSION_OPTION = Option(
-    long="--version",
-    type="bool",
-    description="Show version information and exit",
-)
-
-
-def _version_line(name: str) -> bytes:
+def version_line(name: str) -> bytes:
     """Render the GNU-style version line for a command.
 
     Args:
@@ -229,29 +222,209 @@ def has_injected_version(spec: CommandSpec | None) -> bool:
     Args:
         spec (CommandSpec | None): the registered command spec.
     """
-    return spec is not None and any(o is _VERSION_OPTION for o in spec.options)
+    return spec is not None and any(o is VERSION_OPTION for o in spec.options)
 
 
-def version_request(name: str, spec: CommandSpec | None,
-                    argv: list[str]) -> bytes | None:
-    """Version output when argv asks a command for the injected --version.
+# gnulib's two standard options, in the order ``help_spec`` injects
+# them. Both are answered INSIDE the getopt loop, so the one the scan
+# reaches FIRST decides the line: measured on coreutils 9.7,
+# `cat --help --version` prints the help page and `cat --version --help`
+# prints the version line.
+_STANDARD_DESTS = ("--help", "--version")
 
-    None when the command declares its own --version, when the flag is
-    absent, or when it sits after the `--` end-of-options marker.
+
+def has_injected_help(spec: CommandSpec | None) -> bool:
+    """Whether the wrapper supplies this spec's help response.
+
+    Args:
+        spec (CommandSpec | None): the registered command spec.
+    """
+    return spec is not None and any(o is HELP_OPTION for o in spec.options)
+
+
+def _scan(name: str, spec: CommandSpec, words: list[str]) -> ParsedArgs:
+    """Read these words the way the line is read downstream.
+
+    The same parse, so the two agree by construction rather than by a
+    second reading of the grammar. Only the option reports and the typed
+    dests are consumed, which is why a cwd the caller does not have is
+    not one it needs: nothing here looks at a resolved path.
+
+    Args:
+        name (str): command name as invoked, for the per-program rules
+            the grammar cannot state.
+        spec (CommandSpec): the registered spec.
+        words (list[str]): the words to read.
+    """
+    return parse_command(spec, words, ROOT_CWD.virtual, name)
+
+
+def _scan_refuses(parsed: ParsedArgs) -> bool:
+    """Whether the scan refused an option in the words it read.
+
+    ``missing_required_options`` is deliberately not read: the words are
+    a PREFIX of the line for every command but the two that defer, so an
+    option declared later has not been reached yet.
+
+    Args:
+        parsed (ParsedArgs): one ``_scan`` result.
+    """
+    return bool(parsed.option_error_kinds
+                or parsed.old_option_needs_value is not None)
+
+
+def _standard_index(name: str, spec: CommandSpec, argv: list[str],
+                    dest: str) -> int | None:
+    """Where the parser reads one injected standard option, if anywhere.
+
+    Deliberately not a raw scan over argv. A word that only looks like
+    the option can be an earlier option's value, and a lookalike stops
+    at the wrong one: `grep -e -- --version` hands `--` to -e, so the
+    line is not ended and the `--version` after it really is the option,
+    while `sort -o --version --version` hands the first spelling to -o's
+    output file and only the second is read. Reading each prefix in turn
+    puts the answer where the grammar already lives, so `--`, a declared
+    remainder and a consumed value all follow from the parser rather
+    than from three rules restated here. Adding words never un-types a
+    dest, so the first prefix that carries it is the position.
+
+    Args:
+        name (str): command name as invoked.
+        spec (CommandSpec): the registered spec.
+        argv (list[str]): the words after the command name.
+        dest (str): canonical long spelling to locate.
+    """
+    for index in range(len(argv)):
+        if dest in _scan(name, spec, argv[:index + 1]).typed_dests:
+            return index
+    return None
+
+
+def _standard_output(name: str, spec: CommandSpec, dest: str) -> bytes:
+    """What one standard option answers with.
+
+    Args:
+        name (str): command name as invoked.
+        spec (CommandSpec): the registered spec; ``help_page`` renders
+            the same page from it as from the declared one.
+        dest (str): canonical long spelling, one of _STANDARD_DESTS.
+    """
+    return help_page(name, spec) if dest == "--help" else version_line(name)
+
+
+def standard_request(name: str, spec: CommandSpec | None,
+                     argv: list[str]) -> bytes | None:
+    """Output when argv asks a command for an injected standard option.
+
+    None when the command declares that option itself, when the parser
+    does not read any word as one, or when an option the scan reads
+    first is one the parser refuses.
+
+    This is the one door both standard options come through, and it runs
+    ahead of routing because neither answer belongs to a backend: `rm
+    --version /ro/x` would otherwise meet the read-only refusal, and
+    `mv --help /ram/a /disk/b` would otherwise reach the cross-mount
+    relay, which bypasses the registered wrapper and MOVED THE FILE. The
+    two are one mechanism rather than two because GNU answers both from
+    the same long_options table, so they are ordered against each other
+    by scan position like any other pair of options: measured on
+    coreutils 9.7, `cat --help --version` is the help page and
+    `cat --version --help` is the version line.
+
+    Three rules about position, all of them GNU's and none of them
+    restated here:
+
+    Which words the scan has read when it answers, because a standard
+    option is an option like any other and an error the scan meets first
+    is what GNU reports: `cat --bogus --vers` is `unrecognized option
+    '--bogus'` (exit 1) and `grep --bogus --vers` is grep's own (exit
+    2), where `cat --version --bogus` prints the version and exits 0.
+    So the words ahead of the option are re-read through the parser and
+    a refusal among them declines the answer. Two families answer
+    elsewhere and carry their own tables: STANDARD_AFTER_SCAN finishes
+    the whole line first, STANDARD_BEFORE_SCAN answers ahead of every
+    option. Both are gated on the spec being the builtin's own grammar,
+    since a mount may register a command under one of those names.
+
+    Whether that word is the option at all, which only the parser can
+    say: a declared remainder slot is argparse's REMAINDER, so the first
+    operand ends option parsing and every later word belongs to the
+    program being run; `--` ends it too; and a value-taking option
+    swallows the word after it. Asking the parser covers all three.
+
+    And gnulib's ``parse_long_options``, which reads argv[1] only when
+    it is the whole line (``argc == 2``), so for a
+    SOLE_ARGUMENT_LONG_OPTIONS command the option is an ordinary operand
+    as soon as another word joins it (`expr --version` is the version,
+    `expr --version x` is `expr: syntax error: unexpected argument
+    'x'`). The parser already applies that window, so this reads its
+    answer rather than carrying a second copy of the rule.
 
     Args:
         name (str): command name as invoked.
         spec (CommandSpec | None): the command's registered spec.
         argv (list[str]): the words after the command name.
     """
-    if not has_injected_version(spec):
+    if spec is None:
         return None
-    for arg in argv:
-        if arg == "--":
-            return None
-        if arg == "--version":
-            return _version_line(name)
-    return None
+    injected = {
+        "--help": has_injected_help(spec),
+        "--version": has_injected_version(spec),
+    }
+    if not any(injected.values()):
+        return None
+    whole = _scan(name, spec, argv)
+    found: list[tuple[int, str]] = []
+    for dest in _STANDARD_DESTS:
+        if not injected[dest] or dest not in whole.typed_dests:
+            continue
+        index = _standard_index(name, spec, argv, dest)
+        if index is not None:
+            found.append((index, dest))
+    if not found:
+        return None
+    # The one the scan reaches first decides; no two options share a
+    # word, so the positions cannot tie.
+    index, dest = min(found)
+    builtin = is_builtin_grammar(name, spec)
+    if builtin and name in STANDARD_BEFORE_SCAN:
+        return _standard_output(name, spec, dest)
+    # Everything ahead of the option has to scan cleanly: a refusal
+    # among those words is what GNU reports instead of the answer.
+    if _scan_refuses(_scan(name, spec, argv[:index])):
+        return None
+    # A program that answers only after the whole scan needs the rest of
+    # the line to be clean as well.
+    if builtin and name in STANDARD_AFTER_SCAN and _scan_refuses(whole):
+        return None
+    return _standard_output(name, spec, dest)
+
+
+def help_page(name: str, spec: CommandSpec) -> bytes:
+    """One command's ``--help`` page.
+
+    The page is rendered from ``help_spec``, not from the declared spec,
+    so it documents the two options every command answers rather than
+    only the ones its author wrote down. Only the builtin itself gets
+    GNU's own synopsis line: a registered command that borrowed the name
+    keeps the line its own spec synthesizes, which is why this asks for
+    the spec OBJECT rather than trusting the name.
+
+    Either form of the builtin's own grammar answers the same page: the
+    declared spec the wrapper holds, and the one enriched copy the
+    registry parses, which is what a caller reaching this from the
+    routing door has. That is exactly what ``is_builtin_grammar``
+    settles, and asking it rather than ``SPECS[name] is spec`` is what
+    keeps a cross-mount `--help` from losing GNU's synopsis line.
+
+    Args:
+        name (str): command name as invoked.
+        spec (CommandSpec): the command's grammar, declared or as
+            registered.
+    """
+    synopsis = SYNOPSES.get(name) if is_builtin_grammar(name, spec) else None
+    return render_help(name, registered_spec(name, spec),
+                       synopsis=synopsis).encode()
 
 
 def _with_help_support(
@@ -263,20 +436,10 @@ def _with_help_support(
     prints to stdout, and exits 0 without running the command body.
     A command declaring its own --version handles that flag itself.
     """
-    extras: list[Option] = []
-    if not any(o.long == "--help" for o in spec.options):
-        extras.append(HELP_OPTION)
     has_version = any(o.long == "--version" for o in spec.options)
-    if not has_version:
-        extras.append(_VERSION_OPTION)
-    new_spec = (spec if not extras else replace(
-        spec, options=spec.options + tuple(extras)))
-    # Only the builtin itself answers --help with GNU's synopsis; a
-    # registered command that borrowed the name keeps the line its own
-    # spec synthesizes.
-    synopsis = SYNOPSES.get(name) if SPECS.get(name) is spec else None
-    help_text = render_help(name, new_spec, synopsis=synopsis).encode()
-    version_text = _version_line(name)
+    new_spec = registered_spec(name, spec)
+    help_text = help_page(name, spec)
+    version_text = version_line(name)
 
     @functools.wraps(fn)
     async def wrapper(accessor: Accessor, paths: list[PathSpec],

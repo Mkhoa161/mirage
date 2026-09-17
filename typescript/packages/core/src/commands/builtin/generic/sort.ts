@@ -27,6 +27,7 @@ import {
 import { splitLines } from '../utils/lines.ts'
 import { readStdinAsync } from '../utils/stream.ts'
 import { argmatchError } from '../../spec/usage.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 import { FlagView } from '../../spec/flag_view.ts'
 import { type FlagValue } from '../../spec/types.ts'
 import { specOf } from '../../spec/builtins.ts'
@@ -48,14 +49,14 @@ const CHECK_ARGS: readonly (readonly string[])[] = [['quiet', 'silent'], ['diagn
 function parseFlags(bag: Record<string, FlagValue>): SortFlags | string {
   const fl = new FlagView(bag, specOf('sort'))
   const rawCheck = fl.raw('check')
-  if (
-    rawCheck !== undefined &&
-    rawCheck !== true &&
-    rawCheck !== 'diagnose-first' &&
-    rawCheck !== 'quiet' &&
-    rawCheck !== 'silent'
-  ) {
-    return argmatchError('sort', '--check', String(rawCheck), CHECK_ARGS, 1).message + '\n'
+  let checkWord: string | null = null
+  if (rawCheck !== undefined && rawCheck !== true) {
+    const word = String(rawCheck)
+    const match = argmatch(word, CHECK_ARGS)
+    if (!match.matched) {
+      return argmatchError('sort', '--check', word, CHECK_ARGS, 1, match.kind).message + '\n'
+    }
+    checkWord = match.word
   }
   return {
     reverse: fl.asBool('reverse'),
@@ -73,7 +74,9 @@ function parseFlags(bag: Record<string, FlagValue>): SortFlags | string {
     dictionary: fl.asBool('dictionary_order'),
     ignoreNonprinting: fl.asBool('ignore_nonprinting'),
     check: fl.asBool('c') || rawCheck !== undefined,
-    checkQuiet: rawCheck === 'quiet' || rawCheck === 'silent',
+    // The canonical word of the ['quiet', 'silent'] value is `quiet`, so
+    // `--check=s` and `--check=silent` both land here.
+    checkQuiet: checkWord === 'quiet',
     output: fl.asStr('output') ?? null,
     zeroTerminated: fl.asBool('zero_terminated'),
   }

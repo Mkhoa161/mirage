@@ -122,7 +122,7 @@ export function acceptsLine(
 ): boolean {
   const spec = SPECS[name]
   if (spec === undefined) return true
-  const parsed = parseCommand(spec, [...args], cwd)
+  const parsed = parseCommand(spec, [...args], cwd, name)
   if (parsed.invalidOptions.length > 0 || parsed.ambiguousOptions.length > 0) {
     return false
   }
@@ -170,7 +170,7 @@ export async function stripLinkOperands(
     const spec = SPECS.rm
     if (spec !== undefined) {
       // Keyed by the dashed spelling the line used, not the dest.
-      force = parseCommand(spec, [...args], cwd).flags['-f'] === true
+      force = parseCommand(spec, [...args], cwd, 'rm').flags['-f'] === true
     }
   }
   const verb = name === 'rm' ? 'remove' : 'unlink'
@@ -283,7 +283,7 @@ export async function prepareMv(
   // into a PathSpec there exactly as an operand is.
   const spec = SPECS.mv
   if (spec === undefined) return { items, postUnlink: null, postRename: null, early: null }
-  const fl = new FlagView(parseToKwargs(parseCommand(spec, [...args], cwd)), spec)
+  const fl = new FlagView(parseToKwargs(parseCommand(spec, [...args], cwd, 'mv')), spec)
   if (fl.raw('target_directory') !== undefined) {
     return { items, postUnlink: null, postRename: null, early: null }
   }

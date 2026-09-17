@@ -16,20 +16,9 @@ import { PathSpec, type ReaddirFn } from '../../../types.ts'
 import { rekey } from '../../../utils/key_prefix.ts'
 import { rstripSlash } from '../../../utils/slash.ts'
 import { argmatchError } from '../../spec/usage.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 
-// GNU version-control names (each canonical control has a legacy alias).
-const BACKUP_CONTROLS: Readonly<Record<string, string>> = Object.freeze({
-  none: 'none',
-  off: 'none',
-  simple: 'simple',
-  never: 'simple',
-  existing: 'existing',
-  nil: 'existing',
-  numbered: 'numbered',
-  t: 'numbered',
-})
-
-// The same controls as ARGMATCH candidates, aliases of one value on one
+// GNU's version-control names as ARGMATCH candidates, aliases of one value on one
 // line, which is how gnulib's `argmatch_valid` prints `backup_args`.
 const BACKUP_ARGS: readonly (readonly string[])[] = [
   ['none', 'off'],
@@ -61,11 +50,15 @@ export function backupControl(
   // slot in the repo where the empty word is neither invalid nor
   // ambiguous.
   if (typeof value === 'string' && value !== '') {
-    const control = BACKUP_CONTROLS[value]
-    if (control === undefined) {
-      throw argmatchError(cmdName, 'backup type', value, BACKUP_ARGS, 1)
+    // The canonical word of each class IS its control, so an ARGMATCH
+    // match answers the control directly: `--backup=e` is `existing`,
+    // while `--backup=n` spans none/never/nil/numbered and is ambiguous
+    // (both measured on coreutils 9.4).
+    const match = argmatch(value, BACKUP_ARGS)
+    if (!match.matched) {
+      throw argmatchError(cmdName, 'backup type', value, BACKUP_ARGS, 1, match.kind)
     }
-    return control
+    return match.word
   }
   return 'existing'
 }

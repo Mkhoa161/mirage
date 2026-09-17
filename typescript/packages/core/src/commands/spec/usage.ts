@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { UsageError } from '../errors.ts'
+import type { ArgmatchChoices, ArgmatchKind } from './argmatch.ts'
 import { quoteText } from '../quote.ts'
 import { gnuStrerror } from '../../utils/errors.ts'
 import {
@@ -307,28 +308,22 @@ export function oldOptionError(cmdName: string, letter: string): [Uint8Array, nu
   return [new TextEncoder().encode(line + hint), OLD_OPTION_EXIT]
 }
 
-// One ARGMATCH candidate: a bare name, or a group of spellings that
-// gnulib's argmatch maps to the SAME value. The group is not cosmetic --
-// `argmatch_valid` starts a new `  - ` line only when the value changes and
-// joins the aliases of one value with `, `, which is why GNU answers
-// `sort --check=x` with `  - 'quiet', 'silent'` on one line and
-// `  - 'diagnose-first'` on the next.
-//
-// `ArgmatchChoices` in usage.py is the twin.
-type ArgmatchChoices = readonly (string | readonly string[])[]
-
 /**
  * The first line of a gnulib ARGMATCH refusal, without its newline.
  *
- * Two wordings, and the empty word picks the second: gnulib's `argmatch`
- * matches on a prefix, so `''` is a prefix of every candidate and comes
- * back ambiguous rather than invalid. Measured on coreutils 9.4 at every
- * argmatch slot in the repo (`tail --follow=`, `sort --check=`,
+ * Two wordings, and the CALLER's match result picks between them: the
+ * wording is a property of how `argmatch` refused the value, not of the
+ * value itself, so it arrives from `argmatch` rather than being
+ * re-derived here. There is deliberately no `value === ''` branch: the
+ * empty word is ambiguous because it is a prefix of every candidate and
+ * those candidates span two or more values, which is the same rule every
+ * other word goes through and is what `tail --follow=`, `sort --check=`,
  * `wc --total=`, `uniq --all-repeated=`, `uniq --group=`, `ls --format=`,
- * `ls -l --time-style=`, `cp --update=`, `tee --output-error=`), all of
- * which answer `ambiguous argument ''`. `du --max-depth=` is NOT argmatch
- * and says `invalid maximum depth ''`, which is why that one is worded in
- * du.
+ * `ls -l --time-style=`, `cp --update=` and `tee --output-error=` were
+ * all measured answering `ambiguous argument ''` for. Re-adding the
+ * special case would get those right and a one-candidate slot wrong.
+ * `du --max-depth=` is NOT argmatch and says `invalid maximum depth ''`,
+ * which is why that one is worded in du.
  *
  * The word is rendered through `quoteText`, gnulib's own `quote()`:
  * `tee --output-error=xé` is `invalid argument 'x\303\251'`. Callers must
@@ -336,8 +331,12 @@ type ArgmatchChoices = readonly (string | readonly string[])[]
  *
  * `argmatch_line` in usage.py is the twin.
  */
-export function argmatchLine(cmdName: string, option: string, value: string): string {
-  const kind = value === '' ? 'ambiguous' : 'invalid'
+export function argmatchLine(
+  cmdName: string,
+  option: string,
+  value: string,
+  kind: ArgmatchKind = 'invalid',
+): string {
   return `${cmdName}: ${kind} argument '${quoteText(value)}' for '${option}'`
 }
 
@@ -370,8 +369,9 @@ export function invalidArgumentError(
   value: string,
   choices: ArgmatchChoices,
   exitCode?: number,
+  kind: ArgmatchKind = 'invalid',
 ): [Uint8Array, number] {
-  const line = `${argmatchLine(cmdName, option, value)}\n${argmatchValidBlock(choices)}\n`
+  const line = `${argmatchLine(cmdName, option, value, kind)}\n${argmatchValidBlock(choices)}\n`
   const hint = `Try '${cmdName} --help' for more information.\n`
   const code = exitCode ?? usageExitCode(cmdName)
   return [new TextEncoder().encode(line + hint), code]
@@ -393,8 +393,9 @@ export function argmatchError(
   value: string,
   choices: ArgmatchChoices,
   exitCode?: number,
+  kind: ArgmatchKind = 'invalid',
 ): UsageError {
-  const [message, code] = invalidArgumentError(cmdName, option, value, choices, exitCode)
+  const [message, code] = invalidArgumentError(cmdName, option, value, choices, exitCode, kind)
   return new UsageError(new TextDecoder().decode(message).replace(/\n+$/, ''), code)
 }
 

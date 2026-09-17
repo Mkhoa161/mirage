@@ -49,7 +49,7 @@
       "expect": {
         "exit": 2,
         "stdout": "",
-        "stderr": "history: -z: invalid option\nhistory: usage: history [-c] [-d offset] [n] or history -awrn [filename] or history -ps arg [arg...]\n"
+        "stderr": "history: -z: invalid option\nhistory: usage: history [-c] [-d offset] [n] or history -anrw [filename] or history -ps arg [arg...]\n"
       }
     },
     {

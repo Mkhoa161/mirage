@@ -86,6 +86,10 @@ export function parseFlags(
   // env-supplied int would go unchecked and an env-supplied path would
   // stay a bare string.
   env?: Readonly<Record<string, string>>,
+  // Whether another parser reads this line after mirage, passed straight to
+  // parseCommand. True only for an installed CLI's node, whose spec is
+  // deliberately partial.
+  unknownIsOperand = false,
 ): ParsedCommand {
   const argv: string[] = parts.map((item) => (item instanceof PathSpec ? item.virtual : item))
   const scopeMap = new Map<string, PathSpec>()
@@ -107,7 +111,7 @@ export function parseFlags(
   }
 
   if (spec !== null) {
-    const parsed = parseCommand(spec, argv, cwd, env)
+    const parsed = parseCommand(spec, argv, cwd, cmdName, env, unknownIsOperand)
     const flagKwargs = parseToKwargs(parsed)
 
     for (const [key, value] of Object.entries(flagKwargs)) {
@@ -147,6 +151,7 @@ export function parseFlags(
       optionErrorKinds: parsed.optionErrorKinds,
       needsValueOptions: parsed.needsValueOptions,
       invalidValueOptions: parsed.invalidValueOptions,
+      ambiguousValueOptions: parsed.ambiguousValueOptions,
       invalidIntOptions: parsed.invalidIntOptions,
       invalidFloatOptions: parsed.invalidFloatOptions,
       missingRequiredOptions: parsed.missingRequiredOptions,
@@ -172,6 +177,7 @@ export function parseFlags(
     optionErrorKinds: [],
     needsValueOptions: [],
     invalidValueOptions: [],
+    ambiguousValueOptions: [],
     invalidIntOptions: [],
     invalidFloatOptions: [],
     missingRequiredOptions: [],
@@ -221,6 +227,14 @@ export function optionError(cmdName: string, parsed: ParsedCommand): [Uint8Array
     } else if (kind === 'value') {
       const badValue = parsed.invalidValueOptions[0]
       if (badValue !== undefined) return invalidArgumentError(cmdName, ...badValue)
+    } else if (kind === 'ambiguous_value') {
+      // gnulib's other wording for the same refusal, reached only by an
+      // ARGMATCH table: the value is a prefix of two candidates or more.
+      const badValue = parsed.ambiguousValueOptions[0]
+      if (badValue !== undefined) {
+        const [option, value, choices] = badValue
+        return invalidArgumentError(cmdName, option, value, choices, undefined, 'ambiguous')
+      }
     }
   }
   if (parsed.missingRequiredOptions.length > 0) {

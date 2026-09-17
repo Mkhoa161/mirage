@@ -29,6 +29,7 @@ import {
 } from '../../../types.ts'
 import { UsageError } from '../../errors.ts'
 import { argmatchError, extraOperandError } from '../../spec/usage.ts'
+import { argmatch } from '../../spec/argmatch.ts'
 import type { FlagView } from '../../spec/flag_view.ts'
 import { modifiedTs } from '../../../core/generic/find.ts'
 import { backupControl, backupTarget } from '../utils/backup.ts'
@@ -106,11 +107,10 @@ export function updateMode(cmdName: string, fl: FlagView): string | null {
   const value: unknown = fl.raw('update')
   if (value === undefined || value === false) return null
   if (value === true) return 'older'
-  if (typeof value === 'string' && (UPDATE_MODES as readonly string[]).includes(value)) {
-    return value
-  }
   const shown = typeof value === 'string' ? value : ''
-  throw argmatchError(cmdName, '--update', shown, UPDATE_MODES, 1)
+  const match = argmatch(shown, UPDATE_MODES)
+  if (match.matched) return match.word
+  throw argmatchError(cmdName, '--update', shown, UPDATE_MODES, 1, match.kind)
 }
 
 // The --suffix value, an empty one reading as absent: GNU 9.7

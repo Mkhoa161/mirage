@@ -130,6 +130,134 @@
       ]
     },
     {
+      "id": "tee_output_error_prefix_spanning_two_values_is_ambiguous",
+      "seq": 991026,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'hi' | tee --output-error=w /data/pt_oew.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tee: ambiguous argument 'w' for '--output-error'\nValid arguments are:\n  - 'warn'\n  - 'warn-nopipe'\n  - 'exit'\n  - 'exit-nopipe'\nTry 'tee --help' for more information.\n"
+      },
+      "flags": [
+        "output-error"
+      ]
+    },
+    {
+      "id": "tee_output_error_empty_value_is_ambiguous",
+      "seq": 991027,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'hi' | tee --output-error= /data/pt_oee.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tee: ambiguous argument '' for '--output-error'\nValid arguments are:\n  - 'warn'\n  - 'warn-nopipe'\n  - 'exit'\n  - 'exit-nopipe'\nTry 'tee --help' for more information.\n"
+      },
+      "flags": [
+        "output-error"
+      ]
+    },
+    {
+      "id": "tee_output_error_exact_word_wins_over_a_longer_candidate",
+      "seq": 991028,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mkdir -p /data/pteo_x && printf 'hi' | tee --output-error=exit /data/pteo_x/v.txt > /dev/null && cat /data/pteo_x/v.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi",
+        "stderr": ""
+      },
+      "flags": [
+        "output-error"
+      ]
+    },
+    {
+      "id": "tee_output_error_hyphenated_prefix_resolves",
+      "seq": 991029,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "mkdir -p /data/pteo_h && printf 'hi' | tee --output-error=exit-n /data/pteo_h/v.txt > /dev/null && cat /data/pteo_h/v.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "hi",
+        "stderr": ""
+      },
+      "flags": [
+        "output-error"
+      ]
+    },
+    {
       "id": "tee_bad_value_outranks_a_later_unknown_option",
       "seq": 991091,
       "targets": [

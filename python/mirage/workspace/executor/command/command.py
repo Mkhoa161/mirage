@@ -23,9 +23,10 @@ from mirage.commands.builtin.generic.crossmount.types import Strategy
 from mirage.commands.builtin.generic.tar.mode import is_create_mode
 from mirage.commands.builtin.utils.identity import identity_from
 from mirage.commands.builtin.utils.limit import maybe_with_timeout
-from mirage.commands.config import version_request
+from mirage.commands.config import standard_request
 from mirage.commands.errors import FindParseError
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.builtin_specs import registered_spec
 from mirage.io import IOResult
 from mirage.io.stream import materialize
 from mirage.io.types import ByteSource
@@ -241,18 +242,21 @@ async def handle_command(
                                                          exit_code=127,
                                                          stderr=err)
 
-    # --version answers from the package, never from a backend, so it is
-    # served before mount permission checks and cross-mount routing:
-    # otherwise `rm --version /ro/x` hits the read-only refusal and
-    # `cat --version /ram/a /disk/b` parses against the shared spec, which
-    # carries no injected --version, and fails as an unknown option.
+    # --help and --version answer from the package, never from a backend,
+    # so they are served before mount permission checks and cross-mount
+    # routing: otherwise `rm --version /ro/x` hits the read-only refusal,
+    # `cat --version /ram/a /disk/b` parses against the shared spec,
+    # which carries no injected --version, and fails as an unknown
+    # option, and `mv --help /ram/a /disk/b` reaches the cross-mount
+    # relay, which bypasses the registered wrapper that answers help and
+    # MOVED THE FILE instead of printing the page.
     cmd_mount = registry.mount_for_command(cmd_name)
-    version_out = version_request(
+    standard_out = standard_request(
         cmd_name,
         cmd_mount.spec_for(cmd_name) if cmd_mount else None, raw_argv)
-    if version_out is not None:
-        return version_out, IOResult(), ExecutionNode(command=cmd_str,
-                                                      exit_code=0)
+    if standard_out is not None:
+        return standard_out, IOResult(), ExecutionNode(command=cmd_str,
+                                                       exit_code=0)
 
     # Path-valued flags (e.g. shuf --output=/dst/out) own a mount just like
     # positional operands, so they join routing and mount validation instead
@@ -298,8 +302,15 @@ async def handle_command(
         # against the shared spec so flags and text operands do not depend on
         # the source mount. The bound single-mount runner lets the strategy
         # runners execute each operand natively on its owning mount.
+        # Registered, not declared: the registry injects --help/--version
+        # into every spec, so parsing the declaration here made the same
+        # word mean two things by mount count -- `cat --vers=x /ram/a` was
+        # `option '--version' doesn't allow an argument` and the two-mount
+        # line was `unrecognized option '--vers=x'`.
+        shared_spec = SPECS.get(cmd_name)
         cross_parsed = parse_flags(parts[1:],
-                                   SPECS.get(cmd_name),
+                                   registered_spec(cmd_name, shared_spec)
+                                   if shared_spec is not None else None,
                                    cmd_name,
                                    session.cwd,
                                    str_flag_paths=True)

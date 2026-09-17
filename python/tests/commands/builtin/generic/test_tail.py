@@ -393,3 +393,21 @@ def test_sleep_interval_refuses_what_gnu_refuses(value):
     """
     with pytest.raises(ValueError):
         parse_flags({"sleep_interval": value})
+
+
+# `tail --follow=d` and `--follow=n` both exit 0 (measured, coreutils
+# 9.4): the two candidates share no prefix, so one letter is enough.
+def test_follow_accepts_an_unambiguous_prefix():
+    assert not parse_flags({"follow": "d"}).follow_name
+    assert parse_flags({"follow": "d"}).follow
+    assert parse_flags({"follow": "n"}).follow_name
+    assert parse_flags({"follow": "na"}).follow_name
+    assert parse_flags({"follow": "name"}).follow_name
+    assert not parse_flags({"follow": "descriptor"}).follow_name
+
+
+def test_follow_still_refuses_an_unmatched_word():
+    with pytest.raises(UsageError) as exc:
+        parse_flags({"follow": "nn"})
+    assert str(
+        exc.value).startswith("tail: invalid argument 'nn' for '--follow'\n")

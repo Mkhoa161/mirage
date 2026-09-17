@@ -64,7 +64,7 @@ def default_cwd_operand(parts: list[str | PathSpec], cmd_name: str,
         # Only the words before the expression can be start points: an
         # `-exec` command word or a `-newer` reference is the parser's.
         argv = argv[:len(argv) - len(find_expr_tail(argv))]
-    parsed = parse_command(spec, argv, cwd)
+    parsed = parse_command(spec, argv, cwd, cmd_name)
     if parsed.paths():
         return None
     if cmd_name == "grep":
@@ -84,7 +84,7 @@ def path_flag_scopes(cmd_name: str, argv: list[str],
     spec = SPECS.get(cmd_name)
     if spec is None:
         return []
-    parsed = parse_command(spec, argv, cwd)
+    parsed = parse_command(spec, argv, cwd, cmd_name)
     return [
         PathSpec(virtual=value,
                  directory=value,
@@ -114,7 +114,7 @@ def positional_scopes(cmd_name: str, argv: list[str], cwd: str,
     spec = SPECS.get(cmd_name)
     if spec is None:
         return [p for p in words if isinstance(p, PathSpec)]
-    parsed = parse_command(spec, argv, cwd)
+    parsed = parse_command(spec, argv, cwd, cmd_name)
     by_virtual = {p.virtual: p for p in words if isinstance(p, PathSpec)}
     return [
         by_virtual.get(

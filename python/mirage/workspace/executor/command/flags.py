@@ -82,6 +82,8 @@ def parse_flags(
     cwd: str,
     str_flag_paths: bool = False,
     env: Mapping[str, str] | None = None,
+    *,
+    unknown_is_operand: bool = False,
 ) -> ParsedCommand:
     """Parse flags from classified parts, recovering PathSpec for PATH values.
 
@@ -106,6 +108,10 @@ def parse_flags(
             virtual-path strings instead of PathSpec. Cross-mount
             strategies read flags through FlagView, which type-checks
             str, so they get the string view.
+        unknown_is_operand (bool): whether another parser reads this
+            line after mirage, passed straight to parse_command. True
+            only for an installed CLI's node, whose spec is deliberately
+            partial.
 
     Returns:
         ParsedCommand: positional paths, positional texts, parsed flag dict
@@ -129,7 +135,12 @@ def parse_flags(
             spellings[item.virtual.rstrip("/") or "/"].append(item)
 
     if spec is not None:
-        parsed = parse_command(spec, argv, cwd=cwd, env=env)
+        parsed = parse_command(spec,
+                               argv,
+                               cwd=cwd,
+                               cmd_name=cmd_name,
+                               env=env,
+                               unknown_is_operand=unknown_is_operand)
         # Widens from ParsedFlagValue to FlagValue: PATH values
         # become PathSpec just below.
         flag_kwargs: dict[str, FlagValue] = dict(parse_to_kwargs(parsed))
@@ -205,14 +216,16 @@ def parse_flags(
             paths, texts, flag_kwargs, parsed.warnings, parsed.invalid_options,
             parsed.ambiguous_options, parsed.option_error_kinds,
             parsed.needs_value_options, parsed.invalid_value_options,
-            parsed.invalid_int_options, parsed.invalid_float_options,
-            parsed.missing_required_options, parsed.old_option_needs_value,
-            parsed.missing_required_operands, parsed.typed_dests)
+            parsed.ambiguous_value_options, parsed.invalid_int_options,
+            parsed.invalid_float_options, parsed.missing_required_options,
+            parsed.old_option_needs_value, parsed.missing_required_operands,
+            parsed.typed_dests)
 
     # No spec: separate by type
     paths = [item for item in parts if isinstance(item, PathSpec)]
     texts = [item for item in parts if not isinstance(item, PathSpec)]
-    return ParsedCommand(paths, texts, {}, [], [], [], [], [], [], [], [], [])
+    return ParsedCommand(paths, texts, {}, [], [], [], [], [], [], [], [], [],
+                         [])
 
 
 def option_error(cmd_name: str,
@@ -261,6 +274,15 @@ def option_error(cmd_name: str,
         if kind == "value":
             option, value, choices = parsed.invalid_value_options[0]
             return invalid_argument_error(cmd_name, option, value, choices)
+        # gnulib's other wording for the same refusal, reached only by an
+        # ARGMATCH table: the value is a prefix of two candidates or more.
+        if kind == "ambiguous_value":
+            option, value, choices = parsed.ambiguous_value_options[0]
+            return invalid_argument_error(cmd_name,
+                                          option,
+                                          value,
+                                          choices,
+                                          kind="ambiguous")
     if parsed.missing_required_options:
         return missing_required_error(cmd_name,
                                       parsed.missing_required_options[0])

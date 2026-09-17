@@ -15,8 +15,19 @@
 import pytest
 
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.builtin_specs import registered_spec
+from mirage.commands.spec.compile import compile_spec
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
 from mirage.commands.spec.types import CommandSpec, Operand, Option
+
+
+def _registered(name: str) -> CommandSpec:
+    """The spec the registry parses for a builtin, --help/--version and all.
+
+    Args:
+        name (str): the builtin's name.
+    """
+    return registered_spec(name, SPECS[name])
 
 
 def test_grep_positional_pattern_then_path():
@@ -194,10 +205,71 @@ def test_missing_value_reported_short_and_long():
     assert parsed.needs_value_options == ["e"]
 
 
-def test_text_rest_keeps_unknown_dash_tokens():
-    parsed = parse_command(SPECS["expr"], ["-x", "hello"], "/")
+def test_an_operand_class_command_keeps_unknown_dash_tokens():
+    parsed = parse_command(SPECS["expr"], ["-x", "hello"], "/", "expr")
     assert parsed.texts() == ["-x", "hello"]
     assert parsed.warnings == []
+
+
+# The rest operand's kind used to decide this and cannot: basename,
+# dirname, csplit, numfmt and sleep all declare a TEXT rest and all five
+# report an option they do not know (measured on coreutils 9.4).
+def test_a_text_rest_command_reports_an_unknown_long_option():
+    parsed = parse_command(SPECS["basename"], ["--zzz"], "/", "basename")
+    assert parsed.invalid_options == ["--zzz"]
+    assert parsed.option_error_kinds == ["invalid"]
+    assert parsed.texts() == []
+
+
+def test_a_text_rest_command_reports_an_unknown_short_option():
+    parsed = parse_command(SPECS["basename"], ["-Q"], "/", "basename")
+    assert parsed.invalid_options == ["Q"]
+    assert parsed.texts() == []
+
+
+# An unnamed parse gets the rule, not the exception: the sets are keyed
+# by command name and "" is in neither.
+def test_an_unnamed_parse_is_a_strict_getopt_long_parse():
+    parsed = parse_command(SPECS["basename"], ["--zzz"], "/")
+    assert parsed.invalid_options == ["--zzz"]
+
+
+# unknown_is_operand is what an installed CLI's node is parsed under:
+# the program owns whatever mirage does not declare, so an undeclared
+# dash word lands in the node's textual rest slot and no abbreviation is
+# expanded on the program's behalf.
+def test_unknown_is_operand_forwards_dash_words_into_the_rest_slot():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ),
+                       rest=Operand(type="str"))
+    parsed = parse_command(spec, ["--widt", "80", "-n", "x"],
+                           "/",
+                           "pager",
+                           unknown_is_operand=True)
+    assert parsed.flags == {}
+    assert parsed.invalid_options == []
+    assert parsed.texts() == ["--widt", "80", "-n", "x"]
+
+
+# With no slot to forward into, the same parse refuses it: the program
+# cannot be handed a word the node has nowhere to put.
+def test_unknown_is_operand_without_a_rest_slot_still_refuses():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ))
+    parsed = parse_command(spec, ["--frobnicate"],
+                           "/",
+                           "pager",
+                           unknown_is_operand=True)
+    assert parsed.invalid_options == ["--frobnicate"]
+
+
+# The very same spec parsed without the flag is the other answer, which
+# is what makes the call the deciding fact: nothing about the grammar,
+# and nothing carried on the spec, tells the two apart.
+def test_the_same_spec_parsed_strictly_refuses_the_dash_word():
+    spec = CommandSpec(options=(Option(long="--width", type="int"), ),
+                       rest=Operand(type="str"))
+    parsed = parse_command(spec, ["--widt", "80", "-n", "x"], "/", "pager")
+    assert parsed.flags == {"--width": "80"}
+    assert parsed.invalid_options == ["n"]
 
 
 def test_numeric_dash_token_stays_operand():
@@ -366,17 +438,238 @@ def test_count_flag_accumulates_occurrences():
 
 
 def test_choices_violation_is_reported_not_raised():
-    parsed = parse_command(SPECS["tee"], ["--output-error=bogus", "/f"], "/")
+    parsed = parse_command(SPECS["tee"], ["--output-error=bogus", "/f"], "/",
+                           "tee")
     assert parsed.invalid_value_options == [
         ("--output-error", "bogus", ("warn", "warn-nopipe", "exit",
                                      "exit-nopipe")),
     ]
-    ok = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/")
+    ok = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/", "tee")
     assert ok.invalid_value_options == []
 
 
+# `tee --output-error` is one of the three spec-declared choices sets
+# that really are gnulib ARGMATCH tables, so the parser resolves a
+# prefix and rewrites the bag to the canonical word. Measured on
+# coreutils 9.7: `tee --output-error=exit-n` exits 0 (exit-nopipe) and
+# `=w` is `ambiguous argument 'w'`.
+def test_an_unambiguous_prefix_resolves_to_the_canonical_word():
+    parsed = parse_command(SPECS["tee"], ["--output-error=warn-", "/f"], "/",
+                           "tee")
+    assert parsed.flags["--output-error"] == "warn-nopipe"
+    assert parsed.invalid_value_options == []
+    assert parsed.ambiguous_value_options == []
+
+
+def test_an_exact_word_is_left_alone_and_not_read_as_a_prefix():
+    parsed = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/",
+                           "tee")
+    assert parsed.flags["--output-error"] == "warn"
+    assert parsed.invalid_value_options == []
+
+
+# The second table, so the rule is the option's and not one command's:
+# measured on 9.7, `numfmt --to=s` is `si` and `--to=ie` is ambiguous
+# between `iec` and `iec-i`.
+def test_the_other_argmatch_table_resolves_its_own_prefixes():
+    parsed = parse_command(SPECS["numfmt"], ["--to=s", "1"], "/", "numfmt")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.ambiguous_value_options == []
+    ambiguous = parse_command(SPECS["numfmt"], ["--to=ie", "1"], "/", "numfmt")
+    assert ambiguous.option_error_kinds == ["ambiguous_value"]
+    assert ambiguous.ambiguous_value_options == [
+        ("--to", "ie", ("none", "si", "iec", "iec-i")),
+    ]
+
+
+def test_an_ambiguous_prefix_lands_in_its_own_list_and_on_the_tape():
+    parsed = parse_command(SPECS["tee"], ["--output-error=w", "/f"], "/",
+                           "tee")
+    assert parsed.option_error_kinds == ["ambiguous_value"]
+    assert parsed.ambiguous_value_options == [
+        ("--output-error", "w", ("warn", "warn-nopipe", "exit",
+                                 "exit-nopipe")),
+    ]
+    assert parsed.invalid_value_options == []
+    # The value the line typed stays in the bag: nothing resolved it, and
+    # the renderer names the word as typed.
+    assert parsed.flags["--output-error"] == "w"
+
+
+def test_the_empty_value_is_reported_ambiguous_not_invalid():
+    parsed = parse_command(SPECS["tee"], ["--output-error=", "/f"], "/", "tee")
+    assert parsed.ambiguous_value_options == [
+        ("--output-error", "", ("warn", "warn-nopipe", "exit", "exit-nopipe")),
+    ]
+
+
+def test_prefix_matching_is_case_sensitive():
+    parsed = parse_command(SPECS["tee"], ["--output-error=W", "/f"], "/",
+                           "tee")
+    assert parsed.invalid_value_options == [
+        ("--output-error", "W", ("warn", "warn-nopipe", "exit",
+                                 "exit-nopipe")),
+    ]
+
+
+# Prefix matching is opt-in per (command, option), so a choices set that
+# is NOT one of the three compares the whole word, which is argparse's
+# own rule for `choices`. CPython is the measured case: on 3.11.15
+# `--check-hash-based-pycs a` and `al` are both refused where gnulib
+# would have resolved them to `always`.
+def test_a_choices_set_outside_the_table_takes_no_prefix():
+    parsed = parse_command(SPECS["python3"],
+                           ["--check-hash-based-pycs=a", "-c", "x"], "/",
+                           "python3")
+    assert parsed.flags["--check-hash-based-pycs"] == "a"
+    assert parsed.invalid_value_options == [
+        ("--check-hash-based-pycs", "a", ("always", "default", "never")),
+    ]
+
+
+def test_a_choices_set_outside_the_table_still_takes_the_exact_word():
+    parsed = parse_command(SPECS["python3"],
+                           ["--check-hash-based-pycs=always", "-c", "x"], "/",
+                           "python3")
+    assert parsed.flags["--check-hash-based-pycs"] == "always"
+    assert parsed.invalid_value_options == []
+
+
+# The empty word has no ambiguity wording to reach outside the table:
+# nothing is an exact match, so it is invalid like any other
+# non-candidate, and ambiguous_value_options stays empty.
+def test_a_choices_set_outside_the_table_reports_the_empty_word_invalid():
+    parsed = parse_command(SPECS["python3"],
+                           ["--check-hash-based-pycs=", "-c", "x"], "/",
+                           "python3")
+    assert parsed.invalid_value_options == [
+        ("--check-hash-based-pycs", "", ("always", "default", "never")),
+    ]
+    assert parsed.ambiguous_value_options == []
+
+
+# A mount author's own command is not a GNU program, so its choices are
+# argparse's: `--mode=rem` is refused rather than resolved to `remove`.
+# Nothing the author can write opts a custom spec into the table, which
+# names three builtin Option OBJECTS and is tested by identity.
+def test_a_custom_spec_never_inherits_argmatch():
+    spec = CommandSpec(
+        options=(Option(long="--mode", type="str", choices=("read",
+                                                            "remove")), ))
+    parsed = parse_command(spec, ["--mode=rem"], "/", "mycmd")
+    assert parsed.flags["--mode"] == "rem"
+    assert parsed.invalid_value_options == [
+        ("--mode", "rem", ("read", "remove")),
+    ]
+    # Even naming it after a real ARGMATCH option changes nothing.
+    named = CommandSpec(
+        options=(Option(long="--to", type="str", choices=("none", "si")), ))
+    assert parse_command(named, ["--to=s"], "/",
+                         "mycmd").invalid_value_options == [
+                             ("--to", "s", ("none", "si")),
+                         ]
+
+
+# A mount may register a command under a builtin's own name, so the
+# name is not the identity. A custom `tee` that reproduces GNU tee's
+# `--output-error` field for field still compares the whole word: the
+# option it declares is its own object, not the one the builtin spec
+# holds. Option is a frozen dataclass, so this lookalike is `==` to the
+# builtin's and hashes with it -- only `is` tells them apart, which is
+# why the table is not a frozenset of options.
+def test_a_command_that_borrows_a_builtin_name_does_not_borrow_argmatch():
+    lookalike = Option(long="--output-error",
+                       type="str",
+                       value_optional=True,
+                       choices=("warn", "warn-nopipe", "exit", "exit-nopipe"))
+    builtin = next(o for o in SPECS["tee"].options
+                   if o.long == "--output-error")
+    assert lookalike == builtin and lookalike is not builtin
+    parsed = parse_command(CommandSpec(options=(lookalike, )),
+                           ["--output-error=exit-n"], "/", "tee")
+    assert parsed.flags["--output-error"] == "exit-n"
+    assert parsed.invalid_value_options == [
+        ("--output-error", "exit-n", ("warn", "warn-nopipe", "exit",
+                                      "exit-nopipe")),
+    ]
+
+
+# The registry never hands the parser the spec the builtin declared: it
+# appends --help/--version and parses the COPY (commands/config.py), so
+# `spec is SPECS[name]` is False for every builtin by the time a line is
+# read. Identity of the Option survives that copy, which is the whole
+# reason the table names options rather than specs -- keying on the spec
+# would disable ARGMATCH everywhere while every unit test that passes
+# SPECS[name] straight in kept passing.
+def test_argmatch_survives_the_copy_the_registry_parses():
+    tee = SPECS["tee"]
+    registered = registered_spec("tee", tee)
+    assert registered is not tee
+    parsed = parse_command(registered, ["--output-error=exit-n"], "/", "tee")
+    assert parsed.flags["--output-error"] == "exit-nopipe"
+    assert parsed.invalid_value_options == []
+
+
+# compile_spec caches on a frozen dataclass, so its key is STRUCTURAL: a
+# spec built to look exactly like tee's shares the builtin's CompiledSpec
+# object. The ARGMATCH decision is therefore read off the spec and never
+# stored in there -- stored, it would be whichever of the two compiled
+# first, and the order is whatever the process happened to do. Both
+# directions are checked because the wrong one is order-dependent: the
+# clone inheriting argmatch, and the real tee losing it.
+def test_a_structural_twin_of_a_builtin_spec_shares_no_argmatch():
+    tee = SPECS["tee"]
+    twin = CommandSpec(options=tuple(
+        Option(**{f: getattr(o, f)
+                  for f in o.__dataclass_fields__}) for o in tee.options),
+                       rest=tee.rest,
+                       description=tee.description)
+    assert twin == tee and twin is not tee
+    assert compile_spec(twin) is compile_spec(tee)
+    assert parse_command(twin, ["--output-error=exit-n"], "/",
+                         "tee").invalid_value_options == [
+                             ("--output-error", "exit-n",
+                              ("warn", "warn-nopipe", "exit", "exit-nopipe")),
+                         ]
+    # and the builtin still resolves, whichever was compiled first
+    assert parse_command(tee, ["--output-error=exit-n"], "/",
+                         "tee").flags["--output-error"] == "exit-nopipe"
+
+
+# An installed CLI's node is outside the table for the same reason, so
+# `gh issue list --state=o` is refused where GNU would resolve it. The
+# CLI's group level already enforces its choices exactly
+# (walk._finish_node), so a leaf that prefix-matched would make one
+# Option.choices mean two things inside one tree. unknown_is_operand
+# says nothing about this: it governs the dash word, not the value.
+def test_a_cli_node_compares_the_whole_choice_word():
+    spec = CommandSpec(options=(
+        Option(long="--state", type="str", choices=("open", "closed",
+                                                    "all")), ))
+    parsed = parse_command(spec, ["--state=o"],
+                           "/",
+                           "gh",
+                           unknown_is_operand=True)
+    assert parsed.flags["--state"] == "o"
+    assert parsed.invalid_value_options == [
+        ("--state", "o", ("open", "closed", "all")),
+    ]
+    exact = parse_command(spec, ["--state=open"],
+                          "/",
+                          "gh",
+                          unknown_is_operand=True)
+    assert exact.flags["--state"] == "open"
+    assert exact.invalid_value_options == []
+    # The same spec parsed without the flag answers identically, which
+    # is the point: the choice rule is the table's, not the call's.
+    strict = parse_command(spec, ["--state=o"], "/", "gh")
+    assert strict.invalid_value_options == [
+        ("--state", "o", ("open", "closed", "all")),
+    ]
+
+
 def test_choices_exempt_bare_optional_value_form():
-    parsed = parse_command(SPECS["tee"], ["--output-error", "/f"], "/")
+    parsed = parse_command(SPECS["tee"], ["--output-error", "/f"], "/", "tee")
     assert parsed.flags["--output-error"] is True
     assert parsed.invalid_value_options == []
 
@@ -386,6 +679,18 @@ def test_choices_check_every_value_of_a_multiple_flag():
         Option(short="-m", type="str", multiple=True, choices=("x", "y")), ))
     parsed = parse_command(spec, ["-m", "x", "-m", "z"], "/")
     assert parsed.invalid_value_options == [("-m", "z", ("x", "y"))]
+
+
+def test_every_occurrence_of_an_argmatch_flag_is_resolved_as_it_is_read():
+    # Each occurrence goes through the table as it is scanned, so the one
+    # the bag drops is still refused and the one it keeps is still
+    # rewritten to its candidate.
+    parsed = parse_command(SPECS["numfmt"], ["--to=ie", "--to=s", "1"], "/",
+                           "numfmt")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.ambiguous_value_options == [
+        ("--to", "ie", ("none", "si", "iec", "iec-i")),
+    ]
 
 
 def test_choices_check_every_occurrence_of_a_scalar_flag():
@@ -509,12 +814,78 @@ def test_abbreviated_value_long_takes_the_next_word():
     assert parsed.flags["--exclude"] == "tmp"
 
 
-def test_free_text_commands_keep_exact_only_long_matching():
-    spec = CommandSpec(options=(Option(long="--verbose"), ),
+# A program with no long-option parser at all (bash's echo builtin,
+# Info-ZIP unzip) never expands an abbreviation, because there is no
+# table to expand against.
+def test_a_program_with_no_long_option_parser_matches_exactly():
+    parsed = parse_command(_registered("echo"), ["--hel", "hi"], "/", "echo")
+    assert parsed.flags == {}
+    assert parsed.texts() == ["--hel", "hi"]
+
+
+def test_the_same_line_expands_the_abbreviation_for_a_getopt_command():
+    parsed = parse_command(_registered("basename"), ["--hel", "hi"], "/",
+                           "basename")
+    assert parsed.flags["--help"] is True
+    assert parsed.texts() == ["hi"]
+
+
+# Both tables describe one real program, so a spec that is not that
+# program's own grammar does not get the rule however the line names it.
+# A mount may register a command under a builtin's name: nothing refuses
+# that, and here the rule would swallow the flag the author declared.
+def test_a_custom_spec_never_inherits_a_per_program_parsing_rule():
+    spec = CommandSpec(options=(Option(long="--mode", type="str"), ),
                        rest=Operand(type="str"))
-    parsed = parse_command(spec, ["--verb", "hi"], "/")
-    assert "--verbose" not in parsed.flags
-    assert parsed.texts() == ["--verb", "hi"]
+    parsed = parse_command(spec, ["--mode=x", "value"], "/", "expr")
+    assert parsed.flags == {"--mode": "x"}
+    assert parsed.texts() == ["value"]
+    # ... and the same spec keeps its long options where echo has none.
+    lenient = CommandSpec(options=(Option(long="--verbose"), ),
+                          rest=Operand(type="str"))
+    assert parse_command(lenient, ["--verb", "hi"], "/",
+                         "echo").flags["--verbose"] is True
+
+
+# expr's long options are the two the registry injects into every spec,
+# so the spec has to be the registered one: the declaration carries
+# neither, and a hand-built lookalike is no longer expr's grammar.
+_EXPR_SPEC = _registered("expr")
+
+
+# gnulib's parse_long_options guards on `argc == 2`, so expr reads a long
+# option only when it is the whole line. Measured on coreutils 9.4:
+# `expr --help` helps, `expr --help x` is a syntax error on `x`, and
+# `expr -- --help` prints `--help`.
+def test_a_sole_argument_long_option_is_read_as_an_option():
+    parsed = parse_command(_EXPR_SPEC, ["--help"], "/", "expr")
+    assert parsed.flags["--help"] is True
+    assert parsed.texts() == []
+
+
+def test_a_sole_argument_long_option_prefix_resolves():
+    parsed = parse_command(_EXPR_SPEC, ["--h"], "/", "expr")
+    assert parsed.flags["--help"] is True
+
+
+def test_a_sole_argument_word_that_prefixes_nothing_is_an_operand():
+    parsed = parse_command(_EXPR_SPEC, ["--hex"], "/", "expr")
+    assert parsed.flags == {}
+    assert parsed.invalid_options == []
+    assert parsed.texts() == ["--hex"]
+
+
+def test_a_long_option_outside_the_window_is_an_operand():
+    parsed = parse_command(_EXPR_SPEC, ["--help", "x"], "/", "expr")
+    assert parsed.flags == {}
+    assert parsed.invalid_options == []
+    assert parsed.texts() == ["--help", "x"]
+
+
+def test_dash_dash_puts_the_sole_argument_outside_the_window():
+    parsed = parse_command(_EXPR_SPEC, ["--", "--help"], "/", "expr")
+    assert parsed.flags == {}
+    assert parsed.texts() == ["--help"]
 
 
 def test_int_typed_value_is_reported_not_raised():

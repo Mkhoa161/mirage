@@ -14,23 +14,15 @@
 
 import re
 
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.usage import argmatch_error
 from mirage.types import PathSpec, ReaddirFn
 from mirage.utils.key_prefix import rekey
 
-# GNU version-control names (each canonical control has a legacy alias).
-BACKUP_CONTROLS = {
-    "none": "none",
-    "off": "none",
-    "simple": "simple",
-    "never": "simple",
-    "existing": "existing",
-    "nil": "existing",
-    "numbered": "numbered",
-    "t": "numbered",
-}
-# The same controls as ARGMATCH candidates, aliases of one value on one
-# line, which is how gnulib's `argmatch_valid` prints `backup_args`.
+# GNU's version-control names as ARGMATCH candidates, aliases of one
+# value on one line, which is how gnulib's `argmatch_valid` prints
+# `backup_args` and, since the canonical word of each class is the
+# control itself, the only table this needs.
 BACKUP_ARGS = (("none", "off"), ("simple", "never"), ("existing", "nil"),
                ("numbered", "t"))
 
@@ -67,11 +59,15 @@ def backup_control(cmd_name: str, value: str | bool | None,
     # slot in the repo where the empty word is neither invalid nor
     # ambiguous.
     if isinstance(value, str) and value != "":
-        control = BACKUP_CONTROLS.get(value)
-        if control is None:
+        # The canonical word of each class IS its control, so an
+        # ARGMATCH match answers the control directly: `--backup=e` is
+        # `existing`, while `--backup=n` spans none/never/nil/numbered
+        # and is ambiguous (both measured on coreutils 9.4).
+        match = argmatch(value, BACKUP_ARGS)
+        if not isinstance(match, ArgmatchMatch):
             raise argmatch_error(cmd_name, "backup type", value, BACKUP_ARGS,
-                                 1)
-        return control
+                                 1, match.kind)
+        return match.word
     return "existing"
 
 

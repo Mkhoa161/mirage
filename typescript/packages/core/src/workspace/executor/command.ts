@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { registeredSpec } from '../../commands/spec/builtins.ts'
 import { SPECS } from '../../commands/spec/index.ts'
 import { concatBytes } from '../../core/jq/format.ts'
 import type { ByteSource } from '../../io/types.ts'
@@ -52,7 +53,7 @@ import { maybeWithTimeout } from '../../commands/builtin/utils/limit.ts'
 import { resolveProducer, resolveLimit } from '../../policy/index.ts'
 import type { ExecuteNodeFn, JobHandlerResult } from './jobs.ts'
 import { handleDisown, handleFg, handleJobs, handleKill, handlePs, handleWait } from './jobs.ts'
-import { versionRequest } from '../../commands/config.ts'
+import { standardRequest } from '../../commands/config.ts'
 
 import { dropsMountCaches, handleCli } from './command/cli.ts'
 import { pathStat } from './builtins/links/index.ts'
@@ -266,15 +267,18 @@ export async function handleCommand(
     ]
   }
 
-  // --version answers from the package, never from a backend, so it is
-  // served before mount permission checks and cross-mount routing:
-  // otherwise `rm --version /ro/x` hits the read-only refusal and
+  // --help and --version answer from the package, never from a backend, so
+  // they are served before mount permission checks and cross-mount routing:
+  // otherwise `rm --version /ro/x` hits the read-only refusal,
   // `cat --version /ram/a /disk/b` parses against the shared spec, which
-  // carries no injected --version, and fails as an unknown option.
+  // carries no injected --version, and fails as an unknown option, and
+  // `mv --help /ram/a /disk/b` reaches the cross-mount relay, which bypasses
+  // the registered wrapper that answers help and MOVED THE FILE instead of
+  // printing the page.
   const cmdMount = registry.mountForCommand(cmdName)
-  const versionOut = versionRequest(cmdName, cmdMount?.specFor(cmdName) ?? null, rawArgv)
-  if (versionOut !== null) {
-    return [versionOut, new IOResult(), new ExecutionNode({ command: cmdStr, exitCode: 0 })]
+  const standardOut = standardRequest(cmdName, cmdMount?.specFor(cmdName) ?? null, rawArgv)
+  if (standardOut !== null) {
+    return [standardOut, new IOResult(), new ExecutionNode({ command: cmdStr, exitCode: 0 })]
   }
 
   // Path-valued flags (e.g. shuf --output=/dst/out) own a mount just like
@@ -336,7 +340,18 @@ export async function handleCommand(
     // to the generic as the search pattern. The bound single-mount runner
     // lets the strategy runners execute each operand natively on its
     // owning mount.
-    const csParsed = parseFlags(parts.slice(1), SPECS[cmdName] ?? null, cmdName, session.cwd)
+    // Registered, not declared: the registry injects --help/--version into
+    // every spec, so parsing the declaration here made the same word mean
+    // two things by mount count -- `cat --vers=x /ram/a` was
+    // `option '--version' doesn't allow an argument` and the two-mount line
+    // was `unrecognized option '--vers=x'`.
+    const sharedSpec = SPECS[cmdName]
+    const csParsed = parseFlags(
+      parts.slice(1),
+      sharedSpec !== undefined ? registeredSpec(cmdName, sharedSpec) : null,
+      cmdName,
+      session.cwd,
+    )
     const csFlags = csParsed.flagKwargs
     const csTexts = findExprTokens ?? csParsed.texts
     const csRefusal = optionError(cmdName, csParsed)

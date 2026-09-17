@@ -1316,6 +1316,128 @@ def test_an_empty_argument_is_ambiguous(dest, option, code):
     assert info.value.exit_code == code
 
 
+# gnulib's argmatch resolves an unambiguous prefix and answers the
+# canonical word of the value it matched. Every row measured on coreutils
+# 9.4 (`ls --sort=non`, `-l --time=acc`, `--hyperlink=n`,
+# `-l --time-style=full`).
+@pytest.mark.parametrize("flags,attr,expected", [
+    ({
+        "sort": "non"
+    }, "sort_by", LsSortBy.NONE),
+    ({
+        "sort": "n"
+    }, "sort_by", LsSortBy.NONE),
+    ({
+        "sort": "si"
+    }, "sort_by", LsSortBy.SIZE),
+    ({
+        "time": "a"
+    }, "time_kind", LsTimeKind.ATIME),
+    ({
+        "time": "acc"
+    }, "time_kind", LsTimeKind.ATIME),
+    ({
+        "time": "u"
+    }, "time_kind", LsTimeKind.ATIME),
+    ({
+        "time": "m"
+    }, "time_kind", LsTimeKind.MTIME),
+    ({
+        "time": "s"
+    }, "time_kind", LsTimeKind.CTIME),
+    ({
+        "time": "b"
+    }, "time_kind", LsTimeKind.BIRTH),
+    ({
+        "hyperlink": "al"
+    }, "hyperlink", True),
+    ({
+        "hyperlink": "y"
+    }, "hyperlink", True),
+    ({
+        "hyperlink": "f"
+    }, "hyperlink", True),
+    ({
+        "hyperlink": "n"
+    }, "hyperlink", False),
+    ({
+        "hyperlink": "au"
+    }, "hyperlink", False),
+    ({
+        "hyperlink": "i"
+    }, "hyperlink", False),
+])
+def test_parse_flags_accepts_an_unambiguous_prefix(flags, attr, expected):
+    assert getattr(parse_flags(flags), attr) == expected
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("full", "full-iso"),
+    ("long", "long-iso"),
+    ("i", "iso"),
+    ("loc", "locale"),
+    ("posix-full", "locale"),
+])
+def test_time_style_accepts_an_unambiguous_prefix(value, expected):
+    assert parse_flags({"time_style": value}).columns.time_style == expected
+
+
+# Ambiguity is decided on values: `--time=a` matches atime and access,
+# one value, and is accepted above, while these span two and are refused.
+@pytest.mark.parametrize("flags,message,code", [
+    ({
+        "time": "c"
+    }, "ls: ambiguous argument 'c' for '--time'\n"
+     "Valid arguments are:\n  - 'atime', 'access', 'use'\n"
+     "  - 'ctime', 'status'\n  - 'mtime', 'modification'\n"
+     "  - 'birth', 'creation'\n"
+     "Try 'ls --help' for more information.", 1),
+    ({
+        "hyperlink": "a"
+    }, "ls: ambiguous argument 'a' for '--hyperlink'\n"
+     "Valid arguments are:\n  - 'always', 'yes', 'force'\n"
+     "  - 'never', 'no', 'none'\n  - 'auto', 'tty', 'if-tty'\n"
+     "Try 'ls --help' for more information.", 1),
+    ({
+        "time_style": "lo"
+    }, "ls: ambiguous argument 'lo' for 'time style'\n"
+     "Valid arguments are:\n  - [posix-]full-iso\n  - [posix-]long-iso\n"
+     "  - [posix-]iso\n  - [posix-]locale\n"
+     "  - +FORMAT (e.g., +%H:%M) for a 'date'-style format\n"
+     "Try 'ls --help' for more information.", 2),
+])
+def test_parse_flags_refuses_a_prefix_spanning_two_values(
+        flags, message, code):
+    with pytest.raises(UsageError) as info:
+        parse_flags(flags)
+    assert str(info.value) == message
+    assert info.value.exit_code == code
+
+
+# `ls --sort=NON`, `=NONE` and `=None` are all `invalid argument`, never
+# ambiguous and never accepted: gnulib compares bytes (measured).
+@pytest.mark.parametrize("value", ["NON", "NONE", "None"])
+def test_prefix_matching_is_case_sensitive(value):
+    with pytest.raises(UsageError) as info:
+        parse_flags({"sort": value})
+    assert str(info.value).startswith(
+        f"ls: invalid argument '{value}' for '--sort'\n")
+    assert info.value.exit_code == 1
+
+
+# The block and the hint are byte-identical between the two wordings;
+# only the first line differs. Measured by stripping line 1 from
+# `ls -l --time=c` and `-l --time=zzz`.
+def test_the_ambiguous_and_invalid_blocks_are_the_same_below_line_one():
+    with pytest.raises(UsageError) as ambiguous:
+        parse_flags({"time": "c"})
+    with pytest.raises(UsageError) as invalid:
+        parse_flags({"time": "zzz"})
+    assert str(ambiguous.value).split("\n", 1)[1] == (str(invalid.value).split(
+        "\n", 1)[1])
+    assert ambiguous.value.exit_code == invalid.value.exit_code == 1
+
+
 # xstrtoumax's three refusals as ls words them, measured on coreutils 9.7;
 # the word is quoted but never escaped. Mirrored in ls.test.ts.
 @pytest.mark.parametrize("value,message", [

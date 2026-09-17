@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from mirage.commands.builtin.utils.stream import resolve_source
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import CommandName, FlagValue
 from mirage.commands.spec.usage import argmatch_error, extra_operand_error
@@ -44,6 +45,21 @@ def _parse_count(value: str | None) -> int | None:
     return count
 
 
+def _method_word(option: str, value: str, allowed: tuple[str, ...]) -> str:
+    """One ``--group``/``--all-repeated`` word, ARGMATCH-resolved.
+
+    Args:
+        option (str): the option's long spelling, for the refusal.
+        value (str): the method word as typed.
+        allowed (tuple[str, ...]): GNU's candidates in declaration
+            order, one value each (neither option has aliases).
+    """
+    match = argmatch(value, allowed)
+    if not isinstance(match, ArgmatchMatch):
+        raise argmatch_error("uniq", option, value, allowed, None, match.kind)
+    return match.word
+
+
 def parse_flags(flags: Mapping[str, FlagValue]) -> UniqFlags:
     fl = FlagView(flags, spec=SPECS["uniq"])
     raw_all = fl.raw("all_repeated")
@@ -52,13 +68,13 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> UniqFlags:
         all_repeated = "none"
     elif isinstance(raw_all, str):
         all_repeated = raw_all
-    if all_repeated is not None and all_repeated not in ALL_REPEATED_ARGS:
-        raise argmatch_error("uniq", "--all-repeated", all_repeated,
-                             ALL_REPEATED_ARGS)
+    if all_repeated is not None:
+        all_repeated = _method_word("--all-repeated", all_repeated,
+                                    ALL_REPEATED_ARGS)
     raw_group = fl.raw("group")
     group = "separate" if raw_group is True else raw_group
-    if group is not None and group not in GROUP_ARGS:
-        raise argmatch_error("uniq", "--group", str(group), GROUP_ARGS)
+    if group is not None:
+        group = _method_word("--group", str(group), GROUP_ARGS)
     count = fl.as_bool("count")
     duplicates_only = fl.as_bool("repeated")
     unique_only = fl.as_bool("unique")

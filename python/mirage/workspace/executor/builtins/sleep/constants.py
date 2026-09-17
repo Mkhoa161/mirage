@@ -14,10 +14,18 @@
 
 import re
 
-# Finite non-negative decimals only ("0", "0.2", ".5", "1.", "+1", "1e-3").
-# GNU sleep additionally accepts "inf" and sleeps forever; an agent shell
-# must never hang, so non-finite intervals are rejected (deliberate
-# divergence). The regex also keeps Python/TypeScript parsing identical:
-# float() alone would accept "inf", "nan", "1_0", and surrounding whitespace
-# that Number() rejects, and Number() accepts hex that float() rejects.
+# The NUMBER half of GNU's `NUMBER[SUFFIX]`: finite non-negative decimals
+# only ("0", "0.2", ".5", "1.", "+1", "1e-3"). GNU sleep additionally
+# accepts "inf" and sleeps forever; an agent shell must never hang, so
+# non-finite intervals are rejected (deliberate divergence). The regex also
+# keeps Python/TypeScript parsing identical: float() alone would accept
+# "inf", "nan", "1_0", and surrounding whitespace that Number() rejects, and
+# Number() accepts hex that float() rejects.
 SLEEP_INTERVAL = re.compile(r"\+?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?")
+
+# The SUFFIX half, and what each one multiplies the number by. gnulib's
+# `apply_suffix` switches on one character, so exactly one may follow the
+# number and the switch is lowercase only. Measured on coreutils 9.7:
+# `sleep 0.005m` takes 0.3s, while `sleep 0S`, `sleep 0ss` and `sleep s`
+# are all `invalid time interval`.
+SLEEP_SUFFIXES = {"s": 1, "m": 60, "h": 60 * 60, "d": 60 * 60 * 24}

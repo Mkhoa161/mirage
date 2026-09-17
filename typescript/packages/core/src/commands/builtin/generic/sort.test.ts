@@ -31,7 +31,9 @@ async function stderrOf(flags: CommandOpts['flags']): Promise<[string, number]> 
   })
   if (result === null) throw new Error('sort returned no result')
   const io = result[1]
-  return [DEC.decode(io.stderr as Uint8Array), io.exitCode]
+  // stderr is null on a run that was not refused, which the prefix cases
+  // below are.
+  return [DEC.decode((io.stderr ?? new Uint8Array()) as Uint8Array), io.exitCode]
 }
 
 // GNU's ARGMATCH refusal names the refused word through gnulib's quote(),
@@ -72,5 +74,32 @@ describe('sort --check refusal carries GNU candidate block', () => {
     const [stderr, code] = await stderrOf({ check: '' })
     expect(stderr.split('\n')[0]).toBe("sort: ambiguous argument '' for '--check'")
     expect(code).toBe(1)
+  })
+
+  // `sort --check=q`, `=s` and `=d` all exit 0 on sorted input (measured,
+  // coreutils 9.4). The stdin here is NOT sorted, so the canonical word is
+  // observable: the ('quiet', 'silent') value stays silent while
+  // diagnose-first names the first disorder. Mirrors test_sort.py.
+  it.each(['q', 's', 'quiet', 'silent'])(
+    'resolves --check=%s to the quiet value',
+    async (value) => {
+      const [stderr, code] = await stderrOf({ check: value })
+      expect(stderr).toBe('')
+      expect(code).toBe(1)
+    },
+  )
+
+  it.each(['d', 'diagnose', 'diagnose-first'])(
+    'resolves --check=%s to diagnose-first',
+    async (value) => {
+      const [stderr, code] = await stderrOf({ check: value })
+      expect(stderr).toContain('disorder')
+      expect(code).toBe(1)
+    },
+  )
+
+  it('still refuses a word no candidate starts with', async () => {
+    const [stderr] = await stderrOf({ check: 'qu1et' })
+    expect(stderr.split('\n')[0]).toBe("sort: invalid argument 'qu1et' for '--check'")
   })
 })

@@ -16,14 +16,70 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from mirage.commands.spec.argmatch import (ArgmatchChoices, ArgmatchMatch,
+                                           argmatch, value_classes)
+from mirage.commands.spec.builtin_specs import SPECS, is_builtin_grammar
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
-from mirage.commands.spec.constants import (ARG_PLACEHOLDER, FLOAT_VALUE,
-                                            INT_VALUE, NUMERIC_SHORT,
+from mirage.commands.spec.constants import (ARG_PLACEHOLDER,
+                                            ARGMATCH_CHOICE_OPTIONS,
+                                            FLOAT_VALUE, INT_VALUE,
+                                            NO_LONG_OPTIONS, NUMERIC_SHORT,
+                                            SOLE_ARGUMENT_LONG_OPTIONS,
                                             flag_kwarg_name)
 from mirage.commands.spec.oldstyle import expand_old_style
-from mirage.commands.spec.types import CommandSpec, ParsedFlagValue, ValueType
+from mirage.commands.spec.types import (CommandSpec, Option, ParsedFlagValue,
+                                        ValueType)
 from mirage.utils.path import resolve_path
+
+
+def _argmatch_options() -> tuple[Option, ...]:
+    """The builtin ``Option`` objects whose choices are ARGMATCH tables.
+
+    ARGMATCH_CHOICE_OPTIONS names them as (command, spelling) pairs
+    because that is how the measurement reads; this resolves each pair
+    to the one object the builtin spec declares, so ``_argmatch_dests``
+    can test ``is`` rather than compare strings. A pair that names no
+    option is a rotted entry and fails loudly here, at import.
+    """
+    found: list[Option] = []
+    for name, spelling in sorted(ARGMATCH_CHOICE_OPTIONS):
+        options = [
+            o for o in SPECS[name].options
+            if (o.long if o.long else o.short) == spelling
+        ]
+        if not options:
+            raise ValueError(f"ARGMATCH_CHOICE_OPTIONS names {name} "
+                             f"{spelling}, which that spec does not declare")
+        found.extend(options)
+    return tuple(found)
+
+
+_ARGMATCH_OPTIONS = _argmatch_options()
+
+
+def _argmatch_dests(spec: CommandSpec) -> frozenset[str]:
+    """Which of this spec's choice sets are gnulib ARGMATCH tables.
+
+    Decided by ``Option`` identity, not by the command's name: a mount
+    may register its own `tee` (commands/registry.py), and a name is not
+    an identity. Identity is also the only signal that survives
+    registration, which parses an enriched COPY of the spec (config.py
+    appends --help/--version, once per backend), while every declared
+    Option stays the same object.
+
+    Read off the spec rather than cached on its CompiledSpec because
+    ``compile_spec`` keys on a frozen dataclass, so its cache is
+    STRUCTURAL: a custom spec that merely looked like tee's would share
+    the builtin's compiled tables, and an identity-derived fact stored
+    in there would be whichever of the two compiled first.
+
+    Args:
+        spec (CommandSpec): the grammar being parsed.
+    """
+    return frozenset(
+        (o.long if o.long else o.short) or "" for o in spec.options
+        if o.choices and any(o is table for table in _ARGMATCH_OPTIONS))
 
 
 @dataclass
@@ -66,7 +122,17 @@ class ParsedArgs:
     # renderer tells them apart by the tag.
     option_error_kinds: list[str] = field(default_factory=list)
     needs_value_options: list[str] = field(default_factory=list)
-    invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = field(
+    # Values outside a declared choices set, in scan order. The two
+    # lists are the two wordings gnulib picks between and the kinds tape
+    # above is what orders them against each other: a value that is a
+    # prefix of two candidates reads `ambiguous argument 'ie'`, one that
+    # is a prefix of none reads `invalid argument 'a'`, and both print
+    # the same candidate block. Only the three ARGMATCH_CHOICE_OPTIONS
+    # tables can fill the ambiguous one, because only a prefix can be
+    # ambiguous and every other choices set compares the whole word.
+    invalid_value_options: list[tuple[str, str, ArgmatchChoices]] = field(
+        default_factory=list)
+    ambiguous_value_options: list[tuple[str, str, ArgmatchChoices]] = field(
         default_factory=list)
     invalid_int_options: list[tuple[str, str]] = field(default_factory=list)
     invalid_float_options: list[tuple[str, str]] = field(default_factory=list)
@@ -113,12 +179,14 @@ class _Refusals:
     kinds: list[str]
     ints: list[tuple[str, str]] = field(default_factory=list)
     floats: list[tuple[str, str]] = field(default_factory=list)
-    values: list[tuple[str, str, tuple[str,
-                                       ...]]] = field(default_factory=list)
+    values: list[tuple[str, str,
+                       ArgmatchChoices]] = field(default_factory=list)
+    ambiguous_values: list[tuple[str, str, ArgmatchChoices]] = field(
+        default_factory=list)
 
 
-def _check_value(refusals: _Refusals, cs: CompiledSpec, dest: str,
-                 value: str) -> None:
+def _check_value(refusals: _Refusals, cs: CompiledSpec,
+                 argmatch_dests: frozenset[str], dest: str, value: str) -> str:
     """Run one value through its dest's int, float and choices checks.
 
     Int-typed values are refused before choices, argparse's order (type
@@ -126,30 +194,63 @@ def _check_value(refusals: _Refusals, cs: CompiledSpec, dest: str,
     once: a non-numeric value on an int option that also declares
     choices reports the conversion failure, not the choice list.
 
+    A declared ``choices`` set compares the WHOLE word, argparse's rule,
+    unless the option declaring it is one of the three gnulib ARGMATCH
+    tables the parser owns, in which case an unambiguous prefix resolves
+    to its candidate. The resolved word is what the caller stores, so a
+    command reads `none` where the line typed `non` and never learns the
+    difference. Which sets those are was settled by ``compile_spec``, by
+    ``Option`` identity rather than by the command's name, so a
+    registered command that borrows the name `tee` still compares the
+    whole word. ``_argmatch_dests`` settled which they are.
+
     Args:
         refusals (_Refusals): the lists to report into.
         cs (CompiledSpec): compiled spec tables.
+        argmatch_dests (frozenset[str]): this spec's ARGMATCH sets, from
+            _argmatch_dests.
         dest (str): the value's dest.
         value (str): the raw value.
+
+    Returns:
+        str: the value to store -- the canonical candidate when an
+            ARGMATCH prefix resolved, otherwise the value as typed.
     """
     if dest in cs.int_dests and not INT_VALUE.match(value):
         refusals.ints.append((dest, value))
         refusals.kinds.append("int")
-        return
+        return value
     if dest in cs.float_dests and not FLOAT_VALUE.match(value):
         refusals.floats.append((dest, value))
         refusals.kinds.append("float")
-        return
+        return value
     allowed = cs.choices_by_dest.get(dest)
-    if allowed is not None and value not in allowed:
+    if allowed is None:
+        return value
+    if dest in argmatch_dests:
+        match = argmatch(value, allowed)
+        if isinstance(match, ArgmatchMatch):
+            return match.word
+        if match.kind == "ambiguous":
+            refusals.ambiguous_values.append((dest, value, allowed))
+            refusals.kinds.append("ambiguous_value")
+            return value
         refusals.values.append((dest, value, allowed))
         refusals.kinds.append("value")
+        return value
+    for group in value_classes(allowed):
+        if value in group:
+            return group[0]
+    refusals.values.append((dest, value, allowed))
+    refusals.kinds.append("value")
+    return value
 
 
 def _set_value_flag(
     flags: dict[str, ParsedFlagValue],
     refusals: _Refusals,
     cs: CompiledSpec,
+    argmatch_dests: frozenset[str],
     spelling: str,
     value: str,
 ) -> None:
@@ -170,20 +271,21 @@ def _set_value_flag(
         flags (dict): parsed flag bag, updated in place.
         refusals (_Refusals): where a dropped value's refusal lands.
         cs (CompiledSpec): compiled spec tables.
+        argmatch_dests (frozenset[str]): this spec's ARGMATCH sets.
         spelling (str): dashed spelling as typed.
         value (str): the flag's value.
     """
     name = cs.dest_of(spelling)
-    _check_value(refusals, cs, name, value)
+    stored = _check_value(refusals, cs, argmatch_dests, name, value)
     if name in cs.multiple_dests:
         prev = flags.get(name)
         if isinstance(prev, list):
-            prev.append(value)
+            prev.append(stored)
         else:
-            flags[name] = [value]
+            flags[name] = [stored]
     else:
         flags.pop(name, None)
-        flags[name] = value
+        flags[name] = stored
 
 
 def _bag_values(flags: Mapping[str, ParsedFlagValue],
@@ -301,9 +403,46 @@ def parse_command(
     spec: CommandSpec,
     argv: list[str],
     cwd: str,
+    cmd_name: str = "",
     env: Mapping[str, str] | None = None,
+    *,
+    unknown_is_operand: bool = False,
 ) -> ParsedArgs:
+    """Read one command line against a spec.
+
+    Args:
+        spec (CommandSpec): the grammar to read the line against.
+        argv (list[str]): the words after the command name.
+        cwd (str): directory a relative path operand resolves against.
+        cmd_name (str): the program name, for the refusal wording and
+            for the handful of measured per-program rules the grammar
+            cannot state (NO_LONG_OPTIONS, SOLE_ARGUMENT_LONG_OPTIONS).
+        env (Mapping[str, str] | None): the session environment, so an
+            option declaring one gets its value from there.
+        unknown_is_operand (bool): whether another parser reads this
+            line after mirage. False is a GNU command, where mirage is
+            the only parser the line will meet, so a dashed word the
+            spec does not declare is `unrecognized option`. True is an
+            installed CLI's node, where the spec is deliberately
+            partial: mirage's `git log` declares the flags mirage
+            enforces and git owns the rest, so an undeclared dashed word
+            is handed back as an operand for git to refuse in git's own
+            words and exit (`fatal: unrecognized argument: -p`).
+            Keyword-only and last, because it is a fact about the call
+            rather than about the spec, and nothing on CommandSpec may
+            say it: the shared grammar stays what POSIX and argparse can
+            both express. It says nothing about ``choices``, which
+            compares the whole word for every spec unless the option
+            declaring the set is one of the three builtin ARGMATCH
+            declarations -- an identity the spec itself settles, so
+            it is not a fact about the caller at all.
+
+    Returns:
+        ParsedArgs: the flag bag, operands, and every refusal the line
+            earned.
+    """
     cs = compile_spec(spec)
+    argmatch_dests = _argmatch_dests(spec)
 
     # tar's old option style is expanded before anything else reads the
     # line, so classification, routing and dispatch all scan the same
@@ -365,11 +504,49 @@ def parse_command(
     option_error_kinds: list[str] = []
     refusals = _Refusals(kinds=option_error_kinds)
     needs_value_options: list[str] = []
-    # Free-text commands (echo/python/bash-style TEXT rest) keep unknown
-    # dash tokens verbatim; elsewhere they are dropped with a warning so a
-    # stray flag never corrupts pattern/path classification.
-    lenient_dash_operands = (cs.rest_kind is not None
-                             and cs.rest_kind != "path" and not cs.remainder)
+    # Who owns a dashed word the spec does not declare. The caller
+    # already answered that by which reader it called.
+    if unknown_is_operand:
+        # Where the word goes is still the grammar's to say: it lands in
+        # a textual rest slot when the node has one (git's `log -p`, and
+        # a script root whose whole line is forwarded) and is refused
+        # here when the node declares no slot for it (`pager
+        # --frobnicate`). The rest kind can answer that here and could
+        # not answer it for a GNU command: a CLI node's textual rest IS
+        # the pass-through slot, while basename's is a list of names,
+        # and eleven GNU specs share basename's shape.
+        lenient_dash_operands = (cs.rest_kind is not None
+                                 and cs.rest_kind != "path"
+                                 and not cs.remainder)
+        no_long_option_parser = lenient_dash_operands
+        outside_sole_argument = False
+    else:
+        # getopt_long, with exactly two exceptions, both named rather
+        # than derived from the spec because nothing in a declaration
+        # tells them apart: see NO_LONG_OPTIONS and
+        # SOLE_ARGUMENT_LONG_OPTIONS for the measurements and for why
+        # #1107's "declares no long options" predicate cannot work. A
+        # program with no long-option parser prints a dash word it does
+        # not know instead of refusing it, and never expands an
+        # abbreviation.
+        # Both tables name one real program, so both are gated on this
+        # spec being that program's own grammar: a mount may register a
+        # command under a builtin's name (nothing refuses it), and the
+        # sole-argument rule turns such a spec's declared `--mode=x`
+        # into an operand its handler then never sees.
+        builtin = is_builtin_grammar(cmd_name, spec)
+        no_long_option_parser = builtin and cmd_name in NO_LONG_OPTIONS
+        # gnulib's parse_long_options reads argv[1] only when it is the
+        # whole line, so outside that one-argument window the program
+        # has no long options AT ALL and even an exact `--help` is an
+        # operand. Counted over filtered_argv because `--cache` is
+        # mirage's own out-of-band word and not part of the command line
+        # being emulated.
+        sole_argument = builtin and cmd_name in SOLE_ARGUMENT_LONG_OPTIONS
+        outside_sole_argument = sole_argument and len(filtered_argv) != 1
+        # A dash-leading word this program answers by printing it as an
+        # operand rather than by refusing it.
+        lenient_dash_operands = no_long_option_parser or sole_argument
     i = 0
     end_of_flags = False
 
@@ -389,15 +566,27 @@ def parse_command(
             continue
 
         if tok.startswith("--"):
+            if outside_sole_argument:
+                # Outside gnulib's one-argument window the program has no
+                # long options to recognize, so the word is an operand
+                # whether or not it is declared: `expr --help x` is a
+                # syntax error on `x`, not a help request.
+                raw_args.append(tok)
+                raw_indices.append(orig_indices[i])
+                raw_bases.append(base)
+                i += 1
+                continue
             # getopt_long: an exact spelling always wins; otherwise an
             # unambiguous prefix expands to its declared spelling
             # (grep --rec) and an ambiguous one is refused with every
-            # possibility. Free-text commands keep exact-only matching:
-            # their unknown dash tokens are operands, not typos.
+            # possibility. A program with no long-option parser keeps
+            # exact-only matching: its unknown dash tokens are operands,
+            # not typos. expr inside its window is a real getopt_long
+            # call, so `expr --h` does resolve to --help.
             eq = tok.find("=")
             typed = tok if eq == -1 else tok[:eq]
             spelling = typed
-            if typed not in cs.dest and not lenient_dash_operands:
+            if typed not in cs.dest and not no_long_option_parser:
                 expansions = expand_long(cs, typed)
                 if len(expansions) == 1:
                     spelling = expansions[0]
@@ -414,9 +603,9 @@ def parse_command(
             elif is_pair and eq == -1 and i + 2 < len(filtered_argv):
                 # Two tokens, both recorded under the one dest, so the
                 # command reads the accumulated list in twos.
-                _set_value_flag(flags, refusals, cs, spelling,
+                _set_value_flag(flags, refusals, cs, argmatch_dests, spelling,
                                 filtered_argv[i + 1])
-                _set_value_flag(flags, refusals, cs, spelling,
+                _set_value_flag(flags, refusals, cs, argmatch_dests, spelling,
                                 filtered_argv[i + 2])
                 # The first token names the value and is always textual;
                 # the option's own kind describes the second.
@@ -425,7 +614,7 @@ def parse_command(
                 i += 3
             elif (not is_pair and etok in cs.long_value_spellings
                   and i + 1 < len(filtered_argv)):
-                _set_value_flag(flags, refusals, cs, etok,
+                _set_value_flag(flags, refusals, cs, argmatch_dests, etok,
                                 filtered_argv[i + 1])
                 word_kinds[orig_indices[i + 1]] = cs.kind_of[etok]
                 if cs.dest_of(etok) == cs.base_dest:
@@ -445,8 +634,8 @@ def parse_command(
             else:
                 if eq != -1 and (spelling in cs.long_value_spellings
                                  or spelling in cs.long_optional_spellings):
-                    _set_value_flag(flags, refusals, cs, spelling,
-                                    tok[eq + 1:])
+                    _set_value_flag(flags, refusals, cs, argmatch_dests,
+                                    spelling, tok[eq + 1:])
                     base = _rebase(flags, cs, spelling, tok[eq + 1:], base)
                 elif etok in cs.long_value_spellings:
                     # Declared value flag at end of line with no argument.
@@ -486,7 +675,8 @@ def parse_command(
             matched_optional = False
             for vf in cs.attach_spellings:
                 if tok.startswith(vf) and len(tok) > len(vf):
-                    _set_value_flag(flags, refusals, cs, vf, tok[len(vf):])
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vf,
+                                    tok[len(vf):])
                     base = _rebase(flags, cs, vf, tok[len(vf):], base)
                     i += 1
                     matched_optional = True
@@ -496,7 +686,7 @@ def parse_command(
             matched_value = False
             for vf in cs.value_spellings:
                 if tok == vf and i + 1 < len(filtered_argv):
-                    _set_value_flag(flags, refusals, cs, vf,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vf,
                                     filtered_argv[i + 1])
                     word_kinds[orig_indices[i + 1]] = cs.kind_of[vf]
                     if cs.dest_of(vf) == cs.base_dest:
@@ -506,7 +696,8 @@ def parse_command(
                     matched_value = True
                     break
                 if tok.startswith(vf) and len(tok) > len(vf):
-                    _set_value_flag(flags, refusals, cs, vf, tok[len(vf):])
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vf,
+                                    tok[len(vf):])
                     base = _rebase(flags, cs, vf, tok[len(vf):], base)
                     i += 1
                     matched_value = True
@@ -536,14 +727,15 @@ def parse_command(
                 if attached is not None:
                     for name in cluster_bools:
                         _set_bool_flag(flags, cs, name)
-                    _set_value_flag(flags, refusals, cs, vflag, attached)
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vflag,
+                                    attached)
                     base = _rebase(flags, cs, vflag, attached, base)
                     i += 1
                     continue
                 if i + 1 < len(filtered_argv):
                     for name in cluster_bools:
                         _set_bool_flag(flags, cs, name)
-                    _set_value_flag(flags, refusals, cs, vflag,
+                    _set_value_flag(flags, refusals, cs, argmatch_dests, vflag,
                                     filtered_argv[i + 1])
                     word_kinds[orig_indices[i + 1]] = cs.kind_of[vflag]
                     if cs.dest_of(vflag) == cs.base_dest:
@@ -628,14 +820,22 @@ def parse_command(
                 flags[dest_name] = default
 
     # Every typed value was checked as it was read; what a default or
-    # the environment filled in afterwards is checked here.
+    # the environment filled in afterwards is checked here. An ARGMATCH
+    # dest canonicalizes here too, so a default spelled as a prefix
+    # reaches the command as the candidate it names.
     checked = dict.fromkeys(
         [*cs.int_dests, *cs.float_dests, *cs.choices_by_dest])
     for dest_name in checked:
         if dest_name in typed_dests:
             continue
-        for part in _bag_values(flags, dest_name):
-            _check_value(refusals, cs, dest_name, part)
+        values = _bag_values(flags, dest_name)
+        stored = [
+            _check_value(refusals, cs, argmatch_dests, dest_name, part)
+            for part in values
+        ]
+        if stored and stored != values:
+            flags[dest_name] = (stored if isinstance(flags.get(dest_name),
+                                                     list) else stored[0])
 
     missing_required_options = [
         dest_name for dest_name in cs.required_dests if dest_name not in flags
@@ -751,6 +951,7 @@ def parse_command(
         option_error_kinds=option_error_kinds,
         needs_value_options=needs_value_options,
         invalid_value_options=refusals.values,
+        ambiguous_value_options=refusals.ambiguous_values,
         invalid_int_options=refusals.ints,
         invalid_float_options=refusals.floats,
         missing_required_options=missing_required_options,

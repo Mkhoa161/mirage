@@ -55,6 +55,28 @@ describe('wc --total refusal carries GNU candidate block', () => {
     )
   })
 
+  // `wc --total=al` is `always` and `=au` is `auto` (measured, coreutils
+  // 9.4), while the bare `a` they share spans two values. Mirrors
+  // test_wc.py.
+  it.each([
+    ['al', 'always'],
+    ['au', 'auto'],
+    ['o', 'only'],
+    ['n', 'never'],
+    ['always', 'always'],
+  ])('resolves the unambiguous prefix %s', (value, total) => {
+    const parsed = parseFlags({ total: value })
+    expect(typeof parsed === 'string' ? parsed : parsed.total).toBe(total)
+  })
+
+  it('refuses a prefix spanning two values', () => {
+    expect(parseFlags({ total: 'a' })).toBe(
+      "wc: ambiguous argument 'a' for '--total'\n" +
+        "Valid arguments are:\n  - 'auto'\n  - 'always'\n  - 'only'\n  - 'never'\n" +
+        "Try 'wc --help' for more information.\n",
+    )
+  })
+
   it('still defaults an absent --total to auto', () => {
     const parsed = parseFlags({})
     expect(typeof parsed === 'string' ? parsed : parsed.total).toBe('auto')

@@ -21,10 +21,19 @@ import type { DispatchFn } from '../runtime/types.ts'
 import type { NamespaceView, ReaddirPath, SessionView, StatPath } from '../ops/types.ts'
 import { VERSION } from '../version.ts'
 import type { AggregateResult } from './builtin/aggregators.ts'
-import { BUILTIN_SPECS } from './spec/builtins.ts'
+import { ROOT_CWD } from './constants.ts'
+import { isBuiltinGrammar, registeredSpec } from './spec/builtins.ts'
+import {
+  HELP_OPTION,
+  STANDARD_AFTER_SCAN,
+  STANDARD_BEFORE_SCAN,
+  VERSION_OPTION,
+} from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
+import { type ParsedArgs, parseCommand } from './spec/parser.ts'
 import { SYNOPSES } from './spec/synopsis.ts'
-import { CommandSpec, Option, UsageStyle, type FlagValue } from './spec/types.ts'
+import type { CommandSpec } from './spec/types.ts'
+import { UsageStyle, type FlagValue } from './spec/types.ts'
 
 /**
  * The execution context `Mount.executeCmd` takes: everything the
@@ -256,46 +265,164 @@ export interface CommandOptions<A extends Accessor = Accessor> {
   limit?: Limit | null
 }
 
-export const HELP_OPTION = new Option({
-  long: '--help',
-  type: 'bool',
-  description: 'Show this help and exit',
-})
-
-const VERSION_OPTION = new Option({
-  long: '--version',
-  type: 'bool',
-  description: 'Show version information and exit',
-})
-
 const HELP_ENC = new TextEncoder()
 
 /** Render the GNU-style version line for a command. */
-function versionLine(name: string): string {
+export function versionLine(name: string): string {
   return `${name} (Mirage) ${VERSION}\n`
 }
 
+// gnulib's two standard options, in the order `helpSpec` injects them. Both
+// are answered INSIDE the getopt loop, so the one the scan reaches FIRST
+// decides the line: measured on coreutils 9.7, `cat --help --version` prints
+// the help page and `cat --version --help` prints the version line.
+const STANDARD_DESTS = ['--help', '--version'] as const
+
 /**
- * Version output when argv asks a command for the injected --version.
- * Null when the command declares its own --version, when the flag is
- * absent, or when it sits after the `--` end-of-options marker.
+ * Read these words the way the line is read downstream.
+ *
+ * The same parse, so the two agree by construction rather than by a second
+ * reading of the grammar. Only the option reports and the typed dests are
+ * consumed, which is why a cwd the caller does not have is not one it needs:
+ * nothing here looks at a resolved path. `_scan` in config.py is the twin.
  */
-export function versionRequest(
+function scan(name: string, spec: CommandSpec, words: string[]): ParsedArgs {
+  return parseCommand(spec, words, ROOT_CWD, name)
+}
+
+/**
+ * Whether the scan refused an option in the words it read.
+ *
+ * `missingRequiredOptions` is deliberately not read: the words are a PREFIX of
+ * the line for every command but the two that defer, so an option declared
+ * later has not been reached yet. `_scan_refuses` in config.py is the twin.
+ */
+function scanRefuses(parsed: ParsedArgs): boolean {
+  return parsed.optionErrorKinds.length > 0 || parsed.oldOptionNeedsValue !== null
+}
+
+/**
+ * Where the parser reads one injected standard option, if anywhere.
+ *
+ * Deliberately not a raw scan over argv. A word that only looks like the
+ * option can be an earlier option's value, and a lookalike stops at the wrong
+ * one: `grep -e -- --version` hands `--` to -e, so the line is not ended and
+ * the `--version` after it really is the option, while
+ * `sort -o --version --version` hands the first spelling to -o's output file
+ * and only the second is read. Reading each prefix in turn puts the answer
+ * where the grammar already lives, so `--`, a declared remainder and a
+ * consumed value all follow from the parser rather than from three rules
+ * restated here. Adding words never un-types a dest, so the first prefix that
+ * carries it is the position. `_standard_index` in config.py is the twin.
+ */
+function standardIndex(
+  name: string,
+  spec: CommandSpec,
+  argv: string[],
+  dest: string,
+): number | null {
+  for (let index = 0; index < argv.length; index++) {
+    if (scan(name, spec, argv.slice(0, index + 1)).typedDests.includes(dest)) return index
+  }
+  return null
+}
+
+/** What one standard option answers with. `_standard_output` is the twin. */
+function standardOutput(name: string, spec: CommandSpec, dest: string): Uint8Array {
+  return HELP_ENC.encode(dest === '--help' ? helpPage(name, spec) : versionLine(name))
+}
+
+/**
+ * Output when argv asks a command for an injected standard option.
+ * Null when the command declares that option itself, when the parser does not
+ * read any word as one, or when an option the scan reads first is one the
+ * parser refuses.
+ *
+ * This is the one door both standard options come through, and it runs ahead
+ * of routing because neither answer belongs to a backend: `rm --version /ro/x`
+ * would otherwise meet the read-only refusal, and `mv --help /ram/a /disk/b`
+ * would otherwise reach the cross-mount relay, which bypasses the registered
+ * wrapper that answers help and MOVED THE FILE instead of printing the page.
+ * The two are one mechanism rather than two because GNU answers both from the
+ * same long_options table, so they are ordered against each other by scan
+ * position like any other pair of options: measured on coreutils 9.7,
+ * `cat --help --version` is the help page and `cat --version --help` is the
+ * version line.
+ *
+ * Three rules about position, all of them GNU's and none of them restated
+ * here. Which words the scan has read when it answers, because a standard
+ * option is an option like any other and an error the scan meets first is what
+ * GNU reports (`cat --bogus --vers` is `unrecognized option '--bogus'`), with
+ * STANDARD_AFTER_SCAN and STANDARD_BEFORE_SCAN for the two families that
+ * answer elsewhere. Whether that word is the option at all, which only the
+ * parser can say: a declared remainder slot is argparse's REMAINDER, `--` ends
+ * the scan, and a value-taking option swallows the word after it. And gnulib's
+ * `parse_long_options` window, which the parser already applies for
+ * SOLE_ARGUMENT_LONG_OPTIONS, so this reads its answer rather than carrying a
+ * second copy of the rule. `standard_request` in config.py is the twin.
+ */
+export function standardRequest(
   name: string,
   spec: CommandSpec | null,
   argv: string[],
 ): Uint8Array | null {
-  if (!hasInjectedVersion(spec)) return null
-  for (const arg of argv) {
-    if (arg === '--') return null
-    if (arg === '--version') return HELP_ENC.encode(versionLine(name))
+  if (spec === null) return null
+  const injected: Record<string, boolean> = {
+    '--help': hasInjectedHelp(spec),
+    '--version': hasInjectedVersion(spec),
   }
-  return null
+  if (!STANDARD_DESTS.some((d) => injected[d] === true)) return null
+  const whole = scan(name, spec, argv)
+  const found: { index: number; dest: string }[] = []
+  for (const dest of STANDARD_DESTS) {
+    if (injected[dest] !== true || !whole.typedDests.includes(dest)) continue
+    const index = standardIndex(name, spec, argv, dest)
+    if (index !== null) found.push({ index, dest })
+  }
+  if (found.length === 0) return null
+  // The one the scan reaches first decides; no two options share a word, so
+  // the positions cannot tie.
+  const first = found.reduce((a, b) => (a.index <= b.index ? a : b))
+  const builtin = isBuiltinGrammar(name, spec)
+  if (builtin && STANDARD_BEFORE_SCAN.has(name)) return standardOutput(name, spec, first.dest)
+  // Everything ahead of the option has to scan cleanly: a refusal among those
+  // words is what GNU reports instead of the answer.
+  if (scanRefuses(scan(name, spec, argv.slice(0, first.index)))) return null
+  // A program that answers only after the whole scan needs the rest of the
+  // line to be clean as well.
+  if (builtin && STANDARD_AFTER_SCAN.has(name) && scanRefuses(whole)) return null
+  return standardOutput(name, spec, first.dest)
+}
+
+/** Whether the wrapper supplies this spec's help response. */
+export function hasInjectedHelp(spec: CommandSpec | null): boolean {
+  return spec?.options.some((o) => o === HELP_OPTION) ?? false
 }
 
 /** Whether the wrapper supplies this spec's version response. */
 export function hasInjectedVersion(spec: CommandSpec | null): boolean {
   return spec?.options.some((o) => o === VERSION_OPTION) ?? false
+}
+
+/**
+ * One command's `--help` page.
+ *
+ * Rendered from `helpSpec`, not from the declared spec, so it documents the
+ * two options every command answers rather than only the ones its author
+ * wrote down. Only the builtin itself gets GNU's own synopsis line: a
+ * registered command that borrowed the name keeps the line its own spec
+ * synthesizes, which is why this asks for the spec OBJECT rather than
+ * trusting the name. `help_page` in config.py is the twin.
+ */
+export function helpPage(name: string, spec: CommandSpec): string {
+  // Either form of the builtin's own grammar answers the same page: the
+  // declared spec the wrapper holds, and the one enriched copy the registry
+  // parses, which is what a caller reaching this from the routing door has.
+  // That is exactly what `isBuiltinGrammar` settles, and asking it rather than
+  // `BUILTIN_SPECS[name] === spec` is what keeps a cross-mount `--help` from
+  // losing GNU's synopsis line.
+  const synopsis = isBuiltinGrammar(name, spec) ? SYNOPSES[name] : undefined
+  return renderHelp(name, registeredSpec(name, spec), [], UsageStyle.ARGPARSE, synopsis)
 }
 
 /**
@@ -309,25 +436,9 @@ function withHelpSupport(
   spec: CommandSpec,
   fn: CommandFn,
 ): { spec: CommandSpec; fn: CommandFn } {
-  const hasHelp = spec.options.some((o) => o.long === '--help')
   const hasVersion = spec.options.some((o) => o.long === '--version')
-  const extras: Option[] = []
-  if (!hasHelp) extras.push(HELP_OPTION)
-  if (!hasVersion) extras.push(VERSION_OPTION)
-  // Instance spread mirrors Python's dataclasses.replace: every CommandSpec
-  // field rides along, including ones added after this code was written.
-  // The prototype loss the lint warns about is the point: init wants a
-  // plain field bag, and the constructor rebuilds the class.
-  const newSpec =
-    extras.length === 0
-      ? spec
-      : // eslint-disable-next-line @typescript-eslint/no-misused-spread
-        new CommandSpec({ ...spec, options: [...spec.options, ...extras] })
-  // Only the builtin itself answers --help with GNU's synopsis; a
-  // registered command that borrowed the name keeps the line its own spec
-  // synthesizes.
-  const synopsis = BUILTIN_SPECS[name] === spec ? SYNOPSES[name] : undefined
-  const helpText = renderHelp(name, newSpec, [], UsageStyle.ARGPARSE, synopsis)
+  const newSpec = registeredSpec(name, spec)
+  const helpText = helpPage(name, spec)
   const versionText = versionLine(name)
   const wrappedFn: CommandFn = async (accessor, paths, texts, opts) => {
     if (opts.flags.help === true) {

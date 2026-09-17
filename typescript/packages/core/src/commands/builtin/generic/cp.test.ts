@@ -787,6 +787,26 @@ describe('parseFlags', () => {
     )
   })
 
+  // Measured against GNU coreutils 9.7 on debian:stable-slim, LC_ALL=C.
+  // Mirrors test_cp.py.
+  it.each([
+    ['a', 'all'],
+    ['al', 'all'],
+    ['o', 'older'],
+    ['old', 'older'],
+    ['none-', 'none-fail'],
+  ])('accepts the unambiguous --update prefix %s', (value, mode) => {
+    expect(parseFlags(view({ update: value })).update).toBe(mode)
+  })
+
+  // `n` is a prefix of `none` and of `none-fail`, which are two values, so
+  // 9.7 refuses it rather than reading it as `none`.
+  it.each(['n', 'no', 'non'])('refuses the --update prefix %s as ambiguous', (value) => {
+    expect(() => parseFlags(view({ update: value }))).toThrow(
+      `ambiguous argument '${value}' for '--update'`,
+    )
+  })
+
   it('resolves the GNU update and backup grammars', () => {
     expect(parseFlags(view({ update: true })).update).toBe('older')
     expect(parseFlags(view({ update: true })).update).toBe('older')

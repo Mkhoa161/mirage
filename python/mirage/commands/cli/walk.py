@@ -17,10 +17,9 @@ from dataclasses import replace
 
 from mirage.commands.cli.constants import CLAP_EXIT, USAGE_EXIT
 from mirage.commands.cli.types import CLISpec, WalkFlagBag, WalkResult
-from mirage.commands.config import HELP_OPTION
 from mirage.commands.spec.compile import (CompiledSpec, compile_spec,
                                           expand_long)
-from mirage.commands.spec.constants import FLOAT_VALUE, INT_VALUE
+from mirage.commands.spec.constants import FLOAT_VALUE, HELP_OPTION, INT_VALUE
 from mirage.commands.spec.help import (clap_group_refusal,
                                        clap_unexpected_argument, render_help)
 from mirage.commands.spec.types import UsageStyle

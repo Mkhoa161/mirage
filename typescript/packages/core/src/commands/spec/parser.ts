@@ -13,16 +13,79 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { resolvePath } from '../../utils/path.ts'
+import { compareCodePoints } from '../../utils/sort.ts'
+import { type ArgmatchChoices, argmatch, valueClasses } from './argmatch.ts'
+import { BUILTIN_SPECS, isBuiltinGrammar } from './builtins.ts'
 import { type CompiledSpec, compileSpec, expandLong } from './compile.ts'
 import {
   ARG_PLACEHOLDER,
+  ARGMATCH_CHOICE_OPTIONS,
   FLOAT_VALUE,
   flagKwargName,
   INT_VALUE,
+  NO_LONG_OPTIONS,
   NUMERIC_SHORT,
+  SOLE_ARGUMENT_LONG_OPTIONS,
 } from './constants.ts'
 import { expandOldStyle } from './oldstyle.ts'
-import type { CommandSpec, ValueType, FlagValue } from './types.ts'
+import type { CommandSpec, Option, ValueType, FlagValue } from './types.ts'
+
+/**
+ * The builtin `Option` objects whose choices are gnulib ARGMATCH tables.
+ *
+ * ARGMATCH_CHOICE_OPTIONS names them as "<command> <spelling>" because that
+ * is how the measurement reads; this resolves each entry to the one object
+ * the builtin spec declares, so `argmatchDests` can test `===` rather than
+ * compare strings. An entry naming no option is a rotted table and throws
+ * here, at module load. `_argmatch_options` in parser.py is the twin.
+ */
+function argmatchOptions(): readonly Option[] {
+  const found: Option[] = []
+  for (const key of [...ARGMATCH_CHOICE_OPTIONS].sort(compareCodePoints)) {
+    const sep = key.indexOf(' ')
+    const name = key.slice(0, sep)
+    const spelling = key.slice(sep + 1)
+    const options = (BUILTIN_SPECS[name]?.options ?? []).filter(
+      (o) => (o.long ?? o.short) === spelling,
+    )
+    if (options.length === 0) {
+      throw new Error(
+        `ARGMATCH_CHOICE_OPTIONS names ${name} ${spelling}, which that spec does not declare`,
+      )
+    }
+    found.push(...options)
+  }
+  return found
+}
+
+const ARGMATCH_OPTIONS = argmatchOptions()
+
+/**
+ * Which of this spec's choice sets are gnulib ARGMATCH tables.
+ *
+ * Decided by `Option` identity, not by the command's name: a mount may
+ * register its own `tee` (commands/registry.ts), and a name is not an
+ * identity. Identity is also the only signal that survives registration,
+ * which parses an enriched COPY of the spec (config.ts appends
+ * --help/--version, once per backend), while every declared Option stays the
+ * same object.
+ *
+ * Read off the spec rather than cached on its CompiledSpec so that the two
+ * languages answer alike: python's `compile_spec` caches on a frozen
+ * dataclass, so its key is structural and a spec that merely LOOKED like
+ * tee's would share the builtin's compiled tables. This WeakMap is keyed by
+ * reference and would not, and a fact that depended on which cache it sat in
+ * is exactly the kind that drifts. `_argmatch_dests` in parser.py is the
+ * twin.
+ */
+function argmatchDests(spec: CommandSpec): ReadonlySet<string> {
+  const dests = new Set<string>()
+  for (const o of spec.options) {
+    if (o.choices.length === 0) continue
+    if (ARGMATCH_OPTIONS.some((table) => table === o)) dests.add(o.long ?? o.short ?? '')
+  }
+  return dests
+}
 
 export interface ParsedArgsInit {
   flags: Record<string, FlagValue>
@@ -38,7 +101,18 @@ export interface ParsedArgsInit {
   ambiguousOptions?: [string, readonly string[]][]
   optionErrorKinds?: string[]
   needsValueOptions?: string[]
-  invalidValueOptions?: [string, string, readonly string[]][]
+  /**
+   * Values ARGMATCH refused, in declaration order, each tagged with the
+   * wording gnulib picks for it: `ls --color=a` is a prefix of `always` and
+   * `auto`, two values, and reads `ambiguous argument 'a'`, while
+   * `ls --color=zzz` matches nothing and reads `invalid argument 'zzz'`.
+   * Both print the same candidate block; optionErrorKinds is what orders
+   * them against each other and against every other refusal on the line.
+   * Only the three ARGMATCH_CHOICE_OPTIONS tables can fill the ambiguous
+   * one, because only a prefix can be ambiguous.
+   */
+  invalidValueOptions?: [string, string, ArgmatchChoices][]
+  ambiguousValueOptions?: [string, string, ArgmatchChoices][]
   invalidIntOptions?: [string, string][]
   invalidFloatOptions?: [string, string][]
   missingRequiredOptions?: string[]
@@ -95,7 +169,8 @@ export class ParsedArgs {
   // the tag.
   readonly optionErrorKinds: string[]
   readonly needsValueOptions: string[]
-  readonly invalidValueOptions: [string, string, readonly string[]][]
+  readonly invalidValueOptions: [string, string, ArgmatchChoices][]
+  readonly ambiguousValueOptions: [string, string, ArgmatchChoices][]
   readonly invalidIntOptions: [string, string][]
   readonly invalidFloatOptions: [string, string][]
   readonly missingRequiredOptions: string[]
@@ -124,6 +199,7 @@ export class ParsedArgs {
     this.optionErrorKinds = init.optionErrorKinds ?? []
     this.needsValueOptions = init.needsValueOptions ?? []
     this.invalidValueOptions = init.invalidValueOptions ?? []
+    this.ambiguousValueOptions = init.ambiguousValueOptions ?? []
     this.invalidIntOptions = init.invalidIntOptions ?? []
     this.invalidFloatOptions = init.invalidFloatOptions ?? []
     this.missingRequiredOptions = init.missingRequiredOptions ?? []
@@ -161,7 +237,8 @@ interface Refusals {
   kinds: string[]
   ints: [string, string][]
   floats: [string, string][]
-  values: [string, string, readonly string[]][]
+  values: [string, string, ArgmatchChoices][]
+  ambiguousValues: [string, string, ArgmatchChoices][]
 }
 
 // Run one value through its dest's int, float and choices checks. Int-typed
@@ -169,22 +246,53 @@ interface Refusals {
 // before the choices test), and one value is refused once: a non-numeric
 // value on an int option that also declares choices reports the conversion
 // failure, not the choice list.
-function checkValue(refusals: Refusals, cs: CompiledSpec, dest: string, value: string): void {
+//
+// A declared `choices` set compares the WHOLE word, argparse's rule, unless
+// the option declaring it is one of the three gnulib ARGMATCH tables the
+// parser owns, in which case an unambiguous prefix resolves to its
+// candidate. The returned word is what the caller stores, so a command reads
+// `none` where the line typed `non` and never learns the difference. Which
+// sets those are was settled by `compileSpec`, by `Option` identity rather
+// than by the command's name, so a registered command that borrows the name
+// `tee` still compares the whole word. `_check_value` in parser.py is the
+// twin.
+function checkValue(
+  refusals: Refusals,
+  cs: CompiledSpec,
+  argmatchDestSet: ReadonlySet<string>,
+  dest: string,
+  value: string,
+): string {
   if (cs.intDests.has(dest) && !INT_VALUE.test(value)) {
     refusals.ints.push([dest, value])
     refusals.kinds.push('int')
-    return
+    return value
   }
   if (cs.floatDests.has(dest) && !FLOAT_VALUE.test(value)) {
     refusals.floats.push([dest, value])
     refusals.kinds.push('float')
-    return
+    return value
   }
   const allowed = cs.choicesByDest.get(dest)
-  if (allowed !== undefined && !allowed.includes(value)) {
+  if (allowed === undefined) return value
+  if (argmatchDestSet.has(dest)) {
+    const match = argmatch(value, allowed)
+    if (match.matched) return match.word
+    if (match.kind === 'ambiguous') {
+      refusals.ambiguousValues.push([dest, value, allowed])
+      refusals.kinds.push('ambiguous_value')
+      return value
+    }
     refusals.values.push([dest, value, allowed])
     refusals.kinds.push('value')
+    return value
   }
+  for (const group of valueClasses(allowed)) {
+    if (group.includes(value)) return group[0] ?? value
+  }
+  refusals.values.push([dest, value, allowed])
+  refusals.kinds.push('value')
+  return value
 }
 
 // Record a value flag occurrence under its canonical dest. Both spellings
@@ -202,21 +310,22 @@ function setValueFlag(
   flags: Record<string, FlagValue>,
   refusals: Refusals,
   cs: CompiledSpec,
+  argmatchDestSet: ReadonlySet<string>,
   spelling: string,
   value: string,
 ): void {
   const name = cs.destOf(spelling)
-  checkValue(refusals, cs, name, value)
+  const stored = checkValue(refusals, cs, argmatchDestSet, name, value)
   if (cs.multipleDests.has(name)) {
     const prev = flags[name]
     if (Array.isArray(prev)) {
-      prev.push(value)
+      prev.push(stored)
     } else {
-      flags[name] = [value]
+      flags[name] = [stored]
     }
   } else {
     Reflect.deleteProperty(flags, name)
-    flags[name] = value
+    flags[name] = stored
   }
 }
 
@@ -297,13 +406,36 @@ function matchMixedCluster(tok: string, cs: CompiledSpec): MixedCluster | null {
   return null
 }
 
+/**
+ * Read one command line against a spec.
+ *
+ * `unknownIsOperand` says whether another parser reads this line after
+ * mirage. False is a GNU command, where mirage is the only parser the line
+ * will meet, so a dashed word the spec does not declare is `unrecognized
+ * option`. True is an installed CLI's node, where the spec is deliberately
+ * partial: mirage's `git log` declares the flags mirage enforces and git owns
+ * the rest, so an undeclared dashed word is handed back as an operand for git
+ * to refuse in git's own words and exit (`fatal: unrecognized argument: -p`).
+ * It comes last and defaults to the GNU answer, because it is a fact about
+ * the call rather than about the spec, and nothing on CommandSpec may say it:
+ * the shared grammar stays what POSIX and argparse can both express. It says
+ * nothing about `choices`, which compares the whole word for every spec
+ * unless the option declaring the set is one of the three builtin ARGMATCH
+ * declarations -- an identity the spec itself settles, so it is not a fact
+ * about the caller at all.
+ *
+ * `parse_command` in parser.py is the twin.
+ */
 export function parseCommand(
   spec: CommandSpec,
   argv: string[],
   cwd: string,
+  cmdName = '',
   env?: Readonly<Record<string, string>>,
+  unknownIsOperand = false,
 ): ParsedArgs {
   const cs = compileSpec(spec)
+  const argmatchDestSet = argmatchDests(spec)
 
   // tar's old option style is expanded before anything else reads the
   // line, so classification, routing and dispatch all scan the same
@@ -372,12 +504,55 @@ export function parseCommand(
   const invalidOptions: string[] = []
   const ambiguousOptions: [string, readonly string[]][] = []
   const optionErrorKinds: string[] = []
-  const refusals: Refusals = { kinds: optionErrorKinds, ints: [], floats: [], values: [] }
+  const refusals: Refusals = {
+    kinds: optionErrorKinds,
+    ints: [],
+    floats: [],
+    values: [],
+    ambiguousValues: [],
+  }
   const needsValueOptions: string[] = []
-  // Free-text commands (echo/python/bash-style TEXT rest) keep unknown dash
-  // tokens verbatim; elsewhere they are dropped with a warning so a stray
-  // flag never corrupts pattern/path classification.
-  const lenientDashOperands = cs.restKind !== null && cs.restKind !== 'path' && !cs.remainder
+  // Who owns a dashed word the spec does not declare. The caller already
+  // answered that with unknownIsOperand.
+  let noLongOptionParser: boolean
+  let outsideSoleArgument: boolean
+  let lenientDashOperands: boolean
+  if (unknownIsOperand) {
+    // Where the word goes is still the grammar's to say: it lands in a textual
+    // rest slot when the node has one (git's `log -p`, and a script root whose
+    // whole line is forwarded) and is refused here when the node declares no
+    // slot for it (`pager --frobnicate`). The rest kind can answer that here
+    // and could not answer it for a GNU command: a CLI node's textual rest IS
+    // the pass-through slot, while basename's is a list of names, and eleven
+    // GNU specs share basename's shape.
+    lenientDashOperands = cs.restKind !== null && cs.restKind !== 'path' && !cs.remainder
+    noLongOptionParser = lenientDashOperands
+    outsideSoleArgument = false
+  } else {
+    // getopt_long, with exactly two exceptions, both named rather than derived
+    // from the spec because nothing in a declaration tells them apart: see
+    // NO_LONG_OPTIONS and SOLE_ARGUMENT_LONG_OPTIONS for the measurements and
+    // for why #1107's "declares no long options" predicate cannot work. A
+    // program with no long-option parser prints a dash word it does not know
+    // instead of refusing it, and never expands an abbreviation.
+    // Both tables name one real program, so both are gated on this spec
+    // being that program's own grammar: a mount may register a command under
+    // a builtin's name (nothing refuses it), and the sole-argument rule turns
+    // such a spec's declared `--mode=x` into an operand its handler then
+    // never sees.
+    const builtin = isBuiltinGrammar(cmdName, spec)
+    noLongOptionParser = builtin && NO_LONG_OPTIONS.has(cmdName)
+    // gnulib's parse_long_options reads argv[1] only when it is the whole
+    // line, so outside that one-argument window the program has no long
+    // options AT ALL and even an exact `--help` is an operand. Counted over
+    // filteredArgv because `--cache` is mirage's own out-of-band word and not
+    // part of the command line being emulated.
+    const soleArgument = builtin && SOLE_ARGUMENT_LONG_OPTIONS.has(cmdName)
+    outsideSoleArgument = soleArgument && filteredArgv.length !== 1
+    // A dash-leading word this program answers by printing it as an operand
+    // rather than by refusing it.
+    lenientDashOperands = noLongOptionParser || soleArgument
+  }
   i = 0
   let endOfFlags = false
 
@@ -412,15 +587,27 @@ export function parseCommand(
     }
 
     if (tok.startsWith('--')) {
+      if (outsideSoleArgument) {
+        // Outside gnulib's one-argument window the program has no long options
+        // to recognize, so the word is an operand whether or not it is
+        // declared: `expr --help x` is a syntax error on `x`, not a help
+        // request.
+        rawArgs.push(tok)
+        rawIndices.push(origIndices[i] ?? -1)
+        rawBases.push(base)
+        i += 1
+        continue
+      }
       // getopt_long: an exact spelling always wins; otherwise an
       // unambiguous prefix expands to its declared spelling (grep --rec)
-      // and an ambiguous one is refused with every possibility.
-      // Free-text commands keep exact-only matching: their unknown dash
-      // tokens are operands, not typos.
+      // and an ambiguous one is refused with every possibility. A program
+      // with no long-option parser keeps exact-only matching: its unknown
+      // dash tokens are operands, not typos. expr inside its window is a
+      // real getopt_long call, so `expr --h` does resolve to --help.
       const eqPos = tok.indexOf('=')
       const typed = eqPos === -1 ? tok : tok.slice(0, eqPos)
       let spelling = typed
-      if (!cs.dest.has(typed) && !lenientDashOperands) {
+      if (!cs.dest.has(typed) && !noLongOptionParser) {
         const candidates = expandLong(cs, typed)
         if (candidates.length === 1) {
           spelling = candidates[0] ?? typed
@@ -439,15 +626,15 @@ export function parseCommand(
       } else if (isPair && eqPos === -1 && i + 2 < filteredArgv.length) {
         // Two tokens, both recorded under the one dest, so the command
         // reads the accumulated list in twos.
-        setValueFlag(flags, refusals, cs, spelling, filteredArgv[i + 1] ?? '')
-        setValueFlag(flags, refusals, cs, spelling, filteredArgv[i + 2] ?? '')
+        setValueFlag(flags, refusals, cs, argmatchDestSet, spelling, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, refusals, cs, argmatchDestSet, spelling, filteredArgv[i + 2] ?? '')
         // The first token names the value and is always textual; the
         // option's own kind describes the second.
         wordKinds[origIndices[i + 1] ?? -1] = 'str'
         wordKinds[origIndices[i + 2] ?? -1] = cs.kindOf.get(spelling) ?? null
         i += 3
       } else if (!isPair && cs.longValueSpellings.has(etok) && i + 1 < filteredArgv.length) {
-        setValueFlag(flags, refusals, cs, etok, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, refusals, cs, argmatchDestSet, etok, filteredArgv[i + 1] ?? '')
         wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(etok) ?? null
         if (cs.destOf(etok) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
         base = rebase(flags, cs, etok, filteredArgv[i + 1] ?? '', base)
@@ -468,7 +655,7 @@ export function parseCommand(
           eqPos !== -1 &&
           (cs.longValueSpellings.has(spelling) || cs.longOptionalSpellings.has(spelling))
         ) {
-          setValueFlag(flags, refusals, cs, spelling, tok.slice(eqPos + 1))
+          setValueFlag(flags, refusals, cs, argmatchDestSet, spelling, tok.slice(eqPos + 1))
           base = rebase(flags, cs, spelling, tok.slice(eqPos + 1), base)
         } else if (cs.longValueSpellings.has(etok)) {
           // Declared value flag at end of line with no argument.
@@ -508,7 +695,7 @@ export function parseCommand(
       let matchedOptional = false
       for (const vf of cs.attachSpellings) {
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, refusals, cs, vf, tok.slice(vf.length))
+          setValueFlag(flags, refusals, cs, argmatchDestSet, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedOptional = true
@@ -519,7 +706,7 @@ export function parseCommand(
       let matchedValue = false
       for (const vf of cs.valueSpellings) {
         if (tok === vf && i + 1 < filteredArgv.length) {
-          setValueFlag(flags, refusals, cs, vf, filteredArgv[i + 1] ?? '')
+          setValueFlag(flags, refusals, cs, argmatchDestSet, vf, filteredArgv[i + 1] ?? '')
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(vf) ?? null
           if (cs.destOf(vf) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
           base = rebase(flags, cs, vf, filteredArgv[i + 1] ?? '', base)
@@ -528,7 +715,7 @@ export function parseCommand(
           break
         }
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, refusals, cs, vf, tok.slice(vf.length))
+          setValueFlag(flags, refusals, cs, argmatchDestSet, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedValue = true
@@ -562,14 +749,21 @@ export function parseCommand(
       if (mixed !== null) {
         if (mixed.attached !== null) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, refusals, cs, mixed.valueFlag, mixed.attached)
+          setValueFlag(flags, refusals, cs, argmatchDestSet, mixed.valueFlag, mixed.attached)
           base = rebase(flags, cs, mixed.valueFlag, mixed.attached, base)
           i += 1
           continue
         }
         if (i + 1 < filteredArgv.length) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, refusals, cs, mixed.valueFlag, filteredArgv[i + 1] ?? '')
+          setValueFlag(
+            flags,
+            refusals,
+            cs,
+            argmatchDestSet,
+            mixed.valueFlag,
+            filteredArgv[i + 1] ?? '',
+          )
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(mixed.valueFlag) ?? null
           if (cs.destOf(mixed.valueFlag) === cs.baseDest) {
             wordBases[origIndices[i + 1] ?? -1] = base
@@ -649,11 +843,17 @@ export function parseCommand(
   }
 
   // Every typed value was checked as it was read; what a default or the
-  // environment filled in afterwards is checked here.
+  // environment filled in afterwards is checked here. An ARGMATCH dest
+  // canonicalizes here too, so a default spelled as a prefix reaches the
+  // command as the candidate it names.
   const checked = new Set([...cs.intDests, ...cs.floatDests, ...cs.choicesByDest.keys()])
   for (const destName of checked) {
     if (typedDests.includes(destName)) continue
-    for (const part of bagValues(flags, destName)) checkValue(refusals, cs, destName, part)
+    const values = bagValues(flags, destName)
+    const stored = values.map((part) => checkValue(refusals, cs, argmatchDestSet, destName, part))
+    if (stored.length > 0 && stored.some((word, at) => word !== values[at])) {
+      flags[destName] = Array.isArray(flags[destName]) ? stored : (stored[0] ?? '')
+    }
   }
 
   const missingRequiredOptions = cs.requiredDests.filter((destName) => !(destName in flags))
@@ -761,6 +961,7 @@ export function parseCommand(
     optionErrorKinds,
     needsValueOptions,
     invalidValueOptions: refusals.values,
+    ambiguousValueOptions: refusals.ambiguousValues,
     invalidIntOptions: refusals.ints,
     invalidFloatOptions: refusals.floats,
     missingRequiredOptions,

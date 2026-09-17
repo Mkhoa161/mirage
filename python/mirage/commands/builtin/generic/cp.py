@@ -21,6 +21,7 @@ from mirage.commands.builtin.utils.copy import (backend_key_default,
                                                 copy_targets, is_directory,
                                                 path_exists)
 from mirage.commands.errors import UsageError
+from mirage.commands.spec.argmatch import ArgmatchMatch, argmatch
 from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import argmatch_error, extra_operand_error
@@ -104,9 +105,12 @@ def update_mode(cmd_name: str, fl: FlagView) -> str | None:
         return None
     if value is True:
         return "older"
-    if isinstance(value, str) and value in UPDATE_MODES:
-        return value
-    raise argmatch_error(cmd_name, "--update", str(value), UPDATE_MODES, 1)
+    word = str(value)
+    match = argmatch(word, UPDATE_MODES)
+    if isinstance(match, ArgmatchMatch):
+        return match.word
+    raise argmatch_error(cmd_name, "--update", word, UPDATE_MODES, 1,
+                         match.kind)
 
 
 def backup_raw(fl: FlagView) -> str | bool | None:

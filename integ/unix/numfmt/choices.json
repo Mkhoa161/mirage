@@ -154,6 +154,74 @@
         "from",
         "to"
       ]
+    },
+    {
+      "id": "numfmt_to_prefix_resolves_to_its_candidate",
+      "seq": 991091,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=s 1000",
+      "expect": {
+        "exit": 0,
+        "stdout": "1.0k\n",
+        "stderr": ""
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_to_prefix_of_none_resolves",
+      "seq": 991092,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=n 1000",
+      "expect": {
+        "exit": 0,
+        "stdout": "1000\n",
+        "stderr": ""
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_to_prefix_spanning_two_values_is_ambiguous",
+      "seq": 991093,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=ie 1000",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: ambiguous argument 'ie' for '--to'\nValid arguments are:\n  - 'none'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_from_prefix_resolves_to_auto",
+      "seq": 991094,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --from=a 1K",
+      "expect": {
+        "exit": 0,
+        "stdout": "1000\n",
+        "stderr": ""
+      },
+      "flags": [
+        "from"
+      ]
     }
   ]
 }

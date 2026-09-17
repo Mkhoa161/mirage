@@ -56,7 +56,7 @@ export function defaultCwdOperand(
     // `-exec` command word or a `-newer` reference is the parser's.
     argv = argv.slice(0, argv.length - findExprTail(argv).length)
   }
-  const parsed = parseCommand(spec, argv, cwd)
+  const parsed = parseCommand(spec, argv, cwd, cmdName)
   if (parsed.paths().length > 0) return null
   if (cmdName === 'grep') {
     const kwargs = parseToKwargs(parsed)
@@ -79,7 +79,7 @@ export function defaultCwdOperand(
 export function pathFlagScopes(cmdName: string, argv: string[], cwd: string): PathSpec[] {
   const spec = SPECS[cmdName]
   if (spec === undefined) return []
-  return parseCommand(spec, argv, cwd).pathFlagValues.map(
+  return parseCommand(spec, argv, cwd, cmdName).pathFlagValues.map(
     (value) =>
       new PathSpec({
         virtual: value,
@@ -110,7 +110,7 @@ export function positionalScopes(
   if (spec === undefined) {
     return words.filter((p): p is PathSpec => p instanceof PathSpec)
   }
-  const parsed = parseCommand(spec, argv, cwd)
+  const parsed = parseCommand(spec, argv, cwd, cmdName)
   const byVirtual = new Map<string, PathSpec>()
   for (const word of words) {
     if (word instanceof PathSpec) byVirtual.set(word.virtual, word)
