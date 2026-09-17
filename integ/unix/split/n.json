@@ -220,6 +220,74 @@
       "flags": [
         "numeric-suffixes"
       ]
+    },
+    {
+      "id": "split_n_k_of_a_huge_n_is_one_byte_chunk",
+      "seq": 991079,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "printf 'abc\\ndef\\n' | split -n 2/1000000000",
+      "expect": {
+        "exit": 0,
+        "stdout": "b",
+        "stderr": ""
+      },
+      "flags": [
+        "number"
+      ]
+    },
+    {
+      "id": "split_n_l_k_of_a_huge_n_is_an_empty_chunk",
+      "seq": 991080,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "printf 'abc\\ndef\\n' | split -n l/2/1000000000",
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "number"
+      ]
+    },
+    {
+      "id": "split_n_l_last_of_a_huge_n_is_empty",
+      "seq": 991081,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "printf 'abc\\ndef\\n' | split -n l/1000000000/1000000000",
+      "expect": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "number"
+      ]
+    },
+    {
+      "id": "split_n_r_k_of_a_huge_n_deals_the_record",
+      "seq": 991082,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "printf 'abc\\ndef\\n' | split -n r/2/1000000000",
+      "expect": {
+        "exit": 0,
+        "stdout": "def\n",
+        "stderr": ""
+      },
+      "flags": [
+        "number"
+      ]
     }
   ]
 }

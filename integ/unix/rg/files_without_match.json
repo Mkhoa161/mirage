@@ -318,6 +318,42 @@
       "flags": [
         "files-without-match"
       ]
+    },
+    {
+      "id": "rg_files_without_match_stdin_m0_lists_nothing",
+      "seq": 991083,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' | rg --files-without-match -m0 hello",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": ""
+      },
+      "flags": [
+        "files-without-match",
+        "m"
+      ]
     }
   ]
 }

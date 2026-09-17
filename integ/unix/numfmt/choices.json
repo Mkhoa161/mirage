@@ -102,6 +102,40 @@
       "flags": [
         "from"
       ]
+    },
+    {
+      "id": "numfmt_to_refuses_a_bad_value_the_last_one_replaced",
+      "seq": 991077,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=bogus --to=si 1000",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "numfmt: invalid argument 'bogus' for '--to'\nValid arguments are:\n  - 'none'\n  - 'si'\n  - 'iec'\n  - 'iec-i'\nTry 'numfmt --help' for more information.\n"
+      },
+      "flags": [
+        "to"
+      ]
+    },
+    {
+      "id": "numfmt_to_repeated_valid_values_are_fine",
+      "seq": 991078,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "numfmt --to=si --to=si 1000",
+      "expect": {
+        "exit": 0,
+        "stdout": "1.0k\n",
+        "stderr": ""
+      },
+      "flags": [
+        "to"
+      ]
     }
   ]
 }

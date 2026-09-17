@@ -709,6 +709,25 @@ describe('choices violations are reported, never thrown', () => {
     const parsed = parseCommand(spec, ['-m', 'x', '-m', 'z'], '/')
     expect(parsed.invalidValueOptions).toEqual([['-m', 'z', ['x', 'y']]])
   })
+
+  it('checks every occurrence of a scalar flag', () => {
+    // GNU refuses the argument as it is scanned (`numfmt --to=bogus
+    // --to=si` is refused for bogus), so the value the bag dropped is
+    // checked too, in line order.
+    const parsed = parseCommand(specOf('numfmt'), ['--to=bogus', '--to=si', '1'], '/')
+    expect(parsed.flags['--to']).toBe('si')
+    expect(parsed.invalidValueOptions).toEqual([['--to', 'bogus', ['none', 'si', 'iec', 'iec-i']]])
+    expect(
+      parseCommand(specOf('numfmt'), ['--to=si', '--to=si', '1'], '/').invalidValueOptions,
+    ).toEqual([])
+  })
+
+  it('int checks cover every occurrence of a scalar flag', () => {
+    const spec = new CommandSpec({ options: [new Option({ short: '-n', type: 'int' })] })
+    const parsed = parseCommand(spec, ['-n', 'abc', '-n', '3'], '/')
+    expect(parsed.flags['-n']).toBe('3')
+    expect(parsed.invalidIntOptions).toEqual([['-n', 'abc']])
+  })
 })
 
 describe('required and default', () => {

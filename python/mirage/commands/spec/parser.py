@@ -12,7 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -153,6 +153,37 @@ def _set_value_flag(
         occurrences.append((flag_kwarg_name(name), value))
         flags.pop(name, None)
         flags[name] = value
+
+
+def _given_values(
+    flags: Mapping[str, ParsedFlagValue],
+    occurrences: Sequence[tuple[str, str]],
+    dest_name: str,
+) -> list[str]:
+    """Every value one dest was given, for the per-value checks.
+
+    GNU validates an option's argument as it is scanned, so ``numfmt
+    --to=bogus --to=si`` is refused for ``bogus`` although the bag keeps
+    only ``si``. A scalar dest therefore answers with its occurrence
+    record, in line order; an accumulating dest's list already is that
+    record; a value that arrived by default or from the environment has
+    no occurrence and is read off the bag. The bare boolean form of an
+    optional-value flag is exempt.
+
+    Args:
+        flags (Mapping[str, ParsedFlagValue]): the parsed flag bag.
+        occurrences (Sequence[tuple[str, str]]): the per-occurrence
+            (kwarg name, raw value) record.
+        dest_name (str): the dest to read.
+    """
+    key = flag_kwarg_name(dest_name)
+    recorded = [value for dest, value in occurrences if dest == key]
+    if recorded:
+        return recorded
+    value = flags.get(dest_name)
+    if isinstance(value, list):
+        return value
+    return [value] if isinstance(value, str) else []
 
 
 def _rebase(
@@ -581,28 +612,18 @@ def parse_command(
     # form of an optional-value flag is exempt, like choices.
     invalid_int_options: list[tuple[str, str]] = []
     for dest_name in cs.int_dests:
-        value = flags.get(dest_name)
-        candidates = value if isinstance(
-            value, list) else ([value] if isinstance(value, str) else [])
-        for part in candidates:
+        for part in _given_values(flags, occurrences, dest_name):
             if not INT_VALUE.match(part):
                 invalid_int_options.append((dest_name, part))
     invalid_float_options: list[tuple[str, str]] = []
     for dest_name in cs.float_dests:
-        value = flags.get(dest_name)
-        candidates = value if isinstance(
-            value, list) else ([value] if isinstance(value, str) else [])
-        for part in candidates:
+        for part in _given_values(flags, occurrences, dest_name):
             if not FLOAT_VALUE.match(part):
                 invalid_float_options.append((dest_name, part))
 
     invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = []
     for dest_name, allowed in cs.choices_by_dest.items():
-        value = flags.get(dest_name)
-        # The bare boolean form of an optional-value flag is exempt.
-        candidates = value if isinstance(
-            value, list) else ([value] if isinstance(value, str) else [])
-        for part in candidates:
+        for part in _given_values(flags, occurrences, dest_name):
             if part not in allowed:
                 invalid_value_options.append((dest_name, part, allowed))
 

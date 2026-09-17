@@ -18,9 +18,9 @@ from mirage.commands.builtin.generic import split as split_generic
 from mirage.commands.errors import UsageError
 
 from mirage.commands.builtin.generic.split import (  # isort: skip
-    ChunkKind, ChunkSpec, chunk_parts, parse_bytes_value, parse_chunks_value,
-    parse_lines_value, parse_separator, parse_suffix_length,
-    parse_suffix_start)
+    ChunkKind, ChunkSpec, chunk_at, chunk_parts, parse_bytes_value,
+    parse_chunks_value, parse_lines_value, parse_separator,
+    parse_suffix_length, parse_suffix_start)
 
 _TRY = "\nTry 'split --help' for more information."
 _ALPHA_SUFFIXES = split_generic._ALPHA_SUFFIXES
@@ -413,11 +413,12 @@ def test_chunk_number_is_range_checked_after_n(value, message):
 
 
 def test_byte_chunks_spread_the_remainder_over_the_first_chunks():
-    assert chunk_parts(b"abcdefg", parse_chunks_value("3"),
-                       b"\n") == [b"abc", b"de", b"fg"]
-    assert chunk_parts(b"ab", parse_chunks_value("5"),
-                       b"\n") == [b"a", b"b", b"", b"", b""]
-    assert chunk_parts(b"", parse_chunks_value("3"), b"\n") == [b"", b"", b""]
+    assert list(chunk_parts(b"abcdefg", parse_chunks_value("3"),
+                            b"\n")) == [b"abc", b"de", b"fg"]
+    assert list(chunk_parts(b"ab", parse_chunks_value("5"),
+                            b"\n")) == [b"a", b"b", b"", b"", b""]
+    assert list(chunk_parts(b"", parse_chunks_value("3"),
+                            b"\n")) == [b"", b"", b""]
 
 
 @pytest.mark.parametrize("value,expected", [
@@ -428,29 +429,53 @@ def test_byte_chunks_spread_the_remainder_over_the_first_chunks():
      [b"line1\n", b"line2\n", b"line3\n", b"", b"line4\n", b"line5\n", b""]),
 ])
 def test_line_chunks_keep_records_whole(value, expected):
-    assert chunk_parts(_LINES, parse_chunks_value(value), b"\n") == expected
+    assert list(chunk_parts(_LINES, parse_chunks_value(value),
+                            b"\n")) == expected
 
 
 def test_line_chunks_leave_a_swallowed_chunk_empty():
-    assert chunk_parts(b"aaaaaa\nb\n", parse_chunks_value("l/3"),
-                       b"\n") == [b"aaaaaa\n", b"", b"b\n"]
-    assert chunk_parts(b"aaaaa\nbb\n", parse_chunks_value("l/3"),
-                       b"\n") == [b"aaaaa\n", b"", b"bb\n"]
-    assert chunk_parts(b"aaaa\nb\nc\nd\n", parse_chunks_value("l/2"),
-                       b"\n") == [b"aaaa\nb\n", b"c\nd\n"]
+    assert list(chunk_parts(b"aaaaaa\nb\n", parse_chunks_value("l/3"),
+                            b"\n")) == [b"aaaaaa\n", b"", b"b\n"]
+    assert list(chunk_parts(b"aaaaa\nbb\n", parse_chunks_value("l/3"),
+                            b"\n")) == [b"aaaaa\n", b"", b"bb\n"]
+    assert list(
+        chunk_parts(b"aaaa\nb\nc\nd\n", parse_chunks_value("l/2"),
+                    b"\n")) == [b"aaaa\nb\n", b"c\nd\n"]
 
 
 def test_line_chunks_give_an_unterminated_tail_to_its_chunk():
-    assert chunk_parts(b"aa\nbb\ncc", parse_chunks_value("l/2"),
-                       b"\n") == [b"aa\nbb\n", b"cc"]
-    assert chunk_parts(b"ab", parse_chunks_value("l/3"),
-                       b"\n") == [b"ab", b"", b""]
+    assert list(chunk_parts(b"aa\nbb\ncc", parse_chunks_value("l/2"),
+                            b"\n")) == [b"aa\nbb\n", b"cc"]
+    assert list(chunk_parts(b"ab", parse_chunks_value("l/3"),
+                            b"\n")) == [b"ab", b"", b""]
 
 
 def test_round_robin_deals_records_in_turn():
-    assert chunk_parts(_LINES, parse_chunks_value("r/3"), b"\n") == [
+    assert list(chunk_parts(_LINES, parse_chunks_value("r/3"), b"\n")) == [
         b"line1\nline4\n", b"line2\nline5\n", b"line3\n"
     ]
+
+
+def test_chunk_at_reads_one_chunk_without_cutting_the_rest():
+    # coreutils 9.7 over `abc\ndef\n`, each instant however large N is.
+    huge = 1_000_000_000
+    data = b"abc\ndef\n"
+    assert chunk_at(data, parse_chunks_value(f"2/{huge}"), b"\n", 2) == b"b"
+    assert chunk_at(data, parse_chunks_value(f"l/2/{huge}"), b"\n", 2) == b""
+    assert chunk_at(data, parse_chunks_value(f"l/5/{huge}"), b"\n",
+                    5) == b"def\n"
+    assert chunk_at(data, parse_chunks_value(f"l/{huge}/{huge}"), b"\n",
+                    huge) == b""
+    assert chunk_at(data, parse_chunks_value(f"r/2/{huge}"), b"\n",
+                    2) == b"def\n"
+    assert chunk_at(data, parse_chunks_value(f"r/3/{huge}"), b"\n", 3) == b""
+    assert chunk_at(b"abcdefg", parse_chunks_value("2/3"), b"\n", 2) == b"de"
+
+
+def test_chunk_parts_pads_the_empty_tail_lazily():
+    huge = 1_000_000_000
+    parts = chunk_parts(b"ab", parse_chunks_value(str(huge)), b"\n")
+    assert [next(parts) for _ in range(4)] == [b"a", b"b", b"", b""]
 
 
 def test_hex_start_values_are_lower_case_only():

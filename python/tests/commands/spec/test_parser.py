@@ -389,6 +389,27 @@ def test_choices_check_every_value_of_a_multiple_flag():
     assert parsed.invalid_value_options == [("-m", "z", ("x", "y"))]
 
 
+def test_choices_check_every_occurrence_of_a_scalar_flag():
+    # GNU refuses the argument as it is scanned (`numfmt --to=bogus
+    # --to=si` is refused for bogus), so the value the bag dropped is
+    # checked too, in line order.
+    parsed = parse_command(SPECS["numfmt"], ["--to=bogus", "--to=si", "1"],
+                           "/")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.invalid_value_options == [
+        ("--to", "bogus", ("none", "si", "iec", "iec-i")),
+    ]
+    ok = parse_command(SPECS["numfmt"], ["--to=si", "--to=si", "1"], "/")
+    assert ok.invalid_value_options == []
+
+
+def test_int_check_covers_every_occurrence_of_a_scalar_flag():
+    spec = CommandSpec(options=(Option(short="-n", type="int"), ))
+    parsed = parse_command(spec, ["-n", "abc", "-n", "3"], "/")
+    assert parsed.flags["-n"] == "3"
+    assert parsed.invalid_int_options == [("-n", "abc")]
+
+
 def test_required_option_reported_when_absent():
     spec = CommandSpec(
         options=(Option(long="--out", type="str", required=True), ))

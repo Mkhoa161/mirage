@@ -24,7 +24,7 @@ from mirage.commands.config import CommandOpts
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
-from mirage.io.types import ByteSource, IOResult, materialize
+from mirage.io.types import ByteSource, IOResult
 from mirage.types import FileStat, FileType, PathSpec
 from mirage.utils.errors import FS_ERRORS, WALK_ERRORS, fs_strerror
 from mirage.utils.key_prefix import mount_prefix_of
@@ -311,11 +311,21 @@ async def rg(
     source = resolve_source(stdin, RG_NO_PATTERN, error_cls=UsageError)
     pat = compile_pattern(pattern, f.ignore_case, f.fixed_string, f.whole_word)
     if f.files_without_match and not f.count_only:
-        # ripgrep names a matchless stdin `<stdin>`, exit 0 for the listing.
-        lines = split_lines(decode_line(await materialize(source)))
-        selected = f.max_count != 0 and any(
-            bool(pat.search(line)) != f.invert for line in lines)
-        if selected:
+        # ripgrep names a matchless stdin `<stdin>`, exit 0 for the
+        # listing, and lists nothing under -m0, where it reads nothing.
+        # The probe streams through the scanner and stops at the first
+        # selected line, so an unbounded pipe is never buffered whole.
+        if f.max_count == 0:
+            return b"", IOResult(exit_code=1)
+        probe = IOResult(exit_code=1)
+        async for _ in grep_stream(source,
+                                   pat,
+                                   invert=f.invert,
+                                   max_count=1,
+                                   count_only=True,
+                                   io=probe):
+            pass
+        if probe.exit_code == 0:
             return b"", IOResult(exit_code=1)
         return b"<stdin>\n", IOResult()
     io = IOResult(exit_code=1)

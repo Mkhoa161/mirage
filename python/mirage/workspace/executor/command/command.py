@@ -324,12 +324,17 @@ async def handle_command(
                                            links=namespace,
                                            options=glob_options(session))
             cross_scopes = [p for p in expanded if isinstance(p, PathSpec)]
-        run_single = functools.partial(run_on_mount,
-                                       registry,
-                                       session,
-                                       dispatch,
-                                       namespace,
-                                       routing_decision=routing_decision)
+        # The occurrence record rides every per-operand run, so a stream
+        # command's final stdin-mode invocation still sees a refused
+        # earlier occurrence (`nl -w bad -w 3 /m1/a /m2/b`).
+        run_single = functools.partial(
+            run_on_mount,
+            registry,
+            session,
+            dispatch,
+            namespace,
+            routing_decision=routing_decision,
+            value_occurrences=cross_parsed.value_occurrences)
         cross_ns = namespace_view_of(registry, namespace, dispatch)
         # A per-operand native run is single-mount by construction, so a
         # traversal operand holding nested mounts has to fan out inside

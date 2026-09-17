@@ -101,6 +101,12 @@ export function parseChunksValue(value: string): ChunkSpec {
     throw new UsageError(`split: invalid number of chunks: '${quoteText(countRaw)}'`, 1)
   }
   const count = Number.parseInt(countRaw, 10)
+  if (!Number.isSafeInteger(count)) {
+    // Deliberate divergence: GNU saturates a count past uintmax and then
+    // creates files without end. A count past 2^53 cannot even be
+    // counted here, so it is refused in the same words as a malformed one.
+    throw new UsageError(`split: invalid number of chunks: '${quoteText(countRaw)}'`, 1)
+  }
   let only: number | null = null
   if (slash >= 0) {
     only = Number.parseInt(head, 10)
@@ -182,17 +188,28 @@ function parseSeparator(value: string | undefined): number {
 // count` bytes each, with the remainder spread one byte at a time over the
 // FIRST chunks (7 bytes in 3 are 3, 2, 2 on coreutils 9.7), and an input
 // shorter than the count leaves the tail chunks empty rather than absent.
-function byteChunks(data: Uint8Array, count: number): Uint8Array[] {
+// Byte offset where chunk `index` (1-based) ends: GNU sizes chunks `base`
+// bytes each with the remainder spread one byte at a time over the FIRST
+// chunks, so the end is a closed form rather than a table of N prefix sums.
+function chunkEnd(index: number, base: number, rem: number): number {
+  return base * index + Math.min(index, rem)
+}
+
+// The byte chunks of `data` in order, the way GNU sizes them: `size / count`
+// bytes each, with the remainder spread one byte at a time over the FIRST
+// chunks (7 bytes in 3 are 3, 2, 2 on coreutils 9.7). Stops once the input
+// is used up, because every chunk after that is empty; `chunkParts` pads and
+// `chunkAt` reads past the end, so a huge N never costs N slices.
+function* byteChunks(data: Uint8Array, count: number): Generator<Uint8Array> {
   const base = Math.floor(data.byteLength / count)
   const rem = data.byteLength % count
-  const chunks: Uint8Array[] = []
   let pos = 0
   for (let index = 0; index < count; index++) {
+    if (pos >= data.byteLength) return
     const size = base + (index < rem ? 1 : 0)
-    chunks.push(data.slice(pos, pos + size))
+    yield data.slice(pos, pos + size)
     pos += size
   }
-  return chunks
 }
 
 function concatParts(parts: readonly Uint8Array[]): Uint8Array {
@@ -207,7 +224,7 @@ function concatParts(parts: readonly Uint8Array[]): Uint8Array {
   return out
 }
 
-// Cut `data` into `count` chunks without cutting a record: GNU's
+// The line chunks of `data` in order, no record cut: GNU's
 // `lines_chunk_split`. The byte boundaries are those of `byteChunks` over
 // `max(size, count)`, and a chunk runs to the first terminator at or after
 // its own last byte, so a record that straddles a boundary goes whole to
@@ -215,58 +232,98 @@ function concatParts(parts: readonly Uint8Array[]): Uint8Array {
 // chunk leaves that chunk empty, and a chunk that begins exactly where the
 // previous one ended takes the next record. Measured on coreutils 9.7
 // (`-n l/7` over five 6-byte lines is line1, line2, line3, empty, line4,
-// line5, empty). Mirrors `_line_chunks`.
-function lineChunks(data: Uint8Array, count: number, eol: number): Uint8Array[] {
+// line5, empty). Stops once the input is used up, like `byteChunks`.
+// Mirrors `_line_chunks`.
+function* lineChunks(data: Uint8Array, count: number, eol: number): Generator<Uint8Array> {
   const size = Math.max(data.byteLength, count)
   const base = Math.floor(size / count)
   const rem = size % count
-  const ends: number[] = []
-  let acc = 0
-  for (let index = 1; index <= count; index++) {
-    acc += base + (index <= rem ? 1 : 0)
-    ends.push(acc)
-  }
-  const chunks: Uint8Array[][] = Array.from({ length: count }, () => [])
+  let buf: Uint8Array[] = []
   let pos = 0
   let chunk = 0
   while (pos < data.byteLength && chunk < count) {
-    const start = Math.max(pos, (ends[chunk] ?? 0) - 1)
+    const start = Math.max(pos, chunkEnd(chunk + 1, base, rem) - 1)
     const found = start < data.byteLength ? data.indexOf(eol, start) : -1
     const end = found >= 0 ? found + 1 : data.byteLength
     let terminated = found >= 0
-    chunks[chunk]?.push(data.slice(pos, end))
+    buf.push(data.slice(pos, end))
     pos = end
-    while (terminated || (ends[chunk] ?? 0) <= pos) {
+    while (terminated || chunkEnd(chunk + 1, base, rem) <= pos) {
       if (!terminated && pos >= data.byteLength) break
+      yield concatParts(buf)
+      buf = []
       chunk += 1
       if (chunk >= count) break
-      if ((ends[chunk] ?? 0) > pos) terminated = false
+      if (chunkEnd(chunk + 1, base, rem) > pos) terminated = false
     }
   }
-  return chunks.map(concatParts)
+  if (chunk < count) yield concatParts(buf)
 }
 
-// Deal the records of `data` over `count` chunks in turn; a final record
-// without a terminator is dealt too.
-function roundRobinChunks(data: Uint8Array, count: number, eol: number): Uint8Array[] {
-  const chunks: Uint8Array[][] = Array.from({ length: count }, () => [])
+// The records of `data`, a final unterminated one included.
+function records(data: Uint8Array, eol: number): Uint8Array[] {
+  const out: Uint8Array[] = []
   let pos = 0
-  let index = 0
   while (pos < data.byteLength) {
     const found = data.indexOf(eol, pos)
     const end = found >= 0 ? found + 1 : data.byteLength
-    chunks[index % count]?.push(data.slice(pos, end))
+    out.push(data.slice(pos, end))
     pos = end
-    index += 1
   }
-  return chunks.map(concatParts)
+  return out
 }
 
-// Every chunk of `data` under one -n spec, in order. Mirrors `chunk_parts`.
-export function chunkParts(data: Uint8Array, chunks: ChunkSpec, separator: number): Uint8Array[] {
+// The chunks of `data` dealt record by record in turn: chunk k holds every
+// count-th record from the k-th, and a chunk past the last record is empty,
+// so the walk stops there.
+function* roundRobinChunks(data: Uint8Array, count: number, eol: number): Generator<Uint8Array> {
+  const dealt = records(data, eol)
+  const filled = Math.min(count, dealt.length)
+  for (let index = 0; index < filled; index++) {
+    const own: Uint8Array[] = []
+    for (let at = index; at < dealt.length; at += count) own.push(dealt[at] ?? new Uint8Array(0))
+    yield concatParts(own)
+  }
+}
+
+function cut(data: Uint8Array, chunks: ChunkSpec, separator: number): Generator<Uint8Array> {
   if (chunks.kind === 'l') return lineChunks(data, chunks.count, separator)
   if (chunks.kind === 'r') return roundRobinChunks(data, chunks.count, separator)
   return byteChunks(data, chunks.count)
+}
+
+// Every chunk of `data` under one -n spec, in order: exactly N chunks, the
+// empty tail included, one at a time, so N files never mean N chunks held
+// at once. Mirrors `chunk_parts`.
+export function* chunkParts(
+  data: Uint8Array,
+  chunks: ChunkSpec,
+  separator: number,
+): Generator<Uint8Array> {
+  let produced = 0
+  for (const part of cut(data, chunks, separator)) {
+    yield part
+    produced += 1
+  }
+  for (; produced < chunks.count; produced++) yield new Uint8Array(0)
+}
+
+// Chunk `index` (1-based) of `data` under one -n spec. `K/N` wants one
+// chunk, so only the chunks before it are cut, and a K past the input's
+// last byte is empty at no cost per skipped chunk (`-n 2/1000000000` over
+// 8 bytes is `b`, instant in GNU). Mirrors `chunk_at`.
+export function chunkAt(
+  data: Uint8Array,
+  chunks: ChunkSpec,
+  separator: number,
+  index: number,
+): Uint8Array {
+  let seen = 0
+  for (const part of cut(data, chunks, separator)) {
+    seen += 1
+    if (seen === index) return part
+  }
+  return new Uint8Array(0)
 }
 
 const ALPHA_SUFFIXES = 'abcdefghijklmnopqrstuvwxyz'
@@ -452,15 +509,17 @@ export async function splitGeneric(
   if (chunks !== null) {
     const gathered: Uint8Array[] = []
     for await (const c of source) gathered.push(c)
-    const parts = chunkParts(concatParts(gathered), chunks, separator)
+    const all = concatParts(gathered)
     if (chunks.only !== null) {
       // `K/N` writes the one chunk to stdout and no file at all.
-      return [parts[chunks.only - 1] ?? new Uint8Array(0), new IOResult()]
+      return [chunkAt(all, chunks, separator, chunks.only), new IOResult()]
     }
     // Every chunk gets its file, an empty one included: GNU creates N files
     // for `-n N` however short the input is.
-    for (const [i, part] of parts.entries()) {
+    let i = 0
+    for (const part of chunkParts(all, chunks, separator)) {
       const outPath = outputPath(prefixPath, suffixFn, i, additionalSuffix)
+      i += 1
       await write(makePathSpec(outPath), part)
       writes[outPath] = part
     }

@@ -179,6 +179,26 @@ export class ParsedArgs {
 // validated and refused (`nl -w abc -w 3`), and nothing else on the parse
 // result remembers it. An accumulating dest needs no entry — its list
 // already is the per-occurrence record.
+// Every value one dest was given, for the per-value checks. GNU validates
+// an option's argument as it is scanned, so `numfmt --to=bogus --to=si` is
+// refused for `bogus` although the bag keeps only `si`. A scalar dest
+// therefore answers with its occurrence record, in line order; an
+// accumulating dest's list already is that record; a value that arrived by
+// default or from the environment has no occurrence and is read off the
+// bag. The bare boolean form of an optional-value flag is exempt.
+function givenValues(
+  flags: Record<string, FlagValue>,
+  occurrences: readonly (readonly [string, string])[],
+  destName: string,
+): string[] {
+  const key = flagKwargName(destName)
+  const recorded = occurrences.filter(([dest]) => dest === key).map(([, value]) => value)
+  if (recorded.length > 0) return recorded
+  const value = flags[destName]
+  if (Array.isArray(value)) return value
+  return typeof value === 'string' ? [value] : []
+}
+
 function setValueFlag(
   flags: Record<string, FlagValue>,
   occurrences: [string, string][],
@@ -621,27 +641,20 @@ export function parseCommand(
   // an optional-value flag is exempt, like choices.
   const invalidIntOptions: [string, string][] = []
   for (const destName of cs.intDests) {
-    const value = flags[destName]
-    const candidates = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
-    for (const part of candidates) {
+    for (const part of givenValues(flags, occurrences, destName)) {
       if (!INT_VALUE.test(part)) invalidIntOptions.push([destName, part])
     }
   }
   const invalidFloatOptions: [string, string][] = []
   for (const destName of cs.floatDests) {
-    const value = flags[destName]
-    const candidates = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
-    for (const part of candidates) {
+    for (const part of givenValues(flags, occurrences, destName)) {
       if (!FLOAT_VALUE.test(part)) invalidFloatOptions.push([destName, part])
     }
   }
 
   const invalidValueOptions: [string, string, readonly string[]][] = []
   for (const [destName, allowed] of cs.choicesByDest) {
-    const value = flags[destName]
-    // The bare boolean form of an optional-value flag is exempt.
-    const candidates = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
-    for (const part of candidates) {
+    for (const part of givenValues(flags, occurrences, destName)) {
       if (!allowed.includes(part)) invalidValueOptions.push([destName, part, allowed])
     }
   }

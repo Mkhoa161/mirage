@@ -32,8 +32,6 @@ import {
 } from '../grep_scan.ts'
 import { rgFull } from '../rg_scan.ts'
 import { resolveSource } from '../utils/stream.ts'
-import { decodeLine } from '../grep_offsets.ts'
-import { splitLines } from '../utils/lines.ts'
 import { formatRecords } from '../utils/output.ts'
 
 const ENC = new TextEncoder()
@@ -164,10 +162,19 @@ export async function rgGeneric(
     // been started.
     const io = new IOResult({ exitCode: 1 })
     if (flags.filesWithoutMatch && !flags.countOnly) {
-      // ripgrep names a matchless stdin `<stdin>`, exit 0 for the listing.
-      const lines = splitLines(decodeLine(await materialize(source)))
-      const selected = flags.maxCount !== 0 && lines.some((line) => pat.test(line) !== flags.invert)
-      if (selected) return [new Uint8Array(0), new IOResult({ exitCode: 1 })]
+      // ripgrep names a matchless stdin `<stdin>`, exit 0 for the listing,
+      // and lists nothing under -m0, where it reads nothing. The probe
+      // streams through the scanner and stops at the first selected line,
+      // so an unbounded pipe is never buffered whole.
+      if (flags.maxCount === 0) return [new Uint8Array(0), new IOResult({ exitCode: 1 })]
+      const probe = new IOResult({ exitCode: 1 })
+      const scan = grepStream(source, pat, {
+        ...streamOptionsOf(flags, probe),
+        maxCount: 1,
+        countOnly: true,
+      })
+      for await (const _ of scan) void _
+      if (probe.exitCode === 0) return [new Uint8Array(0), new IOResult({ exitCode: 1 })]
       return [ENC.encode('<stdin>\n'), new IOResult()]
     }
     return [grepStream(source, pat, streamOptionsOf(flags, io)), io]
