@@ -16,7 +16,6 @@ import { describe, expect, it } from 'vitest'
 import { specOf } from './builtins.ts'
 import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
 import { CommandSpec, Operand, Option } from './types.ts'
-import { FlagView } from './flag_view.ts'
 
 describe('parseCommand — bool short flags', () => {
   const spec = new CommandSpec({
@@ -477,77 +476,21 @@ describe('parseToKwargs', () => {
   })
 })
 
-// The per-occurrence record beside the bag. It exists because last-wins
-// throws a value away, and GNU validates every value as getopt hands it
-// over, so a command refusing the leftmost bad one (nl) needs the value the
-// bag dropped.
-describe('parseCommand — value occurrences', () => {
-  it('records every scalar occurrence in scan order', () => {
+// There is no per-occurrence record beside the bag. GNU validates every
+// value as getopt hands it over, so a scalar dest checks the value it is
+// about to drop before the next one replaces it (the int and choices tests
+// under 'choices violations'), and a command that must see every value
+// declares the option `multiple` (argparse's append).
+describe('parseCommand — repeated values', () => {
+  it('keeps every value of an accumulating option for the command', () => {
     const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-v', 'xyz', '-w', '3'], '/')
-    expect(parsed.valueOccurrences).toEqual([
-      ['number_width', 'abc'],
-      ['starting_line_number', 'xyz'],
-      ['number_width', '3'],
-    ])
-    // The bag is untouched: still one value per dest, still last-wins.
-    expect(parsed.flags['--number-width']).toBe('3')
+    expect(parseToKwargs(parsed)).toEqual({
+      number_width: ['abc', '3'],
+      starting_line_number: ['xyz'],
+    })
   })
 
-  it('folds both spellings of one option onto one dest', () => {
-    const parsed = parseCommand(specOf('nl'), ['--number-width=abc', '-w', '3'], '/')
-    expect(parsed.valueOccurrences).toEqual([
-      ['number_width', 'abc'],
-      ['number_width', '3'],
-    ])
-  })
-
-  it('skips an accumulating option, whose own list is the record', () => {
-    const parsed = parseCommand(specOf('grep'), ['-e', 'foo', '-e', 'bar', '/a.txt'], '/')
-    expect(parsed.valueOccurrences).toEqual([])
-    expect(parsed.flags['-e']).toEqual(['foo', 'bar'])
-  })
-
-  it('skips boolean flags', () => {
-    const parsed = parseCommand(specOf('grep'), ['-i', '-v', 'pat'], '/')
-    expect(parsed.valueOccurrences).toEqual([])
-  })
-
-  // Every command parses through this machinery, so an unconditional extra
-  // key would land in every handler's flag bag. A line that typed each
-  // scalar option once has lost nothing: the bag is already the record, in
-  // scan order.
-  it('never carries the record in the kwargs bag', () => {
-    // The record is a typed field of its own, not a key in the bag: every
-    // command parses through this machinery, so a key would land in every
-    // handler's flag bag, untyped and unreadable through a spec-bound
-    // FlagView. The bag stays exactly the line's options, one value per
-    // scalar dest.
-    const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-w', '3'], '/')
-    expect(parseToKwargs(parsed)).toEqual({ number_width: '3' })
-  })
-
-  it('reads the record back as typed pairs', () => {
-    const parsed = parseCommand(specOf('nl'), ['-w', 'abc', '-v', 'xyz', '-w', '3'], '/')
-    const fl = new FlagView(parseToKwargs(parsed), specOf('nl'), parsed.valueOccurrences)
-    expect(fl.valueOccurrences('number_width', 'starting_line_number')).toEqual([
-      ['number_width', 'abc'],
-      ['starting_line_number', 'xyz'],
-      ['number_width', '3'],
-    ])
-    // Names the caller did not ask about are dropped, positions kept.
-    expect(fl.valueOccurrences('starting_line_number')).toEqual([['starting_line_number', 'xyz']])
-  })
-
-  it('falls back to the bag without a record', () => {
-    const parsed = parseCommand(specOf('nl'), ['-v', 'xyz', '-w', 'abc'], '/')
-    const fl = new FlagView(parseToKwargs(parsed), specOf('nl'))
-    expect(fl.valueOccurrences('number_width', 'starting_line_number')).toEqual([
-      ['starting_line_number', 'xyz'],
-      ['number_width', 'abc'],
-    ])
-  })
-
-  it('leaves another option family alone when a repeat arrives', () => {
+  it("carries only the line's options in the kwargs bag", () => {
     const parsed = parseCommand(
       specOf('grep'),
       ['-e', 'a', '-e', 'b', '-m', '1', '-m', '2', 'x'],
@@ -556,10 +499,7 @@ describe('parseCommand — value occurrences', () => {
     const kwargs = parseToKwargs(parsed)
     expect(kwargs.e).toEqual(['a', 'b'])
     expect(kwargs.m).toBe('2')
-    expect(parsed.valueOccurrences).toEqual([
-      ['m', '1'],
-      ['m', '2'],
-    ])
+    expect(Object.keys(kwargs).sort()).toEqual(['e', 'm'])
   })
 })
 

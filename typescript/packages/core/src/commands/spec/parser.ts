@@ -55,18 +55,6 @@ export interface ParsedArgsInit {
    * invisible there, a typed one is not.
    */
   typedDests?: string[]
-  /**
-   * Every scalar value-flag occurrence the line carried, as [dest, raw
-   * value] in scan order. The flag bag keeps one value per scalar dest,
-   * so a repeated option throws the earlier value away; this is where it
-   * survives, for a command that must answer for a value the bag no
-   * longer holds (nl refuses the LEFTMOST invalid one, which is the
-   * order GNU validates in). Parser bookkeeping, not grammar: no spec
-   * field switches it on, an accumulating (`multiple`) option is absent
-   * because its own list already is the record, and every command is
-   * free to ignore it — all of them but nl do.
-   */
-  valueOccurrences?: [string, string][]
   oldOptionNeedsValue?: string | null
 }
 
@@ -112,10 +100,6 @@ export class ParsedArgs {
   readonly missingRequiredOptions: string[]
   readonly missingRequiredOperands: string[]
   readonly typedDests: string[]
-  // Every scalar value-flag occurrence the line carried, as [dest, raw
-  // value] in scan order; see ParsedArgsInit above for why the bag is
-  // not enough on its own.
-  readonly valueOccurrences: [string, string][]
   // The old-style cluster letter whose argument ran off the end of the
   // line (`tar xzf` with no archive). Its own report because GNU tar
   // words it differently and exits differently from every getopt refusal
@@ -144,7 +128,6 @@ export class ParsedArgs {
     this.missingRequiredOptions = init.missingRequiredOptions ?? []
     this.missingRequiredOperands = init.missingRequiredOperands ?? []
     this.typedDests = init.typedDests ?? []
-    this.valueOccurrences = init.valueOccurrences ?? []
     this.oldOptionNeedsValue = init.oldOptionNeedsValue ?? null
   }
 
@@ -168,40 +151,38 @@ export class ParsedArgs {
   }
 }
 
+// The values the per-value checks refused, in the order read.
+interface Refusals {
+  ints: [string, string][]
+  floats: [string, string][]
+  values: [string, string, readonly string[]][]
+}
+
+// Run one value through its dest's int, float and choices checks. Int-typed
+// values are refused before choices, argparse's order (type conversion runs
+// before the choices test).
+function checkValue(refusals: Refusals, cs: CompiledSpec, dest: string, value: string): void {
+  if (cs.intDests.has(dest) && !INT_VALUE.test(value)) refusals.ints.push([dest, value])
+  if (cs.floatDests.has(dest) && !FLOAT_VALUE.test(value)) refusals.floats.push([dest, value])
+  const allowed = cs.choicesByDest.get(dest)
+  if (allowed !== undefined && !allowed.includes(value))
+    refusals.values.push([dest, value, allowed])
+}
+
 // Record a value flag occurrence under its canonical dest. Both spellings
 // of one option land on the same key, so the last occurrence wins
 // regardless of spelling (GNU: `cp --update=all -u` is `--update=older`)
 // and `multiple` options accumulate in true command-line order
 // (`sort -k1 --key=2` is `[1, 2]`).
 //
-// Last-wins is where the bag loses information, so the scalar branch also
-// appends to `occurrences`: the value it drops is the one GNU already
-// validated and refused (`nl -w abc -w 3`), and nothing else on the parse
-// result remembers it. An accumulating dest needs no entry — its list
-// already is the per-occurrence record.
-// Every value one dest was given, for the per-value checks. GNU validates
-// an option's argument as it is scanned, so `numfmt --to=bogus --to=si` is
-// refused for `bogus` although the bag keeps only `si`. A scalar dest
-// therefore answers with its occurrence record, in line order; an
-// accumulating dest's list already is that record; a value that arrived by
-// default or from the environment has no occurrence and is read off the
-// bag. The bare boolean form of an optional-value flag is exempt.
-function givenValues(
-  flags: Record<string, FlagValue>,
-  occurrences: readonly (readonly [string, string])[],
-  destName: string,
-): string[] {
-  const key = flagKwargName(destName)
-  const recorded = occurrences.filter(([dest]) => dest === key).map(([, value]) => value)
-  if (recorded.length > 0) return recorded
-  const value = flags[destName]
-  if (Array.isArray(value)) return value
-  return typeof value === 'string' ? [value] : []
-}
-
+// GNU validated the value it is about to drop the moment getopt read it, so
+// a scalar dest checks that value before the new one replaces it:
+// `numfmt --to=bogus --to=si` is refused for `bogus` although the bag keeps
+// only `si`. What survives in the bag is checked after the scan, with the
+// defaults and environment values.
 function setValueFlag(
   flags: Record<string, FlagValue>,
-  occurrences: [string, string][],
+  refusals: Refusals,
   cs: CompiledSpec,
   spelling: string,
   value: string,
@@ -215,10 +196,20 @@ function setValueFlag(
       flags[name] = [value]
     }
   } else {
-    occurrences.push([flagKwargName(name), value])
+    const dropped = flags[name]
+    if (typeof dropped === 'string') checkValue(refusals, cs, name, dropped)
     Reflect.deleteProperty(flags, name)
     flags[name] = value
   }
+}
+
+// The values the bag holds for one dest. The bare boolean form of an
+// optional-value flag is exempt from the per-value checks, so it reads as
+// no value at all.
+function bagValues(flags: Record<string, FlagValue>, destName: string): string[] {
+  const value = flags[destName]
+  if (Array.isArray(value)) return value
+  return typeof value === 'string' ? [value] : []
 }
 
 // Fold one option occurrence into the operand base directory. Called
@@ -333,7 +324,7 @@ export function parseCommand(
   // Every scalar value-flag occurrence, in scan order, beside the bag that
   // keeps only the last of each. Appended to by setValueFlag and read by
   // nobody here: it leaves on the parse result.
-  const occurrences: [string, string][] = []
+  const refusals: Refusals = { ints: [], floats: [], values: [] }
   const rawArgs: string[] = []
   // rawIndices[k] = argv position of rawArgs[k]
   const rawIndices: number[] = []
@@ -431,15 +422,15 @@ export function parseCommand(
       } else if (isPair && eqPos === -1 && i + 2 < filteredArgv.length) {
         // Two tokens, both recorded under the one dest, so the command
         // reads the accumulated list in twos.
-        setValueFlag(flags, occurrences, cs, spelling, filteredArgv[i + 1] ?? '')
-        setValueFlag(flags, occurrences, cs, spelling, filteredArgv[i + 2] ?? '')
+        setValueFlag(flags, refusals, cs, spelling, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, refusals, cs, spelling, filteredArgv[i + 2] ?? '')
         // The first token names the value and is always textual; the
         // option's own kind describes the second.
         wordKinds[origIndices[i + 1] ?? -1] = 'str'
         wordKinds[origIndices[i + 2] ?? -1] = cs.kindOf.get(spelling) ?? null
         i += 3
       } else if (!isPair && cs.longValueSpellings.has(etok) && i + 1 < filteredArgv.length) {
-        setValueFlag(flags, occurrences, cs, etok, filteredArgv[i + 1] ?? '')
+        setValueFlag(flags, refusals, cs, etok, filteredArgv[i + 1] ?? '')
         wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(etok) ?? null
         if (cs.destOf(etok) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
         base = rebase(flags, cs, etok, filteredArgv[i + 1] ?? '', base)
@@ -459,7 +450,7 @@ export function parseCommand(
           eqPos !== -1 &&
           (cs.longValueSpellings.has(spelling) || cs.longOptionalSpellings.has(spelling))
         ) {
-          setValueFlag(flags, occurrences, cs, spelling, tok.slice(eqPos + 1))
+          setValueFlag(flags, refusals, cs, spelling, tok.slice(eqPos + 1))
           base = rebase(flags, cs, spelling, tok.slice(eqPos + 1), base)
         } else if (cs.longValueSpellings.has(etok)) {
           // Declared value flag at end of line with no argument.
@@ -498,7 +489,7 @@ export function parseCommand(
       let matchedOptional = false
       for (const vf of cs.attachSpellings) {
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, occurrences, cs, vf, tok.slice(vf.length))
+          setValueFlag(flags, refusals, cs, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedOptional = true
@@ -509,7 +500,7 @@ export function parseCommand(
       let matchedValue = false
       for (const vf of cs.valueSpellings) {
         if (tok === vf && i + 1 < filteredArgv.length) {
-          setValueFlag(flags, occurrences, cs, vf, filteredArgv[i + 1] ?? '')
+          setValueFlag(flags, refusals, cs, vf, filteredArgv[i + 1] ?? '')
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(vf) ?? null
           if (cs.destOf(vf) === cs.baseDest) wordBases[origIndices[i + 1] ?? -1] = base
           base = rebase(flags, cs, vf, filteredArgv[i + 1] ?? '', base)
@@ -518,7 +509,7 @@ export function parseCommand(
           break
         }
         if (tok.startsWith(vf) && tok.length > vf.length) {
-          setValueFlag(flags, occurrences, cs, vf, tok.slice(vf.length))
+          setValueFlag(flags, refusals, cs, vf, tok.slice(vf.length))
           base = rebase(flags, cs, vf, tok.slice(vf.length), base)
           i += 1
           matchedValue = true
@@ -552,14 +543,14 @@ export function parseCommand(
       if (mixed !== null) {
         if (mixed.attached !== null) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, occurrences, cs, mixed.valueFlag, mixed.attached)
+          setValueFlag(flags, refusals, cs, mixed.valueFlag, mixed.attached)
           base = rebase(flags, cs, mixed.valueFlag, mixed.attached, base)
           i += 1
           continue
         }
         if (i + 1 < filteredArgv.length) {
           for (const name of mixed.bools) setBoolFlag(flags, cs, name)
-          setValueFlag(flags, occurrences, cs, mixed.valueFlag, filteredArgv[i + 1] ?? '')
+          setValueFlag(flags, refusals, cs, mixed.valueFlag, filteredArgv[i + 1] ?? '')
           wordKinds[origIndices[i + 1] ?? -1] = cs.kindOf.get(mixed.valueFlag) ?? null
           if (cs.destOf(mixed.valueFlag) === cs.baseDest) {
             wordBases[origIndices[i + 1] ?? -1] = base
@@ -636,27 +627,12 @@ export function parseCommand(
     }
   }
 
-  // Int-typed values are refused before choices, argparse's order (type
-  // conversion runs before the choices test). The bare boolean form of
-  // an optional-value flag is exempt, like choices.
-  const invalidIntOptions: [string, string][] = []
-  for (const destName of cs.intDests) {
-    for (const part of givenValues(flags, occurrences, destName)) {
-      if (!INT_VALUE.test(part)) invalidIntOptions.push([destName, part])
-    }
-  }
-  const invalidFloatOptions: [string, string][] = []
-  for (const destName of cs.floatDests) {
-    for (const part of givenValues(flags, occurrences, destName)) {
-      if (!FLOAT_VALUE.test(part)) invalidFloatOptions.push([destName, part])
-    }
-  }
-
-  const invalidValueOptions: [string, string, readonly string[]][] = []
-  for (const [destName, allowed] of cs.choicesByDest) {
-    for (const part of givenValues(flags, occurrences, destName)) {
-      if (!allowed.includes(part)) invalidValueOptions.push([destName, part, allowed])
-    }
+  // What the bag kept: the surviving scalar value, every value of an
+  // accumulating dest, and what a default or the environment filled in. A
+  // value a later occurrence replaced was checked as it went.
+  const checked = new Set([...cs.intDests, ...cs.floatDests, ...cs.choicesByDest.keys()])
+  for (const destName of checked) {
+    for (const part of bagValues(flags, destName)) checkValue(refusals, cs, destName, part)
   }
 
   const missingRequiredOptions = cs.requiredDests.filter((destName) => !(destName in flags))
@@ -763,13 +739,12 @@ export function parseCommand(
     ambiguousOptions,
     optionErrorKinds,
     needsValueOptions,
-    invalidValueOptions,
-    invalidIntOptions,
-    invalidFloatOptions,
+    invalidValueOptions: refusals.values,
+    invalidIntOptions: refusals.ints,
+    invalidFloatOptions: refusals.floats,
     missingRequiredOptions,
     missingRequiredOperands,
     typedDests,
-    valueOccurrences: occurrences,
     oldOptionNeedsValue: old !== null ? old.needsValue : null,
     wordKinds,
     wordBases,

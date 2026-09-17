@@ -82,9 +82,6 @@ interface RunOnMountOpts {
   stdin?: ByteSource | null
   resolveHint?: PathSpec | null
   mount?: MountEntry | null
-  // The parser's per-occurrence record of the scalar value flags, handed
-  // to the handler as `CommandOpts.valueOccurrences`.
-  valueOccurrences?: readonly (readonly [string, string])[]
 }
 
 /** The 126 result for a command no runtime accepted. */
@@ -315,7 +312,6 @@ export async function runOnMount(
       readdirPath,
       ...(signal !== undefined ? { signal } : {}),
       limitOverride,
-      ...(opts.valueOccurrences !== undefined ? { valueOccurrences: opts.valueOccurrences } : {}),
     })
     const stdout = initialStdout
     const prefix = rstripSlash(mount.prefix)

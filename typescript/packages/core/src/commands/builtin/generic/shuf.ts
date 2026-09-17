@@ -295,21 +295,26 @@ export interface ShufFlags {
 // GNU validates each option as getopt hands it over, so the refusal that
 // wins is the first bad option ON THE LINE: `shuf -i 1-x -n abc` names the
 // range and `shuf -n abc -i 1-x` names the count (measured on coreutils
-// 9.7). That is why the three value options are walked as
-// `valueOccurrences` rather than read out of the bag, and it is also what
-// makes a repeat visible: a second `-i` is refused outright (`multiple -i
-// options specified`, even for the same range), and a second `-o` is
-// refused unless it spells the same word. `-e` with `-i` is checked after
-// the scan, so any per-option refusal outranks it. Mirrors `parse_flags`
-// in shuf.py.
-export function parseFlags(
-  bag: Record<string, FlagValue>,
-  occurrences?: readonly (readonly [string, string])[],
-): ShufFlags | string {
-  const fl = new FlagView(bag, specOf('shuf'), occurrences)
+// 9.7). The three value options are therefore declared `multiple`
+// (argparse's `append`) and walked in the order their first occurrence was
+// typed, each value in turn, which is also what makes a repeat visible: a
+// second `-i` is refused outright (`multiple -i options specified`, even
+// for the same range), and a second `-o` is refused unless it spells the
+// same word. `-e` with `-i` is checked after the scan, so any per-option
+// refusal outranks it. Deliberate divergence: an option repeated AFTER a
+// different bad one is checked first here (`shuf -i 1-2 -n abc -i 3-4`
+// refuses the second `-i` where GNU names the count), because keeping the
+// line's own order would take a per-occurrence record across options,
+// which neither argparse nor this parser keeps. Mirrors `parse_flags` in
+// shuf.py.
+export function parseFlags(bag: Record<string, FlagValue>): ShufFlags | string {
+  const fl = new FlagView(bag, specOf('shuf'))
   let inputRangeRaw: string | null = null
   let outputRaw: string | null = null
-  for (const [dest, raw] of fl.valueOccurrences('head_count', 'input_range', 'output')) {
+  const typed = fl
+    .typedOrder('head_count', 'input_range', 'output')
+    .flatMap((dest) => fl.asList(dest).map((raw): [string, string] => [dest, raw]))
+  for (const [dest, raw] of typed) {
     if (dest === 'head_count') {
       if (!UNSIGNED.test(raw)) return `shuf: invalid line count: '${quoteText(raw)}'\n`
     } else if (dest === 'input_range') {
@@ -324,15 +329,15 @@ export function parseFlags(
     }
   }
   if (fl.asBool('echo') && inputRangeRaw !== null) return `${ECHO_WITH_RANGE}\n`
-  const countValue = fl.asStr('head_count')
+  const countValue = fl.asList('head_count').at(-1)
   const count = countValue === undefined ? null : BigInt(countValue)
   return {
     count: count === null || count <= SIZE_MAX ? count : SIZE_MAX,
     echo: fl.asBool('echo'),
     zeroTerminated: fl.asBool('zero_terminated'),
     withReplacement: fl.asBool('repeat'),
-    inputRange: fl.asStr('input_range') ?? null,
-    output: fl.asStr('output') ?? null,
+    inputRange: inputRangeRaw,
+    output: outputRaw,
   }
 }
 
@@ -343,7 +348,7 @@ export async function shufGeneric(
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
   write: (p: PathSpec, data: Uint8Array) => Promise<void>,
 ): Promise<CommandFnResult> {
-  const parsed = parseFlags(opts.flags, opts.valueOccurrences)
+  const parsed = parseFlags(opts.flags)
   if (typeof parsed === 'string') {
     return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }

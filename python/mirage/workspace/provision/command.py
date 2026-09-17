@@ -13,7 +13,6 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dataclasses
-from collections.abc import Sequence
 
 from mirage.cache.file.mixin import FileCacheMixin
 from mirage.commands.builtin.generic.crossmount import is_cross_mount
@@ -169,12 +168,9 @@ async def handle_command_provision(
             parsed = parse_command(spec, argv, cwd=session.cwd)
             flag_kwargs = parse_to_kwargs(parsed)
             text_args = parsed.texts()
-            occurrences: Sequence[tuple[str, str]] | None = (
-                parsed.value_occurrences)
         else:
             flag_kwargs = {}
             text_args = [p for p in parts[1:] if not isinstance(p, PathSpec)]
-            occurrences = None
 
         # One typed bag, the provision-path twin of Mount.execute_cmd's
         # (mirrors handleCommandProvision building CommandOpts in TS),
@@ -191,7 +187,6 @@ async def handle_command_provision(
             command=cmd_str,
             spec=spec,
             index=mount.index,
-            value_occurrences=occurrences,
         )
         result = await cmd.provision_fn(mount.resource.accessor,
                                         resource_scopes, text_args, opts)

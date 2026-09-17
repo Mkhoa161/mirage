@@ -505,11 +505,13 @@ describe('shuf decides the emitted count before anything is built', () => {
 
 // GNU validates options as getopt hands them over, so the first bad one on
 // the line speaks, and a repeated -i or a second, different -o is its own
-// refusal. Measured on coreutils 9.7; mirrored in test_shuf.py.
+// refusal. Measured on coreutils 9.7; mirrored in test_shuf.py. One
+// documented divergence: the options are walked in the order they were
+// FIRST typed, each value in turn, so `-i 1-2 -n abc -i 3-4` refuses the
+// second -i where GNU names the count.
 describe('shuf refuses in command-line order', () => {
   function parseLine(...argv: string[]): ShufFlags | string {
-    const parsed = parseCommand(specOf('shuf'), argv, '/')
-    return parseFlags(parseToKwargs(parsed), parsed.valueOccurrences)
+    return parseFlags(parseToKwargs(parseCommand(specOf('shuf'), argv, '/')))
   }
 
   it.each([
@@ -518,7 +520,7 @@ describe('shuf refuses in command-line order', () => {
     [['-i', '1-2', '-i', '3-4'], 'shuf: multiple -i options specified\n'],
     [['-i', '1-2', '-i', '1-2'], 'shuf: multiple -i options specified\n'],
     [['-i', '1-x', '-i', '2-3'], "shuf: invalid input range: '1-x'\n"],
-    [['-i', '1-2', '-n', 'abc', '-i', '3-4'], "shuf: invalid line count: 'abc'\n"],
+    [['-i', '1-2', '-n', 'abc', '-i', '3-4'], 'shuf: multiple -i options specified\n'],
     [['-i', '1-2', '-o', '/a', '-o', '/b'], 'shuf: multiple output files specified\n'],
     [
       ['-e', 'a', '-i', '1-2'],

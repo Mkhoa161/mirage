@@ -153,7 +153,6 @@ export function parseFlags(
       oldOptionNeedsValue: parsed.oldOptionNeedsValue,
       missingRequiredOperands: parsed.missingRequiredOperands,
       typedDests: parsed.typedDests,
-      valueOccurrences: parsed.valueOccurrences,
     }
   }
 
@@ -179,7 +178,6 @@ export function parseFlags(
     oldOptionNeedsValue: null,
     missingRequiredOperands: [],
     typedDests: [],
-    valueOccurrences: [],
   }
 }
 

@@ -63,7 +63,7 @@ async def shuf(ops: CommandIO, accessor: Accessor, paths: list[PathSpec],
 async def _shuf(ops: CommandIO, accessor: Accessor, paths: list[PathSpec],
                 texts: list[str],
                 opts: CommandOpts) -> tuple[ByteSource | None, IOResult]:
-    parsed = parse_flags(opts.flags, opts.value_occurrences)
+    parsed = parse_flags(opts.flags)
     if paths:
         paths = await ops.resolve_glob(accessor, paths, opts.index)
     elif not ops.is_mounted(accessor):

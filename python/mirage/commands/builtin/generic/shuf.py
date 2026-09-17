@@ -1,6 +1,6 @@
 import random
 import re
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
@@ -227,23 +227,44 @@ def emit_count(available: int, count: int | None,
     return min(count, available)
 
 
-def parse_flags(
-    flags: Mapping[str, FlagValue],
-    occurrences: Sequence[tuple[str, str]] | None = None,
-) -> ShufFlags:
+def _typed_values(fl: FlagView) -> list[tuple[str, str]]:
+    """Every value of -n, -i and -o, by first-typed option then in turn.
+
+    ``-o`` is PATH-typed, so its values are the words as typed, read
+    off the resolved specs, which is what GNU compares two ``-o`` by.
+
+    Args:
+        fl (FlagView): spec-bound view over shuf's flag bag.
+    """
+    pairs: list[tuple[str, str]] = []
+    for dest in fl.typed_order("head_count", "input_range", "output"):
+        if dest == "output":
+            pairs.extend(
+                (dest, p.raw_path or p.virtual) for p in fl.as_paths(dest))
+        else:
+            pairs.extend((dest, raw) for raw in fl.as_list(dest))
+    return pairs
+
+
+def parse_flags(flags: Mapping[str, FlagValue]) -> ShufFlags:
     """Read shuf's flags once, refusing what GNU refuses in GNU's order.
 
     GNU validates each option as getopt hands it over, so the refusal
     that wins is the first bad option ON THE LINE: ``shuf -i 1-x -n abc``
     names the range and ``shuf -n abc -i 1-x`` names the count (measured
-    on coreutils 9.7). That is why the three value options are walked as
-    ``value_occurrences`` rather than read out of the bag, and it is
-    also what makes a repeat visible: a second ``-i`` is refused
-    outright (``multiple -i options specified``, even for the same
-    range), and a second ``-o`` is refused unless it spells the same
-    word (``-o a -o a`` is accepted, ``-o a -o b`` is not). ``-e`` with
-    ``-i`` is checked after the scan, so any per-option refusal
-    outranks it.
+    on coreutils 9.7). The three value options are therefore declared
+    ``multiple`` (argparse's ``append``) and walked in the order their
+    first occurrence was typed, each value in turn, which is also what
+    makes a repeat visible: a second ``-i`` is refused outright
+    (``multiple -i options specified``, even for the same range), and a
+    second ``-o`` is refused unless it spells the same word (``-o a -o
+    a`` is accepted, ``-o a -o b`` is not). ``-e`` with ``-i`` is
+    checked after the scan, so any per-option refusal outranks it.
+    Deliberate divergence: an option repeated AFTER a different bad one
+    is checked first here (``shuf -i 1-2 -n abc -i 3-4`` refuses the
+    second ``-i`` where GNU names the count), because keeping the
+    line's own order would take a per-occurrence record across options,
+    which neither argparse nor this parser keeps.
 
     GNU quotes the WHOLE ``-n`` argument, not just the unparsed
     remainder the way expand and cut do, and never appends an
@@ -262,18 +283,14 @@ def parse_flags(
 
     Args:
         flags (Mapping[str, FlagValue]): the dispatcher's flag bag.
-        occurrences (Sequence[tuple[str, str]] | None): the parser's
-            per-occurrence record (``CommandOpts.value_occurrences``),
-            which is what the line order and a repeat are read from.
 
     Raises:
         ValueError: the stderr text to print, exit 1.
     """
-    fl = FlagView(flags, spec=SPECS["shuf"], occurrences=occurrences)
+    fl = FlagView(flags, spec=SPECS["shuf"])
     input_range_raw: str | None = None
     output_raw: str | None = None
-    for dest, raw in fl.value_occurrences("head_count", "input_range",
-                                          "output"):
+    for dest, raw in _typed_values(fl):
         if dest == "head_count":
             if _UNSIGNED.fullmatch(raw) is None:
                 raise ValueError(
@@ -291,15 +308,16 @@ def parse_flags(
             output_raw = raw
     if fl.as_bool("echo") and input_range_raw is not None:
         raise ValueError(ECHO_WITH_RANGE)
-    count_raw = fl.as_str("head_count")
+    counts = fl.as_list("head_count")
+    count_raw = counts[-1] if counts else None
     outputs = fl.as_paths("output")
     return ShufFlags(
         count=min(int(count_raw), SIZE_MAX) if count_raw is not None else None,
         echo=fl.as_bool("echo"),
         zero_terminated=fl.as_bool("zero_terminated"),
         with_replacement=fl.as_bool("repeat"),
-        input_range=fl.as_str("input_range"),
-        output=outputs[0] if outputs else None,
+        input_range=input_range_raw,
+        output=outputs[-1] if outputs else None,
     )
 
 

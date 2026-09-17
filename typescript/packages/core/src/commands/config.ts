@@ -55,7 +55,6 @@ export interface ExecContext {
   readdirPath?: ReaddirPath
   signal?: AbortSignal
   limitOverride?: Limit | null
-  valueOccurrences?: readonly (readonly [string, string])[]
 }
 
 /**
@@ -108,13 +107,6 @@ export interface CommandOpts {
   readdirPath?: ReaddirPath
   signal?: AbortSignal
   timeoutSeconds?: number
-  // The parser's record of every scalar value-flag occurrence the line
-  // carried, as [kwarg name, raw value] in scan order. The flag bag keeps
-  // one value per dest, so this is where a repeated option's earlier value
-  // survives; a handler reads it through
-  // `new FlagView(opts.flags, spec, opts.valueOccurrences)`. Absent outside
-  // a dispatch, where the bag is the record.
-  valueOccurrences?: readonly (readonly [string, string])[]
 }
 
 export type CommandFnResult = [ByteSource | null, IOResult] | null

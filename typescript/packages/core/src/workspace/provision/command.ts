@@ -181,12 +181,10 @@ export async function handleCommandProvision(
     const spec = mount.specFor(cmdName)
     let flagKwargs: Record<string, FlagValue> = {}
     let textArgs: string[]
-    let occurrences: readonly (readonly [string, string])[] | undefined
     if (spec !== null) {
       const parsed = parseCommand(spec, argv, session.cwd)
       flagKwargs = parseToKwargs(parsed)
       textArgs = parsed.texts()
-      occurrences = parsed.valueOccurrences
     } else {
       textArgs = scopedParts.slice(1).filter((p): p is string => typeof p === 'string')
     }
@@ -207,7 +205,6 @@ export async function handleCommandProvision(
       command: cmdStr,
       ...(spec !== null ? { spec } : {}),
       index: rawIndex,
-      ...(occurrences !== undefined ? { valueOccurrences: occurrences } : {}),
     }
 
     const raw = await cmd.provisionFn(accessor, resourceScopes, textArgs, opts)

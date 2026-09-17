@@ -259,16 +259,10 @@ def _nl_bag(*argv: str) -> dict[str, ParsedFlagValue]:
 def _nl_parse(*argv: str) -> NlFlags:
     """nl's flags read the way the dispatcher hands them over.
 
-    The parser's per-occurrence record rides beside the bag as
-    ``CommandOpts.value_occurrences``, so a repeated option's earlier
-    value reaches ``parse_flags`` here exactly as it does in a
-    workspace.
-
     Args:
         argv (str): the words after `nl`.
     """
-    parsed = parse_command(SPECS["nl"], list(argv), "/")
-    return parse_flags(parse_to_kwargs(parsed), parsed.value_occurrences)
+    return parse_flags(_nl_bag(*argv))
 
 
 # GNU validates each numeric option's value the moment getopt hands it
@@ -374,14 +368,18 @@ def test_nl_repeated_option_refuses_the_earlier_bad_value(argv, expected):
     assert str(refusal.value) == expected
 
 
-# A repeat interleaved with another option is where a "last occurrence"
-# position gets it wrong: in `nl -w 3 -v xyz -w abc` the width's bag
-# position is the THIRD word but the value GNU refuses is -v's, and in
-# `nl -w abc -v xyz -w 3` the width is refused although -v sits between
-# its two occurrences. Measured on GNU coreutils 9.4 (section T).
+# A repeat interleaved with another option: every value of an
+# accumulating option is checked, in the order the options were FIRST
+# typed. That is GNU's answer whenever the bad value comes first
+# (`nl -w abc -v xyz -w 3` refuses the width although -v sits between
+# its two occurrences, coreutils 9.4 section T) and a documented
+# divergence when a repeat lands after a different fatal option:
+# `nl -w 3 -v xyz -w abc` names the width here where GNU names -v,
+# because keeping the line's own order would take a per-occurrence
+# record across options, which neither argparse nor the parser keeps.
 _NL_INTERLEAVED_REPEATS = [
     (("-w", "3", "-v", "xyz", "-w", "abc"),
-     "nl: invalid starting line number: 'xyz'"),
+     "nl: invalid line number field width: 'abc'"),
     (("-w", "abc", "-v", "xyz", "-w", "3"),
      "nl: invalid line number field width: 'abc'"),
     (("-v", "xyz", "-w", "abc", "-v", "5"),

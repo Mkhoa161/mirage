@@ -49,20 +49,10 @@ export function specFlagNames(spec: CommandSpec): ReadonlySet<string> {
 export class FlagView {
   private readonly flags: Readonly<Record<string, FlagValue>>
   private readonly allowed: ReadonlySet<string> | null
-  // The parser's per-occurrence record of the scalar value flags the line
-  // carried (`CommandOpts.valueOccurrences`), which `valueOccurrences`
-  // answers from; undefined means no record was taken and the bag is read
-  // as the record.
-  private readonly occurrences: readonly (readonly [string, string])[] | undefined
 
-  constructor(
-    flags?: Readonly<Record<string, FlagValue>>,
-    spec?: CommandSpec,
-    occurrences?: readonly (readonly [string, string])[],
-  ) {
+  constructor(flags?: Readonly<Record<string, FlagValue>>, spec?: CommandSpec) {
     this.flags = flags ?? {}
     this.allowed = spec === undefined ? null : specFlagNames(spec)
-    this.occurrences = occurrences
   }
 
   private key(name: string): string {
@@ -90,42 +80,6 @@ export class FlagView {
   typedOrder(...names: string[]): string[] {
     const wanted = new Set(names.map((n) => this.key(n)))
     return Object.keys(this.flags).filter((k) => wanted.has(k))
-  }
-
-  /**
-   * The named options' occurrences, in the order the line typed them.
-   *
-   * `typedOrder` can only answer out of the bag, which keeps one value
-   * per scalar option — the LAST occurrence of a repeated one. GNU
-   * validates each value the moment getopt hands it over, so a command
-   * that has to answer for the leftmost bad value (`nl -w abc -w 3`
-   * refuses `abc`) or refuse a repeat outright (`shuf -i 1-2 -i 3-4`)
-   * needs the occurrences the bag threw away. The parser records every
-   * scalar value-flag occurrence as it scans and the dispatcher hands that
-   * record over as `CommandOpts.valueOccurrences`, which is the
-   * `occurrences` this view was built with. Without one (a view built
-   * straight from a bag, outside a dispatch) the bag is read as the record:
-   * that is exact for a line that typed each dest once, since its bag
-   * position is that one occurrence.
-   *
-   * Values are raw argv text: a PATH-typed option's value is the word as
-   * typed, not the resolved path, and the bare boolean form of an
-   * optional-value flag carries no value and so does not appear.
-   * Mirrors Python's `FlagView.value_occurrences`.
-   */
-  valueOccurrences(...names: string[]): [string, string][] {
-    const wanted = new Set(names.map((n) => this.key(n)))
-    if (this.occurrences !== undefined) {
-      const pairs: [string, string][] = []
-      for (const [dest, value] of this.occurrences) if (wanted.has(dest)) pairs.push([dest, value])
-      return pairs
-    }
-    const recorded: [string, string][] = []
-    for (const dest of this.typedOrder(...names)) {
-      const value = this.flags[dest]
-      if (typeof value === 'string') recorded.push([dest, value])
-    }
-    return recorded
   }
 
   asBool(name: string): boolean {

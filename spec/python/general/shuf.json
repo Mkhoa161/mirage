@@ -285,6 +285,7 @@
   "options": [
     {
       "long": "--head-count",
+      "multiple": true,
       "short": "-n",
       "type": "str"
     },
@@ -305,11 +306,13 @@
     },
     {
       "long": "--input-range",
+      "multiple": true,
       "short": "-i",
       "type": "str"
     },
     {
       "long": "--output",
+      "multiple": true,
       "short": "-o",
       "type": "path"
     }

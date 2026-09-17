@@ -405,9 +405,14 @@ function patternError(dest: string, raw: string): string | null {
 //
 // Validation is per OCCURRENCE, not per option: `nl -b bogus -b t` still
 // refuses, because GNU had already reported `bogus` when the second -b
-// overrode it. That is what valueOccurrences is for — the bag keeps one
-// value per scalar option, so it cannot answer for `nl -w abc -w 3`, where
-// the value GNU refuses is the one the bag dropped.
+// overrode it. The validated options are therefore declared `multiple`
+// (argparse's `append`), so every value typed is still there to check; the
+// options are walked in the order their first occurrence was typed, each
+// value in turn. Deliberate divergence: GNU walks the line itself, so an
+// option repeated AFTER a different fatal one is checked too late here
+// (`nl -w 3 -v xyz -w abc` names the width where GNU names the starting
+// line number). Keeping that order would take a per-occurrence record
+// across options, which neither argparse nor this parser keeps.
 //
 // Returns the stderr text, one newline-terminated line per error, or null
 // when GNU accepts every value.
@@ -421,7 +426,10 @@ function optionErrors(fl: FlagView): string | null {
   const dests = [...camps.keys(), ...Object.keys(STYLE_OPTIONS), FORMAT_DEST]
   const render = (lines: readonly string[]): string => lines.map((line) => `${line}\n`).join('')
   const deferred: string[] = []
-  for (const [dest, raw] of fl.valueOccurrences(...dests)) {
+  const typed = fl
+    .typedOrder(...dests)
+    .flatMap((dest) => fl.asList(dest).map((raw): [string, string] => [dest, raw]))
+  for (const [dest, raw] of typed) {
     const camp = camps.get(dest)
     if (camp !== undefined) {
       const fatal = numberError(camp[0], raw, camp[1], camp[2], camp[3])
@@ -465,24 +473,26 @@ export interface NlFlags {
 //
 // Returns the stderr text instead of the struct when GNU refuses the line,
 // the shape every sibling generic's parseFlags uses.
-export function parseFlags(
-  bag: Record<string, FlagValue>,
-  occurrences?: readonly (readonly [string, string])[],
-): NlFlags | string {
-  const fl = new FlagView(bag, specOf('nl'), occurrences)
+// The value that won for an accumulating option, GNU's last one.
+function last(fl: FlagView, name: string): string | undefined {
+  return fl.asList(name).at(-1)
+}
+
+export function parseFlags(bag: Record<string, FlagValue>): NlFlags | string {
+  const fl = new FlagView(bag, specOf('nl'))
   const optionErr = optionErrors(fl)
   if (optionErr !== null) return optionErr
   const rawDelimiter = fl.asStr('section_delimiter')
   return {
-    bodyNumberingRaw: fl.asStr('body_numbering'),
-    startRaw: fl.asStr('starting_line_number'),
-    incrementRaw: fl.asStr('line_increment'),
-    widthRaw: fl.asStr('number_width'),
+    bodyNumberingRaw: last(fl, 'body_numbering'),
+    startRaw: last(fl, 'starting_line_number'),
+    incrementRaw: last(fl, 'line_increment'),
+    widthRaw: last(fl, 'number_width'),
     separator: fl.asStr('number_separator'),
-    footerNumberingRaw: fl.asStr('footer_numbering'),
-    headerNumberingRaw: fl.asStr('header_numbering'),
-    joinBlankLinesRaw: fl.asStr('join_blank_lines'),
-    numberFormat: fl.asStr('number_format') ?? 'rn',
+    footerNumberingRaw: last(fl, 'footer_numbering'),
+    headerNumberingRaw: last(fl, 'header_numbering'),
+    joinBlankLinesRaw: last(fl, 'join_blank_lines'),
+    numberFormat: last(fl, 'number_format') ?? 'rn',
     // An empty `-d` is not an absent one: GNU disables delimiter matching
     // entirely for it and does NOT fall back to `\:`, so the default can
     // only be substituted for undefined.
@@ -518,7 +528,7 @@ export async function nlGeneric(
   opts: CommandOpts,
   stream: (p: PathSpec) => AsyncIterable<Uint8Array>,
 ): Promise<CommandFnResult> {
-  const parsed = parseFlags(opts.flags, opts.valueOccurrences)
+  const parsed = parseFlags(opts.flags)
   if (typeof parsed === 'string') {
     return [null, new IOResult({ exitCode: 1, stderr: ENC.encode(parsed) })]
   }

@@ -190,12 +190,13 @@ SPECS: dict[str, CommandSpec] = {
     'shuf':
     CommandSpec(
         options=(
-            Option(short="-n", long="--head-count", type="str"),
+            Option(short="-n", long="--head-count", type="str", multiple=True),
             Option(short="-e", long="--echo"),
             Option(short="-z", long="--zero-terminated"),
             Option(short="-r", long="--repeat"),
-            Option(short="-i", long="--input-range", type="str"),
-            Option(short="-o", long="--output", type="path"),
+            Option(short="-i", long="--input-range", type="str",
+                   multiple=True),
+            Option(short="-o", long="--output", type="path", multiple=True),
         ),
         rest=Operand(type="path"),
     ),

@@ -12,7 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -79,19 +79,6 @@ class ParsedArgs:
     # what was supplied (clap's) needs exactly this distinction: a
     # defaulted option is invisible there, a typed one is not.
     typed_dests: list[str] = field(default_factory=list)
-    # Every scalar value-flag occurrence the line carried, as (kwarg
-    # name, raw value) in scan order. The bag above keeps one value per
-    # scalar dest, so a repeated option throws the earlier value away;
-    # this is where it survives, for a command that must answer for a
-    # value the bag no longer holds (nl refuses the LEFTMOST invalid
-    # one, which is the order GNU validates in) or that must refuse a
-    # repeat outright (shuf's second -i). It rides the dispatcher's
-    # CommandOpts as a typed field of its own, never the flag bag, and a
-    # FlagView reads it through ``value_occurrences``. Parser
-    # bookkeeping, not grammar: no spec field switches it on, an
-    # accumulating (``multiple``) option is absent because its own list
-    # already is the record, and every command is free to ignore it.
-    value_occurrences: list[tuple[str, str]] = field(default_factory=list)
     # The old-style cluster letter whose argument ran off the end of the
     # line (`tar xzf` with no archive). Its own report because GNU tar
     # words it differently and exits differently from every getopt
@@ -113,9 +100,40 @@ class ParsedArgs:
         return self.flags.get(name, default)
 
 
+@dataclass(slots=True)
+class _Refusals:
+    """The values the per-value checks refused, in the order read."""
+    ints: list[tuple[str, str]] = field(default_factory=list)
+    floats: list[tuple[str, str]] = field(default_factory=list)
+    values: list[tuple[str, str, tuple[str,
+                                       ...]]] = field(default_factory=list)
+
+
+def _check_value(refusals: _Refusals, cs: CompiledSpec, dest: str,
+                 value: str) -> None:
+    """Run one value through its dest's int, float and choices checks.
+
+    Int-typed values are refused before choices, argparse's order (type
+    conversion runs before the choices test).
+
+    Args:
+        refusals (_Refusals): the lists to report into.
+        cs (CompiledSpec): compiled spec tables.
+        dest (str): the value's dest.
+        value (str): the raw value.
+    """
+    if dest in cs.int_dests and not INT_VALUE.match(value):
+        refusals.ints.append((dest, value))
+    if dest in cs.float_dests and not FLOAT_VALUE.match(value):
+        refusals.floats.append((dest, value))
+    allowed = cs.choices_by_dest.get(dest)
+    if allowed is not None and value not in allowed:
+        refusals.values.append((dest, value, allowed))
+
+
 def _set_value_flag(
     flags: dict[str, ParsedFlagValue],
-    occurrences: list[tuple[str, str]],
+    refusals: _Refusals,
     cs: CompiledSpec,
     spelling: str,
     value: str,
@@ -127,17 +145,15 @@ def _set_value_flag(
     is ``--update=older``) and ``multiple`` options accumulate in true
     command-line order (``sort -k1 --key=2`` is ``[1, 2]``).
 
-    Last-wins is where the bag loses information, so the scalar branch
-    also appends to ``occurrences`` under the kwarg name the bag uses:
-    the value it drops is the one GNU already validated and refused
-    (``nl -w abc -w 3``), and nothing else on the parse result
-    remembers it. An accumulating dest needs no
-    entry -- its list already is the per-occurrence record.
+    GNU validated the value it is about to drop the moment getopt read
+    it, so a scalar dest checks that value before the new one replaces
+    it: ``numfmt --to=bogus --to=si`` is refused for ``bogus`` although
+    the bag keeps only ``si``. What survives in the bag is checked
+    after the scan, with the defaults and environment values.
 
     Args:
         flags (dict): parsed flag bag, updated in place.
-        occurrences (list): per-occurrence (dest, raw value) record,
-            appended to in place.
+        refusals (_Refusals): where a dropped value's refusal lands.
         cs (CompiledSpec): compiled spec tables.
         spelling (str): dashed spelling as typed.
         value (str): the flag's value.
@@ -150,36 +166,23 @@ def _set_value_flag(
         else:
             flags[name] = [value]
     else:
-        occurrences.append((flag_kwarg_name(name), value))
-        flags.pop(name, None)
+        dropped = flags.pop(name, None)
+        if isinstance(dropped, str):
+            _check_value(refusals, cs, name, dropped)
         flags[name] = value
 
 
-def _given_values(
-    flags: Mapping[str, ParsedFlagValue],
-    occurrences: Sequence[tuple[str, str]],
-    dest_name: str,
-) -> list[str]:
-    """Every value one dest was given, for the per-value checks.
+def _bag_values(flags: Mapping[str, ParsedFlagValue],
+                dest_name: str) -> list[str]:
+    """The values the bag holds for one dest.
 
-    GNU validates an option's argument as it is scanned, so ``numfmt
-    --to=bogus --to=si`` is refused for ``bogus`` although the bag keeps
-    only ``si``. A scalar dest therefore answers with its occurrence
-    record, in line order; an accumulating dest's list already is that
-    record; a value that arrived by default or from the environment has
-    no occurrence and is read off the bag. The bare boolean form of an
-    optional-value flag is exempt.
+    The bare boolean form of an optional-value flag is exempt from the
+    per-value checks, so it reads as no value at all.
 
     Args:
         flags (Mapping[str, ParsedFlagValue]): the parsed flag bag.
-        occurrences (Sequence[tuple[str, str]]): the per-occurrence
-            (kwarg name, raw value) record.
         dest_name (str): the dest to read.
     """
-    key = flag_kwarg_name(dest_name)
-    recorded = [value for dest, value in occurrences if dest == key]
-    if recorded:
-        return recorded
     value = flags.get(dest_name)
     if isinstance(value, list):
         return value
@@ -316,7 +319,7 @@ def parse_command(
     # Every scalar value-flag occurrence, in scan order, beside the bag
     # that keeps only the last of each. Appended to by _set_value_flag
     # and read by nobody here: it leaves on the parse result.
-    occurrences: list[tuple[str, str]] = []
+    refusals = _Refusals()
     raw_args: list[str] = []
     # raw_indices[k] = argv position of raw_args[k]
     raw_indices: list[int] = []
@@ -397,9 +400,9 @@ def parse_command(
             elif is_pair and eq == -1 and i + 2 < len(filtered_argv):
                 # Two tokens, both recorded under the one dest, so the
                 # command reads the accumulated list in twos.
-                _set_value_flag(flags, occurrences, cs, spelling,
+                _set_value_flag(flags, refusals, cs, spelling,
                                 filtered_argv[i + 1])
-                _set_value_flag(flags, occurrences, cs, spelling,
+                _set_value_flag(flags, refusals, cs, spelling,
                                 filtered_argv[i + 2])
                 # The first token names the value and is always textual;
                 # the option's own kind describes the second.
@@ -408,7 +411,7 @@ def parse_command(
                 i += 3
             elif (not is_pair and etok in cs.long_value_spellings
                   and i + 1 < len(filtered_argv)):
-                _set_value_flag(flags, occurrences, cs, etok,
+                _set_value_flag(flags, refusals, cs, etok,
                                 filtered_argv[i + 1])
                 word_kinds[orig_indices[i + 1]] = cs.kind_of[etok]
                 if cs.dest_of(etok) == cs.base_dest:
@@ -427,7 +430,7 @@ def parse_command(
             else:
                 if eq != -1 and (spelling in cs.long_value_spellings
                                  or spelling in cs.long_optional_spellings):
-                    _set_value_flag(flags, occurrences, cs, spelling,
+                    _set_value_flag(flags, refusals, cs, spelling,
                                     tok[eq + 1:])
                     base = _rebase(flags, cs, spelling, tok[eq + 1:], base)
                 elif etok in cs.long_value_spellings:
@@ -467,7 +470,7 @@ def parse_command(
             matched_optional = False
             for vf in cs.attach_spellings:
                 if tok.startswith(vf) and len(tok) > len(vf):
-                    _set_value_flag(flags, occurrences, cs, vf, tok[len(vf):])
+                    _set_value_flag(flags, refusals, cs, vf, tok[len(vf):])
                     base = _rebase(flags, cs, vf, tok[len(vf):], base)
                     i += 1
                     matched_optional = True
@@ -477,7 +480,7 @@ def parse_command(
             matched_value = False
             for vf in cs.value_spellings:
                 if tok == vf and i + 1 < len(filtered_argv):
-                    _set_value_flag(flags, occurrences, cs, vf,
+                    _set_value_flag(flags, refusals, cs, vf,
                                     filtered_argv[i + 1])
                     word_kinds[orig_indices[i + 1]] = cs.kind_of[vf]
                     if cs.dest_of(vf) == cs.base_dest:
@@ -487,7 +490,7 @@ def parse_command(
                     matched_value = True
                     break
                 if tok.startswith(vf) and len(tok) > len(vf):
-                    _set_value_flag(flags, occurrences, cs, vf, tok[len(vf):])
+                    _set_value_flag(flags, refusals, cs, vf, tok[len(vf):])
                     base = _rebase(flags, cs, vf, tok[len(vf):], base)
                     i += 1
                     matched_value = True
@@ -517,14 +520,14 @@ def parse_command(
                 if attached is not None:
                     for name in cluster_bools:
                         _set_bool_flag(flags, cs, name)
-                    _set_value_flag(flags, occurrences, cs, vflag, attached)
+                    _set_value_flag(flags, refusals, cs, vflag, attached)
                     base = _rebase(flags, cs, vflag, attached, base)
                     i += 1
                     continue
                 if i + 1 < len(filtered_argv):
                     for name in cluster_bools:
                         _set_bool_flag(flags, cs, name)
-                    _set_value_flag(flags, occurrences, cs, vflag,
+                    _set_value_flag(flags, refusals, cs, vflag,
                                     filtered_argv[i + 1])
                     word_kinds[orig_indices[i + 1]] = cs.kind_of[vflag]
                     if cs.dest_of(vflag) == cs.base_dest:
@@ -607,25 +610,14 @@ def parse_command(
             else:
                 flags[dest_name] = default
 
-    # Int-typed values are refused before choices, argparse's order
-    # (type conversion runs before the choices test). The bare boolean
-    # form of an optional-value flag is exempt, like choices.
-    invalid_int_options: list[tuple[str, str]] = []
-    for dest_name in cs.int_dests:
-        for part in _given_values(flags, occurrences, dest_name):
-            if not INT_VALUE.match(part):
-                invalid_int_options.append((dest_name, part))
-    invalid_float_options: list[tuple[str, str]] = []
-    for dest_name in cs.float_dests:
-        for part in _given_values(flags, occurrences, dest_name):
-            if not FLOAT_VALUE.match(part):
-                invalid_float_options.append((dest_name, part))
-
-    invalid_value_options: list[tuple[str, str, tuple[str, ...]]] = []
-    for dest_name, allowed in cs.choices_by_dest.items():
-        for part in _given_values(flags, occurrences, dest_name):
-            if part not in allowed:
-                invalid_value_options.append((dest_name, part, allowed))
+    # What the bag kept: the surviving scalar value, every value of an
+    # accumulating dest, and what a default or the environment filled
+    # in. A value a later occurrence replaced was checked as it went.
+    checked = dict.fromkeys(
+        [*cs.int_dests, *cs.float_dests, *cs.choices_by_dest])
+    for dest_name in checked:
+        for part in _bag_values(flags, dest_name):
+            _check_value(refusals, cs, dest_name, part)
 
     missing_required_options = [
         dest_name for dest_name in cs.required_dests if dest_name not in flags
@@ -740,13 +732,12 @@ def parse_command(
         ambiguous_options=ambiguous_options,
         option_error_kinds=option_error_kinds,
         needs_value_options=needs_value_options,
-        invalid_value_options=invalid_value_options,
-        invalid_int_options=invalid_int_options,
-        invalid_float_options=invalid_float_options,
+        invalid_value_options=refusals.values,
+        invalid_int_options=refusals.ints,
+        invalid_float_options=refusals.floats,
         missing_required_options=missing_required_options,
         missing_required_operands=missing_required_operands,
         typed_dests=typed_dests,
-        value_occurrences=occurrences,
         old_option_needs_value=old.needs_value if old is not None else None,
     )
 

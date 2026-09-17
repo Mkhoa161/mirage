@@ -533,9 +533,6 @@ export class MountEntry {
         ...(context.ns !== undefined ? { ns: context.ns } : {}),
         ...(context.statPath !== undefined ? { statPath: context.statPath } : {}),
         ...(context.readdirPath !== undefined ? { readdirPath: context.readdirPath } : {}),
-        ...(context.valueOccurrences !== undefined
-          ? { valueOccurrences: context.valueOccurrences }
-          : {}),
       }
 
       // What the command tier's mode guard reads: the write-command gate

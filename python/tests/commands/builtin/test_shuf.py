@@ -556,14 +556,17 @@ def test_shuf_input_range_overflow_reaches_the_shell_with_its_clause():
 
 # GNU validates options as getopt hands them over, so the first bad one on
 # the line speaks, and a repeated -i or a second, different -o is its own
-# refusal. Measured on coreutils 9.7; mirrored in shuf.test.ts.
+# refusal. Measured on coreutils 9.7; mirrored in shuf.test.ts. One
+# documented divergence: the options are walked in the order they were
+# FIRST typed, each value in turn, so `-i 1-2 -n abc -i 3-4` refuses the
+# second -i where GNU names the count.
 @pytest.mark.parametrize("line,stderr", [
     ("shuf -i 1-x -n abc", "shuf: invalid input range: '1-x'\n"),
     ("shuf -n abc -i 1-x", "shuf: invalid line count: 'abc'\n"),
     ("shuf -i 1-2 -i 3-4", "shuf: multiple -i options specified\n"),
     ("shuf -i 1-2 -i 1-2", "shuf: multiple -i options specified\n"),
     ("shuf -i 1-x -i 2-3", "shuf: invalid input range: '1-x'\n"),
-    ("shuf -i 1-2 -n abc -i 3-4", "shuf: invalid line count: 'abc'\n"),
+    ("shuf -i 1-2 -n abc -i 3-4", "shuf: multiple -i options specified\n"),
     ("shuf -i 1-2 -o /data/a -o /data/b",
      "shuf: multiple output files specified\n"),
     ("shuf -e a -i 1-2", "shuf: cannot combine -e and -i options\n"

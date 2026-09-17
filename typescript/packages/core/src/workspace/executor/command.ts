@@ -374,14 +374,8 @@ export async function handleCommand(
       ...(routingDecision !== undefined ? { routingDecision } : {}),
       ...(executeFn !== undefined ? { executeFn } : {}),
     }
-    // The occurrence record rides every per-operand run, so a stream
-    // command's final stdin-mode invocation still sees a refused earlier
-    // occurrence (`nl -w bad -w 3 /m1/a /m2/b`).
     const runSingle: RunSingle = (name, ps, ts, fk, opts) =>
-      runOnMount(runCtx, name, ps, ts, fk, {
-        valueOccurrences: csParsed.valueOccurrences,
-        ...(opts ?? {}),
-      })
+      runOnMount(runCtx, name, ps, ts, fk, opts ?? {})
     const csNs = namespaceViewOf(registry, namespace ?? null, dispatch)
     // A per-operand native run is single-mount by construction, so a
     // traversal operand holding nested mounts has to fan out inside it,
@@ -599,7 +593,6 @@ export async function handleCommand(
     stdin,
     mount,
     resolveHint: routingScopes[0] ?? null,
-    valueOccurrences: parsedLine.valueOccurrences,
   })
   let stdout = rawStdout
   if (cmdName === 'find') {

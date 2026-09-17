@@ -61,7 +61,3 @@ class ParsedCommand(NamedTuple):
     # and not list because a NamedTuple default is one shared object.
     missing_required_operands: Sequence[str] = ()
     typed_dests: Sequence[str] = ()
-    # The parser's per-occurrence record of the scalar value flags, as
-    # (kwarg name, raw value) in scan order, handed to the handler as
-    # ``CommandOpts.value_occurrences``.
-    value_occurrences: Sequence[tuple[str, str]] = ()

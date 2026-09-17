@@ -12,7 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 from mirage.commands.spec.constants import flag_kwarg_name
 from mirage.commands.spec.types import CommandSpec, FlagValue
@@ -32,20 +32,13 @@ class FlagView:
             not declare raise KeyError. A missing key is otherwise
             indistinguishable from "flag not passed", so a typo in the name
             would silently read as False/None.
-        occurrences (Sequence[tuple[str, str]] | None): the parser's
-            per-occurrence record of the scalar value flags the line
-            carried (``CommandOpts.value_occurrences``), which is what
-            ``value_occurrences`` answers from. None means no record was
-            taken and the bag is read as the record.
     """
 
     def __init__(self,
                  flags: Mapping[str, FlagValue] | None,
-                 spec: CommandSpec | None = None,
-                 occurrences: Sequence[tuple[str, str]] | None = None) -> None:
+                 spec: CommandSpec | None = None) -> None:
         self._flags = flags if flags is not None else {}
         self._allowed = spec_flag_names(spec) if spec is not None else None
-        self._occurrences = occurrences
 
     def _key(self, name: str) -> str:
         if self._allowed is not None and name not in self._allowed:
@@ -71,45 +64,6 @@ class FlagView:
         """
         wanted = {self._key(n) for n in names}
         return [k for k in self._flags if k in wanted]
-
-    def value_occurrences(self, *names: str) -> list[tuple[str, str]]:
-        """The named options' occurrences, in the order the line typed them.
-
-        ``typed_order`` can only answer out of the bag, which keeps one
-        value per scalar option -- the LAST occurrence of a repeated
-        one. GNU validates each value the moment getopt hands it over,
-        so a command that has to answer for the leftmost bad value
-        (``nl -w abc -w 3`` refuses ``abc``) or refuse a repeat outright
-        (``shuf -i 1-2 -i 3-4``) needs the occurrences the bag threw
-        away. The parser records every scalar value-flag occurrence as
-        it scans and the dispatcher hands that record over as
-        ``CommandOpts.value_occurrences``, which is the ``occurrences``
-        this view was built with. Without one (a view built straight
-        from a bag, outside a dispatch) the bag is read as the record:
-        that is exact for a line that typed each dest once, since its
-        bag position is that one occurrence.
-
-        Args:
-            names (str): flag names to report the occurrences of.
-
-        Returns:
-            list[tuple[str, str]]: (name, raw value) pairs in scan
-                order, for the named options the line carried. Values
-                are raw argv text: a PATH-typed option's value is the
-                word as typed, not the resolved path, and the bare
-                boolean form of an optional-value flag carries no value
-                and so does not appear.
-        """
-        wanted = {self._key(n) for n in names}
-        if self._occurrences is not None:
-            return [(dest, value) for dest, value in self._occurrences
-                    if dest in wanted]
-        recorded: list[tuple[str, str]] = []
-        for dest in self.typed_order(*names):
-            value = self._flags.get(dest)
-            if isinstance(value, str):
-                recorded.append((dest, value))
-        return recorded
 
     def as_bool(self, name: str) -> bool:
         value = self._flags.get(self._key(name))

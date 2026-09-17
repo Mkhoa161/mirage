@@ -57,18 +57,14 @@ async function run(line: Line): Promise<{ exit: number; stdout: string; stderr: 
 // hand-written record would be assuming the very thing under test; these
 // cases go through the spec parser so the bag carries whatever order the
 // parser actually preserves.
-// The record rides beside the bag the way the dispatcher hands it to the
-// handler (`CommandOpts.valueOccurrences`), so a repeated option's earlier
-// value reaches the generic here exactly as it does in a workspace.
-type Line = Pick<CommandOpts, 'flags' | 'valueOccurrences'>
+type Line = Pick<CommandOpts, 'flags'>
 
 function parseLine(line: Line): ReturnType<typeof parseFlags> {
-  return parseFlags(line.flags, line.valueOccurrences)
+  return parseFlags(line.flags)
 }
 
 function nlBag(...argv: string[]): Line {
-  const parsed = parseCommand(specOf('nl'), argv, '/')
-  return { flags: parseToKwargs(parsed), valueOccurrences: parsed.valueOccurrences }
+  return { flags: parseToKwargs(parseCommand(specOf('nl'), argv, '/')) }
 }
 
 describe('nl refuses a numeric option it cannot read whole', () => {
@@ -262,13 +258,16 @@ describe('nl reports the first bad option in command-line order', () => {
     expect(got.stderr).toBe(message)
   })
 
-  // A repeat interleaved with another option is where a "last occurrence"
-  // position gets it wrong: in `nl -w 3 -v xyz -w abc` the width's bag
-  // position is the THIRD word but the value GNU refuses is -v's, and in
-  // `nl -w abc -v xyz -w 3` the width is refused although -v sits between
-  // its two occurrences. Measured on GNU coreutils 9.4 (section T).
+  // Every value of an accumulating option is checked, in the order the
+  // options were FIRST typed. That is GNU's answer whenever the bad value
+  // comes first (`nl -w abc -v xyz -w 3` refuses the width although -v sits
+  // between its two occurrences, coreutils 9.4 section T) and a documented
+  // divergence when a repeat lands after a different fatal option:
+  // `nl -w 3 -v xyz -w abc` names the width here where GNU names -v,
+  // because keeping the line's own order would take a per-occurrence
+  // record across options, which neither argparse nor the parser keeps.
   it.each<[string[], string]>([
-    [['-w', '3', '-v', 'xyz', '-w', 'abc'], "nl: invalid starting line number: 'xyz'\n"],
+    [['-w', '3', '-v', 'xyz', '-w', 'abc'], "nl: invalid line number field width: 'abc'\n"],
     [['-w', 'abc', '-v', 'xyz', '-w', '3'], "nl: invalid line number field width: 'abc'\n"],
     [['-v', 'xyz', '-w', 'abc', '-v', '5'], "nl: invalid starting line number: 'xyz'\n"],
     [['-w', '3', '-w', 'abc', '-v', 'xyz'], "nl: invalid line number field width: 'abc'\n"],

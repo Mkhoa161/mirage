@@ -104,14 +104,10 @@ describe('expand --tabs refuses a value it cannot read whole', () => {
 // ACCUMULATES across occurrences, so a hand-written record cannot express
 // `-t 2,4 -t 6` at all; these cases go through the spec parser so the bag
 // carries whatever occurrence record the parser actually preserves.
-// The record rides beside the bag the way the dispatcher hands it to the
-// handler (`CommandOpts.valueOccurrences`), so a repeated option's earlier
-// value reaches the generic here exactly as it does in a workspace.
-type Line = Pick<CommandOpts, 'flags' | 'valueOccurrences'>
+type Line = Pick<CommandOpts, 'flags'>
 
 function expandBag(...argv: string[]): Line {
-  const parsed = parseCommand(specOf('expand'), argv, '/')
-  return { flags: parseToKwargs(parsed), valueOccurrences: parsed.valueOccurrences }
+  return { flags: parseToKwargs(parseCommand(specOf('expand'), argv, '/')) }
 }
 
 function stops(list: string): TabStops {
