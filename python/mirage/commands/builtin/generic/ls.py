@@ -210,6 +210,29 @@ def _hyperlink_flag(fl: FlagView) -> bool:
     return match.word == "always"
 
 
+def _block_size_error(text: str, refusal: formatting.BlockSizeRefusal) -> str:
+    """GNU's three ``--block-size`` refusals, worded as ls words them.
+
+    Measured on coreutils 9.7: ``ls: invalid --block-size argument
+    'x'``, ``ls: invalid suffix in --block-size argument '1x'`` and
+    ``ls: --block-size argument '99999999999999999999' too large``. The
+    word is quoted but NOT escaped, which is GNU's own split (xstrtol's
+    fatal path prints the argument as is, where argmatch's runs it
+    through ``quote()``): ``ls --block-size=1é`` reports the two UTF-8
+    bytes intact.
+
+    Args:
+        text (str): the option value as typed.
+        refusal (BlockSizeRefusal): which failure the parser reported.
+    """
+    quoted = f"'{text}'"
+    if refusal is formatting.BlockSizeRefusal.TOO_LARGE:
+        return f"ls: --block-size argument {quoted} too large"
+    if refusal is formatting.BlockSizeRefusal.INVALID_SUFFIX:
+        return f"ls: invalid suffix in --block-size argument {quoted}"
+    return f"ls: invalid --block-size argument {quoted}"
+
+
 def parse_flags(flags: Mapping[str, FlagValue]) -> LsFlags:
     """Parse the ls flag bag once into a frozen struct.
 
@@ -242,10 +265,10 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> LsFlags:
     block = None
     block_text = fl.as_str("block_size")
     if block_text is not None:
-        block = formatting.parse_block_size(block_text)
-        if block is None:
-            raise UsageError(
-                f"ls: invalid --block-size argument '{block_text}'", 2)
+        parsed_block = formatting.parse_block_size(block_text)
+        if isinstance(parsed_block, formatting.BlockSizeRefusal):
+            raise UsageError(_block_size_error(block_text, parsed_block), 2)
+        block = parsed_block
         # The later of -h and --block-size wins (GNU: `--block-size=1 -h`
         # prints 1.5K, `-h --block-size=1` prints 1536); the value is
         # still checked either way.

@@ -19,14 +19,7 @@ import { type FileStat, FileType } from '../../types.ts'
 import { getExtension } from '../resolve.ts'
 import { BINARY_EXTENSIONS } from './constants.ts'
 import { grepContextLines } from './grep_context.ts'
-import {
-  decodeLine,
-  encodeLine,
-  lineOffsets,
-  matchOffset,
-  prefixOf,
-  printable,
-} from './grep_offsets.ts'
+import { decodeLine, encodeLine, lineOffsets, matchOffset, prefixOf } from './grep_offsets.ts'
 import { compilePattern } from './grep_pattern.ts'
 import { NO_FILTERS, type WalkFilters, dirAdmitted, fileAdmitted } from './grep_select.ts'
 import { splitLines } from './utils/lines.ts'
@@ -124,7 +117,7 @@ export function grepLines(
   }
   if (opts.countOnly) return [String(count)]
   if (opts.filesOnly) return count > 0 ? [path] : []
-  return results.map(printable)
+  return results
 }
 
 // Whether any `path:count` record has a nonzero count.

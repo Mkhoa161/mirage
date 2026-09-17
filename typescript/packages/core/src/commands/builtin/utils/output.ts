@@ -14,6 +14,8 @@
 
 import { materialize, type IOResult } from '../../../io/types.ts'
 
+import { encodeText } from '../../../shell/bytes.ts'
+
 const ENC = new TextEncoder()
 
 // Prepend warning lines to a result's stderr in place. Used by wrappers
@@ -31,11 +33,17 @@ export async function prependStderr(io: IOResult, warnings: readonly string[]): 
   io.stderr = merged
 }
 
+// Records to output bytes, one per line, smuggled bytes put back. A line
+// that came through `decodeLine` holds a byte that is not valid UTF-8 as a
+// sentinel, and GNU grep and ripgrep print that byte as itself; a plain
+// TextEncoder turned it into U+FFFD, and the `printable` step that used to
+// stand in front of it did the same on purpose. Ordinary text encodes
+// exactly as before. Mirrors Python's `format_records`.
 export function formatRecords(records: readonly string[]): Uint8Array {
   if (records.length === 0) {
     return new Uint8Array(0)
   }
-  return ENC.encode(records.join('\n') + '\n')
+  return encodeText(records.join('\n') + '\n')
 }
 
 export function formatOptionalRecords(records: readonly string[]): Uint8Array | null {

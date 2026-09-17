@@ -95,10 +95,11 @@ describe('per-session mount grants', () => {
     expect(a.store.files.has('/y.txt')).toBe(false)
   })
 
-  // A hidden mount takes the same shell-attributed line as a READ-granted
+  // A hidden mount takes a shell-attributed line like a READ-granted
   // one, on `>` and `>>` alike, and the rest of the line keeps running.
-  // Creating under a hidden path is the one op a hide answers out loud,
-  // since a silent success would leave a file the session cannot see.
+  // The mount does not exist for the session, so a create under it
+  // answers ENOENT as every read does, rather than an EACCES that would
+  // let the session map the hide by probing writes.
   it.each(['echo leaked > /b/y.txt; echo next', 'echo leaked >> /b/y.txt; echo next'])(
     'shell-attributes %s for a hidden mount',
     async (line) => {
@@ -108,7 +109,7 @@ describe('per-session mount grants', () => {
       const denied = await ws.execute(line, { sessionId: 'agent' })
       expect(denied.exitCode).toBe(0)
       expect(stdoutStr(denied)).toBe('next\n')
-      expect(stderrStr(denied)).toBe('/b/y.txt: Permission denied\n')
+      expect(stderrStr(denied)).toBe('/b/y.txt: No such file or directory\n')
       expect(b.store.files.has('/y.txt')).toBe(false)
     },
   )

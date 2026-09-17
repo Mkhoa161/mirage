@@ -30,6 +30,9 @@ from mirage.utils.errors import FS_ERRORS, WALK_ERRORS, fs_strerror
 from mirage.utils.key_prefix import mount_prefix_of
 from mirage.utils.path import respell_raw
 
+# ripgrep's own words for a line with no pattern, exit 2 (14.1.1).
+RG_NO_PATTERN = "rg: ripgrep requires at least one pattern to execute a search"
+
 
 @dataclass(frozen=True, slots=True)
 class RgFlags:
@@ -40,6 +43,7 @@ class RgFlags:
     byte_offsets: bool
     count_only: bool
     files_only: bool
+    files_without_match: bool
     whole_word: bool
     fixed_string: bool
     only_matching: bool
@@ -69,13 +73,22 @@ def parse_flags(fl: FlagView, never_match: bool) -> RgFlags:
     if c_ctx is not None:
         # rg family: -C overrides -A/-B (grep keeps -A/-B precedence)
         context_before = context_after = c_ctx
+    # -c, -l and --files-without-match set one output mode in ripgrep,
+    # so the later one on the line wins: `-c --files-without-match`
+    # lists the matchless files and `--files-without-match -c` prints
+    # counts (ripgrep 14.1.1).
+    listing: str | None = None
+    for name in fl.typed_order("c", "args_l", "files_without_match"):
+        if fl.as_bool(name):
+            listing = name
     return RgFlags(
         ignore_case=fl.as_bool("i"),
         invert=fl.as_bool("v"),
         line_numbers=fl.as_bool("n"),
         byte_offsets=fl.as_bool("byte_offset"),
-        count_only=fl.as_bool("c"),
-        files_only=fl.as_bool("args_l"),
+        count_only=listing == "c",
+        files_only=listing == "args_l",
+        files_without_match=listing == "files_without_match",
         whole_word=fl.as_bool("w"),
         fixed_string=fl.as_bool("F") and not never_match,
         only_matching=fl.as_bool("o"),
@@ -132,8 +145,8 @@ async def rg(
     if read_stream is not None:
         read_stream = cache_aware_bound_stream(read_stream)
     fl = FlagView(opts.flags, spec=SPECS["rg"])
-    pattern, never_match = await resolve_pattern(
-        texts, fl, read_bytes, "rg: usage: rg [flags] pattern [path]")
+    pattern, never_match = await resolve_pattern(texts, fl, read_bytes,
+                                                 RG_NO_PATTERN)
     f = parse_flags(fl, never_match)
 
     if paths:
@@ -166,8 +179,9 @@ async def rg(
         # for a single file and -I suppresses it (cross-mount fanout forces
         # -H so per-operand native runs stay filename-keyed).
         label = (len(paths) > 1 or f.with_filename) and not f.no_filename
-        needs_full = (is_dir or f.files_only or f.context_before
-                      or f.context_after or f.file_type or f.glob_pattern)
+        needs_full = (is_dir or f.files_only or f.files_without_match
+                      or f.context_before or f.context_after or f.file_type
+                      or f.glob_pattern)
         if needs_full:
             warnings_f: list[str] = []
             results: list[str] = []
@@ -188,6 +202,7 @@ async def rg(
                     line_numbers=f.line_numbers,
                     count_only=f.count_only,
                     files_only=f.files_only,
+                    files_without_match=f.files_without_match,
                     fixed_string=f.fixed_string,
                     only_matching=f.only_matching,
                     max_count=f.max_count,
@@ -205,8 +220,12 @@ async def rg(
                 )
                 results.extend(respell_raw(hits_full, p.virtual, p.raw_path))
             stderr = format_optional_records(warnings_f)
-            code = exit_code_for(full_io.exit_code == 0, bool(warnings_f),
-                                 False)
+            # ripgrep's status under --files-without-match follows the
+            # listing, not the matching: 0 when a file was listed, 1 when
+            # every file matched (14.1.1; GNU grep keeps the match status).
+            selected = (bool(results) if f.files_without_match
+                        and not f.count_only else full_io.exit_code == 0)
+            code = exit_code_for(selected, bool(warnings_f), False)
             if not results:
                 return b"", IOResult(exit_code=code, stderr=stderr)
             return format_records(results), IOResult(exit_code=code,
@@ -291,10 +310,26 @@ async def rg(
             stream = nonzero_count_stream(stream)
         return stream, io
 
-    source = resolve_source(stdin,
-                            "rg: usage: rg [flags] pattern [path]",
-                            error_cls=UsageError)
+    source = resolve_source(stdin, RG_NO_PATTERN, error_cls=UsageError)
     pat = compile_pattern(pattern, f.ignore_case, f.fixed_string, f.whole_word)
+    if f.files_without_match and not f.count_only:
+        # ripgrep names a matchless stdin `<stdin>`, exit 0 for the
+        # listing, and lists nothing under -m0, where it reads nothing.
+        # The probe streams through the scanner and stops at the first
+        # selected line, so an unbounded pipe is never buffered whole.
+        if f.max_count == 0:
+            return b"", IOResult(exit_code=1)
+        probe = IOResult(exit_code=1)
+        async for _ in grep_stream(source,
+                                   pat,
+                                   invert=f.invert,
+                                   max_count=1,
+                                   count_only=True,
+                                   io=probe):
+            pass
+        if probe.exit_code == 0:
+            return b"", IOResult(exit_code=1)
+        return b"<stdin>\n", IOResult()
     io = IOResult(exit_code=1)
     stream = grep_stream(
         source,

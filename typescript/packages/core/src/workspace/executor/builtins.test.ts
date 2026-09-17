@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { versionLine } from '../../commands/config.ts'
+import { HELP as PRINTF_HELP } from './builtins/printf/printf.ts'
 import { specOf } from '../../commands/spec/index.ts'
 import { renderHelp } from '../../commands/spec/help.ts'
 import { makeVar } from '../../shell/variable.ts'
@@ -545,8 +546,38 @@ describe('handlePrintf', () => {
     const [out, io, node] = await handlePrintf(['--help'], new Session({ sessionId: 'test' }))
     expect(io.exitCode).toBe(2)
     expect(io.stderr).toBeNull()
-    expect(await readBody(out)).toBe(renderHelp('printf', specOf('printf')))
+    expect(await readBody(out)).toBe(PRINTF_HELP)
     expect(node.exitCode).toBe(2)
+  })
+
+  // The page is the BUILTIN's, so it is bash's own text and not the
+  // spec-rendered one every other command answers --help with: the
+  // spec-rendered page cannot mention `-v`, which is the builtin's option
+  // alone and so is absent from CommandSpec by design. The first line is
+  // bash's synopsis, not GNU's `Usage:` line. Mirrors test_printf.py.
+  it('answers with the bash builtin page, not the spec page', () => {
+    expect(PRINTF_HELP.startsWith('printf: printf [-v var] format [arguments]\n')).toBe(true)
+    expect(PRINTF_HELP).toContain('  -v var\tassign the output to shell variable VAR')
+    expect(PRINTF_HELP).not.toBe(renderHelp('printf', specOf('printf')))
+    expect(PRINTF_HELP.startsWith('printf\n\nUsage:')).toBe(false)
+  })
+
+  // Byte for byte bash 5.2.37's page, minus the two conversions mirage does
+  // not implement. Keeping the check explicit means adding `%Q` or `%(fmt)T`
+  // to the engine without adding it to the page fails here. Mirrors
+  // test_printf.py.
+  it('drops only the conversions mirage lacks', () => {
+    expect(PRINTF_HELP).toContain('      %b\texpand backslash escape sequences')
+    expect(PRINTF_HELP).toContain('      %q\tquote the argument in a way')
+    expect(PRINTF_HELP).not.toContain('%Q')
+    expect(PRINTF_HELP).not.toContain('%(fmt)T')
+    expect(
+      PRINTF_HELP.endsWith(
+        '    Exit Status:\n' +
+          '    Returns success unless an invalid option is given or a write or assignment\n' +
+          '    error occurs.\n',
+      ),
+    ).toBe(true)
   })
 
   it('takes -- as the end of the options', async () => {
@@ -829,6 +860,42 @@ describe('handleSleep', () => {
       )
     },
   )
+
+  // `NUMBER[SUFFIX]...`: sleep takes any number of intervals and sleeps their
+  // sum (measured on 9.7: `sleep 0.3 0.3` takes 0.6s, `sleep 0 1` takes 1s).
+  // Reading only the first operand made `sleep -- 0 1` return at once.
+  // Mirrors test_sleep.py.
+  it('sums every operand', async () => {
+    const started = Date.now()
+    const [, io] = await handleSleep(['--', '0.05', '0.05'])
+    expect(io.exitCode).toBe(0)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(100)
+  })
+
+  // Every operand is validated, and the FIRST bad one is named. Reading only
+  // the first operand made `sleep -- 0 bogus` exit 0. Mirrors test_sleep.py.
+  it.each([
+    [['--', '0', 'bogus'], 'bogus'],
+    [['0', 'bogus'], 'bogus'],
+    [['bogus', '0'], 'bogus'],
+    [['--', '0.2', 'x', 'y'], 'x'],
+  ])('refuses %j naming the first bad operand', async (args, named) => {
+    const [, io] = await handleSleep(args)
+    expect(io.exitCode).toBe(1)
+    expect(decode(io.stderr as Uint8Array)).toBe(
+      `sleep: invalid time interval '${named}'\nTry 'sleep --help' for more information.\n`,
+    )
+  })
+
+  // The check runs over every operand before any of them is slept, so a bad
+  // one does not cost the wait its predecessors would have taken (measured on
+  // 9.7: `sleep 0.2 x 0.2` exits 1 immediately). Mirrors test_sleep.py.
+  it('checks every operand before sleeping any', async () => {
+    const started = Date.now()
+    const [, io] = await handleSleep(['0.3', 'bogus'])
+    expect(io.exitCode).toBe(1)
+    expect(Date.now() - started).toBeLessThan(200)
+  })
 
   // The operand is named through gnulib's `quote()`, like every other
   // coreutils operand diagnostic: measured on 9.4, `sleep -- é` is

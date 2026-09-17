@@ -1,0 +1,224 @@
+{
+  "cases": [
+    {
+      "id": "tr_no_operand_is_missing_operand",
+      "seq": 991067,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo x | tr",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tr: missing operand\nTry 'tr --help' for more information.\n"
+      },
+      "flags": []
+    },
+    {
+      "id": "tr_one_operand_when_translating_names_it",
+      "seq": 991068,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo x | tr a",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tr: missing operand after 'a'\nTwo strings must be given when translating.\nTry 'tr --help' for more information.\n"
+      },
+      "flags": []
+    },
+    {
+      "id": "tr_d_with_two_operands_is_an_extra_operand",
+      "seq": 991069,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo x | tr -d a b",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tr: extra operand 'b'\nOnly one string may be given when deleting without squeezing repeats.\nTry 'tr --help' for more information.\n"
+      },
+      "flags": [
+        "d"
+      ]
+    },
+    {
+      "id": "tr_ds_takes_two_operands",
+      "seq": 991070,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo aab | tr -ds a b",
+      "expect": {
+        "exit": 0,
+        "stdout": "b\n",
+        "stderr": ""
+      },
+      "flags": [
+        "d",
+        "s"
+      ]
+    },
+    {
+      "id": "tr_d_with_three_operands_names_the_second",
+      "seq": 991094,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo x | tr -d a b c",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tr: extra operand 'b'\nTry 'tr --help' for more information.\n"
+      },
+      "flags": [
+        "d"
+      ]
+    },
+    {
+      "id": "tr_ds_with_three_operands_names_the_third",
+      "seq": 991095,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "echo x | tr -ds a b c",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tr: extra operand 'c'\nTry 'tr --help' for more information.\n"
+      },
+      "flags": [
+        "d",
+        "s"
+      ]
+    }
+  ]
+}

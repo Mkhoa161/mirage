@@ -1,7 +1,7 @@
 import pytest
 
-from mirage.commands.builtin.generic.nl import (_section_delimiters, nl,
-                                                nl_generic, parse_flags)
+from mirage.commands.builtin.generic.nl import (NlFlags, _section_delimiters,
+                                                nl, nl_generic, parse_flags)
 from mirage.commands.builtin.generic.rev import rev
 from mirage.commands.builtin.generic.sort import sort
 from mirage.commands.builtin.generic.tac import tac
@@ -256,6 +256,15 @@ def _nl_bag(*argv: str) -> dict[str, ParsedFlagValue]:
     return parse_to_kwargs(parse_command(SPECS["nl"], list(argv), "/"))
 
 
+def _nl_parse(*argv: str) -> NlFlags:
+    """nl's flags read the way the dispatcher hands them over.
+
+    Args:
+        argv (str): the words after `nl`.
+    """
+    return parse_flags(_nl_bag(*argv))
+
+
 # GNU validates each numeric option's value the moment getopt hands it
 # over and exits on that first failure, so the LEFTMOST bad option on the
 # line speaks and every pair reverses when the flags are swapped.
@@ -290,7 +299,7 @@ _NL_FIRST_ON_THE_LINE = [
 @pytest.mark.parametrize("argv,expected", _NL_FIRST_ON_THE_LINE)
 def test_nl_reports_the_first_bad_option_on_the_line(argv, expected):
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
@@ -311,7 +320,7 @@ _NL_MIXED = [
 @pytest.mark.parametrize("argv,expected", _NL_MIXED)
 def test_nl_a_valid_value_does_not_shield_a_later_bad_one(argv, expected):
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
@@ -328,7 +337,7 @@ _NL_REPEATED_BAD_LAST = [
 def test_nl_repeated_option_refuses_a_bad_last_value(argv, expected):
     """`nl -w 3 -w abc` refuses the 'abc', exactly as GNU does."""
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
@@ -355,18 +364,22 @@ _NL_REPEATED_BAD_FIRST = [
 def test_nl_repeated_option_refuses_the_earlier_bad_value(argv, expected):
     """`nl -w abc -w 3` refuses the 'abc' GNU validated first."""
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
-# A repeat interleaved with another option is where a "last occurrence"
-# position gets it wrong: in `nl -w 3 -v xyz -w abc` the width's bag
-# position is the THIRD word but the value GNU refuses is -v's, and in
-# `nl -w abc -v xyz -w 3` the width is refused although -v sits between
-# its two occurrences. Measured on GNU coreutils 9.4 (section T).
+# A repeat interleaved with another option: every value of an
+# accumulating option is checked, in the order the options were FIRST
+# typed. That is GNU's answer whenever the bad value comes first
+# (`nl -w abc -v xyz -w 3` refuses the width although -v sits between
+# its two occurrences, coreutils 9.4 section T) and a documented
+# divergence when a repeat lands after a different fatal option:
+# `nl -w 3 -v xyz -w abc` names the width here where GNU names -v,
+# because keeping the line's own order would take a per-occurrence
+# record across options, which neither argparse nor the parser keeps.
 _NL_INTERLEAVED_REPEATS = [
     (("-w", "3", "-v", "xyz", "-w", "abc"),
-     "nl: invalid starting line number: 'xyz'"),
+     "nl: invalid line number field width: 'abc'"),
     (("-w", "abc", "-v", "xyz", "-w", "3"),
      "nl: invalid line number field width: 'abc'"),
     (("-v", "xyz", "-w", "abc", "-v", "5"),
@@ -379,7 +392,7 @@ _NL_INTERLEAVED_REPEATS = [
 @pytest.mark.parametrize("argv,expected", _NL_INTERLEAVED_REPEATS)
 def test_nl_reports_the_leftmost_bad_value_across_a_repeat(argv, expected):
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
@@ -395,7 +408,7 @@ def test_nl_a_repeat_of_valid_values_still_takes_the_last(
     A control on the fix: reading the leftmost BAD value must not also
     make the leftmost GOOD one win, or `nl -w 3 -w 9` would pad to 3.
     """
-    assert getattr(parse_flags(_nl_bag(*argv)), dest) == expected
+    assert getattr(_nl_parse(*argv), dest) == expected
 
 
 # GNU's own style set, read off build_type_arg: the FIRST character of
@@ -426,7 +439,7 @@ _NL_BAD_STYLES = [
 @pytest.mark.parametrize("flag,raw,label", _NL_BAD_STYLES)
 def test_nl_refuses_a_style_gnu_refuses(flag, raw, label):
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(flag, raw))
+        _nl_parse(flag, raw)
     assert str(refusal.value) == f"nl: {label}: '{raw}'\n{_NL_HINT}"
 
 
@@ -434,19 +447,19 @@ def test_nl_refuses_a_style_gnu_refuses(flag, raw, label):
 @pytest.mark.parametrize("raw", ["a", "t", "n", "p", "pfoo", "tt", "nn", "aa"])
 def test_nl_accepts_every_style_gnu_accepts(flag, raw):
     """A control: `-b p` (empty pattern) and `-b tt` are both legal."""
-    assert parse_flags(_nl_bag(flag, raw)) is not None
+    assert _nl_parse(flag, raw) is not None
 
 
 @pytest.mark.parametrize("raw", ["ln", "rn", "rz"])
 def test_nl_accepts_every_number_format_gnu_accepts(raw):
-    assert parse_flags(_nl_bag("-n", raw)).number_format == raw
+    assert _nl_parse("-n", raw).number_format == raw
 
 
 @pytest.mark.parametrize("argv", [("-d", ""), ("-d", "x"), ("-d", "xy"),
                                   ("-d", "xyz"), ("-s", ""), ("-s", "::")])
 def test_nl_validates_neither_delimiter_nor_separator(argv):
     """GNU validates neither, not even a three-character `-d` (section U)."""
-    assert parse_flags(_nl_bag(*argv)) is not None
+    assert _nl_parse(*argv) is not None
 
 
 @pytest.mark.asyncio
@@ -499,7 +512,7 @@ _NL_BLANK_PREFIX = [
 @pytest.mark.parametrize("extra,rendered", _NL_BLANK_PREFIX)
 async def test_nl_pads_an_unnumbered_line_over_the_separator(extra, rendered):
     _, rs = _make_backend({})
-    parsed = parse_flags(_nl_bag("-b", "n", *extra))
+    parsed = _nl_parse("-b", "n", *extra)
     output, _ = await nl([],
                          read_stream=rs,
                          stdin=b"x\n",
@@ -526,7 +539,7 @@ async def test_nl_pads_a_blank_line_the_same_way():
 async def test_nl_pads_a_line_no_pattern_matched():
     """A `-b p<re>` line that did not match is padded, not separated."""
     _, rs = _make_backend({})
-    parsed = parse_flags(_nl_bag("-b", "pfoo"))
+    parsed = _nl_parse("-b", "pfoo")
     output, _ = await nl([],
                          read_stream=rs,
                          stdin=b"x\n",
@@ -583,7 +596,7 @@ _NL_DEFERRED = [
 def test_nl_defers_a_style_refusal_and_exits_on_a_numeric_one(argv, expected):
     """The executor appends the trailing newline to the raised message."""
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
@@ -646,7 +659,7 @@ def test_nl_p_style_refuses_the_patterns_glibc_refuses(flag, pattern, message):
     because the failure exits where it stands (section U6).
     """
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(flag, "p" + pattern))
+        _nl_parse(flag, "p" + pattern)
     assert str(refusal.value) == f"nl: {message}"
 
 
@@ -707,7 +720,7 @@ _NL_GOOD_PATTERNS = [
 async def test_nl_p_style_matches_what_glibc_matches(pattern, subject):
     """The pattern compiles AND numbers the line glibc numbers."""
     _, rs = _make_backend({})
-    parsed = parse_flags(_nl_bag("-b", "p" + pattern))
+    parsed = _nl_parse("-b", "p" + pattern)
     output, _ = await nl([],
                          read_stream=rs,
                          stdin=subject.encode() + b"\n",
@@ -723,7 +736,7 @@ def test_nl_p_style_accepts_a_pattern_that_matches_nothing(pattern):
     line's bytes are a separate, pre-existing divergence (GNU pads the
     separator with blanks where mirage writes the separator itself).
     """
-    assert parse_flags(_nl_bag("-b", "p" + pattern)) is not None
+    assert _nl_parse("-b", "p" + pattern) is not None
 
 
 # A compile failure joins the FATAL family -- it exits where it stands, so
@@ -747,7 +760,7 @@ _NL_PATTERN_ORDER = [
 @pytest.mark.parametrize("argv,expected", _NL_PATTERN_ORDER)
 def test_nl_a_bad_pattern_is_fatal_where_it_stands(argv, expected):
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag(*argv))
+        _nl_parse(*argv)
     assert str(refusal.value) == expected
 
 
@@ -760,7 +773,7 @@ def test_nl_a_bad_style_outranks_its_own_pattern():
     `invalid body numbering style: '['` plus the hint.
     """
     with pytest.raises(ValueError) as refusal:
-        parse_flags(_nl_bag("-b", "["))
+        _nl_parse("-b", "[")
     assert str(refusal.value) == ("nl: invalid body numbering style: '['\n" +
                                   _NL_HINT)
 
@@ -773,7 +786,7 @@ def test_nl_a_bad_style_outranks_its_own_pattern():
      (("-l", "2", "-l", "4"), "join_blank_lines_raw", "4")])
 def test_nl_repeated_valid_option_is_last_one_wins(argv, dest, expected):
     """GNU assigns as it reads, so `nl -v 1 -v 7` numbers from 7."""
-    assert getattr(parse_flags(_nl_bag(*argv)), dest) == expected
+    assert getattr(_nl_parse(*argv), dest) == expected
 
 
 @pytest.mark.asyncio
@@ -783,7 +796,7 @@ def test_nl_repeated_valid_option_is_last_one_wins(argv, dest, expected):
 async def test_nl_last_valid_value_is_the_one_that_numbers(argv, rendered):
     """The od-verified stdout from ground truth section N3."""
     _, rs = _make_backend({})
-    parsed = parse_flags(_nl_bag(*argv))
+    parsed = _nl_parse(*argv)
     output, _ = await nl([],
                          read_stream=rs,
                          stdin=b"x\n",
@@ -948,11 +961,11 @@ def test_nl_signed_options_have_no_overflow_floor_of_their_own(dest, raw):
 # consuming every `\\:` line as a header while TypeScript's `??` did not
 # (ground truth NL2-H).
 def test_nl_an_empty_delimiter_survives_as_empty():
-    assert parse_flags(_nl_bag("-d", "")).delimiter == ""
+    assert _nl_parse("-d", "").delimiter == ""
 
 
 def test_nl_an_absent_delimiter_takes_the_default():
-    assert parse_flags(_nl_bag()).delimiter == "\\:"
+    assert _nl_parse().delimiter == "\\:"
 
 
 @pytest.mark.asyncio
@@ -1184,7 +1197,8 @@ async def test_tr_translate_charset():
 @pytest.mark.asyncio
 async def test_tr_delete():
     _, rs = _make_backend({})
-    output, _ = await tr([], ("aeiou", ""),
+    # One set: GNU refuses a second operand beside -d without -s.
+    output, _ = await tr([], ("aeiou", ),
                          read_stream=rs,
                          stdin=b"hello world",
                          flags={"delete": True})
@@ -1204,7 +1218,8 @@ async def test_tr_squeeze():
 @pytest.mark.asyncio
 async def test_tr_missing_args_raises():
     _, rs = _make_backend({})
-    with pytest.raises(ValueError, match="usage"):
+    # GNU: `tr: missing operand` plus the help hint, exit 1 (coreutils 9.7).
+    with pytest.raises(ValueError, match="tr: missing operand\n"):
         await tr([], (), read_stream=rs)
 
 

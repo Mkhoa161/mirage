@@ -40,7 +40,7 @@ export const SPECS: Record<string, CommandSpec> = {
   }),
   expand: new CommandSpec({
     options: [
-      new Option({ short: '-t', long: '--tabs', type: 'str' }),
+      new Option({ short: '-t', long: '--tabs', type: 'str', multiple: true }),
       new Option({ short: '-i', long: '--initial' }),
     ],
     rest: new Operand({ type: 'path' }),
@@ -88,16 +88,16 @@ export const SPECS: Record<string, CommandSpec> = {
   }),
   nl: new CommandSpec({
     options: [
-      new Option({ short: '-b', long: '--body-numbering', type: 'str' }),
+      new Option({ short: '-b', long: '--body-numbering', type: 'str', multiple: true }),
       new Option({ short: '-d', long: '--section-delimiter', type: 'str' }),
-      new Option({ short: '-f', long: '--footer-numbering', type: 'str' }),
-      new Option({ short: '-h', long: '--header-numbering', type: 'str' }),
-      new Option({ short: '-l', long: '--join-blank-lines', type: 'str' }),
-      new Option({ short: '-n', long: '--number-format', type: 'str' }),
+      new Option({ short: '-f', long: '--footer-numbering', type: 'str', multiple: true }),
+      new Option({ short: '-h', long: '--header-numbering', type: 'str', multiple: true }),
+      new Option({ short: '-l', long: '--join-blank-lines', type: 'str', multiple: true }),
+      new Option({ short: '-n', long: '--number-format', type: 'str', multiple: true }),
       new Option({ short: '-p', long: '--no-renumber' }),
-      new Option({ short: '-v', long: '--starting-line-number', type: 'str' }),
-      new Option({ short: '-i', long: '--line-increment', type: 'str' }),
-      new Option({ short: '-w', long: '--number-width', type: 'str' }),
+      new Option({ short: '-v', long: '--starting-line-number', type: 'str', multiple: true }),
+      new Option({ short: '-i', long: '--line-increment', type: 'str', multiple: true }),
+      new Option({ short: '-w', long: '--number-width', type: 'str', multiple: true }),
       new Option({ short: '-s', long: '--number-separator', type: 'str' }),
     ],
     rest: new Operand({ type: 'path' }),

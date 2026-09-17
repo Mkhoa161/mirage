@@ -72,6 +72,22 @@ describe('zgrep', () => {
     expect(r.exitCode).toBe(1)
   })
 
+  it('-L prints the operand as typed', async () => {
+    const resource = new RAMResource()
+    resource.store.files.set('/o.gz', await gzip(ENC.encode('foo\n')))
+    const typed = new PathSpec({
+      virtual: '/o.gz',
+      directory: '/',
+      resourcePath: '/o.gz',
+      rawPath: './o.gz',
+    })
+    const r = await runZgrep(resource, [typed], ['hello'], { files_without_match: true })
+    expect(r.exitCode).toBe(1)
+    expect(r.out).toBe('./o.gz\n')
+    const listed = await runZgrep(resource, [typed], ['foo'], { args_l: true })
+    expect(listed.out).toBe('./o.gz\n')
+  })
+
   it('labels stdin "(standard input)" under -H', async () => {
     const resource = new RAMResource()
     const compressed = await gzip(ENC.encode('foo\nbar\n'))

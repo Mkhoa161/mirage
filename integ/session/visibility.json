@@ -64,7 +64,7 @@
       }
     },
     {
-      "id": "vis_write_into_hidden_space_refused",
+      "id": "vis_write_under_hidden_dir_is_enoent",
       "seq": 921007,
       "targets": ["ram", "disk", "redis", "s3", "s3-prefix", "gridfs"],
       "session": "narrowed",
@@ -72,7 +72,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "/data/sessvis/vault/new.txt: Permission denied\n"
+        "stderr": "/data/sessvis/vault/new.txt: No such file or directory\n"
       }
     },
     {
@@ -112,6 +112,66 @@
         "exit": 0,
         "stdout": "note.key\npub.txt\nvault\ntop-secret\n",
         "stderr": ""
+      }
+    },
+    {
+      "id": "vis_write_at_hidden_name_is_eacces",
+      "seq": 921012,
+      "targets": ["ram", "disk", "redis", "s3", "s3-prefix", "gridfs"],
+      "session": "narrowed",
+      "command": "echo hi > /data/sessvis/new.key",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "/data/sessvis/new.key: Permission denied\n"
+      }
+    },
+    {
+      "id": "vis_mkdir_at_hidden_name_is_eacces",
+      "seq": 921013,
+      "targets": ["ram", "disk", "redis"],
+      "session": "narrowed",
+      "command": "mkdir /data/sessvis/vault",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "mkdir: cannot create directory '/data/sessvis/vault': Permission denied\n"
+      }
+    },
+    {
+      "id": "vis_mkdir_under_hidden_dir_is_enoent",
+      "seq": 921014,
+      "targets": ["ram", "disk", "redis"],
+      "session": "narrowed",
+      "command": "mkdir /data/sessvis/vault/deeper",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "mkdir: cannot create directory '/data/sessvis/vault/deeper': No such file or directory\n"
+      }
+    },
+    {
+      "id": "vis_move_into_hidden_dir_is_enoent",
+      "seq": 921015,
+      "targets": ["ram", "disk", "redis", "s3", "s3-prefix", "gridfs"],
+      "session": "narrowed",
+      "command": "mv /data/sessvis/pub.txt /data/sessvis/vault/moved",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "mv: cannot move '/data/sessvis/pub.txt' to '/data/sessvis/vault/moved': No such file or directory\n"
+      }
+    },
+    {
+      "id": "vis_write_under_missing_dir_reads_the_same",
+      "seq": 921016,
+      "targets": ["ram", "disk", "redis"],
+      "session": "narrowed",
+      "command": "echo hi > /data/sessvis/ghost/new.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "/data/sessvis/ghost/new.txt: No such file or directory\n"
       }
     }
   ]

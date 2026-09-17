@@ -150,7 +150,8 @@ export function parseFlags(
       ambiguousOptions: parsed.ambiguousOptions,
       optionErrorKinds: parsed.optionErrorKinds,
       needsValueOptions: parsed.needsValueOptions,
-      choiceValueOptions: parsed.choiceValueOptions,
+      invalidValueOptions: parsed.invalidValueOptions,
+      ambiguousValueOptions: parsed.ambiguousValueOptions,
       invalidIntOptions: parsed.invalidIntOptions,
       invalidFloatOptions: parsed.invalidFloatOptions,
       missingRequiredOptions: parsed.missingRequiredOptions,
@@ -175,7 +176,8 @@ export function parseFlags(
     ambiguousOptions: [],
     optionErrorKinds: [],
     needsValueOptions: [],
-    choiceValueOptions: [],
+    invalidValueOptions: [],
+    ambiguousValueOptions: [],
     invalidIntOptions: [],
     invalidFloatOptions: [],
     missingRequiredOptions: [],
@@ -197,41 +199,43 @@ export function optionError(cmdName: string, parsed: ParsedCommand): [Uint8Array
   if (parsed.oldOptionNeedsValue !== null) {
     return oldOptionError(cmdName, parsed.oldOptionNeedsValue)
   }
-  // Scan-order between unknown and ambiguous options: GNU stops at the
-  // first offending token, so `grep --c --bogus` reports the ambiguity
-  // and the reversed line reports --bogus.
-  const ambiguousFirst = parsed.ambiguousOptions[0]
-  if (parsed.optionErrorKinds[0] === 'ambiguous' && ambiguousFirst !== undefined) {
-    return ambiguousOptionError(cmdName, ...ambiguousFirst)
-  }
-  if (parsed.invalidOptions.length > 0) {
-    // Two reports share invalidOptions and the tag tells them apart: a
-    // boolean long handed a value is not an unrecognized option, and
-    // getopt_long words it differently (`grep --byte-offset=2`).
-    if (parsed.optionErrorKinds[0] === 'unexpected_value') {
+  // The first refusal on the line, whichever check made it: GNU stops at
+  // the first offending token, so `grep --c --bogus` reports the
+  // ambiguity, the reversed line reports --bogus, and `numfmt --from=bad
+  // --bogus` reports the value. The kinds tape holds one tag per refusal
+  // in scan order and each list is in scan order too, so the first tag's
+  // detail is the head of that tag's list. "invalid" and
+  // "unexpected_value" share invalidOptions: a boolean long handed a value
+  // is not an unrecognized option, and getopt_long words it differently
+  // (`grep --byte-offset=2`).
+  for (const kind of parsed.optionErrorKinds) {
+    if (kind === 'ambiguous') {
+      const ambiguous = parsed.ambiguousOptions[0]
+      if (ambiguous !== undefined) return ambiguousOptionError(cmdName, ...ambiguous)
+    } else if (kind === 'unexpected_value') {
       return unexpectedValueError(cmdName, parsed.invalidOptions[0] ?? '')
+    } else if (kind === 'invalid') {
+      return unknownOptionError(cmdName, parsed.invalidOptions[0] ?? '')
+    } else if (kind === 'needs_value') {
+      return missingValueError(cmdName, parsed.needsValueOptions[0] ?? '')
+    } else if (kind === 'int') {
+      const badInt = parsed.invalidIntOptions[0]
+      if (badInt !== undefined) return invalidIntError(cmdName, ...badInt)
+    } else if (kind === 'float') {
+      const badFloat = parsed.invalidFloatOptions[0]
+      if (badFloat !== undefined) return invalidFloatError(cmdName, ...badFloat)
+    } else if (kind === 'value') {
+      const badValue = parsed.invalidValueOptions[0]
+      if (badValue !== undefined) return invalidArgumentError(cmdName, ...badValue)
+    } else if (kind === 'ambiguous_value') {
+      // gnulib's other wording for the same refusal, reached only by an
+      // ARGMATCH table: the value is a prefix of two candidates or more.
+      const badValue = parsed.ambiguousValueOptions[0]
+      if (badValue !== undefined) {
+        const [option, value, choices] = badValue
+        return invalidArgumentError(cmdName, option, value, choices, undefined, 'ambiguous')
+      }
     }
-    return unknownOptionError(cmdName, parsed.invalidOptions[0] ?? '')
-  }
-  if (ambiguousFirst !== undefined) return ambiguousOptionError(cmdName, ...ambiguousFirst)
-  if (parsed.needsValueOptions.length > 0) {
-    return missingValueError(cmdName, parsed.needsValueOptions[0] ?? '')
-  }
-  // Numeric-typed values before choices, argparse's order (choices are
-  // checked against the converted value), matching the walk's finishNode:
-  // a non-numeric value on an int/float option that also declares choices
-  // reports the conversion failure, not the choice list.
-  const badInt = parsed.invalidIntOptions[0]
-  if (badInt !== undefined) return invalidIntError(cmdName, ...badInt)
-  const badFloat = parsed.invalidFloatOptions[0]
-  if (badFloat !== undefined) return invalidFloatError(cmdName, ...badFloat)
-  // One gnulib answer worded two ways, so one stream: the first refusal in
-  // declaration order wins whichever wording it carries, as every report
-  // above does.
-  const badValue = parsed.choiceValueOptions[0]
-  if (badValue !== undefined) {
-    const [option, value, choices, kind] = badValue
-    return invalidArgumentError(cmdName, option, value, choices, undefined, kind)
   }
   if (parsed.missingRequiredOptions.length > 0) {
     return missingRequiredError(cmdName, parsed.missingRequiredOptions[0] ?? '')

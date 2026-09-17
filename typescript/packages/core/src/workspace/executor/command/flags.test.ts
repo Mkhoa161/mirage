@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 
 import { SPECS, specOf } from '../../../commands/spec/index.ts'
 import { PathSpec } from '../../../types.ts'
-import { CommandSpec, Option } from '../../../commands/spec/types.ts'
+import { CommandSpec, Operand, Option } from '../../../commands/spec/types.ts'
 import { optionError, parseFlags } from './flags.ts'
 
 function path(virtual: string): PathSpec {
@@ -131,6 +131,39 @@ describe('optionError scan order', () => {
     expect(dec.decode(flipped?.[0]).startsWith("grep: unrecognized option '--bogus'")).toBe(true)
   })
 
+  it('reports a refused value before a later bad option', () => {
+    // GNU stops at the first offending token whatever kind it is:
+    // coreutils 9.7 `tee --output-error=bad --bogus f` names the value,
+    // the reversed line names --bogus, and a value option that ran out of
+    // line loses to a value refused before it.
+    const dec = new TextDecoder()
+    const spec = new CommandSpec({
+      options: [
+        new Option({ long: '--mode', type: 'str', choices: ['warn', 'exit'] }),
+        new Option({ long: '--count', type: 'int' }),
+      ],
+      rest: new Operand({ type: 'path' }),
+    })
+    const valueFirst = optionError(
+      'tee',
+      parseFlags(['--mode=bad', '--bogus', 'f'], spec, 'tee', '/'),
+    )
+    expect(dec.decode(valueFirst?.[0]).startsWith("tee: invalid argument 'bad' for '--mode'")).toBe(
+      true,
+    )
+    const optionFirst = optionError(
+      'tee',
+      parseFlags(['--bogus', '--mode=bad', 'f'], spec, 'tee', '/'),
+    )
+    expect(dec.decode(optionFirst?.[0]).startsWith("tee: unrecognized option '--bogus'")).toBe(true)
+    const trailing = optionError('tee', parseFlags(['--mode=bad', '--count'], spec, 'tee', '/'))
+    expect(dec.decode(trailing?.[0]).startsWith("tee: invalid argument 'bad' for '--mode'")).toBe(
+      true,
+    )
+    const needy = optionError('tee', parseFlags(['--mode=warn', '--count'], spec, 'tee', '/'))
+    expect(dec.decode(needy?.[0])).toContain("'--count' requires an argument")
+  })
+
   it('reports the numeric conversion before the choice list', () => {
     // Numeric-typed values before choices, argparse's order, matching
     // the walk's finishNode: a non-numeric value on a float option that
@@ -169,38 +202,27 @@ describe('optionError — the two ARGMATCH refusals', () => {
     expect(refusal?.[1]).toBe(1)
   })
 
-  // The two wordings are one report, so the FIRST refused option in
-  // declaration order wins whichever wording it carries. Keeping them in two
-  // lists made the later invalid value outrank the earlier ambiguous one,
-  // which no other report here does.
-  it('follows declaration order between the two wordings', () => {
+  // The two wordings are one report, so the FIRST refused value on the LINE
+  // wins whichever wording it carries. Ordering them by which list they
+  // landed in would make a later invalid value outrank an earlier ambiguous
+  // one, which no other report here does. numfmt declares both ARGMATCH
+  // tables, so one line can carry one of each. Mirrors test_flags.py.
+  it('follows line order between the two wordings', () => {
     const dec = new TextDecoder()
-    const spec = new CommandSpec({
-      options: [
-        new Option({ long: '--first', type: 'str', choices: ['alpha', 'amber'] }),
-        new Option({ long: '--second', type: 'str', choices: ['x', 'y'] }),
-      ],
-    })
-    const parsed = parseFlags(['--first=a', '--second=zzz'], spec, 'cmd', '/')
-    const refusal = optionError('cmd', parsed)
+    const parsed = parseFlags(['--from=ie', '--to=bogus', '1'], specOf('numfmt'), 'numfmt', '/')
+    const refusal = optionError('numfmt', parsed)
     expect(refusal).not.toBeNull()
-    expect(dec.decode(refusal?.[0]).startsWith("cmd: ambiguous argument 'a' for '--first'\n")).toBe(
-      true,
-    )
-    const reversed = new CommandSpec({
-      options: [
-        new Option({ long: '--first', type: 'str', choices: ['x', 'y'] }),
-        new Option({ long: '--second', type: 'str', choices: ['alpha', 'amber'] }),
-      ],
-    })
+    expect(
+      dec.decode(refusal?.[0]).startsWith("numfmt: ambiguous argument 'ie' for '--from'\n"),
+    ).toBe(true)
     const other = optionError(
-      'cmd',
-      parseFlags(['--first=zzz', '--second=a'], reversed, 'cmd', '/'),
+      'numfmt',
+      parseFlags(['--from=bogus', '--to=ie', '1'], specOf('numfmt'), 'numfmt', '/'),
     )
     expect(other).not.toBeNull()
-    expect(dec.decode(other?.[0]).startsWith("cmd: invalid argument 'zzz' for '--first'\n")).toBe(
-      true,
-    )
+    expect(
+      dec.decode(other?.[0]).startsWith("numfmt: invalid argument 'bogus' for '--from'\n"),
+    ).toBe(true)
   })
 
   it('differs from the invalid refusal only in the first line', () => {

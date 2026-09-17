@@ -92,7 +92,11 @@ function usageLine(
   spec: CommandSpec,
   subcommands: readonly [string, string][],
   style: UsageStyle,
+  synopsis?: string,
 ): string {
+  // The builtin that mimics a real program answers with that program's
+  // own first line rather than one synthesized from its slots.
+  if (synopsis !== undefined) return `Usage: ${synopsis}`
   const clap = style === UsageStyle.CLAP
   const bits = [name]
   if (spec.options.length > 0) bits.push(clap ? '[OPTIONS]' : '[flags]')
@@ -112,6 +116,7 @@ export function renderHelp(
   spec: CommandSpec,
   subcommands: readonly [string, string][] = [],
   style: UsageStyle = UsageStyle.ARGPARSE,
+  synopsis?: string,
 ): string {
   const clap = style === UsageStyle.CLAP
   const lines: string[] = []
@@ -124,7 +129,7 @@ export function renderHelp(
   }
   lines.push('')
 
-  lines.push(usageLine(name, spec, subcommands, style))
+  lines.push(usageLine(name, spec, subcommands, style, synopsis))
 
   if (subcommands.length > 0) {
     lines.push('')

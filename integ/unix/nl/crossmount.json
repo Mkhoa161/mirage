@@ -1,0 +1,41 @@
+{
+  "cases": [
+    {
+      "id": "nl_w_refused_first_occurrence_across_mounts",
+      "seq": 991084,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'x\\n' > /data2/nlw.txt && nl -w abc -w 3 /data/a.txt /data2/nlw.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "nl: invalid line number field width: 'abc'\n"
+      },
+      "flags": [
+        "w"
+      ]
+    }
+  ]
+}

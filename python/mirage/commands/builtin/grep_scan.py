@@ -19,7 +19,7 @@ from mirage.commands.builtin.constants import BINARY_EXTENSIONS
 from mirage.commands.builtin.grep_context import grep_context_lines
 from mirage.commands.builtin.grep_offsets import (decode_line, encode_line,
                                                   line_offsets, match_offset,
-                                                  prefix_of, printable)
+                                                  prefix_of)
 from mirage.commands.builtin.grep_pattern import compile_pattern
 from mirage.commands.builtin.grep_select import (NO_FILTERS, WalkFilters,
                                                  dir_admitted, file_admitted)
@@ -130,7 +130,7 @@ def grep_lines(
         return [str(count)]
     if files_only:
         return [path] if count > 0 else []
-    return [printable(r) for r in results]
+    return results
 
 
 def _grep_count_value(results: list[str]) -> int:

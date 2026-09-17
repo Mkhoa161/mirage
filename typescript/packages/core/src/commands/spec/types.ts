@@ -335,15 +335,3 @@ export class CommandSpec {
 }
 
 export type FlagValue = string | boolean | number | string[]
-
-/**
- * The one key in a flag bag that is not an option's dest: the parser's
- * per-occurrence record of the scalar value flags the line carried,
- * flattened to [dest, value, dest, value, ...] the way a `pair` option's
- * list is. `parseToKwargs` writes it, and only when the bag lost
- * something (one dest typed twice); `FlagView.valueOccurrences` is the
- * one reader. The leading dashes make it unspellable as a dest —
- * `flagKwargName` strips them off every real one — so no option can ever
- * collide with it. Mirrors Python's `VALUE_OCCURRENCES_KEY`.
- */
-export const VALUE_OCCURRENCES_KEY = '--value-occurrences'

@@ -33,12 +33,12 @@ async function* stdinOf(text: string): AsyncIterable<Uint8Array> {
 }
 
 async function run(
-  flags: Record<string, FlagValue>,
+  line: Line,
   stdin: AsyncIterable<Uint8Array> | null = null,
 ): Promise<{ exit: number; stdout: string; stderr: string }> {
   const opts = {
     stdin,
-    flags,
+    ...line,
     filetypeFns: null,
     cwd: '/',
     resource: { kind: 'ram' } as never,
@@ -67,14 +67,14 @@ describe('expand --tabs refuses a value it cannot read whole', () => {
     ['-4', "expand: tab size contains invalid character(s): '-4'\n"],
     ['+x', "expand: tab size contains invalid character(s): 'x'\n"],
   ])('refuses --tabs=%s before reading anything', async (value, message) => {
-    const got = await run({ tabs: value }, stdinOf('a\tb\n'))
+    const got = await run({ flags: { tabs: value } }, stdinOf('a\tb\n'))
     expect(got.exit).toBe(1)
     expect(got.stdout).toBe('')
     expect(got.stderr).toBe(message)
   })
 
   it('still expands a valid tab size', async () => {
-    const got = await run({ tabs: '4' }, stdinOf('a\tb\n'))
+    const got = await run({ flags: { tabs: '4' } }, stdinOf('a\tb\n'))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('a   b\n')
     expect(got.stderr).toBe('')
@@ -83,7 +83,7 @@ describe('expand --tabs refuses a value it cannot read whole', () => {
   // GNU accepts a leading `+` on every integer flag value and reads `+4`
   // as 4, so `--tabs=+4` is byte-identical to `--tabs=4`.
   it('accepts a leading plus as a sign', async () => {
-    const got = await run({ tabs: '+4' }, stdinOf('a\tb\n'))
+    const got = await run({ flags: { tabs: '+4' } }, stdinOf('a\tb\n'))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('a   b\n')
     expect(got.stderr).toBe('')
@@ -93,7 +93,7 @@ describe('expand --tabs refuses a value it cannot read whole', () => {
   // leaves expand on its default 8 rather than being an error. expand is
   // the one flag in this family whose empty value succeeds.
   it('reads an empty tab list as the default size 8', async () => {
-    const got = await run({ tabs: '' }, stdinOf('a\tb\n'))
+    const got = await run({ flags: { tabs: '' } }, stdinOf('a\tb\n'))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('a       b\n')
     expect(got.stderr).toBe('')
@@ -104,8 +104,10 @@ describe('expand --tabs refuses a value it cannot read whole', () => {
 // ACCUMULATES across occurrences, so a hand-written record cannot express
 // `-t 2,4 -t 6` at all; these cases go through the spec parser so the bag
 // carries whatever occurrence record the parser actually preserves.
-function expandBag(...argv: string[]): Record<string, FlagValue> {
-  return parseToKwargs(parseCommand(specOf('expand'), argv, '/'))
+type Line = Pick<CommandOpts, 'flags'>
+
+function expandBag(...argv: string[]): Line {
+  return { flags: parseToKwargs(parseCommand(specOf('expand'), argv, '/')) }
 }
 
 function stops(list: string): TabStops {
@@ -155,7 +157,7 @@ describe('expand renders a tab stop list as GNU does', () => {
     ['+0,1', 'a b c d e\n'],
     ['2,+0', 'a b c d e\n'],
   ])('-t %s', async (list, rendered) => {
-    const got = await run({ tabs: list }, stdinOf(ABCDE))
+    const got = await run({ flags: { tabs: list } }, stdinOf(ABCDE))
     expect(got.exit).toBe(0)
     expect(got.stderr).toBe('')
     expect(got.stdout).toBe(rendered)
@@ -170,7 +172,7 @@ describe('expand renders a tab stop list as GNU does', () => {
     ['abcd\tX\n', '/4', 'abcd    X\n'],
     ['abc\tX\n', '/4', 'abc X\n'],
   ])('takes the first stop strictly past the column (%s, -t %s)', async (input, list, out) => {
-    const got = await run({ tabs: list }, stdinOf(input))
+    const got = await run({ flags: { tabs: list } }, stdinOf(input))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe(out)
   })
@@ -180,7 +182,7 @@ describe('expand renders a tab stop list as GNU does', () => {
     ['5,9', 'xxxxxxxxxx Y\n'],
     ['5', 'xxxxxxxxxx     Y\n'],
   ])('one stop repeats where several give one blank (-t %s)', async (list, out) => {
-    const got = await run({ tabs: list }, stdinOf('xxxxxxxxxx\tY\n'))
+    const got = await run({ flags: { tabs: list } }, stdinOf('xxxxxxxxxx\tY\n'))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe(out)
   })
@@ -283,7 +285,7 @@ describe('expand refuses a tab list GNU refuses', () => {
   // Exit 1, empty stdout, and one line per problem with no hint. The stub
   // stream throws, so a refusal that opened an operand would fail here.
   it.each(EXPAND_REFUSALS)('-t %s is fatal before any operand', async (list, message) => {
-    const got = await run({ tabs: list }, stdinOf('a\tb\n'))
+    const got = await run({ flags: { tabs: list } }, stdinOf('a\tb\n'))
     expect(got.exit).toBe(1)
     expect(got.stdout).toBe('')
     expect(got.stderr).toBe(message)
@@ -380,7 +382,7 @@ describe('expand resets the column on a newline alone', () => {
     [{}, 'a\fb\tX\n', 'a\fb     X\n'],
     [{ tabs: '4' }, 'a\r\n\tb\n', 'a\r\n    b\n'],
   ])('%j on %j', async (flags, input, rendered) => {
-    const got = await run(flags, stdinOf(input))
+    const got = await run({ flags }, stdinOf(input))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe(rendered)
   })
@@ -393,13 +395,13 @@ describe('expand -i reads the same tab list', () => {
     [{ initial: true, tabs: '4' }, '\ta\tb\n', '    a\tb\n'],
     [{ initial: true, tabs: '3' }, '  \tx\n', '   x\n'],
   ])('%j', async (flags, input, rendered) => {
-    const got = await run(flags, stdinOf(input))
+    const got = await run({ flags }, stdinOf(input))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe(rendered)
   })
 
   it('refuses the same tab list under -i', async () => {
-    const got = await run({ initial: true, tabs: '0' }, stdinOf('\ta\n'))
+    const got = await run({ flags: { initial: true, tabs: '0' } }, stdinOf('\ta\n'))
     expect(got.exit).toBe(1)
     expect(got.stderr).toBe('expand: tab size cannot be 0\n')
   })
@@ -425,7 +427,7 @@ describe('expand backspace decrements the column', () => {
   ] as [string, Record<string, FlagValue>, string][])(
     '%j with %j',
     async (input, flags, rendered) => {
-      const got = await run(flags, stdinOf(input))
+      const got = await run({ flags }, stdinOf(input))
       expect(got.exit).toBe(0)
       expect(got.stdout).toBe(rendered)
     },
@@ -434,7 +436,7 @@ describe('expand backspace decrements the column', () => {
   // `-i` needs no backspace handling: `\b` is not `isblank`, so the leading
   // run stops at it and the TAB after is copied verbatim (NL3-E).
   it('ends the leading run under -i', async () => {
-    const got = await run({ initial: true, tabs: '4' }, stdinOf('  \b \tx\n'))
+    const got = await run({ flags: { initial: true, tabs: '4' } }, stdinOf('  \b \tx\n'))
     expect(got.exit).toBe(0)
     expect(got.stdout).toBe('  \b \tx\n')
   })

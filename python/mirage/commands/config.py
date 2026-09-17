@@ -20,9 +20,10 @@ from typing import Any, Callable, Protocol, cast
 from mirage.accessor.base import Accessor
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.commands.constants import ROOT_CWD
-from mirage.commands.spec import CommandSpec
+from mirage.commands.spec import SPECS, CommandSpec
 from mirage.commands.spec.constants import SOLE_ARGUMENT_LONG_OPTIONS
 from mirage.commands.spec.help import render_help
+from mirage.commands.spec.synopsis import SYNOPSES
 from mirage.commands.spec.types import FlagValue, Option
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource, IOResult
@@ -284,7 +285,11 @@ def _with_help_support(
         extras.append(_VERSION_OPTION)
     new_spec = (spec if not extras else replace(
         spec, options=spec.options + tuple(extras)))
-    help_text = render_help(name, new_spec).encode()
+    # Only the builtin itself answers --help with GNU's synopsis; a
+    # registered command that borrowed the name keeps the line its own
+    # spec synthesizes.
+    synopsis = SYNOPSES.get(name) if SPECS.get(name) is spec else None
+    help_text = render_help(name, new_spec, synopsis=synopsis).encode()
     version_text = version_line(name)
 
     @functools.wraps(fn)

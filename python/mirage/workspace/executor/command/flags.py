@@ -215,15 +215,17 @@ def parse_flags(
         return ParsedCommand(
             paths, texts, flag_kwargs, parsed.warnings, parsed.invalid_options,
             parsed.ambiguous_options, parsed.option_error_kinds,
-            parsed.needs_value_options, parsed.choice_value_options,
-            parsed.invalid_int_options, parsed.invalid_float_options,
-            parsed.missing_required_options, parsed.old_option_needs_value,
-            parsed.missing_required_operands, parsed.typed_dests)
+            parsed.needs_value_options, parsed.invalid_value_options,
+            parsed.ambiguous_value_options, parsed.invalid_int_options,
+            parsed.invalid_float_options, parsed.missing_required_options,
+            parsed.old_option_needs_value, parsed.missing_required_operands,
+            parsed.typed_dests)
 
     # No spec: separate by type
     paths = [item for item in parts if isinstance(item, PathSpec)]
     texts = [item for item in parts if not isinstance(item, PathSpec)]
-    return ParsedCommand(paths, texts, {}, [], [], [], [], [], [], [], [], [])
+    return ParsedCommand(paths, texts, {}, [], [], [], [], [], [], [], [], [],
+                         [])
 
 
 def option_error(cmd_name: str,
@@ -244,45 +246,43 @@ def option_error(cmd_name: str,
     # letter, so `tar Qf` and `tar fQ` both name f, not Q.
     if parsed.old_option_needs_value is not None:
         return old_option_error(cmd_name, parsed.old_option_needs_value)
-    # Scan-order between unknown and ambiguous options: GNU stops at the
-    # first offending token, so `grep --c --bogus` reports the ambiguity
-    # and the reversed line reports --bogus.
-    if (parsed.option_error_kinds
-            and parsed.option_error_kinds[0] == "ambiguous"):
-        token, candidates = parsed.ambiguous_options[0]
-        return ambiguous_option_error(cmd_name, token, candidates)
-    if parsed.invalid_options:
-        # Two reports share invalid_options and the tag tells them apart:
-        # a boolean long handed a value is not an unrecognized option,
-        # and getopt_long words it differently (`grep --byte-offset=2`).
-        if parsed.option_error_kinds[:1] == ["unexpected_value"]:
+    # The first refusal on the line, whichever check made it: GNU stops
+    # at the first offending token, so `grep --c --bogus` reports the
+    # ambiguity, the reversed line reports --bogus, and `numfmt
+    # --from=bad --bogus` reports the value. The kinds tape holds one tag
+    # per refusal in scan order and each list is in scan order too, so
+    # the first tag's detail is the head of that tag's list. "invalid"
+    # and "unexpected_value" share invalid_options: a boolean long handed
+    # a value is not an unrecognized option, and getopt_long words it
+    # differently (`grep --byte-offset=2`).
+    for kind in parsed.option_error_kinds:
+        if kind == "ambiguous":
+            token, candidates = parsed.ambiguous_options[0]
+            return ambiguous_option_error(cmd_name, token, candidates)
+        if kind == "unexpected_value":
             return unexpected_value_error(cmd_name, parsed.invalid_options[0])
-        return unknown_option_error(cmd_name, parsed.invalid_options[0])
-    if parsed.ambiguous_options:
-        token, candidates = parsed.ambiguous_options[0]
-        return ambiguous_option_error(cmd_name, token, candidates)
-    if parsed.needs_value_options:
-        return missing_value_error(cmd_name, parsed.needs_value_options[0])
-    # Numeric-typed values before choices, argparse's order (choices are
-    # checked against the converted value), matching the walk's
-    # _finish_node: a non-numeric value on an int/float option that also
-    # declares choices reports the conversion failure, not the choice list.
-    if parsed.invalid_int_options:
-        option, value = parsed.invalid_int_options[0]
-        return invalid_int_error(cmd_name, option, value)
-    if parsed.invalid_float_options:
-        option, value = parsed.invalid_float_options[0]
-        return invalid_float_error(cmd_name, option, value)
-    # One gnulib answer worded two ways, so one stream: the first
-    # refusal in declaration order wins whichever wording it carries,
-    # as every report above does.
-    if parsed.choice_value_options:
-        option, value, choices, kind = parsed.choice_value_options[0]
-        return invalid_argument_error(cmd_name,
-                                      option,
-                                      value,
-                                      choices,
-                                      kind=kind)
+        if kind == "invalid":
+            return unknown_option_error(cmd_name, parsed.invalid_options[0])
+        if kind == "needs_value":
+            return missing_value_error(cmd_name, parsed.needs_value_options[0])
+        if kind == "int":
+            option, value = parsed.invalid_int_options[0]
+            return invalid_int_error(cmd_name, option, value)
+        if kind == "float":
+            option, value = parsed.invalid_float_options[0]
+            return invalid_float_error(cmd_name, option, value)
+        if kind == "value":
+            option, value, choices = parsed.invalid_value_options[0]
+            return invalid_argument_error(cmd_name, option, value, choices)
+        # gnulib's other wording for the same refusal, reached only by an
+        # ARGMATCH table: the value is a prefix of two candidates or more.
+        if kind == "ambiguous_value":
+            option, value, choices = parsed.ambiguous_value_options[0]
+            return invalid_argument_error(cmd_name,
+                                          option,
+                                          value,
+                                          choices,
+                                          kind="ambiguous")
     if parsed.missing_required_options:
         return missing_required_error(cmd_name,
                                       parsed.missing_required_options[0])

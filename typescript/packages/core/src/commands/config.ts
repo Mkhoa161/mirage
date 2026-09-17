@@ -21,9 +21,11 @@ import type { DispatchFn } from '../runtime/types.ts'
 import type { NamespaceView, ReaddirPath, SessionView, StatPath } from '../ops/types.ts'
 import { VERSION } from '../version.ts'
 import type { AggregateResult } from './builtin/aggregators.ts'
+import { BUILTIN_SPECS } from './spec/builtins.ts'
 import { SOLE_ARGUMENT_LONG_OPTIONS } from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
-import { CommandSpec, Option, type FlagValue } from './spec/types.ts'
+import { SYNOPSES } from './spec/synopsis.ts'
+import { CommandSpec, Option, UsageStyle, type FlagValue } from './spec/types.ts'
 
 /**
  * The execution context `Mount.executeCmd` takes: everything the
@@ -336,7 +338,11 @@ function withHelpSupport(
       ? spec
       : // eslint-disable-next-line @typescript-eslint/no-misused-spread
         new CommandSpec({ ...spec, options: [...spec.options, ...extras] })
-  const helpText = renderHelp(name, newSpec)
+  // Only the builtin itself answers --help with GNU's synopsis; a
+  // registered command that borrowed the name keeps the line its own spec
+  // synthesizes.
+  const synopsis = BUILTIN_SPECS[name] === spec ? SYNOPSES[name] : undefined
+  const helpText = renderHelp(name, newSpec, [], UsageStyle.ARGPARSE, synopsis)
   const versionText = versionLine(name)
   const wrappedFn: CommandFn = async (accessor, paths, texts, opts) => {
     if (opts.flags.help === true) {

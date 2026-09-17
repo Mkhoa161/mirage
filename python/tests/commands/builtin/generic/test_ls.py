@@ -1436,3 +1436,23 @@ def test_the_ambiguous_and_invalid_blocks_are_the_same_below_line_one():
     assert str(ambiguous.value).split("\n", 1)[1] == (str(invalid.value).split(
         "\n", 1)[1])
     assert ambiguous.value.exit_code == invalid.value.exit_code == 1
+
+
+# xstrtoumax's three refusals as ls words them, measured on coreutils 9.7;
+# the word is quoted but never escaped. Mirrored in ls.test.ts.
+@pytest.mark.parametrize("value,message", [
+    ("x", "ls: invalid --block-size argument 'x'"),
+    ("", "ls: invalid --block-size argument ''"),
+    ("0K", "ls: invalid --block-size argument '0K'"),
+    ("1x", "ls: invalid suffix in --block-size argument '1x'"),
+    ("Kx", "ls: invalid suffix in --block-size argument 'Kx'"),
+    ("1e", "ls: invalid suffix in --block-size argument '1e'"),
+    ("1R", "ls: invalid suffix in --block-size argument '1R'"),
+    ("Y", "ls: --block-size argument 'Y' too large"),
+    ("16E", "ls: --block-size argument '16E' too large"),
+])
+def test_block_size_refusals_are_worded_as_gnu_words_them(value, message):
+    with pytest.raises(UsageError) as exc:
+        parse_flags({"block_size": value})
+    assert str(exc.value) == message
+    assert exc.value.exit_code == 2

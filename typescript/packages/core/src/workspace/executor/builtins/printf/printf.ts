@@ -12,8 +12,6 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { specOf } from '../../../../commands/spec/index.ts'
-import { renderHelp } from '../../../../commands/spec/help.ts'
 import { isProgramInvocation } from '../../../../context/session_context.ts'
 import { yieldBytes } from '../../../../io/stream.ts'
 import { IOResult } from '../../../../io/types.ts'
@@ -32,6 +30,49 @@ import { TARGET_RE } from '../constants.ts'
 // bash 5.2.21's own string, which both the usage error and the invalid-option
 // refusal end with.
 const USAGE = 'printf: usage: printf [-v var] format [arguments]\n'
+
+// bash's own help page for the printf builtin, byte for byte as bash 5.2.37
+// writes it, because `printf --help` is answered by the builtin and a
+// builtin's page is bash's, not GNU coreutils'. It cannot come from
+// renderHelp: the page documents `-v`, which is the BUILTIN's option alone
+// (run as a program through `find -exec printf`, `-v` is not available), so
+// CommandSpec must not declare it and the spec-driven renderer has nothing to
+// render it from.
+//
+// One deliberate divergence, and it is a subtraction: bash lists `%Q` and
+// `%(fmt)T` among the conversions it adds to printf(1), and mirage implements
+// neither, so those two entries are dropped rather than promised. Everything
+// mirage does implement is described in bash's own words. Adding either
+// conversion means adding its lines back here. `_HELP` in printf.py is the
+// twin.
+export const HELP =
+  'printf: printf [-v var] format [arguments]\n' +
+  '    Formats and prints ARGUMENTS under control of the FORMAT.\n' +
+  '    \n' +
+  '    Options:\n' +
+  '      -v var\tassign the output to shell variable VAR rather than\n' +
+  '    \t\tdisplay it on the standard output\n' +
+  '    \n' +
+  '    FORMAT is a character string which contains three types of objects: plain\n' +
+  '    characters, which are simply copied to standard output; character escape\n' +
+  '    sequences, which are converted and copied to the standard output; and\n' +
+  '    format specifications, each of which causes printing of the next successive\n' +
+  '    argument.\n' +
+  '    \n' +
+  '    In addition to the standard format specifications described in printf(1),\n' +
+  '    printf interprets:\n' +
+  '    \n' +
+  '      %b\texpand backslash escape sequences in the corresponding argument\n' +
+  '      %q\tquote the argument in a way that can be reused as shell input\n' +
+  '    \n' +
+  '    The format is re-used as necessary to consume all of the arguments.  If\n' +
+  '    there are fewer arguments than the format requires,  extra format\n' +
+  '    specifications behave as if a zero value or null string, as appropriate,\n' +
+  '    had been supplied.\n' +
+  '    \n' +
+  '    Exit Status:\n' +
+  '    Returns success unless an invalid option is given or a write or assignment\n' +
+  '    error occurs.\n'
 
 /**
  * Assign `value` to a `printf -v` target (scalar or `name[idx]`).
@@ -118,9 +159,9 @@ export async function handlePrintf(
       // `internal_getopt`, by writing the builtin's help page to STDOUT and
       // exiting 2 -- only a spelling internal_getopt actually reads (`--hel`,
       // `--version`) takes the invalid-option path below (bash 5.2.37). The
-      // page is the spec's, rendered by the one renderer every other mirage
-      // command answers `--help` with, so the two cannot drift.
-      const page = new TextEncoder().encode(renderHelp('printf', specOf('printf')))
+      // page is the BUILTIN's, in bash's own words and layout, because that
+      // is whose printf this is; see HELP.
+      const page = new TextEncoder().encode(HELP)
       return [
         yieldBytes(page),
         new IOResult({ exitCode: 2 }),

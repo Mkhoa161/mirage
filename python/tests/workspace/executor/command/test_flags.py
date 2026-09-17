@@ -15,7 +15,7 @@
 from dataclasses import replace
 
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import CommandSpec, Option
+from mirage.commands.spec.types import CommandSpec, Operand, Option
 from mirage.workspace.executor.command.flags import (option_error, parse_flags,
                                                      synthesize_path_spec)
 
@@ -59,6 +59,35 @@ def test_option_error_reports_the_first_scan_error_like_gnu():
     refusal = option_error("grep", invalid_first)
     assert refusal is not None
     assert refusal[0].startswith(b"grep: unrecognized option '--bogus'")
+
+
+def test_option_error_reports_a_refused_value_before_a_later_bad_option():
+    # GNU stops at the first offending token whatever kind it is:
+    # coreutils 9.7 `tee --output-error=bad --bogus f` names the value,
+    # the reversed line names --bogus, and a value option that ran out
+    # of line loses to a value refused before it.
+    spec = CommandSpec(options=(Option(long="--mode",
+                                       type="str",
+                                       choices=("warn", "exit")),
+                                Option(long="--count", type="int")),
+                       rest=Operand(type="path"))
+    value_first = parse_flags(["--mode=bad", "--bogus", "f"], spec, "tee", "/")
+    refusal = option_error("tee", value_first)
+    assert refusal is not None
+    assert refusal[0].startswith(b"tee: invalid argument 'bad' for '--mode'")
+    option_first = parse_flags(["--bogus", "--mode=bad", "f"], spec, "tee",
+                               "/")
+    refusal = option_error("tee", option_first)
+    assert refusal is not None
+    assert refusal[0].startswith(b"tee: unrecognized option '--bogus'")
+    trailing = parse_flags(["--mode=bad", "--count"], spec, "tee", "/")
+    refusal = option_error("tee", trailing)
+    assert refusal is not None
+    assert refusal[0].startswith(b"tee: invalid argument 'bad' for '--mode'")
+    needy = parse_flags(["--mode=warn", "--count"], spec, "tee", "/")
+    refusal = option_error("tee", needy)
+    assert refusal is not None
+    assert b"'--count' requires an argument" in refusal[0]
 
 
 def test_option_error_reports_numeric_conversion_before_choices():
@@ -164,30 +193,24 @@ def test_option_error_words_an_ambiguous_value_as_gnu_does():
     assert code == 1
 
 
-# The two wordings are one report, so the FIRST refused option in
-# declaration order wins whichever wording it carries. Keeping them in
-# two lists made the later invalid value outrank the earlier ambiguous
-# one, which no other report here does.
-def test_argmatch_refusals_follow_declaration_order():
-    spec = CommandSpec(options=(
-        Option(long="--first", type="str", choices=("alpha", "amber")),
-        Option(long="--second", type="str", choices=("x", "y")),
-    ))
-    parsed = parse_flags(["--first=a", "--second=zzz"], spec, "cmd", "/")
-    refusal = option_error("cmd", parsed)
+# The two wordings are one report, so the FIRST refused value on the
+# LINE wins whichever wording it carries. Ordering them by which list
+# they landed in would make a later invalid value outrank an earlier
+# ambiguous one, which no other report here does. numfmt declares both
+# ARGMATCH tables, so one line can carry one of each.
+def test_argmatch_refusals_follow_line_order():
+    parsed = parse_flags(["--from=ie", "--to=bogus", "1"], SPECS["numfmt"],
+                         "numfmt", "/")
+    refusal = option_error("numfmt", parsed)
     assert refusal is not None
     assert refusal[0].startswith(
-        b"cmd: ambiguous argument 'a' for '--first'\n")
-    reversed_spec = CommandSpec(options=(
-        Option(long="--first", type="str", choices=("x", "y")),
-        Option(long="--second", type="str", choices=("alpha", "amber")),
-    ))
-    parsed = parse_flags(["--first=zzz", "--second=a"], reversed_spec, "cmd",
-                         "/")
-    refusal = option_error("cmd", parsed)
+        b"numfmt: ambiguous argument 'ie' for '--from'\n")
+    parsed = parse_flags(["--from=bogus", "--to=ie", "1"], SPECS["numfmt"],
+                         "numfmt", "/")
+    refusal = option_error("numfmt", parsed)
     assert refusal is not None
     assert refusal[0].startswith(
-        b"cmd: invalid argument 'zzz' for '--first'\n")
+        b"numfmt: invalid argument 'bogus' for '--from'\n")
 
 
 def test_the_two_argmatch_refusals_differ_only_in_the_first_line():

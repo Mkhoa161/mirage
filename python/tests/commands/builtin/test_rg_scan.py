@@ -72,6 +72,7 @@ async def rg(backend, path, pattern, **kwargs):
         warnings=kwargs.get("warnings", None),
         byte_offsets=kwargs.get("byte_offsets", False),
         io=kwargs.get("io"),
+        files_without_match=kwargs.get("files_without_match", False),
     )
 
 
@@ -780,16 +781,17 @@ class TestRgOffsetsOverSmuggledBytes:
 
     @pytest.mark.anyio
     async def test_a_printed_line_replaces_a_smuggled_byte(self, backend):
-        # The scan answers in `list[str]`, which `format_records` encodes
-        # strictly, so the byte prints as U+FFFD -- what a replacing decode
-        # already gave, with the offset now right.
+        # The scan answers in `list[str]`, and the byte rides through as
+        # the surrogate escape `decode_line` gave it: `format_records`
+        # puts it back as itself, which is what ripgrep prints (measured
+        # 14.1.1: `\377` reaches the terminal raw, never as U+FFFD).
         await _write_bytes(backend, "/tmp/inv3.bin", b"\xffa\n")
         result = await rg(backend,
                           "/tmp/inv3.bin",
                           "a",
                           line_numbers=False,
                           byte_offsets=True)
-        assert result == ["0:�a"]
+        assert result == ["0:\udcffa"]
 
 
 class TestRgFilesOnlyNamesTheFile:
@@ -836,3 +838,49 @@ class TestRgMaxCountIsPerFileInAWalk:
         await _write(backend, "/tmp/mw3/y.txt", "a3\na4\n")
         result = await rg(backend, "/tmp/mw3", "a", max_count=1)
         assert result == ["/tmp/mw3/x.txt:1:a1", "/tmp/mw3/y.txt:1:a3"]
+
+
+class TestFilesWithoutMatch:
+    """ripgrep's --files-without-match: the paths that selected no line.
+
+    -c outranks it (ripgrep 14.1.1 prints counts), and -m0 lists nothing
+    since it is read before the scan. Mirrored in rg_scan.test.ts.
+    """
+
+    @pytest.mark.anyio
+    async def test_lists_the_matchless_file(self, backend):
+        await _write(backend, "/tmp/a.txt", "bar\nbaz")
+        assert await rg(backend, "/tmp/a.txt", "foo",
+                        files_without_match=True) == ["/tmp/a.txt"]
+
+    @pytest.mark.anyio
+    async def test_a_matching_file_is_not_listed(self, backend):
+        await _write(backend, "/tmp/a.txt", "foo\nbar")
+        assert await rg(backend, "/tmp/a.txt", "foo",
+                        files_without_match=True) == []
+
+    @pytest.mark.anyio
+    async def test_walk_lists_only_the_matchless_files(self, backend):
+        await _mkdir(backend, "/tmp/sub")
+        await _write(backend, "/tmp/a.txt", "hello")
+        await _write(backend, "/tmp/sub/b.txt", "world")
+        result = await rg(backend, "/tmp", "hello", files_without_match=True)
+        assert result == ["/tmp/sub/b.txt"]
+
+    @pytest.mark.anyio
+    async def test_count_outranks_it(self, backend):
+        await _write(backend, "/tmp/a.txt", "foo\nfoo")
+        assert await rg(backend,
+                        "/tmp/a.txt",
+                        "foo",
+                        count_only=True,
+                        files_without_match=True) == ["2"]
+
+    @pytest.mark.anyio
+    async def test_m0_lists_nothing(self, backend):
+        await _write(backend, "/tmp/a.txt", "bar")
+        assert await rg(backend,
+                        "/tmp/a.txt",
+                        "foo",
+                        max_count=0,
+                        files_without_match=True) == []

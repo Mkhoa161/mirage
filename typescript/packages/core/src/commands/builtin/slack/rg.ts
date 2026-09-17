@@ -33,7 +33,7 @@ import { command, type CommandFnResult, type CommandOpts } from '../../config.ts
 import { specOf } from '../../spec/builtins.ts'
 import { patternArg } from '../grep_pattern.ts'
 import { pushdownOperand } from '../grep_pushdown.ts'
-import { rgGeneric } from '../generic/rg.ts'
+import { RG_NO_PATTERN, rgGeneric } from '../generic/rg.ts'
 import { SEARCH_HONORED, SEARCH_MAX_RESULTS } from './grep.ts'
 import { FlagView } from '../../spec/flag_view.ts'
 
@@ -57,10 +57,7 @@ async function rgCommand(
 ): Promise<CommandFnResult> {
   const pattern = patternArg(texts, opts.flags)
   if (pattern === null) {
-    return [
-      null,
-      new IOResult({ exitCode: 2, stderr: ENC.encode('rg: usage: rg [flags] pattern [path]\n') }),
-    ]
+    return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${RG_NO_PATTERN}\n`) })]
   }
   const fl = new FlagView(opts.flags, specOf('rg'))
 

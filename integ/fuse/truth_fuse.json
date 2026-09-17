@@ -19,5 +19,14 @@
   "link_policy_unlink_refused": true,
   "link_policy_survives": true,
   "link_plain_unlink_ok": true,
-  "link_target_survives": "body"
+  "link_target_survives": "body",
+  "session_shell_hidden_exit": 1,
+  "session_shell_listing": "pub.txt",
+  "session_shell_write_refused": true,
+  "session_host_reads_hidden": "secret",
+  "session_kernel_visible_read": "pub",
+  "session_kernel_listing": "pub.txt",
+  "session_kernel_hidden_absent": true,
+  "session_kernel_create_under_hidden_absent": true,
+  "session_kernel_write_refused": true
 }

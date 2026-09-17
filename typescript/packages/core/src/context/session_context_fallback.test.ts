@@ -36,6 +36,10 @@ import type { CommandRule } from '../policy/types.ts'
 import type { Policies } from '../policy/policies.ts'
 import type { SessionManager } from '../workspace/session/manager.ts'
 import { Session } from '../workspace/session/session.ts'
+import { parseSessionProfile } from '../policy/profile.ts'
+import { RAMResource } from '../resource/ram/ram.ts'
+import { getTestParser } from '../workspace/fixtures/workspace_fixture.ts'
+import { Workspace } from '../workspace/workspace/workspace.ts'
 import type * as asyncContextModule from '../utils/async_context.ts'
 
 // The browser-runtime branch under node's test runner: the mock forces
@@ -371,5 +375,41 @@ describe('redirect targets on the fallback storage', () => {
     expect(judgedInA).toBe(true)
     expect(redirectTargetJudged(outA.virtual)).toBe(false)
     expect(redirectPathsFor(nodeA)).toEqual([])
+  })
+})
+
+describe('a named facade session on the fallback storage', () => {
+  it('is bound even while another task holds a wider session live', async () => {
+    // The newest live frame here is whichever task bound last, not
+    // this task's own, so a facade that names its session must not
+    // take that frame for its ambient context: a wide session held
+    // live by a concurrent task would otherwise judge the named
+    // session's ops. The unnamed door keeps the ambient frame, which
+    // is what a command's runtime reaching `ws.fs` relies on.
+    const parser = await getTestParser()
+    const ws = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] as const },
+      {
+        mode: MountMode.WRITE,
+        shellParser: parser,
+        profiles: { agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }) },
+        profile: 'agent',
+      },
+    )
+    try {
+      const host = ws.createSession('host', { profile: parseSessionProfile({}) })
+      const wide = ws.fs.forSession(host.sessionId)
+      await wide.mkdir('/data/vault')
+      await wide.writeFile('/data/vault/secret', 'top\n')
+      const [held, release] = gate()
+      const holding = runWithSession(host, () => held, ws.sessionManager)
+      const named = ws.fs.forSession(ws.defaultSessionId)
+      await expect(named.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
+      release()
+      await holding
+    } finally {
+      await ws.close()
+    }
   })
 })

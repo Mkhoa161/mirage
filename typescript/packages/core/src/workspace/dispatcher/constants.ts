@@ -61,15 +61,18 @@ export const LINK_ENTRY_OPS: ReadonlySet<string> = new Set(['unlink', 'rename', 
 // requested/residual split and the overlay write read the same names.
 export const SETATTR_KEYS = ['mode', 'uid', 'gid', 'atime', 'mtime'] as const
 
-// Ops that create the path they name. A hidden target refuses these as
-// EACCES rather than ENOENT, because "does not exist" is nonsense as
-// the answer to a create the caller is spelling out; every other op on
-// a hidden path answers ENOENT, the no-name-leak rule.
+// Ops that create the path they name. A hidden target refuses these
+// through `hiddenRefusal` with `create` set: EACCES when the directory
+// the create lands in is visible (a hidden name there reads as a file
+// the session cannot write), ENOENT when that directory is hidden too,
+// the same answer every read gives for it. Every other op on a hidden
+// path answers ENOENT, the no-name-leak rule.
 export const HIDDEN_CREATE_OPS: ReadonlySet<string> = new Set([
   'write',
   'write_bytes',
   'append',
   'create',
+  'truncate',
   'mkdir',
   'symlink',
 ])

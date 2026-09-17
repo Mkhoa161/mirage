@@ -15,10 +15,8 @@
 import pytest
 
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.parser import parse_command, parse_to_kwargs
-from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
-                                        Operand, Option)
+from mirage.commands.spec.types import CommandSpec, Operand, Option
 
 
 def test_grep_positional_pattern_then_path():
@@ -429,144 +427,234 @@ def test_count_flag_accumulates_occurrences():
 
 
 def test_choices_violation_is_reported_not_raised():
-    parsed = parse_command(SPECS["tee"], ["--output-error=bogus", "/f"], "/")
-    assert parsed.choice_value_options == [
+    parsed = parse_command(SPECS["tee"], ["--output-error=bogus", "/f"], "/",
+                           "tee")
+    assert parsed.invalid_value_options == [
         ("--output-error", "bogus", ("warn", "warn-nopipe", "exit",
-                                     "exit-nopipe"), "invalid"),
+                                     "exit-nopipe")),
     ]
-    ok = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/")
-    assert ok.choice_value_options == []
+    ok = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/", "tee")
+    assert ok.invalid_value_options == []
 
 
-# A declared choices set is a gnulib ARGMATCH table, so the parser
-# resolves a prefix and rewrites the bag to the canonical word. Measured
-# on coreutils 9.4: `tee --output-error=warn-` exits 0 (warn-nopipe) and
+# `tee --output-error` is one of the three spec-declared choices sets
+# that really are gnulib ARGMATCH tables, so the parser resolves a
+# prefix and rewrites the bag to the canonical word. Measured on
+# coreutils 9.7: `tee --output-error=exit-n` exits 0 (exit-nopipe) and
 # `=w` is `ambiguous argument 'w'`.
 def test_an_unambiguous_prefix_resolves_to_the_canonical_word():
-    parsed = parse_command(SPECS["tee"], ["--output-error=warn-", "/f"], "/")
+    parsed = parse_command(SPECS["tee"], ["--output-error=warn-", "/f"], "/",
+                           "tee")
     assert parsed.flags["--output-error"] == "warn-nopipe"
-    assert parsed.choice_value_options == []
+    assert parsed.invalid_value_options == []
+    assert parsed.ambiguous_value_options == []
 
 
 def test_an_exact_word_is_left_alone_and_not_read_as_a_prefix():
-    parsed = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/")
+    parsed = parse_command(SPECS["tee"], ["--output-error=warn", "/f"], "/",
+                           "tee")
     assert parsed.flags["--output-error"] == "warn"
-    assert parsed.choice_value_options == []
+    assert parsed.invalid_value_options == []
 
 
-def test_an_ambiguous_prefix_is_tagged_in_the_one_stream():
-    parsed = parse_command(SPECS["tee"], ["--output-error=w", "/f"], "/")
-    assert parsed.choice_value_options == [
-        ("--output-error", "w", ("warn", "warn-nopipe", "exit", "exit-nopipe"),
-         "ambiguous"),
+# The second table, so the rule is the option's and not one command's:
+# measured on 9.7, `numfmt --to=s` is `si` and `--to=ie` is ambiguous
+# between `iec` and `iec-i`.
+def test_the_other_argmatch_table_resolves_its_own_prefixes():
+    parsed = parse_command(SPECS["numfmt"], ["--to=s", "1"], "/", "numfmt")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.ambiguous_value_options == []
+    ambiguous = parse_command(SPECS["numfmt"], ["--to=ie", "1"], "/", "numfmt")
+    assert ambiguous.option_error_kinds == ["ambiguous_value"]
+    assert ambiguous.ambiguous_value_options == [
+        ("--to", "ie", ("none", "si", "iec", "iec-i")),
     ]
+
+
+def test_an_ambiguous_prefix_lands_in_its_own_list_and_on_the_tape():
+    parsed = parse_command(SPECS["tee"], ["--output-error=w", "/f"], "/",
+                           "tee")
+    assert parsed.option_error_kinds == ["ambiguous_value"]
+    assert parsed.ambiguous_value_options == [
+        ("--output-error", "w", ("warn", "warn-nopipe", "exit",
+                                 "exit-nopipe")),
+    ]
+    assert parsed.invalid_value_options == []
     # The value the line typed stays in the bag: nothing resolved it, and
     # the renderer names the word as typed.
     assert parsed.flags["--output-error"] == "w"
 
 
 def test_the_empty_value_is_reported_ambiguous_not_invalid():
-    parsed = parse_command(SPECS["tee"], ["--output-error=", "/f"], "/")
-    assert parsed.choice_value_options == [
-        ("--output-error", "", ("warn", "warn-nopipe", "exit", "exit-nopipe"),
-         "ambiguous"),
+    parsed = parse_command(SPECS["tee"], ["--output-error=", "/f"], "/", "tee")
+    assert parsed.ambiguous_value_options == [
+        ("--output-error", "", ("warn", "warn-nopipe", "exit", "exit-nopipe")),
     ]
 
 
 def test_prefix_matching_is_case_sensitive():
-    parsed = parse_command(SPECS["tee"], ["--output-error=W", "/f"], "/")
-    assert parsed.choice_value_options == [
-        ("--output-error", "W", ("warn", "warn-nopipe", "exit", "exit-nopipe"),
-         "invalid"),
+    parsed = parse_command(SPECS["tee"], ["--output-error=W", "/f"], "/",
+                           "tee")
+    assert parsed.invalid_value_options == [
+        ("--output-error", "W", ("warn", "warn-nopipe", "exit",
+                                 "exit-nopipe")),
     ]
 
 
-# CPython parses --check-hash-based-pycs by hand and takes only an
-# exact word, so this one choices set is not an ARGMATCH table: measured
-# on 3.11.15, `--check-hash-based-pycs a` and `al` are both refused
-# where gnulib would have resolved them to `always`.
-def test_a_hand_parsed_choices_set_takes_no_prefix():
+# Prefix matching is opt-in per (command, option), so a choices set that
+# is NOT one of the three compares the whole word, which is argparse's
+# own rule for `choices`. CPython is the measured case: on 3.11.15
+# `--check-hash-based-pycs a` and `al` are both refused where gnulib
+# would have resolved them to `always`.
+def test_a_choices_set_outside_the_table_takes_no_prefix():
     parsed = parse_command(SPECS["python3"],
                            ["--check-hash-based-pycs=a", "-c", "x"], "/",
                            "python3")
     assert parsed.flags["--check-hash-based-pycs"] == "a"
-    assert parsed.choice_value_options == [
-        ("--check-hash-based-pycs", "a", ("always", "default", "never"),
-         "invalid"),
+    assert parsed.invalid_value_options == [
+        ("--check-hash-based-pycs", "a", ("always", "default", "never")),
     ]
 
 
-def test_a_hand_parsed_choices_set_still_takes_the_exact_word():
+def test_a_choices_set_outside_the_table_still_takes_the_exact_word():
     parsed = parse_command(SPECS["python3"],
                            ["--check-hash-based-pycs=always", "-c", "x"], "/",
                            "python3")
     assert parsed.flags["--check-hash-based-pycs"] == "always"
-    assert parsed.choice_value_options == []
+    assert parsed.invalid_value_options == []
 
 
-# The empty word has no ambiguity wording to reach here either: nothing
-# is an exact match, so it is invalid like any other non-candidate.
-def test_a_hand_parsed_choices_set_reports_the_empty_word_invalid():
+# The empty word has no ambiguity wording to reach outside the table:
+# nothing is an exact match, so it is invalid like any other
+# non-candidate, and ambiguous_value_options stays empty.
+def test_a_choices_set_outside_the_table_reports_the_empty_word_invalid():
     parsed = parse_command(SPECS["python3"],
                            ["--check-hash-based-pycs=", "-c", "x"], "/",
                            "python3")
-    assert parsed.choice_value_options == [
-        ("--check-hash-based-pycs", "", ("always", "default", "never"),
-         "invalid"),
+    assert parsed.invalid_value_options == [
+        ("--check-hash-based-pycs", "", ("always", "default", "never")),
     ]
+    assert parsed.ambiguous_value_options == []
 
 
-# An installed CLI's choices set is clap's or git's, not gnulib's: the
-# program compares the whole word, which is argparse's own rule, so
-# `gh issue list --state=o` is a refusal there where GNU would resolve
-# it to `open`. The CLI's group level already enforces its choices
-# exactly (walk._finish_node), so a leaf that prefix-matched would make
-# one Option.choices mean two things inside one tree.
-def test_unknown_is_operand_takes_no_prefix_for_its_choices():
-    options = (Option(long="--state",
-                      type="str",
-                      choices=("open", "closed", "all")), )
-    spec = CommandSpec(options=options)
+# A mount author's own command is not a GNU program, so its choices are
+# argparse's: `--mode=rem` is refused rather than resolved to `remove`.
+# Nothing the author can write opts a custom spec into the table, which
+# is keyed by command name and holds three GNU entries.
+def test_a_custom_spec_never_inherits_argmatch():
+    spec = CommandSpec(
+        options=(Option(long="--mode", type="str", choices=("read",
+                                                            "remove")), ))
+    parsed = parse_command(spec, ["--mode=rem"], "/", "mycmd")
+    assert parsed.flags["--mode"] == "rem"
+    assert parsed.invalid_value_options == [
+        ("--mode", "rem", ("read", "remove")),
+    ]
+    # Even naming it after a real ARGMATCH option changes nothing: the
+    # table is keyed by the pair, so `mycmd --to` is not `numfmt --to`.
+    named = CommandSpec(
+        options=(Option(long="--to", type="str", choices=("none", "si")), ))
+    assert parse_command(named, ["--to=s"], "/",
+                         "mycmd").invalid_value_options == [
+                             ("--to", "s", ("none", "si")),
+                         ]
+
+
+# An installed CLI's node is outside the table for the same reason, so
+# `gh issue list --state=o` is refused where GNU would resolve it. The
+# CLI's group level already enforces its choices exactly
+# (walk._finish_node), so a leaf that prefix-matched would make one
+# Option.choices mean two things inside one tree. unknown_is_operand
+# says nothing about this: it governs the dash word, not the value.
+def test_a_cli_node_compares_the_whole_choice_word():
+    spec = CommandSpec(options=(
+        Option(long="--state", type="str", choices=("open", "closed",
+                                                    "all")), ))
     parsed = parse_command(spec, ["--state=o"],
                            "/",
                            "gh",
                            unknown_is_operand=True)
     assert parsed.flags["--state"] == "o"
-    assert parsed.choice_value_options == [
-        ("--state", "o", ("open", "closed", "all"), "invalid"),
+    assert parsed.invalid_value_options == [
+        ("--state", "o", ("open", "closed", "all")),
     ]
     exact = parse_command(spec, ["--state=open"],
                           "/",
                           "gh",
                           unknown_is_operand=True)
     assert exact.flags["--state"] == "open"
-    assert exact.choice_value_options == []
-    # The same spec parsed without the flag prefix-matches, so the call
-    # is what decides and nothing about the option does.
-    gnu = parse_command(spec, ["--state=o"], "/", "ls")
-    assert gnu.flags["--state"] == "open"
-    assert gnu.choice_value_options == []
+    assert exact.invalid_value_options == []
+    # The same spec parsed without the flag answers identically, which
+    # is the point: the choice rule is the table's, not the call's.
+    strict = parse_command(spec, ["--state=o"], "/", "gh")
+    assert strict.invalid_value_options == [
+        ("--state", "o", ("open", "closed", "all")),
+    ]
 
 
 def test_choices_exempt_bare_optional_value_form():
-    parsed = parse_command(SPECS["tee"], ["--output-error", "/f"], "/")
+    parsed = parse_command(SPECS["tee"], ["--output-error", "/f"], "/", "tee")
     assert parsed.flags["--output-error"] is True
-    assert parsed.choice_value_options == []
+    assert parsed.invalid_value_options == []
 
 
 def test_choices_check_every_value_of_a_multiple_flag():
     spec = CommandSpec(options=(
         Option(short="-m", type="str", multiple=True, choices=("x", "y")), ))
     parsed = parse_command(spec, ["-m", "x", "-m", "z"], "/")
-    assert parsed.choice_value_options == [("-m", "z", ("x", "y"), "invalid")]
+    assert parsed.invalid_value_options == [("-m", "z", ("x", "y"))]
 
 
-def test_every_value_of_a_multiple_flag_resolves_to_its_canonical_word():
-    spec = CommandSpec(options=(Option(
-        short="-m", type="str", multiple=True, choices=("alpha", "beta")), ))
-    parsed = parse_command(spec, ["-m", "al", "-m", "beta"], "/")
-    assert parsed.flags["-m"] == ["alpha", "beta"]
-    assert parsed.choice_value_options == []
+def test_every_occurrence_of_an_argmatch_flag_is_resolved_as_it_is_read():
+    # Each occurrence goes through the table as it is scanned, so the one
+    # the bag drops is still refused and the one it keeps is still
+    # rewritten to its candidate.
+    parsed = parse_command(SPECS["numfmt"], ["--to=ie", "--to=s", "1"], "/",
+                           "numfmt")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.ambiguous_value_options == [
+        ("--to", "ie", ("none", "si", "iec", "iec-i")),
+    ]
+
+
+def test_choices_check_every_occurrence_of_a_scalar_flag():
+    # GNU refuses the argument as it is scanned (`numfmt --to=bogus
+    # --to=si` is refused for bogus), so the value the bag dropped is
+    # checked too, in line order.
+    parsed = parse_command(SPECS["numfmt"], ["--to=bogus", "--to=si", "1"],
+                           "/")
+    assert parsed.flags["--to"] == "si"
+    assert parsed.invalid_value_options == [
+        ("--to", "bogus", ("none", "si", "iec", "iec-i")),
+    ]
+    ok = parse_command(SPECS["numfmt"], ["--to=si", "--to=si", "1"], "/")
+    assert ok.invalid_value_options == []
+
+
+def test_the_first_refused_value_on_the_line_is_reported_first():
+    # GNU stops at the first bad argument it reads, whatever its option
+    # and whatever check refuses it, so the kinds tape carries each
+    # refusal's tag in scan order for the reporter to follow.
+    spec = CommandSpec(options=(
+        Option(short="-n", type="int"),
+        Option(long="--mode", type="str", choices=("a", "b")),
+    ))
+    parsed = parse_command(spec, ["--mode", "bad", "-n", "abc"], "/")
+    assert parsed.option_error_kinds == ["value", "int"]
+    assert parsed.invalid_value_options == [("--mode", "bad", ("a", "b"))]
+    assert parsed.invalid_int_options == [("-n", "abc")]
+    parsed = parse_command(SPECS["numfmt"], ["--from=bad1", "--to=bad2", "1"],
+                           "/")
+    assert parsed.option_error_kinds == ["value", "value"]
+    assert [dest for dest, _, _ in parsed.invalid_value_options
+            ] == ["--from", "--to"]
+
+
+def test_int_check_covers_every_occurrence_of_a_scalar_flag():
+    spec = CommandSpec(options=(Option(short="-n", type="int"), ))
+    parsed = parse_command(spec, ["-n", "abc", "-n", "3"], "/")
+    assert parsed.flags["-n"] == "3"
+    assert parsed.invalid_int_options == [("-n", "abc")]
 
 
 def test_required_option_reported_when_absent():
@@ -1048,98 +1136,28 @@ def test_js_flags_before_the_first_operand_are_still_the_interpreters():
     assert parsed.texts() == ["a"]
 
 
-# The per-occurrence record beside the bag. It exists because last-wins
-# throws a value away, and GNU validates every value as getopt hands it
-# over, so a command refusing the leftmost bad one (nl) needs the value
-# the bag dropped.
-def test_value_occurrences_record_every_scalar_occurrence_in_scan_order():
+# There is no per-occurrence record beside the bag. GNU validates every
+# value as getopt hands it over, so a scalar dest checks the value it is
+# about to drop before the next one replaces it (the int and choices tests
+# above), and a command that must see every value declares the option
+# `multiple` (argparse's append).
+def test_an_accumulating_option_keeps_every_value_for_the_command():
     parsed = parse_command(SPECS["nl"], ["-w", "abc", "-v", "xyz", "-w", "3"],
                            "/")
-    assert parsed.value_occurrences == [("--number-width", "abc"),
-                                        ("--starting-line-number", "xyz"),
-                                        ("--number-width", "3")]
-    # The bag is untouched: still one value per dest, still last-wins.
-    assert parsed.flags["--number-width"] == "3"
-
-
-def test_value_occurrences_fold_both_spellings_onto_one_dest():
-    parsed = parse_command(SPECS["nl"], ["--number-width=abc", "-w", "3"], "/")
-    assert parsed.value_occurrences == [("--number-width", "abc"),
-                                        ("--number-width", "3")]
-
-
-def test_value_occurrences_skip_an_accumulating_option():
-    """A `multiple` option's own list already is the record."""
-    parsed = parse_command(SPECS["grep"], ["-e", "foo", "-e", "bar", "/a.txt"],
-                           "/")
-    assert parsed.value_occurrences == []
-    assert parsed.flags["-e"] == ["foo", "bar"]
-
-
-def test_value_occurrences_skip_boolean_flags():
-    parsed = parse_command(SPECS["grep"], ["-i", "-v", "pat"], "/")
-    assert parsed.value_occurrences == []
-
-
-def test_the_kwargs_bag_is_unchanged_when_no_scalar_option_repeats():
-    """The record rides the bag only when the bag lost something.
-
-    Every command parses through this machinery, so an unconditional
-    extra key would land in every handler's flag bag. A line that typed
-    each scalar option once has lost nothing: the bag is already the
-    record, in scan order.
-    """
-    parsed = parse_command(SPECS["nl"], ["-w", "3", "-v", "5"], "/")
     assert parse_to_kwargs(parsed) == {
-        "number_width": "3",
-        "starting_line_number": "5",
+        "number_width": ["abc", "3"],
+        "starting_line_number": ["xyz"],
     }
 
 
-def test_the_kwargs_bag_carries_the_record_once_a_scalar_repeats():
-    parsed = parse_command(SPECS["nl"], ["-w", "abc", "-w", "3"], "/")
-    assert parse_to_kwargs(parsed) == {
-        "number_width": "3",
-        VALUE_OCCURRENCES_KEY: ["number_width", "abc", "number_width", "3"],
-    }
-
-
-def test_the_record_in_the_bag_is_read_back_as_typed_pairs():
-    parsed = parse_command(SPECS["nl"], ["-w", "abc", "-v", "xyz", "-w", "3"],
-                           "/")
-    fl = FlagView(parse_to_kwargs(parsed), spec=SPECS["nl"])
-    assert fl.value_occurrences("number_width", "starting_line_number") == [
-        ("number_width", "abc"),
-        ("starting_line_number", "xyz"),
-        ("number_width", "3"),
-    ]
-    # Names the caller did not ask about are dropped, positions kept.
-    assert fl.value_occurrences("starting_line_number") == [
-        ("starting_line_number", "xyz")
-    ]
-
-
-def test_occurrences_fall_back_to_the_bag_when_nothing_repeated():
-    """Without a repeat each dest sits at its own occurrence's position."""
-    parsed = parse_command(SPECS["nl"], ["-v", "xyz", "-w", "abc"], "/")
-    kwargs = parse_to_kwargs(parsed)
-    assert VALUE_OCCURRENCES_KEY not in kwargs
-    fl = FlagView(kwargs, spec=SPECS["nl"])
-    assert fl.value_occurrences("number_width", "starting_line_number") == [
-        ("starting_line_number", "xyz"),
-        ("number_width", "abc"),
-    ]
-
-
-def test_a_repeat_elsewhere_does_not_disturb_another_option_family():
-    """grep's accumulating options are untouched by the record's arrival."""
+def test_the_kwargs_bag_carries_only_the_line_s_options():
     parsed = parse_command(SPECS["grep"],
                            ["-e", "a", "-e", "b", "-m", "1", "-m", "2", "x"],
                            "/")
     kwargs = parse_to_kwargs(parsed)
     assert kwargs["e"] == ["a", "b"]
     assert kwargs["m"] == "2"
-    assert kwargs[VALUE_OCCURRENCES_KEY] == ["m", "1", "m", "2"]
+    assert set(kwargs) == {"e", "m"}
 
 
 # A boolean long handed a value is reported as its own kind, not as an

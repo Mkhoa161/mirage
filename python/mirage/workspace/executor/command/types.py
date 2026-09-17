@@ -15,7 +15,7 @@
 from collections.abc import Awaitable, Sequence
 from typing import NamedTuple, Protocol
 
-from mirage.commands.spec.argmatch import ArgmatchKind
+from mirage.commands.spec.argmatch import ArgmatchChoices
 from mirage.commands.spec.types import FlagValue
 from mirage.io import IOResult
 from mirage.io.types import ByteSource
@@ -50,12 +50,13 @@ class ParsedCommand(NamedTuple):
     ambiguous_options: list[tuple[str, tuple[str, ...]]]
     option_error_kinds: list[str]
     needs_value_options: list[str]
-    # Every ARGMATCH refusal in declaration order, each tagged with the
-    # wording GNU picks: `invalid argument` for a value that prefixes no
+    # The two wordings GNU picks between for a refused choice value, in
+    # scan order: `invalid argument` for a value that matches no
     # candidate, `ambiguous argument` for one that prefixes candidates
-    # spanning two or more values. One stream, because the two print the
-    # same candidate block and the report has to follow one order.
-    choice_value_options: list[tuple[str, str, tuple[str, ...], ArgmatchKind]]
+    # spanning two or more values. option_error_kinds orders them
+    # against each other and against every other refusal on the line.
+    invalid_value_options: list[tuple[str, str, ArgmatchChoices]]
+    ambiguous_value_options: list[tuple[str, str, ArgmatchChoices]]
     invalid_int_options: list[tuple[str, str]]
     invalid_float_options: list[tuple[str, str]]
     missing_required_options: list[str]

@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import type { ArgmatchKind } from '../../../commands/spec/argmatch.ts'
+import type { ArgmatchChoices } from '../../../commands/spec/argmatch.ts'
 import type { ByteSource, IOResult } from '../../../io/types.ts'
 import type { ExecutionNode } from '../../types.ts'
 import type { FlagValue } from '../../../commands/spec/types.ts'
@@ -37,12 +37,13 @@ export interface ParsedCommand {
   ambiguousOptions: [string, readonly string[]][]
   optionErrorKinds: string[]
   needsValueOptions: string[]
-  // Every ARGMATCH refusal in declaration order, each tagged with the
-  // wording GNU picks: `invalid argument` for a value that prefixes no
-  // candidate, `ambiguous argument` for one that prefixes candidates
-  // spanning two or more values. One stream, because the two print the
-  // same candidate block and the report has to follow one order.
-  choiceValueOptions: [string, string, readonly string[], ArgmatchKind][]
+  // The two wordings GNU picks between for a refused choice value, in scan
+  // order: `invalid argument` for a value that matches no candidate,
+  // `ambiguous argument` for one that prefixes candidates spanning two or
+  // more values. optionErrorKinds orders them against each other and
+  // against every other refusal on the line.
+  invalidValueOptions: [string, string, ArgmatchChoices][]
+  ambiguousValueOptions: [string, string, ArgmatchChoices][]
   invalidIntOptions: [string, string][]
   invalidFloatOptions: [string, string][]
   missingRequiredOptions: string[]

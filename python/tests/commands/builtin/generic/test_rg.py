@@ -747,3 +747,90 @@ async def test_rg_no_filename_preserves_multi_file_nul_matches():
     )
     assert await _drain_async(output) == b"needle\0a\nneedle\0b\n"
     assert io.exit_code == 0
+
+
+async def _endless_after_first_match():
+    yield b"hello\n"
+    raise RuntimeError("the probe read past the first selected line")
+
+
+@pytest.mark.asyncio
+async def test_rg_files_without_match_stdin_stops_at_the_first_match():
+    # A stdin that never ends must not be buffered whole: the probe
+    # streams through the scanner and stops on the first selected line.
+    readdir, stat, rb, rs = _make_backend({})
+    output, io = await rg(
+        [],
+        ["hello"],
+        CommandOpts(flags={"files_without_match": True}),
+        readdir=readdir,
+        stat=stat,
+        read_bytes=rb,
+        read_stream=rs,
+        stdin=_endless_after_first_match(),
+    )
+    assert await _drain_async(output) == b""
+    assert io.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_rg_files_without_match_stdin_lists_stdin_when_nothing_matches():
+    readdir, stat, rb, rs = _make_backend({})
+    output, io = await rg(
+        [],
+        ["hello"],
+        CommandOpts(flags={"files_without_match": True}),
+        readdir=readdir,
+        stat=stat,
+        read_bytes=rb,
+        read_stream=rs,
+        stdin=b"x\ny\n",
+    )
+    assert await _drain_async(output) == b"<stdin>\n"
+    assert io.exit_code == 0
+
+
+@pytest.mark.asyncio
+async def test_rg_files_without_match_stdin_m0_lists_nothing():
+    # ripgrep 14.1.1: `printf 'x\n' | rg --files-without-match -m0 hello`
+    # prints nothing and exits 1, matched input or not.
+    readdir, stat, rb, rs = _make_backend({})
+    for data in (b"x\n", b"hello\n"):
+        output, io = await rg(
+            [],
+            ["hello"],
+            CommandOpts(flags={
+                "files_without_match": True,
+                "m": "0"
+            }),
+            readdir=readdir,
+            stat=stat,
+            read_bytes=rb,
+            read_stream=rs,
+            stdin=data,
+        )
+        assert await _drain_async(output) == b""
+        assert io.exit_code == 1
+
+
+def test_rg_output_mode_is_the_last_of_c_l_and_files_without_match():
+    # ripgrep 14.1.1: `-c --files-without-match` lists the matchless
+    # files, `--files-without-match -c` prints counts, `-l -c` counts.
+    later = parse_flags(FlagView({
+        "c": True,
+        "files_without_match": True
+    }),
+                        never_match=False)
+    assert (later.count_only, later.files_without_match) == (False, True)
+    earlier = parse_flags(FlagView({
+        "files_without_match": True,
+        "c": True
+    }),
+                          never_match=False)
+    assert (earlier.count_only, earlier.files_without_match) == (True, False)
+    counted = parse_flags(FlagView({
+        "args_l": True,
+        "c": True
+    }),
+                          never_match=False)
+    assert (counted.files_only, counted.count_only) == (False, True)

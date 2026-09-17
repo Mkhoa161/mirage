@@ -237,6 +237,9 @@ def parse_tab_stops(occurrences: list[str]) -> TabStops:
 def parse_flags(flags: Mapping[str, FlagValue]) -> ExpandFlags:
     """Read expand's flags once, refusing a tab list GNU refuses.
 
+    ``-t`` accumulates across occurrences, so it is declared
+    ``multiple`` and read as the list it typed.
+
     Args:
         flags (Mapping[str, FlagValue]): the dispatcher's flag bag.
 
@@ -245,7 +248,7 @@ def parse_flags(flags: Mapping[str, FlagValue]) -> ExpandFlags:
     """
     fl = FlagView(flags, spec=SPECS["expand"])
     return ExpandFlags(
-        tabs=parse_tab_stops([raw for _, raw in fl.value_occurrences("tabs")]),
+        tabs=parse_tab_stops(fl.as_list("tabs")),
         initial_only=fl.as_bool("initial"),
     )
 

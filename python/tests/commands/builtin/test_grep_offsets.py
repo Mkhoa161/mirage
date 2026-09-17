@@ -1,6 +1,6 @@
 from mirage.commands.builtin.grep_offsets import (decode_line, encode_line,
                                                   line_offsets, match_offset,
-                                                  prefix_of, printable)
+                                                  prefix_of)
 
 
 def test_line_offsets_count_the_stripped_terminator():
@@ -72,18 +72,3 @@ def test_line_offsets_are_exact_over_an_invalid_byte():
 def test_match_offset_counts_an_invalid_byte_as_one():
     # `grep -bo a` over `\xffa\n` is `1:a` on GNU grep 3.11.
     assert match_offset(0, decode_line(b"\xffa"), 1) == 1
-
-
-def test_printable_replaces_a_smuggled_byte():
-    assert printable(decode_line(b"\xffa")) == "\ufffda"
-
-
-def test_printable_gives_up_exactly_what_a_replacing_decode_gives_up():
-    # A truncated multi-byte sequence is one maximal invalid subsequence, so
-    # it comes back as one U+FFFD rather than one per byte.
-    raw = b"\xe2\x82x"
-    assert printable(decode_line(raw)) == raw.decode(errors="replace")
-
-
-def test_printable_leaves_ordinary_text_alone():
-    assert printable("café abc") == "café abc"

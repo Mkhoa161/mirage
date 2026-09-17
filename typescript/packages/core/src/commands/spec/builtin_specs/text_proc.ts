@@ -88,8 +88,11 @@ export const SPECS: Record<string, CommandSpec> = {
   }),
   numfmt: new CommandSpec({
     options: [
-      new Option({ long: '--to', type: 'str' }),
-      new Option({ long: '--from', type: 'str' }),
+      // GNU's argmatch tables, in GNU's order: `--to=auto` is not an
+      // output mode, and an unknown word answers with the shared ARGMATCH
+      // refusal (coreutils 9.7).
+      new Option({ long: '--to', type: 'str', choices: ['none', 'si', 'iec', 'iec-i'] }),
+      new Option({ long: '--from', type: 'str', choices: ['none', 'auto', 'si', 'iec', 'iec-i'] }),
       new Option({ long: '--suffix', type: 'str' }),
       new Option({ long: '--grouping' }),
     ],
@@ -133,12 +136,12 @@ export const SPECS: Record<string, CommandSpec> = {
   }),
   shuf: new CommandSpec({
     options: [
-      new Option({ short: '-n', long: '--head-count', type: 'str' }),
+      new Option({ short: '-n', long: '--head-count', type: 'str', multiple: true }),
       new Option({ short: '-e', long: '--echo' }),
       new Option({ short: '-z', long: '--zero-terminated' }),
       new Option({ short: '-r', long: '--repeat' }),
-      new Option({ short: '-i', long: '--input-range', type: 'str' }),
-      new Option({ short: '-o', long: '--output', type: 'path' }),
+      new Option({ short: '-i', long: '--input-range', type: 'str', multiple: true }),
+      new Option({ short: '-o', long: '--output', type: 'path', multiple: true }),
     ],
     rest: new Operand({ type: 'path' }),
   }),
@@ -213,7 +216,9 @@ export const SPECS: Record<string, CommandSpec> = {
     ],
     positional: [new Operand({ type: 'str' }), new Operand({ type: 'str' })],
   }),
-  tsort: new CommandSpec({ positional: [new Operand({ type: 'path' })] }),
+  tsort: new CommandSpec({
+    positional: [new Operand({ type: 'path' })],
+  }),
   uniq: new CommandSpec({
     options: [
       new Option({ short: '-c', long: '--count' }),

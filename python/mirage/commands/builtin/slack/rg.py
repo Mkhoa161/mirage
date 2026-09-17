@@ -15,6 +15,7 @@
 import logging
 
 from mirage.accessor.slack import SlackAccessor
+from mirage.commands.builtin.generic.rg import RG_NO_PATTERN
 from mirage.commands.builtin.generic.rg import rg as generic_rg
 from mirage.commands.builtin.generic_bind.adapter import bound_op
 from mirage.commands.builtin.grep_pattern import pattern_arg
@@ -50,7 +51,7 @@ async def rg(accessor: SlackAccessor, paths: list[PathSpec], texts: list[str],
     fl = FlagView(opts.flags, spec=SPECS["rg"])
     pattern_str = pattern_arg(texts, fl)
     if pattern_str is None:
-        raise UsageError("rg: usage: rg [flags] pattern [path]")
+        raise UsageError(RG_NO_PATTERN)
 
     # Same gate as slack grep, from the same table: only a lone concrete
     # operand with no reshaping flag may be answered by the search API.

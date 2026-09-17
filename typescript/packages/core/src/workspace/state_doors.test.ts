@@ -199,11 +199,10 @@ describe('name-plane writes go through the door', () => {
     const sess = ws.createSession('agent', { profile: { paths: { hide: ['/b'] } } })
     await runWithSession(sess, async () => {
       await ws.fs.symlink('/a/lk', 'x.txt')
-      // Creating under a hidden path is EACCES, not ENOENT: a create is
-      // the one op a hide answers out loud, because silently succeeding
-      // would leave a link the session cannot see and the next writer
-      // cannot overwrite.
-      await expect(ws.fs.symlink('/b/lk', 'y.txt')).rejects.toMatchObject({ code: 'EACCES' })
+      // The hidden mount does not exist for the session, so a create
+      // under it answers ENOENT as every read does; only a create at a
+      // hidden name inside a visible directory is EACCES.
+      await expect(ws.fs.symlink('/b/lk', 'y.txt')).rejects.toMatchObject({ code: 'ENOENT' })
     })
     expect(ws.namespace.isLink('/a/lk')).toBe(true)
     expect(ws.namespace.isLink('/b/lk')).toBe(false)

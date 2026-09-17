@@ -31,7 +31,7 @@
       "expect": {
         "exit": 2,
         "stdout": "",
-        "stderr": "rg: usage: rg [flags] pattern [path]\n"
+        "stderr": "rg: ripgrep requires at least one pattern to execute a search\n"
       }
     },
     {

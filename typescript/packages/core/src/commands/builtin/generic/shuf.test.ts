@@ -13,6 +13,8 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
+import { specOf } from '../../spec/builtins.ts'
+import { parseCommand, parseToKwargs } from '../../spec/parser.ts'
 import { materialize } from '../../../io/types.ts'
 import type { FlagValue } from '../../spec/types.ts'
 import type { CommandOpts } from '../../config.ts'
@@ -26,6 +28,7 @@ import {
   parseInputRange,
   rangeError,
   shufGeneric,
+  type ShufFlags,
 } from './shuf.ts'
 
 const ENC = new TextEncoder()
@@ -245,9 +248,10 @@ describe('shuf -i takes a prefix on either bound', () => {
 // fields rather than querying the bag inline.
 describe('shuf parseFlags is the one flag read', () => {
   it('returns the struct for a line GNU accepts', () => {
+    // `-e` is left off: GNU refuses it beside `-i` (`cannot combine -e
+    // and -i options`), which is its own case below.
     const parsed = parseFlags({
       head_count: '+2',
-      echo: true,
       zero_terminated: true,
       repeat: true,
       input_range: '1-3',
@@ -255,7 +259,7 @@ describe('shuf parseFlags is the one flag read', () => {
     })
     expect(parsed).toEqual({
       count: 2n,
-      echo: true,
+      echo: false,
       zeroTerminated: true,
       withReplacement: true,
       inputRange: '1-3',
@@ -497,4 +501,36 @@ describe('shuf decides the emitted count before anything is built', () => {
       expect(emitCount(available, count, repeat)).toBe(expected)
     },
   )
+})
+
+// GNU validates options as getopt hands them over, so the first bad one on
+// the line speaks, and a repeated -i or a second, different -o is its own
+// refusal. Measured on coreutils 9.7; mirrored in test_shuf.py. One
+// documented divergence: the options are walked in the order they were
+// FIRST typed, each value in turn, so `-i 1-2 -n abc -i 3-4` refuses the
+// second -i where GNU names the count.
+describe('shuf refuses in command-line order', () => {
+  function parseLine(...argv: string[]): ShufFlags | string {
+    return parseFlags(parseToKwargs(parseCommand(specOf('shuf'), argv, '/')))
+  }
+
+  it.each([
+    [['-i', '1-x', '-n', 'abc'], "shuf: invalid input range: '1-x'\n"],
+    [['-n', 'abc', '-i', '1-x'], "shuf: invalid line count: 'abc'\n"],
+    [['-i', '1-2', '-i', '3-4'], 'shuf: multiple -i options specified\n'],
+    [['-i', '1-2', '-i', '1-2'], 'shuf: multiple -i options specified\n'],
+    [['-i', '1-x', '-i', '2-3'], "shuf: invalid input range: '1-x'\n"],
+    [['-i', '1-2', '-n', 'abc', '-i', '3-4'], 'shuf: multiple -i options specified\n'],
+    [['-i', '1-2', '-o', '/a', '-o', '/b'], 'shuf: multiple output files specified\n'],
+    [
+      ['-e', 'a', '-i', '1-2'],
+      "shuf: cannot combine -e and -i options\nTry 'shuf --help' for more information.\n",
+    ],
+  ])('refuses %j', (argv, message) => {
+    expect(parseLine(...argv)).toBe(message)
+  })
+
+  it('accepts the same output twice', () => {
+    expect(typeof parseLine('-i', '1-2', '-o', '/a', '-o', '/a')).not.toBe('string')
+  })
 })

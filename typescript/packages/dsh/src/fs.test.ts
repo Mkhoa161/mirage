@@ -19,8 +19,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type { FsErrorCode } from '@deepseek-ai/dsh-fs'
+import { runWithSession } from '@struktoai/mirage-core/context/session_context'
 import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
+import { RAMWorkspaceStateStore } from '@struktoai/mirage-core/workspace/store/ram'
 import {
   DiskResource,
   LocalRuntime,
@@ -635,6 +637,148 @@ describe('listDir cancellation', () => {
     const { fs } = await makeFs({ 'a.txt': 'x', 'b.txt': 'y' })
     const entries = await fs.listDir(await fs.resolve('/data'), new AbortController().signal)
     expect(entries.map((e) => e.name)).toEqual(['a.txt', 'b.txt'])
+  })
+})
+
+async function adapterOn(ws: Workspace, config: MirageFsConfig): Promise<MirageFileSystem> {
+  const ctx = new Context()
+  await ctx.plugin(MirageService, { workspace: ws }).await()
+  await ctx.plugin(MirageFileSystem, config).await()
+  return ctx.fs as MirageFileSystem
+}
+
+describe('the session the adapter reads as', () => {
+  it('a named session confines ctx.fs the way it confines the shell', async () => {
+    const ws = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] },
+      {
+        profiles: {
+          agent: parseSessionProfile(
+            { paths: { hide: ['/data/vault', '/data/hidden-lk'] } },
+            'profile agent',
+          ),
+        },
+      },
+    )
+    workspaces.push(ws)
+    await ws.fs.mkdir('/data/vault')
+    await ws.fs.writeFile('/data/vault/secret', 'top')
+    await ws.fs.writeFile('/data/public.txt', 'pub')
+    await ws.fs.symlink('/data/vault/lk', '/data/public.txt')
+    await ws.fs.symlink('/data/hidden-lk', '/data/public.txt')
+    ws.createSession('agent', { profile: 'agent' })
+    const fs = await adapterOn(ws, { sessionId: 'agent' })
+    expect(await fs.stat(await fs.resolve('/data/vault/secret'))).toBeUndefined()
+    const target = await fs.resolve('/data/vault/new.txt')
+    const err = await fs.writeText(target, 'x').catch((caught: unknown) => caught)
+    expect((err as FsError).code).toBe('FS_NOT_FOUND')
+    // A link inside hidden space is not followed out of it: the typed
+    // path reaches the door and reads as absent, and the listing never
+    // names a hidden link either.
+    const link = await fs.resolve('/data/vault/lk')
+    expect(String(link.targetKey)).toBe('/data/vault/lk')
+    expect(await fs.stat(link)).toBeUndefined()
+    const listed = await fs.listDir(await fs.resolve('/data'))
+    expect(listed.map((e) => e.name)).toEqual(['public.txt'])
+    // lstat reads the leaf off the link table, so a hidden link is
+    // absent there too, under a hidden parent or hidden by its own name.
+    expect(await fs.lstat('/data/vault/lk')).toBeUndefined()
+    expect(await fs.lstat('/data/hidden-lk')).toBeUndefined()
+    expect(String((await fs.resolve('/data/hidden-lk')).targetKey)).toBe('/data/hidden-lk')
+    expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top')
+  })
+
+  it('reads links as the ambient session the door will keep', async () => {
+    // A callback reaching ctx.fs from inside `ws.execute` dispatches as
+    // that line's session, so the link table is judged as it too: a
+    // link the ambient session hides stays typed for the door to refuse,
+    // even though the adapter's own configured session could see it.
+    const ws = new Workspace(
+      { '/data': [new RAMResource(), MountMode.WRITE] },
+      {
+        profiles: {
+          agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }, 'profile agent'),
+        },
+      },
+    )
+    workspaces.push(ws)
+    await ws.fs.mkdir('/data/vault')
+    await ws.fs.writeFile('/data/public.txt', 'pub')
+    await ws.fs.symlink('/data/vault/lk', '/data/public.txt')
+    const agent = ws.createSession('agent', { profile: 'agent' })
+    const fs = await adapterOn(ws, {})
+    expect(String((await fs.resolve('/data/vault/lk')).targetKey)).toBe('/data/public.txt')
+    const asAgent = await runWithSession(
+      agent,
+      async () => ({
+        key: String((await fs.resolve('/data/vault/lk')).targetKey),
+        names: (await fs.listDir(await fs.resolve('/data'))).map((e) => e.name),
+        stat: await fs.stat(await fs.resolve('/data/vault/lk')),
+      }),
+      ws.sessionManager,
+    )
+    expect(asAgent).toEqual({ key: '/data/vault/lk', names: ['public.txt'], stat: undefined })
+  })
+
+  it('probes a caller cwd as the session, not as the default', async () => {
+    const ram = new RAMResource()
+    const seeder = new Workspace({ '/data': [ram, MountMode.WRITE] })
+    workspaces.push(seeder)
+    await seeder.fs.mkdir('/data/work')
+    await seeder.fs.mkdir('/data/vault')
+    const ws = new Workspace(
+      { '/data': [ram, MountMode.WRITE] },
+      {
+        profiles: {
+          host: parseSessionProfile({ paths: { hide: ['/data/work'] } }, 'profile host'),
+          agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }, 'profile agent'),
+        },
+        profile: 'host',
+      },
+    )
+    workspaces.push(ws)
+    ws.createSession('agent', { profile: 'agent' })
+    const fs = await adapterOn(ws, { sessionId: 'agent' })
+    // A directory only the agent can see is a base; one only the
+    // default can see is not, so the configured cwd takes over.
+    const seen = await fs.resolve('x.txt', { cwd: '/data/work' })
+    expect(String(seen.targetKey)).toBe('/data/work/x.txt')
+    const unseen = await fs.resolve('x.txt', { cwd: '/data/vault' })
+    expect(String(unseen.targetKey)).toBe('/x.txt')
+  })
+
+  it('hydrates a fresh attach before reading as its session', async () => {
+    // `ready` resolves an attached workspace as built, with a minted
+    // default and an empty link table; the adapter reads both outside
+    // the door, so it must hydrate first or a persisted hide is judged
+    // by the wrong session and a persisted link is not seen at all.
+    const store = new RAMWorkspaceStateStore()
+    const ram = new RAMResource()
+    const build = (): Workspace =>
+      new Workspace({ '/data': [ram, MountMode.WRITE] }, { workspaceId: 'shared', store })
+    const wsA = build()
+    workspaces.push(wsA)
+    await wsA.fs.mkdir('/data/vault')
+    await wsA.fs.writeFile('/data/vault/secret', 'top')
+    await wsA.fs.writeFile('/data/public.txt', 'pub')
+    await wsA.fs.symlink('/data/vault/lk', '/data/public.txt')
+    await wsA.fs.symlink('/data/lk', '/data/public.txt')
+    await wsA.setSessionProfile(
+      wsA.defaultSessionId,
+      parseSessionProfile({ paths: { hide: ['/data/vault'] } }, 'profile default'),
+    )
+    await wsA.flushSessions()
+
+    const wsB = build()
+    workspaces.push(wsB)
+    const minted = wsB.defaultSessionId
+    const fs = await adapterOn(wsB, {})
+    const hidden = await fs.resolve('/data/vault/lk')
+    expect(String(hidden.targetKey)).toBe('/data/vault/lk')
+    expect(await fs.lstat('/data/vault/lk')).toBeUndefined()
+    expect(String((await fs.resolve('/data/lk')).targetKey)).toBe('/data/public.txt')
+    expect(wsB.defaultSessionId).toBe(wsA.defaultSessionId)
+    expect(wsB.defaultSessionId).not.toBe(minted)
   })
 })
 

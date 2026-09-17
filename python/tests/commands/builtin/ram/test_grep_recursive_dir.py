@@ -76,4 +76,4 @@ async def test_grep_recursive_no_operand_no_match_exits_one(workspace):
 async def test_grep_without_recursive_keeps_the_usage_error(workspace):
     io = await workspace.execute("grep hello", cwd="/")
     assert io.exit_code == 2
-    assert b"usage" in (io.stderr or b"")
+    assert b"Usage: grep" in (io.stderr or b"")

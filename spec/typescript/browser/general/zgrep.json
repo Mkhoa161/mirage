@@ -232,11 +232,21 @@
       "type": "bool"
     },
     {
+      "long": "--byte-offset",
+      "short": "-b",
+      "type": "bool"
+    },
+    {
       "short": "-c",
       "type": "bool"
     },
     {
       "short": "-l",
+      "type": "bool"
+    },
+    {
+      "long": "--files-without-match",
+      "short": "-L",
       "type": "bool"
     },
     {

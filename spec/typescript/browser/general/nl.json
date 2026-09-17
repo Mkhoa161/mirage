@@ -229,6 +229,7 @@
   "options": [
     {
       "long": "--body-numbering",
+      "multiple": true,
       "short": "-b",
       "type": "str"
     },
@@ -239,21 +240,25 @@
     },
     {
       "long": "--footer-numbering",
+      "multiple": true,
       "short": "-f",
       "type": "str"
     },
     {
       "long": "--header-numbering",
+      "multiple": true,
       "short": "-h",
       "type": "str"
     },
     {
       "long": "--join-blank-lines",
+      "multiple": true,
       "short": "-l",
       "type": "str"
     },
     {
       "long": "--number-format",
+      "multiple": true,
       "short": "-n",
       "type": "str"
     },
@@ -264,16 +269,19 @@
     },
     {
       "long": "--starting-line-number",
+      "multiple": true,
       "short": "-v",
       "type": "str"
     },
     {
       "long": "--line-increment",
+      "multiple": true,
       "short": "-i",
       "type": "str"
     },
     {
       "long": "--number-width",
+      "multiple": true,
       "short": "-w",
       "type": "str"
     },

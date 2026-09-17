@@ -150,22 +150,30 @@ async def handle_sleep(
         return None, IOResult(exit_code=1,
                               stderr=err), ExecutionNode(command="sleep",
                                                          exit_code=1)
-    raw = operands[0]
-    # "1e309" passes the regex but overflows to inf, so check both.
-    seconds = float(raw) if SLEEP_INTERVAL.fullmatch(raw) else math.inf
-    if not math.isfinite(seconds):
-        # coreutils sleep refuses an operand through `usage
-        # (EXIT_FAILURE)`, so the diagnostic carries the Try-help line,
-        # and the operand goes through gnulib's `quote()` like every
-        # other coreutils operand diagnostic (measured on 9.4:
-        # `sleep abc` is two lines, and `sleep -- <e-acute>` names
-        # `'\303\251'`).
-        err = (f"sleep: invalid time interval '{quote_text(raw)}'\n"
-               f"{usage_hint('sleep')}\n").encode()
-        return None, IOResult(exit_code=1,
-                              stderr=err), ExecutionNode(command="sleep",
-                                                         exit_code=1)
-    await cancellable_sleep(seconds, cancel)
+    # `NUMBER[SUFFIX]...`: every operand is an interval and the line
+    # sleeps their SUM (measured on 9.7: `sleep 0.3 0.3` takes 0.6s).
+    # All of them are checked before any of them is slept, so a bad one
+    # anywhere refuses the whole line immediately rather than after
+    # sleeping its predecessors (`sleep 0.2 x 0.2` exits 1 at once), and
+    # the FIRST offending operand is the one named.
+    total = 0.0
+    for raw in operands:
+        # "1e309" passes the regex but overflows to inf, so check both.
+        seconds = float(raw) if SLEEP_INTERVAL.fullmatch(raw) else math.inf
+        if not math.isfinite(seconds):
+            # coreutils sleep refuses an operand through `usage
+            # (EXIT_FAILURE)`, so the diagnostic carries the Try-help
+            # line, and the operand goes through gnulib's `quote()` like
+            # every other coreutils operand diagnostic (measured on 9.4:
+            # `sleep abc` is two lines, and `sleep -- <e-acute>` names
+            # `'\303\251'`).
+            err = (f"sleep: invalid time interval '{quote_text(raw)}'\n"
+                   f"{usage_hint('sleep')}\n").encode()
+            return None, IOResult(exit_code=1,
+                                  stderr=err), ExecutionNode(command="sleep",
+                                                             exit_code=1)
+        total += seconds
+    await cancellable_sleep(total, cancel)
     return None, IOResult(), ExecutionNode(command="sleep", exit_code=0)
 
 

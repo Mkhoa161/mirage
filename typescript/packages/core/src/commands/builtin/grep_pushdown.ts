@@ -147,6 +147,7 @@ const PUSHDOWN_SHAPING_BOOL = [
   'byte_offset',
   'c',
   'args_l',
+  'files_without_match',
   'w',
   'o',
   'q',

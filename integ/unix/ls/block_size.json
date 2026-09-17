@@ -1,0 +1,448 @@
+{
+  "cases": [
+    {
+      "id": "ls_block_size_junk_after_a_number_is_an_invalid_suffix",
+      "seq": 991058,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=1x /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid suffix in --block-size argument '1x'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_unit_then_junk_is_an_invalid_suffix",
+      "seq": 991059,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=Kx /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid suffix in --block-size argument 'Kx'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_lower_case_e_is_an_invalid_suffix",
+      "seq": 991060,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=1e /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid suffix in --block-size argument '1e'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_past_uintmax_is_too_large",
+      "seq": 991061,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=Y /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: --block-size argument 'Y' too large\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_sixteen_exa_is_too_large",
+      "seq": 991062,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=16E /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: --block-size argument '16E' too large\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_empty_is_invalid",
+      "seq": 991063,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size= /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid --block-size argument ''\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_leading_blank_and_plus_are_read",
+      "seq": 991064,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls -l --block-size=' +1' /data/one_byte.txt | cut -d' ' -f5",
+      "expect": {
+        "exit": 0,
+        "stdout": "1\n",
+        "stderr": ""
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_lower_case_k_scales",
+      "seq": 991065,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls -l --block-size=k /data/one_byte.txt | cut -d' ' -f5",
+      "expect": {
+        "exit": 0,
+        "stdout": "1K\n",
+        "stderr": ""
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_r_is_not_a_unit",
+      "seq": 991066,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=1R /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid suffix in --block-size argument '1R'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_plus_before_a_unit_is_invalid",
+      "seq": 991085,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=+K /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid --block-size argument '+K'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_blank_before_a_unit_is_invalid",
+      "seq": 991086,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size=' K' /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid --block-size argument ' K'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    },
+    {
+      "id": "ls_block_size_blank_after_the_sign_is_invalid",
+      "seq": 991087,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "ls --block-size='+ 1' /data/a.txt",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "ls: invalid --block-size argument '+ 1'\n"
+      },
+      "flags": [
+        "block-size"
+      ]
+    }
+  ]
+}

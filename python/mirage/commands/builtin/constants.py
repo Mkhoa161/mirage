@@ -120,7 +120,7 @@ SPLIT_COUNT_PATTERN = re.compile(rf"{C_SPACE}\+?[0-9]+")
 # rejects both `--numeric-suffixes=+5` and `=" 5"`, so they keep the strict
 # digits-only form.
 SPLIT_DIGITS = re.compile(r"[0-9]+")
-SPLIT_HEX_DIGITS = re.compile(r"[0-9a-fA-F]+")
+SPLIT_HEX_DIGITS = re.compile(r"[0-9a-f]+")
 SPLIT_TRY_HELP = "\nTry 'split --help' for more information."
 
 # GNU answers a missing script with its whole thirty-nine line usage block

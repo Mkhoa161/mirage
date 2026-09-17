@@ -15,12 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { IOResult } from '../../io/types.ts'
 import { ContentType, FileStat, FileType } from '../../types.ts'
-import {
-  rgFolderFiletype,
-  rgFull,
-  type RgFolderFiletypeOptions,
-  type RgFullOptions,
-} from './rg_scan.ts'
+import { rgFull, type RgFullOptions } from './rg_scan.ts'
 
 const ENC = new TextEncoder()
 
@@ -671,11 +666,12 @@ describe('rgFull offsets over a smuggled byte', () => {
     ])
   })
 
-  it('replaces a smuggled byte in the printed line', async () => {
-    // The scan answers in `string[]`, which `formatRecords` encodes, so the
-    // byte prints as U+FFFD -- what a replacing decode already gave, with
-    // the offset now right.
-    expect(await raw('/raw/inv2.bin', 'a', { byteOffsets: true })).toEqual(['0:�a'])
+  it('keeps a smuggled byte in the printed line', async () => {
+    // The scan answers in `string[]`, and the byte rides through as the
+    // sentinel `decodeLine` gave it: `formatRecords` puts it back as itself,
+    // which is what ripgrep prints (measured 14.1.1: `\377` reaches the
+    // terminal raw, never as U+FFFD).
+    expect(await raw('/raw/inv2.bin', 'a', { byteOffsets: true })).toEqual(['0:\udcffa'])
   })
 })
 
@@ -685,60 +681,6 @@ describe('rgFull -l names the file', () => {
     // `-H`: this used to answer with an empty line where the python twin
     // answered with the file.
     expect(await raw('/raw/m.txt', 'a', { filesOnly: true })).toEqual(['/raw/m.txt'])
-  })
-})
-
-describe('rgFolderFiletype reports selection on the io channel', () => {
-  // The filetype walk is TypeScript-only, so nothing outside this file can
-  // see it: `rg -o '[0-9]*' dir` over a line whose only match is empty
-  // selects the line and prints nothing, and the branch answered 1 from the
-  // empty list where `rgFull`, the python twin and `grep -o` all answer 0.
-  function folderOpts(overrides: Partial<RgFolderFiletypeOptions> = {}): RgFolderFiletypeOptions {
-    return {
-      ignoreCase: false,
-      invert: false,
-      lineNumbers: false,
-      countOnly: false,
-      filesOnly: false,
-      onlyMatching: false,
-      maxCount: null,
-      fixedString: false,
-      wholeWord: false,
-      fileType: null,
-      globPattern: null,
-      hidden: false,
-      ...overrides,
-    }
-  }
-
-  it('reports a selection an empty match printed nothing for', async () => {
-    const io = new IOResult({ exitCode: 1 })
-    const hits = await rgFolderFiletype(
-      rawReaddirFn,
-      rawStatFn,
-      rawReadBytesFn,
-      '/rawdir',
-      '[0-9]*',
-      folderOpts({ onlyMatching: true }),
-      null,
-      io,
-    )
-    expect([hits, io.exitCode]).toEqual([[], 0])
-  })
-
-  it('leaves the status alone when nothing was selected', async () => {
-    const io = new IOResult({ exitCode: 1 })
-    const hits = await rgFolderFiletype(
-      rawReaddirFn,
-      rawStatFn,
-      rawReadBytesFn,
-      '/rawdir',
-      'zzz',
-      folderOpts(),
-      null,
-      io,
-    )
-    expect([hits, io.exitCode]).toEqual([[], 1])
   })
 })
 
@@ -761,5 +703,22 @@ describe('rgFull -m N counts per file in a walk', () => {
       '/rawmw/y.txt:1:a3',
       '/rawmw/y.txt:2:a4',
     ])
+  })
+})
+
+// ripgrep's --files-without-match: the paths that selected no line. -c
+// outranks it (ripgrep 14.1.1 prints counts), and -m0 lists nothing since it
+// is read before the scan. Mirrored in test_rg_scan.py.
+describe('rgFull --files-without-match', () => {
+  it('lists a matchless file and not a matching one', async () => {
+    expect(await raw('/raw/m.txt', 'zzz', { filesWithoutMatch: true })).toEqual(['/raw/m.txt'])
+    expect(await raw('/raw/m.txt', 'a', { filesWithoutMatch: true })).toEqual([])
+  })
+
+  it('lets -c print counts and lists nothing under -m0', async () => {
+    expect(await raw('/raw/m.txt', 'a', { filesWithoutMatch: true, countOnly: true })).toEqual(
+      await raw('/raw/m.txt', 'a', { countOnly: true }),
+    )
+    expect(await raw('/raw/m.txt', 'zzz', { filesWithoutMatch: true, maxCount: 0 })).toEqual([])
   })
 })

@@ -1089,3 +1089,29 @@ describe('ls quotes the word its argument clauses name', () => {
     expect(message.includes(value)).toBe(true)
   })
 })
+
+// xstrtoumax's three refusals as ls words them, measured on coreutils 9.7;
+// the word is quoted but never escaped. Mirrored in test_ls.py.
+describe('ls --block-size refusals are worded as GNU words them', () => {
+  it.each([
+    ['x', "ls: invalid --block-size argument 'x'"],
+    ['', "ls: invalid --block-size argument ''"],
+    ['0K', "ls: invalid --block-size argument '0K'"],
+    ['1x', "ls: invalid suffix in --block-size argument '1x'"],
+    ['Kx', "ls: invalid suffix in --block-size argument 'Kx'"],
+    ['1e', "ls: invalid suffix in --block-size argument '1e'"],
+    ['1R', "ls: invalid suffix in --block-size argument '1R'"],
+    ['Y', "ls: --block-size argument 'Y' too large"],
+    ['16E', "ls: --block-size argument '16E' too large"],
+  ])('refuses %j', (value, message) => {
+    let caught: unknown = null
+    try {
+      parseFlags(new FlagView({ block_size: value }, specOf('ls')))
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(UsageError)
+    expect((caught as UsageError).message).toBe(message)
+    expect((caught as UsageError).exitCode).toBe(2)
+  })
+})

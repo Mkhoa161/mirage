@@ -134,6 +134,50 @@ async def test_sleep_invalid_interval_exits_1(raw):
     assert node.exit_code == 1
 
 
+# `NUMBER[SUFFIX]...`: sleep takes any number of intervals and sleeps
+# their sum (measured on 9.7: `sleep 0.3 0.3` takes 0.6s, `sleep 0 1`
+# takes 1s). Reading only the first operand made `sleep -- 0 1` return
+# at once.
+@pytest.mark.asyncio
+async def test_sleep_sums_every_operand():
+    started = time.monotonic()
+    _, io, node = await handle_sleep(["--", "0.05", "0.05"])
+    elapsed = time.monotonic() - started
+    assert io.exit_code == 0
+    assert node.exit_code == 0
+    assert elapsed >= 0.1
+
+
+# Every operand is validated, and the FIRST bad one is named. Reading
+# only the first operand made `sleep -- 0 bogus` exit 0.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("args,named", [
+    (["--", "0", "bogus"], "bogus"),
+    (["0", "bogus"], "bogus"),
+    (["bogus", "0"], "bogus"),
+    (["--", "0.2", "x", "y"], "x"),
+])
+async def test_sleep_refuses_any_bad_operand_naming_the_first(args, named):
+    _, io, node = await handle_sleep(args)
+    assert io.exit_code == 1
+    assert node.exit_code == 1
+    assert io.stderr == (
+        f"sleep: invalid time interval '{named}'\n"
+        f"Try 'sleep --help' for more information.\n").encode()
+
+
+# The check runs over every operand before any of them is slept, so a
+# bad one does not cost the wait its predecessors would have taken
+# (measured on 9.7: `sleep 0.2 x 0.2` exits 1 immediately).
+@pytest.mark.asyncio
+async def test_sleep_checks_every_operand_before_sleeping_any():
+    started = time.monotonic()
+    _, io, _ = await handle_sleep(["0.3", "bogus"])
+    elapsed = time.monotonic() - started
+    assert io.exit_code == 1
+    assert elapsed < 0.2
+
+
 # The operand is named through gnulib's `quote()`, like every other
 # coreutils operand diagnostic: measured on 9.4, `sleep -- <e-acute>` is
 # `sleep: invalid time interval '\303\251'`.

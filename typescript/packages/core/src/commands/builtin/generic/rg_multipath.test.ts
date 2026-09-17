@@ -166,3 +166,49 @@ describe('rgGeneric -H/-I filename labels', () => {
     expect(await run(['/top1.txt', '/top2.txt'], { args_I: true })).toBe('hello one\nhello two\n')
   })
 })
+
+async function* endlessAfterFirstMatch(): AsyncIterable<Uint8Array> {
+  await Promise.resolve()
+  yield ENC.encode('hello\n')
+  throw new Error('the probe read past the first selected line')
+}
+
+async function runStdin(
+  stdin: ByteSource,
+  flags: Record<string, string | boolean | number | string[]>,
+): Promise<[string, number]> {
+  const [out, io] = (await rgGeneric(
+    [],
+    ['hello'],
+    { ...opts(flags), stdin },
+    stat,
+    readdir,
+    stream,
+  )) as [ByteSource, { exitCode: number }]
+  return [DEC.decode(await materialize(out)), io.exitCode]
+}
+
+describe('rgGeneric --files-without-match on stdin', () => {
+  it('stops at the first selected line instead of buffering the stream', async () => {
+    // A stdin that never ends must not be materialized whole.
+    expect(await runStdin(endlessAfterFirstMatch(), { files_without_match: true })).toEqual(['', 1])
+  })
+
+  it('names a matchless stdin <stdin>', async () => {
+    expect(await runStdin(ENC.encode('x\ny\n'), { files_without_match: true })).toEqual([
+      '<stdin>\n',
+      0,
+    ])
+  })
+
+  it('lists nothing under -m0, matched input or not', async () => {
+    // ripgrep 14.1.1: `printf 'x\n' | rg --files-without-match -m0 hello`
+    // prints nothing and exits 1.
+    for (const data of ['x\n', 'hello\n']) {
+      expect(await runStdin(ENC.encode(data), { files_without_match: true, m: '0' })).toEqual([
+        '',
+        1,
+      ])
+    }
+  })
+})

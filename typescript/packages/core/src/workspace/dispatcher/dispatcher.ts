@@ -73,6 +73,7 @@ import {
   effectivePathMode,
   getCurrentSession,
   hiddenPathsIntersect,
+  hiddenRefusal,
   liveSessions,
   pathAllowed,
 } from '../../context/session_context.ts'
@@ -80,11 +81,6 @@ import { moveReveals } from '../../utils/hidden.ts'
 import { removeRemnants, visibleBelow, type RemnantChannel } from '../../utils/remnants.ts'
 
 const NOOP_ACCESSOR_INSTANCE = new NOOPAccessor()
-
-/** The error a hidden path answers: ENOENT, or EACCES for a create. */
-function hiddenRefusal(opName: string, virtual: string): Error {
-  return HIDDEN_CREATE_OPS.has(opName) ? eacces(virtual) : enoent(virtual)
-}
 
 /**
  * Drop listing entries the current session's spec hides.
@@ -222,11 +218,11 @@ export class Dispatcher {
     // it, the followed path is re-checked so a visible link cannot
     // lead in, and a rename destination is a create.
     if (!pathAllowed(path.virtual)) {
-      throw hiddenRefusal(opName, path.virtual)
+      throw hiddenRefusal(path.virtual, HIDDEN_CREATE_OPS.has(opName))
     }
     const dstArg = args?.[0]
     if (opName === 'rename' && dstArg instanceof PathSpec && !pathAllowed(dstArg.virtual)) {
-      throw eacces(dstArg.virtual)
+      throw hiddenRefusal(dstArg.virtual, true)
     }
     if (opName === 'rename' && dstArg instanceof PathSpec) {
       // A rename re-anchors everything below its source while the hides
@@ -277,7 +273,7 @@ export class Dispatcher {
       const followed = this.namespace.follow(path.virtual)
       if (followed !== path.virtual) {
         p = PathSpec.fromStrPath(followed)
-        if (!pathAllowed(p.virtual)) throw hiddenRefusal(opName, p.virtual)
+        if (!pathAllowed(p.virtual)) throw hiddenRefusal(p.virtual, HIDDEN_CREATE_OPS.has(opName))
       }
     }
     const resolvedOwner = this.namespace.tryMountFor(p.virtual)

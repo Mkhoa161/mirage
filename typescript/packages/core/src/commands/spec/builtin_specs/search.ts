@@ -35,6 +35,7 @@ export const SPECS: Record<string, CommandSpec> = {
       new Option({ short: '-b', long: '--byte-offset' }),
       new Option({ short: '-c' }),
       new Option({ short: '-l' }),
+      new Option({ short: '-L', long: '--files-without-match' }),
       new Option({ short: '-w' }),
       new Option({ short: '-F' }),
       new Option({ short: '-E' }),
@@ -182,6 +183,8 @@ export const SPECS: Record<string, CommandSpec> = {
       new Option({ short: '-b', long: '--byte-offset' }),
       new Option({ short: '-c' }),
       new Option({ short: '-l' }),
+      // ripgrep spells this long only: its -L is --follow.
+      new Option({ long: '--files-without-match' }),
       new Option({ short: '-w' }),
       new Option({ short: '-F' }),
       new Option({ short: '-o' }),
@@ -238,8 +241,10 @@ export const SPECS: Record<string, CommandSpec> = {
   zgrep: new CommandSpec({
     options: [
       new Option({ short: '-i' }),
+      new Option({ short: '-b', long: '--byte-offset' }),
       new Option({ short: '-c' }),
       new Option({ short: '-l' }),
+      new Option({ short: '-L', long: '--files-without-match' }),
       new Option({ short: '-n' }),
       new Option({ short: '-v' }),
       new Option({ short: '-e', type: 'str', multiple: true }),

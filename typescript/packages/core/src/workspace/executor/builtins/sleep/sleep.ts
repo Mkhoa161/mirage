@@ -130,8 +130,7 @@ export async function handleSleep(args: string[], signal?: AbortSignal): Promise
       new ExecutionNode({ command: 'sleep', exitCode: code }),
     ]
   }
-  const raw = operands[0]
-  if (raw === undefined) {
+  if (operands.length === 0) {
     // Missing operand is the same `usage (EXIT_FAILURE)` refusal the
     // invalid-interval one is, so it carries the same Try-help line (measured
     // on 9.4: `sleep` is two lines, not one).
@@ -142,24 +141,34 @@ export async function handleSleep(args: string[], signal?: AbortSignal): Promise
       new ExecutionNode({ command: 'sleep', exitCode: 1 }),
     ]
   }
-  // "1e309" passes the regex but overflows to Infinity, so check both.
-  const seconds = SLEEP_INTERVAL.test(raw) ? Number(raw) : Infinity
-  if (!Number.isFinite(seconds)) {
-    // coreutils sleep refuses an operand through `usage (EXIT_FAILURE)`, so
-    // the diagnostic carries the Try-help line, and the operand goes through
-    // gnulib's `quote()` like every other coreutils operand diagnostic
-    // (measured on 9.4: `sleep abc` is two lines, and `sleep -- é` names
-    // `'\303\251'`).
-    const err = new TextEncoder().encode(
-      `sleep: invalid time interval '${quoteText(raw)}'\n${usageHint('sleep')}\n`,
-    )
-    return [
-      null,
-      new IOResult({ exitCode: 1, stderr: err }),
-      new ExecutionNode({ command: 'sleep', exitCode: 1 }),
-    ]
+  // `NUMBER[SUFFIX]...`: every operand is an interval and the line sleeps
+  // their SUM (measured on 9.7: `sleep 0.3 0.3` takes 0.6s). All of them are
+  // checked before any of them is slept, so a bad one anywhere refuses the
+  // whole line immediately rather than after sleeping its predecessors
+  // (`sleep 0.2 x 0.2` exits 1 at once), and the FIRST offending operand is
+  // the one named.
+  let total = 0
+  for (const raw of operands) {
+    // "1e309" passes the regex but overflows to Infinity, so check both.
+    const seconds = SLEEP_INTERVAL.test(raw) ? Number(raw) : Infinity
+    if (!Number.isFinite(seconds)) {
+      // coreutils sleep refuses an operand through `usage (EXIT_FAILURE)`, so
+      // the diagnostic carries the Try-help line, and the operand goes through
+      // gnulib's `quote()` like every other coreutils operand diagnostic
+      // (measured on 9.4: `sleep abc` is two lines, and `sleep -- é` names
+      // `'\303\251'`).
+      const err = new TextEncoder().encode(
+        `sleep: invalid time interval '${quoteText(raw)}'\n${usageHint('sleep')}\n`,
+      )
+      return [
+        null,
+        new IOResult({ exitCode: 1, stderr: err }),
+        new ExecutionNode({ command: 'sleep', exitCode: 1 }),
+      ]
+    }
+    total += seconds
   }
-  await sleep(seconds * 1000, signal)
+  await sleep(total * 1000, signal)
   return [null, new IOResult(), new ExecutionNode({ command: 'sleep', exitCode: 0 })]
 }
 

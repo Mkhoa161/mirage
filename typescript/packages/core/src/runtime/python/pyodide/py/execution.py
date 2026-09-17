@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import traceback
+import types
 import warnings
 
 
@@ -75,6 +76,8 @@ def run(request, arm_interrupt, disarm_interrupt):
     saved_stdout = sys.stdout
     saved_stderr = sys.stderr
     saved_argv = sys.argv
+    had_main = '__main__' in sys.modules
+    saved_main = sys.modules.get('__main__')
 
     out_bytes = OutputCapture()
     err_bytes = OutputCapture()
@@ -116,7 +119,10 @@ def run(request, arm_interrupt, disarm_interrupt):
             sys.stdout = out_text
             sys.stderr = err_text
             sys.argv = list(argv)
-            user_globals = {}
+            main_module = types.ModuleType('__main__')
+            user_globals = main_module.__dict__
+            user_globals['__annotations__'] = {}
+            sys.modules['__main__'] = main_module
             if script_cli:
                 user_globals.update(argv=list(argv),
                                     stdin=bytes(stdin_bytes)
@@ -148,6 +154,10 @@ def run(request, arm_interrupt, disarm_interrupt):
                 err_bytes.diagnostic(traceback.format_exc())
                 exit_code = 1
         finally:
+            if had_main:
+                sys.modules['__main__'] = saved_main
+            else:
+                sys.modules.pop('__main__', None)
             os.environ.clear()
             os.environ.update(saved_env)
             sys.path[:] = saved_path

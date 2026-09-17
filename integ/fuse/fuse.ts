@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { rmSync } from 'node:fs'
-import { readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -23,6 +23,7 @@ import {
   Mount,
   MountBackend,
   MountMode,
+  parseSessionProfile,
   RAMResource,
   Workspace,
   type Action,
@@ -188,6 +189,72 @@ async function runLinkProbe(
 // go through the real kernel -> FUSE handler. Async fs APIs are required: the
 // mounts' napi callbacks run on the single Node event loop, so a *sync* read
 // would block the loop that has to service the callback and deadlock.
+async function absent(attempt: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await attempt()
+    return false
+  } catch (err) {
+    return (err as { code?: string }).code === 'ENOENT'
+  }
+}
+
+// A session-bound kernel mount answers as its shell does. The
+// session's profile hides /data/vault and caps /data at read. Through
+// the kernel the hidden directory is absent: a read under it and a
+// create under it both answer ENOENT and the listing omits it; the cap
+// refuses a write and leaves the file as it was. The shell door run as
+// the same session gives every answer the same way, and the host's own
+// door still reads the hidden file, so the hide is the session's and
+// not the mount's.
+async function runSessionProbe(
+  result: Record<string, string | number | boolean | null>,
+): Promise<void> {
+  const enc = new TextEncoder()
+  const dec = new TextDecoder()
+  const res = new RAMResource()
+  res.store.dirs.add('/')
+  res.store.dirs.add('/vault')
+  res.store.files.set('/pub.txt', enc.encode('pub\n'))
+  res.store.files.set('/vault/secret.txt', enc.encode('secret\n'))
+  const ws = new Workspace({ '/data': new Mount(res, { mode: MountMode.WRITE }) })
+  const session = ws.createSession('agent', {
+    profile: parseSessionProfile({
+      paths: { hide: ['/data/vault'] },
+      mounts: { '/data': 'read' },
+    }),
+  })
+  const hidden = await ws.execute('cat /data/vault/secret.txt', { sessionId: 'agent' })
+  result.session_shell_hidden_exit = hidden.exitCode
+  const listing = await ws.execute('ls /data', { sessionId: 'agent' })
+  result.session_shell_listing = dec.decode(listing.stdout).trim()
+  const capped = await ws.execute('echo x > /data/pub.txt', { sessionId: 'agent' })
+  result.session_shell_write_refused = capped.exitCode !== 0
+  result.session_host_reads_hidden = (await ws.fs.readFileText('/data/vault/secret.txt')).trim()
+  const handle = await fuseMount(ws, { session })
+  const data = join(handle.mountpoint, 'data')
+  try {
+    result.session_kernel_visible_read = (await readFile(`${data}/pub.txt`, 'utf8')).trim()
+    result.session_kernel_listing = (await readdir(data)).sort().join(',')
+    result.session_kernel_hidden_absent = await absent(() => readFile(`${data}/vault/secret.txt`))
+    result.session_kernel_create_under_hidden_absent = await absent(() =>
+      writeFile(`${data}/vault/new.txt`, 'x\n'),
+    )
+    // The cap's refusal is an errno the adapter picks; what is pinned
+    // is that the write fails and the body survives.
+    let refused = false
+    try {
+      await writeFile(`${data}/pub.txt`, 'x\n')
+    } catch {
+      refused = true
+    }
+    result.session_kernel_write_refused =
+      refused && (await readFile(`${data}/pub.txt`, 'utf8')) === 'pub\n'
+  } finally {
+    await handle.unmount()
+    await ws.close()
+  }
+}
+
 async function main(): Promise<void> {
   const result: Record<string, string | number | boolean | null> = {}
   const enc = new TextEncoder()
@@ -256,6 +323,7 @@ async function main(): Promise<void> {
   await runSizelessProbe(result)
   await runPolicyProbe(result)
   await runLinkProbe(result)
+  await runSessionProbe(result)
   process.stdout.write(JSON.stringify(result) + '\n')
 }
 

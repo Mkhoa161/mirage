@@ -224,10 +224,11 @@ def test_redirect_to_forbidden_mount_is_denied():
     io = asyncio.run(run())
     assert io.exit_code != 0
     # A refused redirect target is shell-attributed like GNU
-    # ("bash: line 1: /b/leaked.txt: Permission denied"). Creating under
-    # a hidden path is the one op a hide answers out loud, since a
-    # silent success would leave a file the session cannot see.
-    assert (io.stderr or b"") == b"/b/leaked.txt: Permission denied\n"
+    # ("bash: line 1: /b/leaked.txt: No such file or directory"). The
+    # hidden mount does not exist for the session, so a create under it
+    # answers as every read does, rather than an EACCES that would let
+    # the session map the hide by probing writes.
+    assert (io.stderr or b"") == b"/b/leaked.txt: No such file or directory\n"
 
 
 def test_append_to_forbidden_mount_is_shell_attributed():
@@ -245,7 +246,7 @@ def test_append_to_forbidden_mount_is_shell_attributed():
     io = asyncio.run(run())
     assert io.exit_code == 0
     assert (io.stdout or b"") == b"next\n"
-    assert (io.stderr or b"") == b"/b/leaked.txt: Permission denied\n"
+    assert (io.stderr or b"") == b"/b/leaked.txt: No such file or directory\n"
 
 
 def test_cross_mount_copy_into_forbidden_mount_is_denied():

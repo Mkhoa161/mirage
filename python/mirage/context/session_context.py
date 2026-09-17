@@ -13,6 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import errno
+import os
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -22,6 +23,7 @@ from mirage.types import (MOUNT_MODE_RANK, EntryGate, MountMode, PathSpec,
 from mirage.utils.errors import ReadOnlyError
 from mirage.utils.hidden import (anchor_depth, hides_intersect, is_glob,
                                  path_visible, show_head, shown_mode)
+from mirage.utils.path import parent
 
 if TYPE_CHECKING:
     from mirage.policy.policies import Policies
@@ -89,6 +91,29 @@ def get_current_session_for(owner: "SessionManager") -> "Session | None":
     """
     binding = _current_session.get()
     if binding is None or binding.owner is not owner:
+        return None
+    return binding.session
+
+
+def get_current_session_unless_foreign(
+        owner: "SessionManager") -> "Session | None":
+    """The bound session, unless another owner published it.
+
+    An op door keeps the session it is reached under, so it never
+    widens a caller's view: a command's runtime, a kernel mount and a
+    guest runtime all bind before they call. A binding that names an
+    owner other than ``owner`` is another workspace's, and its session
+    describes that workspace's hides and grants, so the door must not
+    adopt it. A binding that names no owner is a deliberate placement
+    (a kernel mount, a guest runtime, an embedder binding by hand) and
+    is kept.
+
+    Args:
+        owner (SessionManager): the asking workspace's session manager.
+    """
+    binding = _current_session.get()
+    if binding is None or (binding.owner is not None
+                           and binding.owner is not owner):
         return None
     return binding.session
 
@@ -205,16 +230,40 @@ def path_allowed(virtual: str) -> bool:
     the workspace-bound one, leave this path visible.
 
     Enumeration surfaces filter
-    names through it and the doors answer ENOENT (EACCES for creates)
-    when it says no, so hiding reads as nonexistence, never as a
-    denial that leaks the name. True when no session is bound or the
-    session hides nothing.
+    names through it and the doors answer :func:`hidden_refusal` when
+    it says no, so hiding reads as nonexistence, never as a denial
+    that leaks the name. True when no session is bound or the session
+    hides nothing.
 
     Args:
         virtual (str): absolute virtual path.
     """
     sess = get_current_session()
     return sess is None or session_path_allowed(sess, virtual)
+
+
+def hidden_refusal(virtual: str, create: bool) -> OSError:
+    """The error a hidden path answers, in POSIX's own terms.
+
+    ENOENT names a component that does not exist and EACCES an entry
+    the caller may not write, so a create is EACCES only when the
+    directory it lands in is visible: a hidden name under a visible
+    parent reads as an existing file the session cannot write, which
+    is the one answer that neither reveals the content nor invites a
+    create that would clobber it. A create under a hidden directory is
+    ENOENT, the same answer every read gives for that directory, so a
+    write cannot detect a hide a read could not. Everything that is
+    not a create is ENOENT.
+
+    Args:
+        virtual (str): the hidden virtual path.
+        create (bool): whether the op creates the path it names; a
+            rename or copy destination is one.
+    """
+    if create and path_allowed(parent(virtual.rstrip("/") or "/")):
+        return PermissionError(errno.EACCES, os.strerror(errno.EACCES),
+                               virtual)
+    return FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), virtual)
 
 
 _current_admission: ContextVar["EntryGate | None"] = ContextVar(

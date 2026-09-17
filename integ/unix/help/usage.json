@@ -1,0 +1,179 @@
+{
+  "cases": [
+    {
+      "id": "help_usage_line_grep",
+      "seq": 991071,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep --help | sed -n 3p",
+      "expect": {
+        "exit": 0,
+        "stdout": "Usage: grep [OPTION]... PATTERNS [FILE]...\n",
+        "stderr": ""
+      },
+      "flags": []
+    },
+    {
+      "id": "help_usage_line_cp",
+      "seq": 991072,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "cp --help | sed -n 3p",
+      "expect": {
+        "exit": 0,
+        "stdout": "Usage: cp [OPTION]... [-T] SOURCE DEST\n",
+        "stderr": ""
+      },
+      "flags": []
+    },
+    {
+      "id": "help_usage_line_split",
+      "seq": 991073,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "split --help | sed -n 3p",
+      "expect": {
+        "exit": 0,
+        "stdout": "Usage: split [OPTION]... [FILE [PREFIX]]\n",
+        "stderr": ""
+      },
+      "flags": []
+    },
+    {
+      "id": "help_usage_line_unlink",
+      "seq": 991074,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "unlink --help | sed -n 3p",
+      "expect": {
+        "exit": 0,
+        "stdout": "Usage: unlink FILE\n",
+        "stderr": ""
+      },
+      "flags": []
+    },
+    {
+      "id": "grep_no_pattern_prints_the_synopsis",
+      "seq": 991076,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "grep -e",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "grep: option requires an argument -- 'e'\nTry 'grep --help' for more information.\n"
+      },
+      "flags": []
+    }
+  ]
+}

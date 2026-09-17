@@ -14,7 +14,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from mirage.shell.variable import ShellValue, VarAttr
 from mirage.types import FileStat
@@ -249,3 +249,11 @@ class NamespaceView:
     # claimed the workspace. What an owner-rendering command prints in
     # the owner column for an entry whose backend reports no uid.
     user: str | None = None
+
+
+# Run one facade op as a session: ``(session_id, run) -> result``, None
+# naming the workspace's default session as it is when the op runs. The
+# workspace supplies it, so the facade binds the session the way a
+# shell line does without holding the session manager itself.
+SessionBind = Callable[[str | None, Callable[[], Awaitable[Any]]],
+                       Awaitable[Any]]

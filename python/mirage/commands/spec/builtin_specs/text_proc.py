@@ -190,12 +190,13 @@ SPECS: dict[str, CommandSpec] = {
     'shuf':
     CommandSpec(
         options=(
-            Option(short="-n", long="--head-count", type="str"),
+            Option(short="-n", long="--head-count", type="str", multiple=True),
             Option(short="-e", long="--echo"),
             Option(short="-z", long="--zero-terminated"),
             Option(short="-r", long="--repeat"),
-            Option(short="-i", long="--input-range", type="str"),
-            Option(short="-o", long="--output", type="path"),
+            Option(short="-i", long="--input-range", type="str",
+                   multiple=True),
+            Option(short="-o", long="--output", type="path", multiple=True),
         ),
         rest=Operand(type="path"),
     ),
@@ -258,8 +259,15 @@ SPECS: dict[str, CommandSpec] = {
     'numfmt':
     CommandSpec(
         options=(
-            Option(long="--to", type="str"),
-            Option(long="--from", type="str"),
+            # GNU's argmatch tables, in GNU's order: `--to=auto` is not
+            # an output mode, and an unknown word answers with the
+            # shared ARGMATCH refusal (coreutils 9.7).
+            Option(long="--to",
+                   type="str",
+                   choices=("none", "si", "iec", "iec-i")),
+            Option(long="--from",
+                   type="str",
+                   choices=("none", "auto", "si", "iec", "iec-i")),
             Option(long="--suffix", type="str"),
             Option(long="--grouping"),
         ),

@@ -84,15 +84,34 @@ export const NO_LONG_OPTIONS: ReadonlySet<string> = new Set(['echo', 'unzip'])
 // collapsed.
 export const SOLE_ARGUMENT_LONG_OPTIONS: ReadonlySet<string> = new Set(['expr'])
 
-// The declared `choices` sets that are NOT gnulib ARGMATCH tables, so an
-// abbreviation of a candidate is not a match. CPython compares
-// `--check-hash-based-pycs` against its three words by hand and refuses
-// anything else: measured on 3.11.15, `--check-hash-based-pycs a` and
-// `--check-hash-based-pycs al` are both `--check-hash-based-pycs must be one
-// of 'default', 'always', or 'never'`, where gnulib would have resolved `a` to
-// `always`. Keyed by canonical long spelling, and an exception list again --
-// `tee --output-error` is real argmatch and keeps its prefixes.
-export const EXACT_CHOICE_OPTIONS: ReadonlySet<string> = new Set(['--check-hash-based-pycs'])
+// The spec-declared `choices` sets that ARE gnulib ARGMATCH tables, so an
+// unambiguous prefix of a candidate resolves to it and the bag is rewritten
+// to the canonical word. Every other declared set compares the whole word,
+// which is argparse's own rule for `choices` and so the right default for
+// the grammar this spec layer is modelled on: a mount author's custom
+// `--mode` with choices ('read', 'remove') refuses `rem`, and an installed
+// CLI's node refuses `--state=o`, as clap and git do.
+//
+// It is an opt-in table because prefix matching is the rare case, not the
+// common one: the GNU commands that really do own an argmatch table --
+// `--backup`, `ls --sort`, `ls --time`, `sort --check`, `cp --update`,
+// `tail --follow`, `wc --total`, `uniq`, `cut` -- call `argmatch` from the
+// command with their own candidate list, and never reach the parser's
+// `Option.choices` at all. These three are the whole of what does. Measured
+// on coreutils 9.7: `tee --output-error=exit-n` resolves to `exit-nopipe`
+// while `=w` and `=e` are ambiguous, `numfmt --to=s` resolves to `si` and
+// `--to=ie` is ambiguous between `iec` and `iec-i`.
+//
+// Keyed by "<command> <canonical long spelling>", not by spelling alone, so
+// a custom spec that happens to name an option `--to` does not inherit
+// numfmt's rule. A command name never contains a space, so the joined key is
+// unambiguous; python spells the same table as a set of pairs. This is the
+// same per-program keying NO_LONG_OPTIONS and SOLE_ARGUMENT_LONG_OPTIONS use.
+export const ARGMATCH_CHOICE_OPTIONS: ReadonlySet<string> = new Set([
+  'tee --output-error',
+  'numfmt --to',
+  'numfmt --from',
+])
 
 // Value shape accepted by an int-typed option: optional sign plus digits,
 // the portable core of Python int() and argparse (no whitespace, no

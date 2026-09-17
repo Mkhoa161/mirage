@@ -764,8 +764,8 @@ class TestOffsetsOverSmuggledBytes:
 
     def test_lines_replace_a_smuggled_byte_on_the_way_out(self):
         # A list-returning scan hands its lines to `format_records`, which
-        # encodes strictly, so the byte comes back as U+FFFD -- exactly what
-        # a replacing decode used to give, with the offset now right.
+        # puts a surrogate escape back as the byte it stands for, so the
+        # line keeps it: GNU grep and ripgrep both print the byte raw.
         rows = grep_lines("/f.txt", ["\udcffa"], compile_pattern("a"), False,
                           False, False, False, False, None, None, True)
-        assert rows == ["0:\ufffda"]
+        assert rows == ["0:\udcffa"]

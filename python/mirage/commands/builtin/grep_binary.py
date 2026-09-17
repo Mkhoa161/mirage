@@ -20,6 +20,7 @@ class GrepFlags:
     byte_offsets: bool
     count_only: bool
     files_only: bool
+    files_without_match: bool
     whole_word: bool
     fixed_string: bool
     basic_regexp: bool
@@ -161,9 +162,13 @@ async def grep_input(source: AsyncIterator[bytes],
         # `grep -m0 -c a f g` -- no per-file zeros either. That is not the
         # same as a genuine zero, which `grep -c a g` still prints as `0`,
         # so -c cannot answer from the count here. Measured on GNU grep
-        # 3.11 across `-m0`, `-m 0` and `--max-count=0`.
+        # 3.11 across `-m0`, `-m 0` and `--max-count=0`. -L is the one
+        # flag that still speaks: nothing selected means the file is
+        # listed (`grep -m0 -L a f` prints f, exit 1).
         # Nothing is read, but the backend already opened the source.
         await close_quietly(source)
+        if f.files_without_match and not f.quiet:
+            yield path.encode() + b"\n"
         return
     number = 0
     # GNU counts BYTES from the start of the input and keeps counting
@@ -191,6 +196,10 @@ async def grep_input(source: AsyncIterator[bytes],
                     return
                 if f.files_only:
                     yield path.encode() + b"\n"
+                    return
+                if f.files_without_match:
+                    # A selected line is all -L needs to know: the file
+                    # is not listed, and the status still says it matched.
                     return
             if f.count_only:
                 if f.max_count is not None and count >= f.max_count:
@@ -257,6 +266,11 @@ async def grep_input(source: AsyncIterator[bytes],
         count = 0
         io.exit_code = 1
 
+    # -L lists the file once it is known to hold no selected line, and
+    # outranks -c (GNU 3.11: `grep -L -c hello m o` prints only `o`).
+    if f.files_without_match and not f.quiet:
+        yield path.encode() + b"\n"
+        return
     if f.count_only and not (f.quiet or f.files_only):
         yield (f"{path}:"
                if show_filename else "").encode() + f"{count}\n".encode()

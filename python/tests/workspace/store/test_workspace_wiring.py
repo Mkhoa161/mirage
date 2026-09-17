@@ -139,6 +139,37 @@ async def test_attach_adopts_stored_default_session():
 
 
 @pytest.mark.asyncio
+async def test_the_op_door_adopts_the_stored_default_before_binding():
+    # The first ``ws.fs`` call on a fresh attach used to hydrate the
+    # session store alone, so it ran as the minted default rather than
+    # the writer's, whose hides the discovery record points at.
+    store = RAMWorkspaceStateStore()
+    ram = RAMResource()
+    ws_a = Workspace({"/data": ram},
+                     mode=MountMode.WRITE,
+                     workspace_id="shared",
+                     store=store)
+    await ws_a.execute("mkdir -p /data/vault && echo top > /data/vault/secret")
+    await ws_a.set_session_profile(ws_a.default_session_id,
+                                   {"paths": {
+                                       "hide": ["/data/vault"]
+                                   }})
+    await ws_a.flush_sessions()
+
+    ws_b = Workspace({"/data": ram},
+                     mode=MountMode.WRITE,
+                     workspace_id="shared",
+                     store=store)
+    minted = ws_b.default_session_id
+    with pytest.raises(FileNotFoundError):
+        await ws_b.fs.read("/data/vault/secret")
+    assert ws_b.default_session_id == ws_a.default_session_id
+    assert ws_b.default_session_id != minted
+    await ws_a.close()
+    await ws_b.close()
+
+
+@pytest.mark.asyncio
 async def test_explicit_session_id_is_not_adopted_away():
     store = RAMWorkspaceStateStore()
     ws_a = Workspace({"/data": RAMResource()},

@@ -27,6 +27,7 @@ import {
   lsPrefix,
   parseBlockSize,
   timeOf,
+  type BlockSizeRefusal,
 } from '../utils/formatting.ts'
 import { UsageError } from '../../errors.ts'
 import { argmatchError, argmatchLine, usageHint } from '../../spec/usage.ts'
@@ -781,6 +782,20 @@ function hyperlinkFlag(fl: FlagView): boolean {
 // -u with neither -l nor a sort sorts by that time; and the later of -h
 // and --block-size wins. Throws UsageError for
 // a value GNU refuses, with GNU's exit status for that option.
+// GNU's three --block-size refusals, worded as ls words them. Measured on
+// coreutils 9.7: `ls: invalid --block-size argument 'x'`, `ls: invalid
+// suffix in --block-size argument '1x'` and `ls: --block-size argument
+// '99999999999999999999' too large`. The word is quoted but NOT escaped,
+// which is GNU's own split (xstrtol's fatal path prints the argument as is,
+// where argmatch's runs it through quote()): `ls --block-size=1é` reports
+// the two UTF-8 bytes intact.
+function blockSizeError(text: string, refusal: BlockSizeRefusal): string {
+  const quoted = `'${text}'`
+  if (refusal === 'too large') return `ls: --block-size argument ${quoted} too large`
+  if (refusal === 'invalid suffix') return `ls: invalid suffix in --block-size argument ${quoted}`
+  return `ls: invalid --block-size argument ${quoted}`
+}
+
 export function parseFlags(fl: FlagView): LsFlags {
   const [askedSort, sortedExplicitly] = sortFlag(fl)
   const timeKind = timeFlag(fl)
@@ -791,9 +806,10 @@ export function parseFlags(fl: FlagView): LsFlags {
   const blockText = fl.asStr('block_size')
   let blockSize = null
   if (blockText !== undefined) {
-    blockSize = parseBlockSize(blockText)
-    if (blockSize === null)
-      throw new UsageError(`ls: invalid --block-size argument '${blockText}'`, 2)
+    const parsedBlock = parseBlockSize(blockText)
+    if (typeof parsedBlock === 'string')
+      throw new UsageError(blockSizeError(blockText, parsedBlock), 2)
+    blockSize = parsedBlock
     // The later of -h and --block-size wins (GNU: `--block-size=1 -h`
     // prints 1.5K, `-h --block-size=1` prints 1536); the value is still
     // checked either way.
