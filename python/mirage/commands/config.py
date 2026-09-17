@@ -25,8 +25,11 @@ from mirage.commands.spec.builtin_specs import (VERSION_OPTION,
                                                 is_builtin_grammar,
                                                 registered_spec)
 from mirage.commands.spec.compile import compile_spec, expand_long
-from mirage.commands.spec.constants import SOLE_ARGUMENT_LONG_OPTIONS
+from mirage.commands.spec.constants import (SOLE_ARGUMENT_LONG_OPTIONS,
+                                            VERSION_AFTER_SCAN,
+                                            VERSION_BEFORE_SCAN)
 from mirage.commands.spec.help import render_help
+from mirage.commands.spec.parser import parse_command
 from mirage.commands.spec.synopsis import SYNOPSES
 from mirage.commands.spec.types import FlagValue
 from mirage.io.stream import yield_bytes
@@ -242,23 +245,81 @@ def _is_injected_version(spec: CommandSpec, arg: str) -> bool:
     return expand_long(compile_spec(spec), arg) == ("--version", )
 
 
+def _version_index(spec: CommandSpec, argv: list[str]) -> int | None:
+    """Where the scan would read the injected --version, if anywhere.
+
+    None when no word names it, or when the first one sits after the
+    `--` end-of-options marker, which ends the scan.
+
+    Args:
+        spec (CommandSpec): the registered spec, --version already
+            injected.
+        argv (list[str]): the words after the command name.
+    """
+    for index, arg in enumerate(argv):
+        if arg == "--":
+            return None
+        if _is_injected_version(spec, arg):
+            return index
+    return None
+
+
+def _scan_refuses(name: str, spec: CommandSpec, words: list[str]) -> bool:
+    """Whether the parser refuses an option in these words.
+
+    The same parse the line gets downstream, so the two agree by
+    construction rather than by a second reading of the grammar; only
+    the option reports are read, which is why a cwd the caller does not
+    have is not one it needs (nothing here consumes a resolved path).
+    ``missing_required_options`` is deliberately not read: these words
+    are a PREFIX of the line for every command but the two that defer,
+    so an option declared later has not been reached yet.
+
+    Args:
+        name (str): command name as invoked, for the per-program rules
+            the grammar cannot state.
+        spec (CommandSpec): the registered spec.
+        words (list[str]): the words the scan has read.
+    """
+    parsed = parse_command(spec, words, ROOT_CWD.virtual, name)
+    return bool(parsed.option_error_kinds
+                or parsed.old_option_needs_value is not None)
+
+
 def version_request(name: str, spec: CommandSpec | None,
                     argv: list[str]) -> bytes | None:
     """Version output when argv asks a command for the injected --version.
 
     None when the command declares its own --version, when the flag is
-    absent, or when it sits after the `--` end-of-options marker.
+    absent, when it sits after the `--` end-of-options marker, or when
+    an option the scan reads first is one the parser refuses.
 
     This runs on raw argv, ahead of the parser, so it has to honor the
-    one rule the parser states about a long option's POSITION:
-    gnulib's ``parse_long_options`` reads argv[1] only when it is the
-    whole line (``argc == 2``), so for a SOLE_ARGUMENT_LONG_OPTIONS
-    command `--version` is an ordinary operand as soon as another word
-    joins it. Measured on coreutils 9.7: `expr --version` is the
-    version and `expr --version x` is `expr: syntax error: unexpected
-    argument 'x'`. Inside that window the parser's own prefix expansion
-    still answers (`expr --versio`), which is why this only has to
-    decline rather than re-match.
+    two rules the parser states about a long option's POSITION.
+
+    The first is which words the scan has read when it answers, because
+    `--version` is an option like any other and an option error the
+    scan meets first is what GNU reports: measured on coreutils 9.7 and
+    grep 3.11, `cat --bogus --vers` is `unrecognized option '--bogus'`
+    (exit 1) and `grep --bogus --vers` is grep's own (exit 2), where
+    `cat --version --bogus` prints the version and exits 0 because
+    coreutils answers INSIDE the scan loop. So the words ahead of the
+    option are re-read through the parser, and a refusal among them
+    declines the answer and leaves the ordinary path to word it. Two
+    families answer elsewhere and carry their own tables:
+    VERSION_AFTER_SCAN finishes the whole line first, VERSION_BEFORE_SCAN
+    answers ahead of every option. Both are gated on the spec being the
+    builtin's own grammar, since a mount may register a command under
+    one of those names.
+
+    The second is gnulib's ``parse_long_options``, which reads argv[1]
+    only when it is the whole line (``argc == 2``), so for a
+    SOLE_ARGUMENT_LONG_OPTIONS command `--version` is an ordinary
+    operand as soon as another word joins it. Measured on coreutils
+    9.7: `expr --version` is the version and `expr --version x` is
+    `expr: syntax error: unexpected argument 'x'`. Inside that window
+    the parser's own prefix expansion still answers (`expr --versio`),
+    which is why this only has to decline rather than re-match.
 
     A word is the injected option when it resolves to it the way
     getopt_long would, not only when it is spelled out in full, because
@@ -278,15 +339,29 @@ def version_request(name: str, spec: CommandSpec | None,
     """
     if spec is None or not has_injected_version(spec):
         return None
-    if name in SOLE_ARGUMENT_LONG_OPTIONS and is_builtin_grammar(name, spec):
+    builtin = is_builtin_grammar(name, spec)
+    if builtin and name in SOLE_ARGUMENT_LONG_OPTIONS:
         return (version_line(name) if len(argv) == 1
                 and _is_injected_version(spec, argv[0]) else None)
-    for arg in argv:
-        if arg == "--":
-            return None
-        if _is_injected_version(spec, arg):
-            return version_line(name)
-    return None
+    index = _version_index(spec, argv)
+    if index is None:
+        return None
+    if builtin and name in VERSION_BEFORE_SCAN:
+        return version_line(name)
+    # Everything ahead of the option has to scan cleanly, which is both
+    # halves of "the scan reaches this word as an option": a refusal
+    # among those words is what GNU reports instead, and a value-taking
+    # option that swallowed this one (`grep -e --version`) leaves its
+    # own refusal there, so declining hands the word back to the
+    # ordinary path to read as that option's value, as GNU does.
+    if _scan_refuses(name, spec, argv[:index]):
+        return None
+    # A program that answers only after the whole scan needs the rest of
+    # the line to be clean too.
+    if (builtin and name in VERSION_AFTER_SCAN
+            and _scan_refuses(name, spec, argv)):
+        return None
+    return version_line(name)
 
 
 def help_page(name: str, spec: CommandSpec) -> bytes:

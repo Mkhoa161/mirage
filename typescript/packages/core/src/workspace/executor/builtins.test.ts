@@ -891,18 +891,78 @@ describe('handleSleep', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(90)
   })
 
-  // Every operand is validated, and the FIRST bad one is named. Reading only
-  // the first operand made `sleep -- 0 bogus` exit 0. Mirrors test_sleep.py.
+  // The page this arm prints heads with GNU's own
+  // `Usage: sleep NUMBER[SUFFIX]...`, and gnulib's `apply_suffix` is what that
+  // promises: one trailing character, multiplying by 1, 60, 3600 or 86400.
+  // Measured on coreutils 9.7 -- `sleep 0.3s` and `sleep 0.005m` each take
+  // 0.3s, `sleep 0.0001h` takes 0.36s -- and asserted on the elapsed time
+  // rather than on the parse, because reading the suffix and then dropping the
+  // multiplier would satisfy any check of the exit code alone. The 10ms of
+  // slack is the sum test's, for a timer that lands early. Mirrors
+  // test_sleep.py.
   it.each([
-    [['--', '0', 'bogus'], 'bogus'],
-    [['0', 'bogus'], 'bogus'],
-    [['bogus', '0'], 'bogus'],
-    [['--', '0.2', 'x', 'y'], 'x'],
-  ])('refuses %j naming the first bad operand', async (args, named) => {
+    ['0.3s', 300],
+    ['0.005m', 300],
+    ['0.0001h', 360],
+    ['0.0000035d', 302],
+  ])('scales %s by the advertised suffix', async (raw, ms) => {
+    const started = Date.now()
+    const [, io] = await handleSleep([raw])
+    expect(io.exitCode).toBe(0)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(ms - 10)
+  })
+
+  // A suffixed operand sums with a bare one like any other.
+  it('sums suffixed and bare operands', async () => {
+    const started = Date.now()
+    const [, io] = await handleSleep(['0.05', '0.05s'])
+    expect(io.exitCode).toBe(0)
+    expect(Date.now() - started).toBeGreaterThanOrEqual(90)
+  })
+
+  // gnulib allows exactly ONE character after the number and switches on it in
+  // lowercase, so everything here is `invalid time interval` on 9.7: an
+  // uppercase suffix, two of them, a suffix with anything after it, a letter
+  // that is not one, and a bare suffix with no number. Mirrors test_sleep.py.
+  it.each(['0S', '0M', '0H', '0D', '0.5S', '0ss', '0sx', '0n', '0b', 's', '1_0s', '0 s'])(
+    'refuses %j, a suffix gnulib does not take',
+    async (raw) => {
+      const [, io] = await handleSleep(['--', raw])
+      expect(io.exitCode).toBe(1)
+      expect(decode(io.stderr as Uint8Array)).toBe(
+        `sleep: invalid time interval '${raw}'\nTry 'sleep --help' for more information.\n`,
+      )
+    },
+  )
+
+  // Every operand is validated and EVERY bad one is named: coreutils calls
+  // `error()` per offending operand and only then `usage (EXIT_FAILURE)`, so
+  // the lines come in line order, a repeat repeats, and one Try-help line
+  // closes them (measured on 9.7: `sleep 1x 2y` is three lines, `sleep 1x 1x`
+  // names 1x twice, `sleep 1x 0 2y` skips the good one). Reading only the
+  // first operand made `sleep -- 0 bogus` exit 0. Mirrors test_sleep.py.
+  it.each([
+    [['--', '0', 'bogus'], ['bogus']],
+    [['0', 'bogus'], ['bogus']],
+    [['bogus', '0'], ['bogus']],
+    [
+      ['--', '0.2', 'x', 'y'],
+      ['x', 'y'],
+    ],
+    [
+      ['1x', '1x'],
+      ['1x', '1x'],
+    ],
+    [
+      ['1x', '0', '2y'],
+      ['1x', '2y'],
+    ],
+  ])('refuses %j naming every bad operand', async (args, named) => {
     const [, io] = await handleSleep(args)
     expect(io.exitCode).toBe(1)
+    const lines = named.map((w) => `sleep: invalid time interval '${w}'\n`).join('')
     expect(decode(io.stderr as Uint8Array)).toBe(
-      `sleep: invalid time interval '${named}'\nTry 'sleep --help' for more information.\n`,
+      `${lines}Try 'sleep --help' for more information.\n`,
     )
   })
 

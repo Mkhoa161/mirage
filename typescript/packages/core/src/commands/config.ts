@@ -21,10 +21,17 @@ import type { DispatchFn } from '../runtime/types.ts'
 import type { NamespaceView, ReaddirPath, SessionView, StatPath } from '../ops/types.ts'
 import { VERSION } from '../version.ts'
 import type { AggregateResult } from './builtin/aggregators.ts'
+import { ROOT_CWD } from './constants.ts'
 import { BUILTIN_SPECS, isBuiltinGrammar, registeredSpec } from './spec/builtins.ts'
 import { compileSpec, expandLong } from './spec/compile.ts'
-import { SOLE_ARGUMENT_LONG_OPTIONS, VERSION_OPTION } from './spec/constants.ts'
+import {
+  SOLE_ARGUMENT_LONG_OPTIONS,
+  VERSION_AFTER_SCAN,
+  VERSION_BEFORE_SCAN,
+  VERSION_OPTION,
+} from './spec/constants.ts'
 import { renderHelp } from './spec/help.ts'
+import { parseCommand } from './spec/parser.ts'
 import { SYNOPSES } from './spec/synopsis.ts'
 import type { CommandSpec } from './spec/types.ts'
 import { UsageStyle, type FlagValue } from './spec/types.ts'
@@ -267,17 +274,64 @@ export function versionLine(name: string): string {
 }
 
 /**
- * Version output when argv asks a command for the injected --version.
- * Null when the command declares its own --version, when the flag is
- * absent, or when it sits after the `--` end-of-options marker.
+ * Where the scan would read the injected --version, if anywhere.
  *
- * This runs on raw argv, ahead of the parser, so it has to honor the one rule
- * the parser states about a long option's POSITION: gnulib's
- * `parse_long_options` reads argv[1] only when it is the whole line
- * (`argc == 2`), so for a SOLE_ARGUMENT_LONG_OPTIONS command `--version` is an
- * ordinary operand as soon as another word joins it. Measured on coreutils
- * 9.7: `expr --version` is the version and `expr --version x` is
- * `expr: syntax error: unexpected argument 'x'`.
+ * Null when no word names it, or when the first one sits after the `--`
+ * end-of-options marker, which ends the scan. `_version_index` in config.py
+ * is the twin.
+ */
+function versionIndex(spec: CommandSpec, argv: string[]): number | null {
+  for (const [index, arg] of argv.entries()) {
+    if (arg === '--') return null
+    if (isInjectedVersion(spec, arg)) return index
+  }
+  return null
+}
+
+/**
+ * Whether the parser refuses an option in these words.
+ *
+ * The same parse the line gets downstream, so the two agree by construction
+ * rather than by a second reading of the grammar; only the option reports are
+ * read, which is why a cwd the caller does not have is not one it needs
+ * (nothing here consumes a resolved path). `missingRequiredOptions` is
+ * deliberately not read: these words are a PREFIX of the line for every
+ * command but the two that defer, so an option declared later has not been
+ * reached yet. `_scan_refuses` in config.py is the twin.
+ */
+function scanRefuses(name: string, spec: CommandSpec, words: string[]): boolean {
+  const parsed = parseCommand(spec, words, ROOT_CWD, name)
+  return parsed.optionErrorKinds.length > 0 || parsed.oldOptionNeedsValue !== null
+}
+
+/**
+ * Version output when argv asks a command for the injected --version.
+ * Null when the command declares its own --version, when the flag is absent,
+ * when it sits after the `--` end-of-options marker, or when an option the
+ * scan reads first is one the parser refuses.
+ *
+ * This runs on raw argv, ahead of the parser, so it has to honor the two rules
+ * the parser states about a long option's POSITION.
+ *
+ * The first is which words the scan has read when it answers, because
+ * `--version` is an option like any other and an option error the scan meets
+ * first is what GNU reports: measured on coreutils 9.7 and grep 3.11,
+ * `cat --bogus --vers` is `unrecognized option '--bogus'` (exit 1) and
+ * `grep --bogus --vers` is grep's own (exit 2), where `cat --version --bogus`
+ * prints the version and exits 0 because coreutils answers INSIDE the scan
+ * loop. So the words ahead of the option are re-read through the parser, and a
+ * refusal among them declines the answer and leaves the ordinary path to word
+ * it. Two families answer elsewhere and carry their own tables:
+ * VERSION_AFTER_SCAN finishes the whole line first, VERSION_BEFORE_SCAN
+ * answers ahead of every option. Both are gated on the spec being the
+ * builtin's own grammar, since a mount may register a command under one of
+ * those names.
+ *
+ * The second is gnulib's `parse_long_options`, which reads argv[1] only when
+ * it is the whole line (`argc == 2`), so for a SOLE_ARGUMENT_LONG_OPTIONS
+ * command `--version` is an ordinary operand as soon as another word joins it.
+ * Measured on coreutils 9.7: `expr --version` is the version and
+ * `expr --version x` is `expr: syntax error: unexpected argument 'x'`.
  *
  * A word is the injected option when it resolves to it the way getopt_long
  * would, not only when it is spelled out in full, because the parser
@@ -295,15 +349,25 @@ export function versionRequest(
   argv: string[],
 ): Uint8Array | null {
   if (spec === null || !hasInjectedVersion(spec)) return null
-  if (SOLE_ARGUMENT_LONG_OPTIONS.has(name) && isBuiltinGrammar(name, spec)) {
+  const builtin = isBuiltinGrammar(name, spec)
+  if (builtin && SOLE_ARGUMENT_LONG_OPTIONS.has(name)) {
     const sole = argv.length === 1 && isInjectedVersion(spec, argv[0] ?? '')
     return sole ? HELP_ENC.encode(versionLine(name)) : null
   }
-  for (const arg of argv) {
-    if (arg === '--') return null
-    if (isInjectedVersion(spec, arg)) return HELP_ENC.encode(versionLine(name))
-  }
-  return null
+  const index = versionIndex(spec, argv)
+  if (index === null) return null
+  if (builtin && VERSION_BEFORE_SCAN.has(name)) return HELP_ENC.encode(versionLine(name))
+  // Everything ahead of the option has to scan cleanly, which is both halves
+  // of "the scan reaches this word as an option": a refusal among those words
+  // is what GNU reports instead, and a value-taking option that swallowed this
+  // one (`grep -e --version`) leaves its own refusal there, so declining hands
+  // the word back to the ordinary path to read as that option's value, as GNU
+  // does.
+  if (scanRefuses(name, spec, argv.slice(0, index))) return null
+  // A program that answers only after the whole scan needs the rest of the
+  // line to be clean too.
+  if (builtin && VERSION_AFTER_SCAN.has(name) && scanRefuses(name, spec, argv)) return null
+  return HELP_ENC.encode(versionLine(name))
 }
 
 /**

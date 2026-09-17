@@ -26,7 +26,7 @@ import { yieldBytes } from '../../../../io/stream.ts'
 import { IOResult } from '../../../../io/types.ts'
 import { sleep } from '../../../abort.ts'
 import { ExecutionNode } from '../../../types.ts'
-import { SLEEP_INTERVAL } from './constants.ts'
+import { SLEEP_INTERVAL, SLEEP_SUFFIXES } from './constants.ts'
 import type { BuiltinCall, Result } from '../types.ts'
 
 // The only two options coreutils sleep declares, through gnulib's
@@ -102,6 +102,26 @@ function sleepOperands(args: string[]): [string[], string | null] {
   return [operands, null]
 }
 
+/**
+ * One operand's seconds, or null when it is not an interval.
+ *
+ * GNU's grammar is `NUMBER[SUFFIX]`, which the help page advertises: gnulib
+ * reads the number with strtod, then allows at most ONE trailing character and
+ * looks it up in `apply_suffix`. Measured on coreutils 9.7: `sleep 0.005m`
+ * takes 0.3s, `sleep 1e-3s` is accepted, and `sleep 0S`, `sleep 0ss`,
+ * `sleep 0sx` and `sleep s` are each `invalid time interval`. Null also covers
+ * GNU's own "inf", a documented divergence carried by SLEEP_INTERVAL.
+ * `_interval_seconds` in sleep.py is the twin.
+ */
+function intervalSeconds(raw: string): number | null {
+  const multiplier = SLEEP_SUFFIXES[raw.slice(-1)] ?? 0
+  const num = multiplier ? raw.slice(0, -1) : raw
+  if (!SLEEP_INTERVAL.test(num)) return null
+  const seconds = Number(num) * (multiplier || 1)
+  // "1e309" passes the regex and overflows to Infinity.
+  return Number.isFinite(seconds) ? seconds : null
+}
+
 export async function handleSleep(args: string[], signal?: AbortSignal): Promise<Result> {
   const [operands, badOption] = sleepOperands(args)
   if (badOption !== null) {
@@ -149,28 +169,31 @@ export async function handleSleep(args: string[], signal?: AbortSignal): Promise
   // their SUM (measured on 9.7: `sleep 0.3 0.3` takes 0.6s). All of them are
   // checked before any of them is slept, so a bad one anywhere refuses the
   // whole line immediately rather than after sleeping its predecessors
-  // (`sleep 0.2 x 0.2` exits 1 at once), and the FIRST offending operand is
-  // the one named.
+  // (`sleep 0.2 x 0.2` exits 1 at once).
   let total = 0
+  const bad: string[] = []
   for (const raw of operands) {
-    // "1e309" passes the regex but overflows to Infinity, so check both.
-    const seconds = SLEEP_INTERVAL.test(raw) ? Number(raw) : Infinity
-    if (!Number.isFinite(seconds)) {
-      // coreutils sleep refuses an operand through `usage (EXIT_FAILURE)`, so
-      // the diagnostic carries the Try-help line, and the operand goes through
-      // gnulib's `quote()` like every other coreutils operand diagnostic
-      // (measured on 9.4: `sleep abc` is two lines, and `sleep -- é` names
-      // `'\303\251'`).
-      const err = new TextEncoder().encode(
-        `sleep: invalid time interval '${quoteText(raw)}'\n${usageHint('sleep')}\n`,
-      )
-      return [
-        null,
-        new IOResult({ exitCode: 1, stderr: err }),
-        new ExecutionNode({ command: 'sleep', exitCode: 1 }),
-      ]
+    const seconds = intervalSeconds(raw)
+    if (seconds === null) {
+      bad.push(raw)
+      continue
     }
     total += seconds
+  }
+  if (bad.length > 0) {
+    // coreutils calls `error()` per offending operand and only then
+    // `usage (EXIT_FAILURE)`, so EVERY bad operand is named, in line order and
+    // repeated if it repeats, under one closing Try-help line (measured on
+    // 9.7: `sleep 1x 2y` is three lines, `sleep 1x 1x` names 1x twice). Each
+    // operand goes through gnulib's `quote()` like every other coreutils
+    // operand diagnostic (measured on 9.4: `sleep -- é` names `'\303\251'`).
+    const lines = bad.map((raw) => `sleep: invalid time interval '${quoteText(raw)}'\n`)
+    const err = new TextEncoder().encode(`${lines.join('')}${usageHint('sleep')}\n`)
+    return [
+      null,
+      new IOResult({ exitCode: 1, stderr: err }),
+      new ExecutionNode({ command: 'sleep', exitCode: 1 }),
+    ]
   }
   await sleep(total * 1000, signal)
   return [null, new IOResult(), new ExecutionNode({ command: 'sleep', exitCode: 0 })]

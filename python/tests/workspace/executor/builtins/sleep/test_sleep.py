@@ -140,6 +140,55 @@ async def test_sleep_unknown_short_option_names_the_character():
                          b"Try 'sleep --help' for more information.\n")
 
 
+# The page this arm prints heads with GNU's own
+# `Usage: sleep NUMBER[SUFFIX]...`, and gnulib's `apply_suffix` is what
+# that promises: one trailing character, multiplying by 1, 60, 3600 or
+# 86400. Measured on coreutils 9.7 -- `sleep 0.3s` and `sleep 0.005m`
+# each take 0.3s, `sleep 0.0001h` takes 0.36s -- and asserted on the
+# elapsed time rather than on the parse, because reading the suffix and
+# then dropping the multiplier would satisfy any check of the exit code
+# alone.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw,seconds", [("0.3s", 0.3), ("0.005m", 0.3),
+                                         ("0.0001h", 0.36),
+                                         ("0.0000035d", 0.3024)])
+async def test_sleep_scales_by_the_advertised_suffix(raw, seconds):
+    started = time.monotonic()
+    _, io, node = await handle_sleep([raw])
+    elapsed = time.monotonic() - started
+    assert io.exit_code == 0
+    assert node.exit_code == 0
+    # The same 10ms of slack the sum test takes: a timer may land a
+    # millisecond early, and the bound still separates this from the
+    # suffix being ignored (0.005m read as 0.005s).
+    assert elapsed >= seconds - 0.01
+
+
+# A suffixed operand sums with a bare one like any other.
+@pytest.mark.asyncio
+async def test_sleep_sums_suffixed_and_bare_operands():
+    started = time.monotonic()
+    _, io, _ = await handle_sleep(["0.05", "0.05s"])
+    assert io.exit_code == 0
+    assert time.monotonic() - started >= 0.09
+
+
+# gnulib allows exactly ONE character after the number and switches on
+# it in lowercase, so everything here is `invalid time interval` on 9.7:
+# an uppercase suffix, two of them, a suffix with anything after it, a
+# letter that is not one, and a bare suffix with no number.
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", [
+    "0S", "0M", "0H", "0D", "0.5S", "0ss", "0sx", "0n", "0b", "s", "1_0s",
+    "0 s"
+])
+async def test_sleep_refuses_a_suffix_gnulib_does_not_take(raw):
+    _, io, _ = await handle_sleep(["--", raw])
+    assert io.exit_code == 1
+    assert io.stderr.startswith(
+        f"sleep: invalid time interval '{raw}'\n".encode())
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "raw",
@@ -171,22 +220,28 @@ async def test_sleep_sums_every_operand():
     assert elapsed >= 0.09
 
 
-# Every operand is validated, and the FIRST bad one is named. Reading
-# only the first operand made `sleep -- 0 bogus` exit 0.
+# Every operand is validated and EVERY bad one is named: coreutils calls
+# `error()` per offending operand and only then `usage (EXIT_FAILURE)`,
+# so the lines come in line order, a repeat repeats, and one Try-help
+# line closes them (measured on 9.7: `sleep 1x 2y` is three lines,
+# `sleep 1x 1x` names 1x twice, `sleep 1x 0 2y` skips the good one).
+# Reading only the first operand made `sleep -- 0 bogus` exit 0.
 @pytest.mark.asyncio
 @pytest.mark.parametrize("args,named", [
-    (["--", "0", "bogus"], "bogus"),
-    (["0", "bogus"], "bogus"),
-    (["bogus", "0"], "bogus"),
-    (["--", "0.2", "x", "y"], "x"),
+    (["--", "0", "bogus"], ["bogus"]),
+    (["0", "bogus"], ["bogus"]),
+    (["bogus", "0"], ["bogus"]),
+    (["--", "0.2", "x", "y"], ["x", "y"]),
+    (["1x", "1x"], ["1x", "1x"]),
+    (["1x", "0", "2y"], ["1x", "2y"]),
 ])
-async def test_sleep_refuses_any_bad_operand_naming_the_first(args, named):
+async def test_sleep_refuses_any_bad_operand_naming_every_one(args, named):
     _, io, node = await handle_sleep(args)
     assert io.exit_code == 1
     assert node.exit_code == 1
+    lines = "".join(f"sleep: invalid time interval '{w}'\n" for w in named)
     assert io.stderr == (
-        f"sleep: invalid time interval '{named}'\n"
-        f"Try 'sleep --help' for more information.\n").encode()
+        f"{lines}Try 'sleep --help' for more information.\n").encode()
 
 
 # The check runs over every operand before any of them is slept, so a

@@ -296,3 +296,70 @@ class TestVersionRequest:
             spec=CommandSpec(rest=Operand(type="str")))(_noop_handler)
         assert version_request("expr", borrowed._registered_commands[0].spec,
                                ["--version", "x"]) is not None
+
+    # `--version` is an option like any other, so an option error the
+    # scan meets FIRST is what GNU reports: measured on coreutils 9.7,
+    # `cat --bogus --vers` is `cat: unrecognized option '--bogus'`
+    # (exit 1) and `sort --bogus --version` is sort's own (exit 2).
+    def test_a_refusal_the_scan_meets_first_outranks_the_version(self):
+        for name in ("cat", "sort", "tee"):
+            spec = registered_spec(name, SPECS[name])
+            assert version_request(name, spec, ["--bogus", "--vers"]) is None
+            assert version_request(name, spec,
+                                   ["--bogus", "--version"]) is None
+
+    # The mirror: coreutils answers INSIDE the getopt loop, calling
+    # `version_etc` and exiting there, so a word the scan never reaches
+    # cannot outrank it (`cat --version --bogus` prints the version and
+    # exits 0 on 9.7).
+    def test_a_refusal_the_scan_never_reaches_does_not(self):
+        spec = registered_spec("cat", SPECS["cat"])
+        assert version_request("cat", spec, ["--version", "--bogus"])
+        assert version_request("cat", spec, ["--vers", "--bogus"])
+
+    # grep sets `show_version` and keeps scanning, printing after the
+    # loop, so a refusal anywhere outranks the answer; ripgrep's clap
+    # parse is whole-line for the same reason. Measured on grep 3.11 and
+    # ripgrep 14.1.1: both `--version --bogus` lines exit 2.
+    def test_the_deferred_family_reads_the_whole_line(self):
+        for name in ("grep", "rg"):
+            spec = registered_spec(name, SPECS[name])
+            assert version_request(name, spec, ["--version"])
+            assert version_request(name, spec,
+                                   ["--version", "--bogus"]) is None
+            assert version_request(name, spec,
+                                   ["--bogus", "--version"]) is None
+
+    # zgrep is a shell script whose own loop answers before it ever
+    # builds a grep command, so no refusal outranks it (measured on gzip
+    # 1.13: `zgrep --bogus --version f.gz` prints the version, exit 0,
+    # where `zgrep --bogus f.gz` reaches grep and exits 2).
+    def test_zgrep_answers_ahead_of_every_refusal(self):
+        spec = registered_spec("zgrep", SPECS["zgrep"])
+        assert version_request("zgrep", spec, ["--bogus", "--version"])
+
+    # A value-taking option swallows the word, so it is that option's
+    # value and never an option at all: `grep -e --version f` greps for
+    # the pattern `--version` and exits 1 on grep 3.11. The prefix
+    # carries getopt's own `needs_value` refusal, which is what declines
+    # here and leaves the word to the parser.
+    def test_a_value_taking_option_swallows_the_word(self):
+        spec = registered_spec("grep", SPECS["grep"])
+        assert version_request("grep", spec, ["-e", "--version"]) is None
+        assert version_request("grep", spec,
+                               ["--include", "--version"]) is None
+
+    # Both tables name one real program, so both are gated on the spec
+    # being that program's own grammar. A mount may register a command
+    # under a builtin's name (nothing refuses it), and neither gnulib's
+    # deferral nor zgrep's precedence is a fact about that command.
+    def test_a_borrowed_name_does_not_borrow_the_family(self):
+        for name in ("grep", "zgrep"):
+            borrowed = command(
+                name,
+                resource="disk",
+                spec=CommandSpec(rest=Operand(type="str")))(_noop_handler)
+            spec = borrowed._registered_commands[0].spec
+            assert version_request(name, spec, ["--version", "--bogus"])
+            assert version_request(name, spec,
+                                   ["--bogus", "--version"]) is None

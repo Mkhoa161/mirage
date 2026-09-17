@@ -26,7 +26,8 @@ from mirage.io import IOResult
 from mirage.io.stream import yield_bytes
 from mirage.io.types import ByteSource
 from mirage.workspace.abort import cancellable_sleep
-from mirage.workspace.executor.builtins.sleep.constants import SLEEP_INTERVAL
+from mirage.workspace.executor.builtins.sleep.constants import (SLEEP_INTERVAL,
+                                                                SLEEP_SUFFIXES)
 from mirage.workspace.executor.builtins.types import BuiltinCall, Result
 from mirage.workspace.types import ExecutionNode
 
@@ -114,6 +115,33 @@ def _sleep_operands(args: list[str]) -> tuple[list[str], str | None]:
     return operands, None
 
 
+def _interval_seconds(raw: str) -> float | None:
+    """One operand's seconds, or None when it is not an interval.
+
+    GNU's grammar is `NUMBER[SUFFIX]`, which the help page advertises:
+    gnulib reads the number with strtod, then allows at most ONE
+    trailing character and looks it up in `apply_suffix`. Measured on
+    coreutils 9.7: `sleep 0.005m` takes 0.3s, `sleep 1e-3s` is
+    accepted, and `sleep 0S`, `sleep 0ss`, `sleep 0sx` and `sleep s`
+    are each `invalid time interval`.
+
+    Args:
+        raw (str): one operand, as typed.
+
+    Returns:
+        float | None: the seconds it names, or None when the word is
+            not one mirage accepts (which includes GNU's own "inf",
+            a documented divergence carried by SLEEP_INTERVAL).
+    """
+    multiplier = SLEEP_SUFFIXES.get(raw[-1:], 0)
+    number = raw[:-1] if multiplier else raw
+    if not SLEEP_INTERVAL.fullmatch(number):
+        return None
+    seconds = float(number) * (multiplier or 1)
+    # "1e309" passes the regex and overflows to inf.
+    return seconds if math.isfinite(seconds) else None
+
+
 async def handle_sleep(
     args: list[str],
     cancel: asyncio.Event | None = None,
@@ -158,25 +186,28 @@ async def handle_sleep(
     # sleeps their SUM (measured on 9.7: `sleep 0.3 0.3` takes 0.6s).
     # All of them are checked before any of them is slept, so a bad one
     # anywhere refuses the whole line immediately rather than after
-    # sleeping its predecessors (`sleep 0.2 x 0.2` exits 1 at once), and
-    # the FIRST offending operand is the one named.
+    # sleeping its predecessors (`sleep 0.2 x 0.2` exits 1 at once).
     total = 0.0
+    bad: list[str] = []
     for raw in operands:
-        # "1e309" passes the regex but overflows to inf, so check both.
-        seconds = float(raw) if SLEEP_INTERVAL.fullmatch(raw) else math.inf
-        if not math.isfinite(seconds):
-            # coreutils sleep refuses an operand through `usage
-            # (EXIT_FAILURE)`, so the diagnostic carries the Try-help
-            # line, and the operand goes through gnulib's `quote()` like
-            # every other coreutils operand diagnostic (measured on 9.4:
-            # `sleep abc` is two lines, and `sleep -- <e-acute>` names
-            # `'\303\251'`).
-            err = (f"sleep: invalid time interval '{quote_text(raw)}'\n"
-                   f"{usage_hint('sleep')}\n").encode()
-            return None, IOResult(exit_code=1,
-                                  stderr=err), ExecutionNode(command="sleep",
-                                                             exit_code=1)
+        seconds = _interval_seconds(raw)
+        if seconds is None:
+            bad.append(raw)
+            continue
         total += seconds
+    if bad:
+        # coreutils calls `error()` per offending operand and only then
+        # `usage (EXIT_FAILURE)`, so EVERY bad operand is named, in line
+        # order and repeated if it repeats, under one closing Try-help
+        # line (measured on 9.7: `sleep 1x 2y` is three lines, `sleep 1x
+        # 1x` names 1x twice). Each operand goes through gnulib's
+        # `quote()` like every other coreutils operand diagnostic
+        # (measured on 9.4: `sleep -- <e-acute>` names `'\303\251'`).
+        err = ("".join(f"sleep: invalid time interval '{quote_text(raw)}'\n"
+                       for raw in bad) + f"{usage_hint('sleep')}\n").encode()
+        return None, IOResult(exit_code=1,
+                              stderr=err), ExecutionNode(command="sleep",
+                                                         exit_code=1)
     await cancellable_sleep(total, cancel)
     return None, IOResult(), ExecutionNode(command="sleep", exit_code=0)
 

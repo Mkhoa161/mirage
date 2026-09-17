@@ -105,6 +105,25 @@ export const NO_LONG_OPTIONS: ReadonlySet<string> = new Set(['echo', 'unzip'])
 // collapsed.
 export const SOLE_ARGUMENT_LONG_OPTIONS: ReadonlySet<string> = new Set(['expr'])
 
+// The two programs that answer `--version` only once the WHOLE option scan
+// has succeeded, rather than at the position the word sits in. GNU grep's
+// getopt loop sets `show_version` and keeps scanning, and prints after the
+// loop, so a refusal anywhere on the line outranks the answer; ripgrep's clap
+// parse is whole-line for the same reason. Measured on GNU grep 3.11 and
+// ripgrep 14.1.1: `grep --version --bogus` and `rg --version --bogus` both
+// report the option and exit 2, where `cat --version --bogus` prints the
+// version and exits 0 because coreutils calls `version_etc` and exits INSIDE
+// the loop.
+export const VERSION_AFTER_SCAN: ReadonlySet<string> = new Set(['grep', 'rg'])
+
+// The one program whose `--version` outranks every option refusal, wherever
+// the word sits. zgrep is a shell script that reads the line in its own loop
+// before it ever builds a grep command, and that loop answers `--version`
+// itself. Measured on gzip 1.13: `zgrep --bogus --version f.gz` prints
+// zgrep's version and exits 0, while `zgrep --bogus f.gz` reaches grep and is
+// refused with exit 2.
+export const VERSION_BEFORE_SCAN: ReadonlySet<string> = new Set(['zgrep'])
+
 // The spec-declared `choices` sets that ARE gnulib ARGMATCH tables, so an
 // unambiguous prefix of a candidate resolves to it and the bag is rewritten
 // to the canonical word. Every other declared set compares the whole word,
