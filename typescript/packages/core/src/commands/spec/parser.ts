@@ -82,11 +82,12 @@ export class ParsedArgs {
   // options (canonical spelling).
   readonly invalidOptions: string[]
   readonly ambiguousOptions: [string, readonly string[]][]
-  // "invalid" / "unexpected_value" / "ambiguous" tags in scan encounter
-  // order, so the refusal names the FIRST offending token like GNU (grep
-  // --c --bogus reports --c; reversed reports --bogus). needsValue is
-  // absent by construction: it only fires on the line's final token, so it
-  // can never precede another scan error. "unexpected_value" is a boolean
+  // One tag per refusal in scan encounter order ("invalid",
+  // "unexpected_value", "ambiguous", "needs_value", "int", "float",
+  // "value"), so the refusal names the FIRST offending token like GNU (grep
+  // --c --bogus reports --c; reversed reports --bogus; numfmt --from=bad
+  // --bogus reports the value). Each tag's detail is the next entry of that
+  // tag's own list. "unexpected_value" is a boolean
   // long handed a value, which getopt_long refuses in its own words rather
   // than as an unrecognized option; its entry in invalidOptions is the
   // option's canonical spelling with the typed value ("--byte-offset=2"),
@@ -153,9 +154,9 @@ export class ParsedArgs {
 
 // The values the per-value checks refused, in the order read. `kinds` is
 // the scan's shared `optionErrorKinds` tape: every refusal also drops its
-// tag (`int`, `float`, `value`) there, so the reporter can tell which of
-// the three lists holds the FIRST bad value on the line, the one GNU stops
-// at.
+// tag (`int`, `float`, `value`) there, beside the scan's own tags, so the
+// reporter can tell which list holds the FIRST refusal on the line, the
+// one GNU stops at.
 interface Refusals {
   kinds: string[]
   ints: [string, string][]
@@ -454,6 +455,7 @@ export function parseCommand(
       } else if (isPair) {
         if (eqPos === -1) {
           needsValueOptions.push(spelling)
+          optionErrorKinds.push('needs_value')
         } else {
           // A two-token option has no `=` form (jq refuses `--arg=name`
           // as an unknown option).
@@ -471,6 +473,7 @@ export function parseCommand(
         } else if (cs.longValueSpellings.has(etok)) {
           // Declared value flag at end of line with no argument.
           needsValueOptions.push(etok)
+          optionErrorKinds.push('needs_value')
         } else if (lenientDashOperands) {
           rawArgs.push(tok)
           rawIndices.push(origIndices[i] ?? -1)
@@ -584,9 +587,11 @@ export function parseCommand(
       } else if (cs.valueSpellings.includes(tok)) {
         // A declared value flag with no argument left on the line.
         needsValueOptions.push(tok.slice(1))
+        optionErrorKinds.push('needs_value')
       } else if (mixed !== null && mixed.attached === null) {
         // A cluster ending in a value flag that ran out of line.
         needsValueOptions.push(mixed.valueFlag.slice(1))
+        optionErrorKinds.push('needs_value')
       } else {
         // GNU reports the first offending character, not the token.
         let bad = tok.slice(1, 2)

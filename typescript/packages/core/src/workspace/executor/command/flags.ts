@@ -193,32 +193,26 @@ export function optionError(cmdName: string, parsed: ParsedCommand): [Uint8Array
   if (parsed.oldOptionNeedsValue !== null) {
     return oldOptionError(cmdName, parsed.oldOptionNeedsValue)
   }
-  // Scan-order between unknown and ambiguous options: GNU stops at the
-  // first offending token, so `grep --c --bogus` reports the ambiguity
-  // and the reversed line reports --bogus.
-  const ambiguousFirst = parsed.ambiguousOptions[0]
-  if (parsed.optionErrorKinds[0] === 'ambiguous' && ambiguousFirst !== undefined) {
-    return ambiguousOptionError(cmdName, ...ambiguousFirst)
-  }
-  if (parsed.invalidOptions.length > 0) {
-    // Two reports share invalidOptions and the tag tells them apart: a
-    // boolean long handed a value is not an unrecognized option, and
-    // getopt_long words it differently (`grep --byte-offset=2`).
-    if (parsed.optionErrorKinds[0] === 'unexpected_value') {
-      return unexpectedValueError(cmdName, parsed.invalidOptions[0] ?? '')
-    }
-    return unknownOptionError(cmdName, parsed.invalidOptions[0] ?? '')
-  }
-  if (ambiguousFirst !== undefined) return ambiguousOptionError(cmdName, ...ambiguousFirst)
-  if (parsed.needsValueOptions.length > 0) {
-    return missingValueError(cmdName, parsed.needsValueOptions[0] ?? '')
-  }
-  // The first refused value on the line, whichever check refused it: GNU
-  // stops there, so `numfmt --from=bad1 --to=bad2` names bad1. The kinds
-  // tape holds the three tags in scan order, and each list is in scan
-  // order too.
+  // The first refusal on the line, whichever check made it: GNU stops at
+  // the first offending token, so `grep --c --bogus` reports the
+  // ambiguity, the reversed line reports --bogus, and `numfmt --from=bad
+  // --bogus` reports the value. The kinds tape holds one tag per refusal
+  // in scan order and each list is in scan order too, so the first tag's
+  // detail is the head of that tag's list. "invalid" and
+  // "unexpected_value" share invalidOptions: a boolean long handed a value
+  // is not an unrecognized option, and getopt_long words it differently
+  // (`grep --byte-offset=2`).
   for (const kind of parsed.optionErrorKinds) {
-    if (kind === 'int') {
+    if (kind === 'ambiguous') {
+      const ambiguous = parsed.ambiguousOptions[0]
+      if (ambiguous !== undefined) return ambiguousOptionError(cmdName, ...ambiguous)
+    } else if (kind === 'unexpected_value') {
+      return unexpectedValueError(cmdName, parsed.invalidOptions[0] ?? '')
+    } else if (kind === 'invalid') {
+      return unknownOptionError(cmdName, parsed.invalidOptions[0] ?? '')
+    } else if (kind === 'needs_value') {
+      return missingValueError(cmdName, parsed.needsValueOptions[0] ?? '')
+    } else if (kind === 'int') {
       const badInt = parsed.invalidIntOptions[0]
       if (badInt !== undefined) return invalidIntError(cmdName, ...badInt)
     } else if (kind === 'float') {

@@ -128,6 +128,70 @@
         "i",
         "p"
       ]
+    },
+    {
+      "id": "tee_bad_value_outranks_a_later_unknown_option",
+      "seq": 991091,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'hi' | tee --output-error=bad --bogus /data/pt_oe.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tee: invalid argument 'bad' for '--output-error'\nValid arguments are:\n  - 'warn'\n  - 'warn-nopipe'\n  - 'exit'\n  - 'exit-nopipe'\nTry 'tee --help' for more information.\n"
+      },
+      "flags": [
+        "output-error"
+      ]
+    },
+    {
+      "id": "tee_unknown_option_outranks_a_later_bad_value",
+      "seq": 991092,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'hi' | tee --bogus --output-error=bad /data/pt_oe.txt",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "tee: unrecognized option '--bogus'\nTry 'tee --help' for more information.\n"
+      },
+      "flags": [
+        "output-error"
+      ]
     }
   ]
 }

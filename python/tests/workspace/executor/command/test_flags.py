@@ -15,7 +15,7 @@
 from dataclasses import replace
 
 from mirage.commands.spec import SPECS
-from mirage.commands.spec.types import CommandSpec, Option
+from mirage.commands.spec.types import CommandSpec, Operand, Option
 from mirage.workspace.executor.command.flags import (option_error, parse_flags,
                                                      synthesize_path_spec)
 
@@ -59,6 +59,35 @@ def test_option_error_reports_the_first_scan_error_like_gnu():
     refusal = option_error("grep", invalid_first)
     assert refusal is not None
     assert refusal[0].startswith(b"grep: unrecognized option '--bogus'")
+
+
+def test_option_error_reports_a_refused_value_before_a_later_bad_option():
+    # GNU stops at the first offending token whatever kind it is:
+    # coreutils 9.7 `tee --output-error=bad --bogus f` names the value,
+    # the reversed line names --bogus, and a value option that ran out
+    # of line loses to a value refused before it.
+    spec = CommandSpec(options=(Option(long="--mode",
+                                       type="str",
+                                       choices=("warn", "exit")),
+                                Option(long="--count", type="int")),
+                       rest=Operand(type="path"))
+    value_first = parse_flags(["--mode=bad", "--bogus", "f"], spec, "tee", "/")
+    refusal = option_error("tee", value_first)
+    assert refusal is not None
+    assert refusal[0].startswith(b"tee: invalid argument 'bad' for '--mode'")
+    option_first = parse_flags(["--bogus", "--mode=bad", "f"], spec, "tee",
+                               "/")
+    refusal = option_error("tee", option_first)
+    assert refusal is not None
+    assert refusal[0].startswith(b"tee: unrecognized option '--bogus'")
+    trailing = parse_flags(["--mode=bad", "--count"], spec, "tee", "/")
+    refusal = option_error("tee", trailing)
+    assert refusal is not None
+    assert refusal[0].startswith(b"tee: invalid argument 'bad' for '--mode'")
+    needy = parse_flags(["--mode=warn", "--count"], spec, "tee", "/")
+    refusal = option_error("tee", needy)
+    assert refusal is not None
+    assert b"'--count' requires an argument" in refusal[0]
 
 
 def test_option_error_reports_numeric_conversion_before_choices():

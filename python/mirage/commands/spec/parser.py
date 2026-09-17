@@ -53,11 +53,12 @@ class ParsedArgs:
     ambiguous_options: list[tuple[str,
                                   tuple[str,
                                         ...]]] = field(default_factory=list)
-    # "invalid" / "unexpected_value" / "ambiguous" tags in scan encounter
-    # order, so the refusal names the FIRST offending token like GNU (grep
-    # --c --bogus reports --c; reversed reports --bogus). needs_value is
-    # absent by construction: it only fires on the line's final token, so
-    # it can never precede another scan error. "unexpected_value" is a
+    # One tag per refusal in scan encounter order ("invalid",
+    # "unexpected_value", "ambiguous", "needs_value", "int", "float",
+    # "value"), so the refusal names the FIRST offending token like GNU
+    # (grep --c --bogus reports --c; reversed reports --bogus; numfmt
+    # --from=bad --bogus reports the value). Each tag's detail is the next
+    # entry of that tag's own list. "unexpected_value" is a
     # boolean long handed a value, which getopt_long refuses in its own
     # words rather than as an unrecognized option; its entry in
     # invalid_options is the option's canonical spelling with the typed
@@ -105,9 +106,9 @@ class _Refusals:
     """The values the per-value checks refused, in the order read.
 
     ``kinds`` is the scan's shared ``option_error_kinds`` tape: every
-    refusal also drops its tag (``int``, ``float``, ``value``) there, so
-    the reporter can tell which of the three lists holds the FIRST bad
-    value on the line, the one GNU stops at.
+    refusal also drops its tag (``int``, ``float``, ``value``) there,
+    beside the scan's own tags, so the reporter can tell which list holds
+    the FIRST refusal on the line, the one GNU stops at.
     """
     kinds: list[str]
     ints: list[tuple[str, str]] = field(default_factory=list)
@@ -434,6 +435,7 @@ def parse_command(
             elif is_pair:
                 if eq == -1:
                     needs_value_options.append(spelling)
+                    option_error_kinds.append("needs_value")
                 else:
                     # A two-token option has no `=` form (jq refuses
                     # `--arg=name` as an unknown option).
@@ -449,6 +451,7 @@ def parse_command(
                 elif etok in cs.long_value_spellings:
                     # Declared value flag at end of line with no argument.
                     needs_value_options.append(etok)
+                    option_error_kinds.append("needs_value")
                 elif lenient_dash_operands:
                     raw_args.append(tok)
                     raw_indices.append(orig_indices[i])
@@ -564,6 +567,7 @@ def parse_command(
                     assert mixed is not None
                     needy = mixed[1][1:]
                 needs_value_options.append(needy)
+                option_error_kinds.append("needs_value")
             else:
                 # GNU reports the first offending character, not the token.
                 bad = tok[1:2]
