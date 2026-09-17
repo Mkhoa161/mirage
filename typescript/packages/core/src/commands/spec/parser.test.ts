@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { specOf } from './builtins.ts'
-import { ParsedArgs, parseCommand, parseKnownCommand, parseToKwargs } from './parser.ts'
+import { ParsedArgs, parseCommand, parseToKwargs } from './parser.ts'
 import { CommandSpec, Operand, Option, VALUE_OCCURRENCES_KEY } from './types.ts'
 import { FlagView } from './flag_view.ts'
 
@@ -416,33 +416,32 @@ describe('parseCommand — unknown dash tokens warn and drop', () => {
     expect(parseCommand(specOf('basename'), ['--zzz'], '/').invalidOptions).toEqual(['--zzz'])
   })
 
-  // parseKnownCommand is the other reader, the one an installed CLI's node
-  // takes: the program owns whatever mirage does not declare, so an undeclared
-  // dash word lands in the node's textual rest slot and no abbreviation is
-  // expanded on the program's behalf. With no slot to forward into, the same
-  // reader refuses it: the program cannot be handed a word the node has
-  // nowhere to put.
-  it('forwards dash words into the rest slot for the known reader', () => {
+  // unknownIsOperand is what an installed CLI's node is parsed under: the
+  // program owns whatever mirage does not declare, so an undeclared dash word
+  // lands in the node's textual rest slot and no abbreviation is expanded on
+  // the program's behalf. With no slot to forward into, the same parse refuses
+  // it: the program cannot be handed a word the node has nowhere to put.
+  it('forwards dash words into the rest slot under unknownIsOperand', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
       rest: new Operand({ type: 'str' }),
     })
-    const parsed = parseKnownCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager')
+    const parsed = parseCommand(spec, ['--widt', '80', '-n', 'x'], '/', 'pager', undefined, true)
     expect(parsed.flags).toEqual({})
     expect(parsed.invalidOptions).toEqual([])
     expect(parsed.texts()).toEqual(['--widt', '80', '-n', 'x'])
     const slotless = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
     })
-    expect(parseKnownCommand(slotless, ['--frobnicate'], '/', 'pager').invalidOptions).toEqual([
-      '--frobnicate',
-    ])
+    expect(
+      parseCommand(slotless, ['--frobnicate'], '/', 'pager', undefined, true).invalidOptions,
+    ).toEqual(['--frobnicate'])
   })
 
-  // The very same spec read by parseCommand is the other answer, which is what
-  // makes the reader the deciding fact: nothing about the grammar, and nothing
-  // carried on the spec, tells the two apart.
-  it('refuses the same dash word through parseCommand', () => {
+  // The very same spec parsed without the flag is the other answer, which is
+  // what makes the call the deciding fact: nothing about the grammar, and
+  // nothing carried on the spec, tells the two apart.
+  it('refuses the same dash word when parsed strictly', () => {
     const spec = new CommandSpec({
       options: [new Option({ long: '--width', type: 'int' })],
       rest: new Operand({ type: 'str' }),
@@ -791,21 +790,21 @@ describe('choices violations are reported, never thrown', () => {
   // `open`. The CLI's group level already enforces its choices exactly (walk's
   // finishNode), so a leaf that prefix-matched would make one Option.choices
   // mean two things inside one tree. Mirrors test_parser.py.
-  it('takes no prefix for the known reader', () => {
+  it('takes no prefix under unknownIsOperand', () => {
     const options = [
       new Option({ long: '--state', type: 'str', choices: ['open', 'closed', 'all'] }),
     ]
     const spec = new CommandSpec({ options })
-    const parsed = parseKnownCommand(spec, ['--state=o'], '/', 'gh')
+    const parsed = parseCommand(spec, ['--state=o'], '/', 'gh', undefined, true)
     expect(parsed.flags['--state']).toBe('o')
     expect(parsed.choiceValueOptions).toEqual([
       ['--state', 'o', ['open', 'closed', 'all'], 'invalid'],
     ])
-    const exact = parseKnownCommand(spec, ['--state=open'], '/', 'gh')
+    const exact = parseCommand(spec, ['--state=open'], '/', 'gh', undefined, true)
     expect(exact.flags['--state']).toBe('open')
     expect(exact.choiceValueOptions).toEqual([])
-    // The same spec read by parseCommand prefix-matches, so the reader is what
-    // decides and nothing about the option does.
+    // The same spec parsed without the flag prefix-matches, so the call is
+    // what decides and nothing about the option does.
     const gnu = parseCommand(spec, ['--state=o'], '/', 'ls')
     expect(gnu.flags['--state']).toBe('open')
     expect(gnu.choiceValueOptions).toEqual([])

@@ -269,11 +269,11 @@ def _match_choice(value: str, choices: ArgmatchChoices,
     Nearly every spec-declared ``choices`` set on a GNU command is a
     gnulib ARGMATCH table, so the value goes through :func:`argmatch`
     and an unambiguous prefix resolves. Two things are not: the options
-    in EXACT_CHOICE_OPTIONS, and every option read by
-    :func:`parse_known_command`. Both have a program that compares the
-    whole word itself, so only an exact candidate matches, and the
-    ambiguous wording is unreachable for them because a prefix is never
-    a match to be ambiguous between.
+    in EXACT_CHOICE_OPTIONS, and every option on a line parsed with
+    ``unknown_is_operand``. Both have a program that compares the whole
+    word itself, so only an exact candidate matches, and the ambiguous
+    wording is unreachable for them because a prefix is never a match to
+    be ambiguous between.
 
     Args:
         value (str): the value as typed, never pre-escaped.
@@ -299,85 +299,42 @@ def parse_command(
     cwd: str,
     cmd_name: str = "",
     env: Mapping[str, str] | None = None,
+    *,
+    unknown_is_operand: bool = False,
 ) -> ParsedArgs:
-    """Read a line as gnulib would, for a program mirage implements.
-
-    A dashed word the spec does not declare is this program's to refuse
-    (`unrecognized option`), because this program is the only parser the
-    line will meet, and a declared ``choices`` set is an ARGMATCH table,
-    so an unambiguous abbreviation of a candidate resolves to it. Use
-    this for every GNU command.
+    """Read one command line against a spec.
 
     Args:
         spec (CommandSpec): the grammar to read the line against.
         argv (list[str]): the words after the command name.
         cwd (str): directory a relative path operand resolves against.
-        cmd_name (str): the command name, for the handful of measured
-            per-program rules the grammar cannot state (NO_LONG_OPTIONS,
-            SOLE_ARGUMENT_LONG_OPTIONS) and for the refusal wording.
+        cmd_name (str): the program name, for the refusal wording and
+            for the handful of measured per-program rules the grammar
+            cannot state (NO_LONG_OPTIONS, SOLE_ARGUMENT_LONG_OPTIONS).
         env (Mapping[str, str] | None): the session environment, so an
             option declaring one gets its value from there.
+        unknown_is_operand (bool): whether another parser reads this
+            line after mirage. False is a GNU command, where mirage is
+            the only parser the line will meet, so a dashed word the
+            spec does not declare is `unrecognized option` and a
+            declared ``choices`` set is a gnulib ARGMATCH table whose
+            candidates an unambiguous abbreviation resolves to. True is
+            an installed CLI's node, where the spec is deliberately
+            partial: mirage's `git log` declares the flags mirage
+            enforces and git owns the rest, so an undeclared dashed word
+            is handed back as an operand for git to refuse in git's own
+            words and exit (`fatal: unrecognized argument: -p`), and a
+            choice value is compared whole, which is what clap and git
+            do and what argparse does. Both answers are argparse's, so
+            this is the one knob, not two. Keyword-only and last,
+            because it is a fact about the call rather than about the
+            spec, and nothing on CommandSpec may say it: the shared
+            grammar stays what POSIX and argparse can both express.
 
     Returns:
         ParsedArgs: the flag bag, operands, and every refusal the line
             earned.
     """
-    return _parse(spec, argv, cwd, cmd_name, env, unknown_is_operand=False)
-
-
-def parse_known_command(
-    spec: CommandSpec,
-    argv: list[str],
-    cwd: str,
-    cmd_name: str = "",
-    env: Mapping[str, str] | None = None,
-) -> ParsedArgs:
-    """Read a line as argparse would, for a program mirage imitates.
-
-    An installed CLI's node is read this way, because mirage is not the
-    only parser its line meets: the node declares the flags mirage
-    enforces and the program owns the rest. Both of argparse's answers
-    follow from that. A dashed word the spec does not declare is not
-    this parser's to refuse, so it is handed back as an operand
-    (``parse_known_args``) and `git log -p` reaches git to earn git's
-    own words and exit (`fatal: unrecognized argument: -p`) instead of
-    mirage's `unrecognized option`; and a declared ``choices`` set is
-    compared whole rather than by ARGMATCH, which is what argparse does
-    and what clap and git do, so `gh --state=o` is refused where gnulib
-    would have resolved it to `open`.
-
-    Which reader to call is the caller's, exactly as it is in argparse.
-    Nothing on the spec says it, so the shared grammar stays what POSIX
-    and argparse can both express, and a spec is not re-read as a
-    different tier by whoever happens to hold it.
-
-    A node that declares nowhere to put an undeclared dashed word still
-    refuses it (`pager --frobnicate`), and that much the grammar does
-    answer.
-
-    Args:
-        spec (CommandSpec): the grammar to read the line against.
-        argv (list[str]): the words after the command name.
-        cwd (str): directory a relative path operand resolves against.
-        cmd_name (str): the program name, for the refusal wording.
-        env (Mapping[str, str] | None): the session environment, so an
-            option declaring one gets its value from there.
-
-    Returns:
-        ParsedArgs: the flag bag, operands (undeclared dashed words
-            among them), and every refusal the line earned.
-    """
-    return _parse(spec, argv, cwd, cmd_name, env, unknown_is_operand=True)
-
-
-def _parse(
-    spec: CommandSpec,
-    argv: list[str],
-    cwd: str,
-    cmd_name: str,
-    env: Mapping[str, str] | None,
-    unknown_is_operand: bool,
-) -> ParsedArgs:
     cs = compile_spec(spec)
 
     # tar's old option style is expanded before anything else reads the
@@ -774,12 +731,11 @@ def _parse(
     # An installed CLI's table is not one: it is clap's or git's, which
     # compare the whole word, so `ntn` and `gh` refuse `--state=o` where
     # gnulib would resolve it to `open`. That is argparse's own rule for
-    # `choices`, so it rides the same reader choice the caller already
-    # made above rather than a second switch, and it keeps the two
-    # levels of one tree saying one thing -- a group node's choices are
-    # enforced exactly by walk._finish_node, so deriving the leaf's rule
-    # from anything else would make one `Option.choices` mean two things
-    # inside one CLI.
+    # `choices`, so it rides the same knob the caller already set rather
+    # than a second one, and it keeps the two levels of one tree saying
+    # one thing -- a group node's choices are enforced exactly by
+    # walk._finish_node, so deriving the leaf's rule from anything else
+    # would make one `Option.choices` mean two things inside one CLI.
     choice_value_options: list[tuple[str, str, tuple[str, ...],
                                      ArgmatchKind]] = []
     for dest_name, allowed in cs.choices_by_dest.items():

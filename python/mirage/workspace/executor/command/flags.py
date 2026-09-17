@@ -16,7 +16,7 @@ from collections import defaultdict, deque
 from collections.abc import Mapping
 
 from mirage.commands.spec import (CommandSpec, flag_kwarg_name, parse_command,
-                                  parse_known_command, parse_to_kwargs)
+                                  parse_to_kwargs)
 from mirage.commands.spec.types import FlagValue
 from mirage.commands.spec.usage import (  # yapf: disable
     ambiguous_option_error, invalid_argument_error, invalid_float_error,
@@ -82,54 +82,8 @@ def parse_flags(
     cwd: str,
     str_flag_paths: bool = False,
     env: Mapping[str, str] | None = None,
-) -> ParsedCommand:
-    """Read a line whose every word this spec is answerable for.
-
-    The PathSpec-recovering wrapper around :func:`parse_command`; see
-    :func:`parse_known_flags` for the reader an installed CLI's node
-    takes, and :func:`_parse_flags` for the arguments both share.
-    """
-    return _parse_flags(parts,
-                        spec,
-                        cmd_name,
-                        cwd,
-                        str_flag_paths,
-                        env,
-                        unknown_is_operand=False)
-
-
-def parse_known_flags(
-    parts: list[str | PathSpec],
-    spec: CommandSpec | None,
-    cmd_name: str,
-    cwd: str,
-    str_flag_paths: bool = False,
-    env: Mapping[str, str] | None = None,
-) -> ParsedCommand:
-    """Read a line this spec shares with the program it is a node of.
-
-    The PathSpec-recovering wrapper around :func:`parse_known_command`,
-    so an installed CLI's node forwards a dashed word it does not
-    declare instead of refusing it. See :func:`_parse_flags` for the
-    arguments both readers share.
-    """
-    return _parse_flags(parts,
-                        spec,
-                        cmd_name,
-                        cwd,
-                        str_flag_paths,
-                        env,
-                        unknown_is_operand=True)
-
-
-def _parse_flags(
-    parts: list[str | PathSpec],
-    spec: CommandSpec | None,
-    cmd_name: str,
-    cwd: str,
-    str_flag_paths: bool,
-    env: Mapping[str, str] | None,
-    unknown_is_operand: bool,
+    *,
+    unknown_is_operand: bool = False,
 ) -> ParsedCommand:
     """Parse flags from classified parts, recovering PathSpec for PATH values.
 
@@ -154,8 +108,10 @@ def _parse_flags(
             virtual-path strings instead of PathSpec. Cross-mount
             strategies read flags through FlagView, which type-checks
             str, so they get the string view.
-        unknown_is_operand (bool): which reader to run, as argparse
-            picks between parse_args and parse_known_args.
+        unknown_is_operand (bool): whether another parser reads this
+            line after mirage, passed straight to parse_command. True
+            only for an installed CLI's node, whose spec is deliberately
+            partial.
 
     Returns:
         ParsedCommand: positional paths, positional texts, parsed flag dict
@@ -179,8 +135,12 @@ def _parse_flags(
             spellings[item.virtual.rstrip("/") or "/"].append(item)
 
     if spec is not None:
-        reader = parse_known_command if unknown_is_operand else parse_command
-        parsed = reader(spec, argv, cwd=cwd, cmd_name=cmd_name, env=env)
+        parsed = parse_command(spec,
+                               argv,
+                               cwd=cwd,
+                               cmd_name=cmd_name,
+                               env=env,
+                               unknown_is_operand=unknown_is_operand)
         # Widens from ParsedFlagValue to FlagValue: PATH values
         # become PathSpec just below.
         flag_kwargs: dict[str, FlagValue] = dict(parse_to_kwargs(parsed))

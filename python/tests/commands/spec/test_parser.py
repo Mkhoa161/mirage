@@ -16,8 +16,7 @@ import pytest
 
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
-from mirage.commands.spec.parser import (parse_command, parse_known_command,
-                                         parse_to_kwargs)
+from mirage.commands.spec.parser import parse_command, parse_to_kwargs
 from mirage.commands.spec.types import (VALUE_OCCURRENCES_KEY, CommandSpec,
                                         Operand, Option)
 
@@ -226,32 +225,37 @@ def test_an_unnamed_parse_is_a_strict_getopt_long_parse():
     assert parsed.invalid_options == ["--zzz"]
 
 
-# parse_known_command is the other reader, the one an installed CLI's
-# node takes: the program owns whatever mirage does not declare, so an
-# undeclared dash word lands in the node's textual rest slot and no
-# abbreviation is expanded on the program's behalf.
-def test_the_known_reader_forwards_dash_words_into_the_rest_slot():
+# unknown_is_operand is what an installed CLI's node is parsed under:
+# the program owns whatever mirage does not declare, so an undeclared
+# dash word lands in the node's textual rest slot and no abbreviation is
+# expanded on the program's behalf.
+def test_unknown_is_operand_forwards_dash_words_into_the_rest_slot():
     spec = CommandSpec(options=(Option(long="--width", type="int"), ),
                        rest=Operand(type="str"))
-    parsed = parse_known_command(spec, ["--widt", "80", "-n", "x"], "/",
-                                 "pager")
+    parsed = parse_command(spec, ["--widt", "80", "-n", "x"],
+                           "/",
+                           "pager",
+                           unknown_is_operand=True)
     assert parsed.flags == {}
     assert parsed.invalid_options == []
     assert parsed.texts() == ["--widt", "80", "-n", "x"]
 
 
-# With no slot to forward into, the same reader refuses it: the program
+# With no slot to forward into, the same parse refuses it: the program
 # cannot be handed a word the node has nowhere to put.
-def test_the_known_reader_without_a_rest_slot_still_refuses():
+def test_unknown_is_operand_without_a_rest_slot_still_refuses():
     spec = CommandSpec(options=(Option(long="--width", type="int"), ))
-    parsed = parse_known_command(spec, ["--frobnicate"], "/", "pager")
+    parsed = parse_command(spec, ["--frobnicate"],
+                           "/",
+                           "pager",
+                           unknown_is_operand=True)
     assert parsed.invalid_options == ["--frobnicate"]
 
 
-# The very same spec read by parse_command is the other answer, which is
-# what makes the reader the deciding fact: nothing about the grammar,
+# The very same spec parsed without the flag is the other answer, which
+# is what makes the call the deciding fact: nothing about the grammar,
 # and nothing carried on the spec, tells the two apart.
-def test_the_same_spec_read_by_parse_command_refuses_the_dash_word():
+def test_the_same_spec_parsed_strictly_refuses_the_dash_word():
     spec = CommandSpec(options=(Option(long="--width", type="int"), ),
                        rest=Operand(type="str"))
     parsed = parse_command(spec, ["--widt", "80", "-n", "x"], "/", "pager")
@@ -518,20 +522,26 @@ def test_a_hand_parsed_choices_set_reports_the_empty_word_invalid():
 # it to `open`. The CLI's group level already enforces its choices
 # exactly (walk._finish_node), so a leaf that prefix-matched would make
 # one Option.choices mean two things inside one tree.
-def test_the_known_reader_takes_no_prefix_for_its_choices():
+def test_unknown_is_operand_takes_no_prefix_for_its_choices():
     options = (Option(long="--state",
                       type="str",
                       choices=("open", "closed", "all")), )
     spec = CommandSpec(options=options)
-    parsed = parse_known_command(spec, ["--state=o"], "/", "gh")
+    parsed = parse_command(spec, ["--state=o"],
+                           "/",
+                           "gh",
+                           unknown_is_operand=True)
     assert parsed.flags["--state"] == "o"
     assert parsed.choice_value_options == [
         ("--state", "o", ("open", "closed", "all"), "invalid"),
     ]
-    exact = parse_known_command(spec, ["--state=open"], "/", "gh")
+    exact = parse_command(spec, ["--state=open"],
+                          "/",
+                          "gh",
+                          unknown_is_operand=True)
     assert exact.flags["--state"] == "open"
     assert exact.choice_value_options == []
-    # The same spec read by parse_command prefix-matches, so the reader
+    # The same spec parsed without the flag prefix-matches, so the call
     # is what decides and nothing about the option does.
     gnu = parse_command(spec, ["--state=o"], "/", "ls")
     assert gnu.flags["--state"] == "open"

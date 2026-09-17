@@ -295,7 +295,7 @@ function matchMixedCluster(tok: string, cs: CompiledSpec): MixedCluster | null {
  * Nearly every spec-declared `choices` set on a GNU command is a gnulib
  * ARGMATCH table, so the value goes through `argmatch` and an unambiguous
  * prefix resolves. Two things are not: the options in EXACT_CHOICE_OPTIONS,
- * and every option read by `parseKnownCommand`. Both have a program that
+ * and every option on a line parsed with `unknownIsOperand`. Both have a program that
  * compares the whole word itself, so only an exact candidate matches, and the
  * ambiguous wording is unreachable for them because a prefix is never a match
  * to be ambiguous between.
@@ -311,13 +311,24 @@ function matchChoice(value: string, choices: ArgmatchChoices, exactOnly: boolean
 }
 
 /**
- * Read a line as gnulib would, for a program mirage implements.
+ * Read one command line against a spec.
  *
- * A dashed word the spec does not declare is this program's to refuse
- * (`unrecognized option`), because this program is the only parser the line
- * will meet, and a declared `choices` set is an ARGMATCH table, so an
- * unambiguous abbreviation of a candidate resolves to it. Use this for every
- * GNU command. `parse_command` in parser.py is the twin.
+ * `unknownIsOperand` says whether another parser reads this line after
+ * mirage. False is a GNU command, where mirage is the only parser the line
+ * will meet, so a dashed word the spec does not declare is `unrecognized
+ * option` and a declared `choices` set is a gnulib ARGMATCH table whose
+ * candidates an unambiguous abbreviation resolves to. True is an installed
+ * CLI's node, where the spec is deliberately partial: mirage's `git log`
+ * declares the flags mirage enforces and git owns the rest, so an undeclared
+ * dashed word is handed back as an operand for git to refuse in git's own
+ * words and exit (`fatal: unrecognized argument: -p`), and a choice value is
+ * compared whole, which is what clap and git do and what argparse does. Both
+ * answers are argparse's, so this is the one knob, not two. It comes last and
+ * defaults to the GNU answer, because it is a fact about the call rather than
+ * about the spec, and nothing on CommandSpec may say it: the shared grammar
+ * stays what POSIX and argparse can both express.
+ *
+ * `parse_command` in parser.py is the twin.
  */
 export function parseCommand(
   spec: CommandSpec,
@@ -325,50 +336,7 @@ export function parseCommand(
   cwd: string,
   cmdName = '',
   env?: Readonly<Record<string, string>>,
-): ParsedArgs {
-  return parse(spec, argv, cwd, cmdName, env, false)
-}
-
-/**
- * Read a line as argparse would, for a program mirage imitates.
- *
- * An installed CLI's node is read this way, because mirage is not the only
- * parser its line meets: the node declares the flags mirage enforces and the
- * program owns the rest. Both of argparse's answers follow from that. A dashed
- * word the spec does not declare is not this parser's to refuse, so it is
- * handed back as an operand (`parse_known_args`) and `git log -p` reaches git
- * to earn git's own words and exit (`fatal: unrecognized argument: -p`)
- * instead of mirage's `unrecognized option`; and a declared `choices` set is
- * compared whole rather than by ARGMATCH, which is what argparse does and what
- * clap and git do, so `gh --state=o` is refused where gnulib would have
- * resolved it to `open`.
- *
- * Which reader to call is the caller's, exactly as it is in argparse. Nothing
- * on the spec says it, so the shared grammar stays what POSIX and argparse can
- * both express, and a spec is not re-read as a different tier by whoever
- * happens to hold it.
- *
- * A node that declares nowhere to put an undeclared dashed word still refuses
- * it (`pager --frobnicate`), and that much the grammar does answer.
- * `parse_known_command` in parser.py is the twin.
- */
-export function parseKnownCommand(
-  spec: CommandSpec,
-  argv: string[],
-  cwd: string,
-  cmdName = '',
-  env?: Readonly<Record<string, string>>,
-): ParsedArgs {
-  return parse(spec, argv, cwd, cmdName, env, true)
-}
-
-function parse(
-  spec: CommandSpec,
-  argv: string[],
-  cwd: string,
-  cmdName: string,
-  env: Readonly<Record<string, string>> | undefined,
-  unknownIsOperand: boolean,
+  unknownIsOperand = false,
 ): ParsedArgs {
   const cs = compileSpec(spec)
 
@@ -442,7 +410,7 @@ function parse(
   const optionErrorKinds: string[] = []
   const needsValueOptions: string[] = []
   // Who owns a dashed word the spec does not declare. The caller already
-  // answered that by which reader it called.
+  // answered that with unknownIsOperand.
   let noLongOptionParser: boolean
   let outsideSoleArgument: boolean
   let lenientDashOperands: boolean
@@ -783,8 +751,8 @@ function parse(
   // An installed CLI's table is not one: it is clap's or git's, which
   // compare the whole word, so `ntn` and `gh` refuse `--state=o` where
   // gnulib would resolve it to `open`. That is argparse's own rule for
-  // `choices`, so it rides the same reader choice the caller already made
-  // above rather than a second switch, and it keeps the two levels of one
+  // `choices`, so it rides the same knob the caller already set rather than
+  // a second one, and it keeps the two levels of one
   // tree saying one thing -- a group node's choices are enforced exactly by
   // walk's finishNode, so deriving the leaf's rule from anything else would
   // make one `Option.choices` mean two things inside one CLI.

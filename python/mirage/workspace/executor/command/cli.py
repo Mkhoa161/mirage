@@ -42,17 +42,16 @@ from mirage.runtime.routing import runtime_for_language
 from mirage.runtime.types import CodeExecution, DispatchFn, ScriptSource
 from mirage.types import PathSpec, Producer, word_text
 from mirage.workspace.cli.types import CLIInstall
-from mirage.workspace.executor.command.flags import (option_error,
-                                                     parse_known_flags)
+from mirage.workspace.executor.command.flags import option_error, parse_flags
 from mirage.workspace.executor.command.run import exec_node
 from mirage.workspace.session import Session, env_snapshot
 from mirage.workspace.types import ExecutionNode
 
-# A textual rest operand is a CLI node's pass-through form: read by
-# parse_known_flags, it takes the undeclared dashed tokens the node does
+# A textual rest operand is a CLI node's pass-through form: parsed under
+# unknown_is_operand, it takes the undeclared dashed tokens the node does
 # not refuse, which is what a program parsing its own argv needs. "str",
-# not "path", so nothing is cwd-resolved or routed. Only that reader
-# treats the rest kind this way: a GNU command's textual rest is a list
+# not "path", so nothing is cwd-resolved or routed. Only that parse
+# reads the rest kind this way: a GNU command's textual rest is a list
 # of operands, which is why basename has one and still refuses an option
 # it does not know.
 PASSTHROUGH_REST = Operand(type="str")
@@ -288,7 +287,7 @@ async def handle_cli(
     # Words re-enter string space as typed (word_text): the walk owns
     # interpretation, so a quoted "Lunch?" must not arrive as the
     # glob-classified absolute /Lunch?. Leaf path operands are resolved
-    # later by parse_known_flags against the session cwd.
+    # later by parse_flags against the session cwd.
     cmd_str = " ".join(word_text(p) for p in parts)
     argv = [word_text(p) for p in parts[1:]]
     stdout: ByteSource | None
@@ -319,11 +318,12 @@ async def handle_cli(
     # The environment goes into the parse, not on top of it: an option
     # declaring one is coerced, choice-checked, path-resolved and
     # credited against required exactly as a typed value is.
-    parsed = parse_known_flags(list(result.argv),
-                               parse_spec,
-                               prog,
-                               session.cwd,
-                               env=env_snapshot(session))
+    parsed = parse_flags(list(result.argv),
+                         parse_spec,
+                         prog,
+                         session.cwd,
+                         env=env_snapshot(session),
+                         unknown_is_operand=True)
     if mirage_help and parsed.flag_kwargs.get("help") is True:
         help_text = render_help(prog, parse_spec, style=style).encode()
         return help_text, IOResult(), ExecutionNode(command=cmd_str,
