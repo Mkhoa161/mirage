@@ -24,6 +24,10 @@ semantics.
   repo root (the venv binary, so `examples/` is included).
 - Examples run from the repo root with the venv interpreter:
   `./python/.venv/bin/python examples/python/s3/s3.py`.
+- **Do not add a changeset.** `typescript/.changeset/` stays as it is for
+  now: the public interface is still moving, so a per-PR version note
+  describes a surface that changes again before it ships. Nothing gates on
+  one. The release notes get written once the interface settles.
 
 ### Gates
 
