@@ -218,7 +218,7 @@ export class MirageFileSystem extends FileSystem {
       await host.namespace.ensureLoaded()
       this.host = host
       this.fsOps =
-        this.sessionId === undefined ? host.fs : new SessionHandle(host, this.sessionId).fs
+        this.sessionId === undefined ? host.vfs : new SessionHandle(host, this.sessionId).vfs
     }
     assertNotAborted(signal, operation)
     return this.fsOps
@@ -395,7 +395,7 @@ export class MirageFileSystem extends FileSystem {
       // dispatch, so a read would land on the link's target rather than
       // the disk file the caller named. Links are namespace state, so the
       // disk mount cannot see one and only this table can say.
-      if (shadowedByLink(workspace.fs.links, virtual)) continue
+      if (shadowedByLink(workspace.vfs.links, virtual)) continue
       return virtual
     }
     return undefined

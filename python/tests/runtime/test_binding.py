@@ -141,7 +141,7 @@ async def test_context_keeps_namespace_live_and_matches_native_projection():
         assert context.resolver.owner_of("/data/nested/a") == "/data/nested/"
         vfs = RuntimeVFS(context.dispatch, asyncio.get_running_loop(),
                          context.resolver)
-        mount = MountCore(ws.fs)
+        mount = MountCore(ws.vfs)
         # Call both sync adapters on a worker to keep their serving loop free.
         guest = await asyncio.to_thread(vfs.read, "/data/link")
         native = await asyncio.to_thread(mount.read, "/data/link", 100, 0,

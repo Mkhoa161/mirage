@@ -150,14 +150,14 @@ describe('name-plane writes go through the door', () => {
     // readlink is the read twin: guests and CLIs ask through the same
     // door instead of a bespoke channel.
     const ws = await makeWs()
-    await ws.fs.symlink('/a/lk', 'x.txt')
-    expect(await ws.fs.readlink('/a/lk')).toBe('x.txt')
+    await ws.vfs.symlink('/a/lk', 'x.txt')
+    expect(await ws.vfs.readlink('/a/lk')).toBe('x.txt')
     expect(ws.namespace.readlink('/a/lk')).toBe('x.txt')
   })
 
   it('readlink on a non-link reports EINVAL', async () => {
     const ws = await makeWs()
-    await expect(ws.fs.readlink('/a/x.txt')).rejects.toMatchObject({ code: 'EINVAL' })
+    await expect(ws.vfs.readlink('/a/x.txt')).rejects.toMatchObject({ code: 'EINVAL' })
   })
 
   it('scoped shell readlink on hidden turf is refused', async () => {
@@ -198,11 +198,11 @@ describe('name-plane writes go through the door', () => {
     const ws = await makeWs()
     const sess = ws.createSession('agent', { profile: { paths: { hide: ['/b'] } } })
     await runWithSession(sess, async () => {
-      await ws.fs.symlink('/a/lk', 'x.txt')
+      await ws.vfs.symlink('/a/lk', 'x.txt')
       // The hidden mount does not exist for the session, so a create
       // under it answers ENOENT as every read does; only a create at a
       // hidden name inside a visible directory is EACCES.
-      await expect(ws.fs.symlink('/b/lk', 'y.txt')).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(ws.vfs.symlink('/b/lk', 'y.txt')).rejects.toMatchObject({ code: 'ENOENT' })
     })
     expect(ws.namespace.isLink('/a/lk')).toBe(true)
     expect(ws.namespace.isLink('/b/lk')).toBe(false)
@@ -644,7 +644,7 @@ async function makeSealedWs(policies: Policy[]): Promise<Workspace> {
   const ws = new Workspace({ '/a': vfs }, { mode: MountMode.WRITE, shellParser: parser })
   open.push(ws)
   await ws.shell('mkdir -p /a/prod')
-  await ws.fs.writeFile('/a/prod/keep.txt', ENC.encode('keep\n'))
+  await ws.vfs.writeFile('/a/prod/keep.txt', ENC.encode('keep\n'))
   for (const p of policies) ws.policies.add(p)
   return ws
 }
@@ -659,7 +659,7 @@ describe('op hooks bind at the op doors and the command tier', () => {
 
     // The doors hold: the fs facade, and a dispatcher-routed redirect
     // write.
-    await expect(ws.fs.readFile('/a/secret.txt')).rejects.toThrow('secret is sealed')
+    await expect(ws.vfs.readFile('/a/secret.txt')).rejects.toThrow('secret is sealed')
     const redirect = await ws.shell('echo hi > /a/prod/new.txt')
     expect(redirect.exitCode).not.toBe(0)
 
@@ -1065,10 +1065,10 @@ describe('hidden paths across the tiers', () => {
     const ws = await makeHiddenPathsWs()
     const sess = ws.getSession('agent')
     await runWithSession(sess, async () => {
-      await expect(ws.fs.readFile('/a/secrets/token.txt')).rejects.toMatchObject({
+      await expect(ws.vfs.readFile('/a/secrets/token.txt')).rejects.toMatchObject({
         code: 'ENOENT',
       })
-      const names = await ws.fs.readdir('/a')
+      const names = await ws.vfs.readdir('/a')
       expect(names.some((n) => n.includes('secrets'))).toBe(false)
     })
   })
@@ -1371,7 +1371,7 @@ describe('command permissions end to end', () => {
   async function commandsWs(): Promise<Workspace> {
     const parser = await getTestParser()
     // The frozen subtree is seeded on the VFS: the pure path rule
-    // holds at every op door, the host's `ws.fs` included.
+    // holds at every op door, the host's `ws.vfs` included.
     const repo = new RAMVFS()
     repo.store.dirs.add('/locked')
     repo.store.files.set('/locked/y', ENC.encode('y\n'))
@@ -1489,8 +1489,8 @@ describe('command permissions end to end', () => {
     // A pure path rule holds at the command plane for any command and
     // at the op door for every op, whatever door.
     expect(await line(ws, 'cat /repo/locked/y')).toEqual([1, '', 'cat: /repo/locked/y: frozen\n'])
-    await expect(ws.fs.writeFile('/repo/locked/y', 'changed')).rejects.toThrow()
-    await expect(ws.fs.readFile('/repo/locked/y')).rejects.toThrow()
+    await expect(ws.vfs.writeFile('/repo/locked/y', 'changed')).rejects.toThrow()
+    await expect(ws.vfs.readFile('/repo/locked/y')).rejects.toThrow()
     // A mount section's rule applies when the line works inside the
     // mount (cwd under it, or a path under it), whole command; the verb
     // walk reads `-C /repo reset --hard` as `git reset --hard`.

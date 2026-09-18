@@ -101,7 +101,7 @@ async def _ws() -> Workspace:
     ws = Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE)
     ws.get_session(ws.default_session_id).cwd = "/"
     await ws.shell("mkdir -p /ram/dir")
-    await ws.fs.write("/ram/dir/inner.txt", b"inner\n")
+    await ws.vfs.write("/ram/dir/inner.txt", b"inner\n")
     return ws
 
 

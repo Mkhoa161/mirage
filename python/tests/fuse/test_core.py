@@ -35,7 +35,7 @@ async def seeded():
     await ws.shell("tee /a.txt", stdin=b"hello world")
     await ws.shell("mkdir /sub")
     await ws.shell("tee /sub/b.txt", stdin=b"nested")
-    return MountCore(ws.fs)
+    return MountCore(ws.vfs)
 
 
 def test_core_needs_no_fuse_module():
@@ -135,7 +135,7 @@ async def test_o_trunc_open_through_a_link_settles_the_targets_handle():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.shell("tee /a.txt", stdin=b"hello world")
     await ws.shell("ln -s a.txt /lk")
-    core = MountCore(ws.fs)
+    core = MountCore(ws.vfs)
     first = core.open("/a.txt", os.O_WRONLY)
     core.write("/a.txt", b"QUEUED", 0, first)
     second = core.open("/lk", os.O_WRONLY | os.O_TRUNC)
@@ -153,14 +153,14 @@ async def test_failed_settlement_keeps_the_other_handles_buffer():
     res = RAMVFS()
     seed = Workspace({"/": res}, mode=MountMode.WRITE)
     await seed.shell("tee /a.txt", stdin=b"seed")
-    core = MountCore(Workspace({"/": res}, mode=MountMode.READ).fs)
+    core = MountCore(Workspace({"/": res}, mode=MountMode.READ).vfs)
     first = core.open("/a.txt", os.O_WRONLY)
     core.write("/a.txt", b"QUEUED", 0, first)
     with pytest.raises(OSError):
         core.open("/a.txt", os.O_WRONLY | os.O_TRUNC)
     with pytest.raises(OSError):
         core.flush("/a.txt", first)
-    assert await seed.fs.read("/a.txt") == b"seed"
+    assert await seed.vfs.read("/a.txt") == b"seed"
 
 
 @pytest.mark.asyncio
@@ -193,7 +193,7 @@ async def test_getattr_of_a_link_reports_the_nodes_own_row():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.shell("tee /a.txt", stdin=b"hello")
     await ws.shell("ln -s a.txt /link")
-    core = MountCore(ws.fs)
+    core = MountCore(ws.vfs)
     await ws.dispatch("setattr",
                       PathSpec.from_str_path("/link"),
                       mode=None,
@@ -231,7 +231,7 @@ async def test_scoped_mount_may_not_touch_a_link_on_hidden_turf():
     await ws.shell("tee /extra/secret.txt", stdin=b"classified")
     await ws.shell("ln -s secret.txt /extra/lk")
     sess = ws.create_session("agent", profile={"paths": {"hide": ["/extra"]}})
-    core = MountCore(ws.fs, session=sess)
+    core = MountCore(ws.vfs, session=sess)
 
     with pytest.raises(OSError) as created:
         core.symlink("/extra/lk2", "/data/greeting.txt")
@@ -250,7 +250,7 @@ async def test_unlink_removes_a_link_and_keeps_its_target():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.shell("tee /f.txt", stdin=b"body")
     await ws.shell("ln -s f.txt /lk")
-    core = MountCore(ws.fs)
+    core = MountCore(ws.vfs)
     core.unlink("/lk")
     assert not ws.namespace.is_link("/lk")
     assert (await ws.shell("cat /f.txt")).stdout == b"body"
@@ -277,7 +277,7 @@ async def test_getxattr_missing_raises_no_xattr(seeded):
 @pytest.mark.asyncio
 async def test_resolve_honors_root_prefix():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
-    core = MountCore(ws.fs, root_prefix="/data/")
+    core = MountCore(ws.vfs, root_prefix="/data/")
     assert core.resolve("/") == "/data"
     assert core.resolve("/x.txt") == "/data/x.txt"
 
@@ -292,7 +292,7 @@ async def test_rename_across_mounts_reports_exdev():
         "/other/": RAMVFS()
     },
                    mode=MountMode.WRITE)
-    core = MountCore(ws.fs)
+    core = MountCore(ws.vfs)
     core.write("/data/x.txt", b"body", 0, None)
     with pytest.raises(OSError) as exc:
         core.rename("/data/x.txt", "/other/x.txt")
@@ -326,7 +326,7 @@ async def test_o_trunc_open_hydrates_through_the_renderer():
     vfs.register_op(_read_tally)
     ws = Workspace({"/data/": vfs}, mode=MountMode.WRITE)
     await ws.shell("tee /data/books.tally", stdin=b"0123456789")
-    core = MountCore(_Sizeless(ws.fs))
+    core = MountCore(_Sizeless(ws.vfs))
     fh = core.open("/data/books.tally", os.O_WRONLY | os.O_TRUNC)
     assert core._run(core._ops.read("/data/books.tally", raw=True)) == b""
     rendered = b"RENDERED-AND-MUCH-LONGER"
@@ -339,7 +339,7 @@ def _tally_core() -> MountCore:
     vfs = RAMVFS()
     vfs.register_op(_read_tally)
     ws = Workspace({"/data/": vfs}, mode=MountMode.WRITE)
-    return MountCore(ws.fs)
+    return MountCore(ws.vfs)
 
 
 @pytest.mark.asyncio
@@ -440,7 +440,7 @@ def test_drain_ops_omits_internal_mount_identity():
                       timestamp=1,
                       duration_ms=2,
                       mount_id="internal-mount")
-    ws.fs.records.append(record)
-    core = MountCore(ws.fs)
+    ws.vfs.records.append(record)
+    core = MountCore(ws.vfs)
     assert core.drain_ops() == [record.to_dict()]
     assert core.drain_ops() == []

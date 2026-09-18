@@ -585,11 +585,11 @@ function checkOps(expect: Expect, seen: string[]): string[] {
   return problems
 }
 
-// One facade step: call a typed Ops convenience (`ws.fs`) and check its
+// One facade step: call a typed Ops convenience (`ws.vfs`) and check its
 // value. The JSON carries the python facade spelling (`is_dir`,
 // `list_files`); snakeToCamel maps it onto the TS method.
 async function runFacade(ws: Workspace, expect: Expect, spec: FacadeSpec): Promise<string[]> {
-  const facade = ws.fs as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
+  const facade = ws.vfs as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>
   const method = facade[snakeToCamel(spec.method)]
   if (method === undefined) return [`facade has no method ${spec.method}`]
   const args: unknown[] = [spec.path]
@@ -602,7 +602,7 @@ async function runFacade(ws: Workspace, expect: Expect, spec: FacadeSpec): Promi
     // condition instead.
     let name = 'NONE'
     try {
-      await method.apply(ws.fs, args)
+      await method.apply(ws.vfs, args)
     } catch (err) {
       name = (err as { code?: string }).code ?? (err as Error).constructor.name
     }
@@ -611,7 +611,7 @@ async function runFacade(ws: Workspace, expect: Expect, spec: FacadeSpec): Promi
   }
   if (expect.throws_contains !== undefined) {
     try {
-      await method.apply(ws.fs, args)
+      await method.apply(ws.vfs, args)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes(expect.throws_contains)) return []
@@ -622,7 +622,7 @@ async function runFacade(ws: Workspace, expect: Expect, spec: FacadeSpec): Promi
     }
     return ['facade: expected an error, none raised']
   }
-  const value = await method.apply(ws.fs, args)
+  const value = await method.apply(ws.vfs, args)
   if (
     expect.value !== undefined &&
     JSON.stringify(value ?? null) !== JSON.stringify(expect.value)

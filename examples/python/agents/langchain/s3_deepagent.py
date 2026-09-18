@@ -56,7 +56,7 @@ result2 = agent.invoke({"messages": [{"role": "user", "content": task2}]})
 for text in extract_text(result2["messages"][-1:]):
     print(text)
 
-records = ws.fs.records
+records = ws.vfs.records
 if records:
     total = sum(r.bytes for r in records)
     print(f"\n--- {len(records)} ops, {total:,} bytes ---")

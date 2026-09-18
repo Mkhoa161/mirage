@@ -78,7 +78,7 @@ async def test_curl_o_persists_to_writable_mount(multi_mount_ws, mock_http):
     io = await multi_mount_ws.shell(
         "curl -s https://x.test/file -o /ram/foo.bin")
     assert io.exit_code == 0
-    data = await multi_mount_ws.fs.read("/ram/foo.bin")
+    data = await multi_mount_ws.vfs.read("/ram/foo.bin")
     assert data == mock_http
 
 
@@ -120,7 +120,7 @@ async def test_wget_O_persists_to_writable_mount(multi_mount_ws, mock_http):
     io = await multi_mount_ws.shell(
         "wget -q -O /ram/wget.bin https://x.test/file")
     assert io.exit_code == 0
-    data = await multi_mount_ws.fs.read("/ram/wget.bin")
+    data = await multi_mount_ws.vfs.read("/ram/wget.bin")
     assert data == mock_http
 
 

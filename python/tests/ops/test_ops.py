@@ -136,7 +136,7 @@ def _two_mount_ops() -> Ops:
     return Workspace({
         "/a/": RAMVFS(),
         "/b/": RAMVFS()
-    }, mode=MountMode.WRITE).fs
+    }, mode=MountMode.WRITE).vfs
 
 
 class TestRename:
@@ -196,11 +196,11 @@ async def test_a_namespace_answer_is_not_a_backend_op(deep_only_session):
     },
                    mode=MountMode.WRITE)
     try:
-        ws.fs.records.clear()
-        assert await ws.fs.readdir("/m/inner") == ["/m/inner/deep"]
+        ws.vfs.records.clear()
+        assert await ws.vfs.readdir("/m/inner") == ["/m/inner/deep"]
         assert [(r.source, r.is_cache)
-                for r in ws.fs.records] == [("ram", True)]
-        assert ws.fs.network_records == []
+                for r in ws.vfs.records] == [("ram", True)]
+        assert ws.vfs.network_records == []
     finally:
         await ws.close()
 
@@ -226,12 +226,12 @@ async def test_a_denied_namespace_answer_is_not_a_backend_op(
                    mode=MountMode.WRITE)
     try:
         ws.policies.add(DenyInner())
-        ws.fs.records.clear()
+        ws.vfs.records.clear()
         with pytest.raises(PermissionError):
-            await ws.fs.readdir("/m/inner")
+            await ws.vfs.readdir("/m/inner")
         assert [(r.source, r.is_cache)
-                for r in ws.fs.records] == [("ram", True)]
-        assert ws.fs.network_records == []
+                for r in ws.vfs.records] == [("ram", True)]
+        assert ws.vfs.network_records == []
     finally:
         await ws.close()
 
@@ -322,7 +322,7 @@ class TestMultiMount:
         ops = Workspace({
             "/mem1/": one,
             "/mem2/": two
-        }, mode=MountMode.WRITE).fs
+        }, mode=MountMode.WRITE).vfs
         run(ops.mkdir("/mem1/dir"))
         run(ops.mkdir("/mem2/dir"))
         run(ops.write("/mem1/dir/a.txt", b"from store1"))
@@ -343,7 +343,7 @@ class TestOpsAgainstSeededStore:
         store.files["/test.txt"] = b"hello"
         store.modified["/test.txt"] = "2024-01-01T00:00:00"
         ws = Workspace({"/data/": vfs}, mode=MountMode.WRITE)
-        return ws.fs, store
+        return ws.vfs, store
 
     def test_read(self, memory_ops):
         ops, _ = memory_ops
@@ -375,7 +375,7 @@ def _structure_only_ops(policies: list[Policy]) -> Ops:
         "/data/inner/deep/": RAMVFS()
     },
                      mode=MountMode.WRITE,
-                     policies=policies).fs
+                     policies=policies).vfs
 
 
 class TestStructureFallbackGates:
@@ -401,7 +401,7 @@ def _granted_child_ops() -> Ops:
         "/data/": RAMVFS(),
         "/data/inner/deep/": RAMVFS()
     },
-                     mode=MountMode.WRITE).fs
+                     mode=MountMode.WRITE).vfs
 
 
 @pytest.fixture
@@ -464,10 +464,10 @@ class TestAttachedOpsOneDoor:
         ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
         try:
             ws.policies.add(counter)
-            await ws.fs.write("/data/x.txt", b"body")
+            await ws.vfs.write("/data/x.txt", b"body")
             assert counter.calls.count(("write", "/data/x.txt")) == 1
             counter.calls.clear()
-            assert await ws.fs.read("/data/x.txt") == b"body"
+            assert await ws.vfs.read("/data/x.txt") == b"body"
             assert counter.calls.count(("read", "/data/x.txt")) == 1
         finally:
             await ws.close()
@@ -476,9 +476,9 @@ class TestAttachedOpsOneDoor:
     async def test_records_survive_the_delegation(self):
         ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
         try:
-            await ws.fs.write("/data/x.txt", b"12345")
-            assert await ws.fs.read("/data/x.txt") == b"12345"
-            recorded = {(r.op, r.path, r.bytes) for r in ws.fs.records}
+            await ws.vfs.write("/data/x.txt", b"12345")
+            assert await ws.vfs.read("/data/x.txt") == b"12345"
+            recorded = {(r.op, r.path, r.bytes) for r in ws.vfs.records}
             assert ("write", "/data/x.txt", 5) in recorded
             assert ("read", "/data/x.txt", 5) in recorded
         finally:
@@ -493,8 +493,8 @@ class TestAttachedOpsOneDoor:
         try:
             ws.policies.add(_DenyEverything())
             with pytest.raises(PolicyDenied):
-                await ws.fs.write("/data/x.txt", b"body")
-            assert ws.fs.records == []
+                await ws.vfs.write("/data/x.txt", b"body")
+            assert ws.vfs.records == []
         finally:
             await ws.close()
 
@@ -503,7 +503,7 @@ class TestAttachedOpsOneDoor:
         ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.READ)
         try:
             with pytest.raises(PermissionError):
-                await ws.fs.write("/data/x.txt", b"body")
+                await ws.vfs.write("/data/x.txt", b"body")
         finally:
             await ws.close()
 
@@ -515,13 +515,13 @@ class TestAttachedOpsOneDoor:
         },
                        mode=MountMode.WRITE)
         try:
-            await ws.fs.write("/a/x.txt", b"body")
-            await ws.fs.rename("/a/x.txt", "/a/y.txt")
-            assert await ws.fs.read("/a/y.txt") == b"body"
+            await ws.vfs.write("/a/x.txt", b"body")
+            await ws.vfs.rename("/a/x.txt", "/a/y.txt")
+            assert await ws.vfs.read("/a/y.txt") == b"body"
             with pytest.raises(OSError) as exc:
-                await ws.fs.rename("/a/y.txt", "/b/x.txt")
+                await ws.vfs.rename("/a/y.txt", "/b/x.txt")
             assert exc.value.errno == errno.EXDEV
-            assert await ws.fs.read("/a/y.txt") == b"body"
+            assert await ws.vfs.read("/a/y.txt") == b"body"
         finally:
             await ws.close()
 
@@ -579,8 +579,8 @@ class TestPerCallSession:
     @staticmethod
     def _split_ws() -> Workspace:
         ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
-        run(ws.fs.write("/data/secret.txt", b"classified"))
-        run(ws.fs.write("/data/open.txt", b"public"))
+        run(ws.vfs.write("/data/secret.txt", b"classified"))
+        run(ws.vfs.write("/data/open.txt", b"public"))
         ws.create_session(
             "blind", permissions={"paths": {
                 "hide": ["/data/secret.txt"]
@@ -591,11 +591,11 @@ class TestPerCallSession:
     def test_an_op_runs_as_the_session_it_names(self):
         ws = self._split_ws()
         try:
-            assert run(ws.fs.read("/data/secret.txt",
-                                  session_id="seeing")) == b"classified"
-            assert run(ws.fs.exists("/data/secret.txt",
-                                    session_id="blind")) is False
-            assert run(ws.fs.readdir(
+            assert run(ws.vfs.read("/data/secret.txt",
+                                   session_id="seeing")) == b"classified"
+            assert run(ws.vfs.exists("/data/secret.txt",
+                                     session_id="blind")) is False
+            assert run(ws.vfs.readdir(
                 "/data", session_id="blind")) == ["/data/open.txt"]
         finally:
             run(ws.close())
@@ -604,7 +604,7 @@ class TestPerCallSession:
         ws = self._split_ws()
         try:
             with pytest.raises(PermissionError):
-                run(ws.fs.write("/data/secret.txt", b"x", session_id="blind"))
+                run(ws.vfs.write("/data/secret.txt", b"x", session_id="blind"))
         finally:
             run(ws.close())
 
@@ -614,12 +614,12 @@ class TestPerCallSession:
         # would quietly read as the default.
         ws = self._split_ws()
         try:
-            assert run(ws.fs.cat("/data/secret.txt",
-                                 session_id="seeing")) == "classified"
-            assert run(ws.fs.list_files("/data",
-                                        session_id="blind")) == ["open.txt"]
-            assert run(ws.fs.is_file("/data/secret.txt",
-                                     session_id="blind")) is False
+            assert run(ws.vfs.cat("/data/secret.txt",
+                                  session_id="seeing")) == "classified"
+            assert run(ws.vfs.list_files("/data",
+                                         session_id="blind")) == ["open.txt"]
+            assert run(ws.vfs.is_file("/data/secret.txt",
+                                      session_id="blind")) is False
         finally:
             run(ws.close())
 
@@ -632,8 +632,8 @@ class TestPerCallSession:
             hidden_paths=HiddenPaths(paths=("/data/secret.txt", )))
         token = set_current_session(session)
         try:
-            assert run(ws.fs.exists("/data/secret.txt",
-                                    session_id="seeing")) is False
+            assert run(ws.vfs.exists("/data/secret.txt",
+                                     session_id="seeing")) is False
         finally:
             reset_current_session(token)
             run(ws.close())
@@ -641,8 +641,8 @@ class TestPerCallSession:
     def test_no_session_named_is_the_facade_s_own(self):
         ws = self._split_ws()
         try:
-            door = SessionHandle(ws, "blind").fs
+            door = SessionHandle(ws, "blind").vfs
             assert run(door.exists("/data/secret.txt")) is False
-            assert run(ws.fs.exists("/data/secret.txt")) is True
+            assert run(ws.vfs.exists("/data/secret.txt")) is True
         finally:
             run(ws.close())

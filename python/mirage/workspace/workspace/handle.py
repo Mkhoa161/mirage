@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 class SessionHandle:
     """One session's two doors, bound together.
 
-    ``shell`` runs a line as the session and ``fs`` is the op facade
+    ``shell`` runs a line as the session and ``vfs`` is the op facade
     run as it, so a host holds one object per agent and both doors
     answer under the same profile: hides, mount modes, grants and
     standing decisions. Nothing is stored here; the session record
@@ -50,9 +50,9 @@ class SessionHandle:
         return self._ws.get_session(self._id)
 
     @property
-    def fs(self) -> Ops:
+    def vfs(self) -> Ops:
         """The op facade run as this session."""
-        return self._ws.fs._for_session(self._id)
+        return self._ws.vfs._for_session(self._id)
 
     @overload
     async def shell(self,

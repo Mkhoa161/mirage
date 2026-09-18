@@ -30,7 +30,7 @@ def _make_gdrive_ops() -> tuple[Ops, IndexCacheStore]:
     vfs = GoogleDriveVFS(
         config=GoogleDriveConfig(client_id="x", refresh_token="y"))
     ws = Workspace({"/gdrive/": vfs}, mode=MountMode.READ)
-    return ws.fs, vfs.index
+    return ws.vfs, vfs.index
 
 
 @pytest.mark.asyncio

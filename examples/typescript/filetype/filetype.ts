@@ -41,7 +41,7 @@ function encode(counts: Record<string, number>): Uint8Array {
 async function tallyCat(ws: Workspace, paths: PathSpec[]): Promise<CommandFnResult> {
   const path = paths[0]
   if (path === undefined) return [null, new IOResult({ exitCode: 1 })]
-  const raw = await ws.fs.readFile(path.virtual)
+  const raw = await ws.vfs.readFile(path.virtual)
   if (dec.decode(raw.subarray(0, MAGIC.length)) !== MAGIC) {
     return [null, new IOResult({ exitCode: 1, stderr: enc.encode('cat: not a tally file\n') })]
   }
@@ -58,8 +58,8 @@ async function tallyCat(ws: Workspace, paths: PathSpec[]): Promise<CommandFnResu
 async function main(): Promise<void> {
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
 
-  await ws.fs.writeFile('/data/hits.tally', encode({ alpha: 3, beta: 11 }))
-  await ws.fs.writeFile('/data/notes.txt', enc.encode('plain text\n'))
+  await ws.vfs.writeFile('/data/hits.tally', encode({ alpha: 3, beta: 11 }))
+  await ws.vfs.writeFile('/data/notes.txt', enc.encode('plain text\n'))
 
   const [tally] = command({
     name: 'cat',

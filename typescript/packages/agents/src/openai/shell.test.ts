@@ -53,7 +53,7 @@ describe('MirageShell', () => {
 
   it('captures stderr and exitCode for failing commands', async () => {
     const ws = mkWs()
-    await ws.fs.writeFile('/exists.txt', 'x')
+    await ws.vfs.writeFile('/exists.txt', 'x')
     const shell = new MirageShell(ws)
     const result = await shell.run({ commands: ['cat /missing-file.txt'] })
 

@@ -51,11 +51,11 @@ async def test_a_handle_binds_both_doors_to_one_session():
         assert shown.stdout == b"hello\n"
         hidden = await reviewer.shell("cat /repo/secrets/key.pem")
         assert hidden.exit_code == 1
-        assert await reviewer.fs.read("/repo/README.md") == b"hello\n"
+        assert await reviewer.vfs.read("/repo/README.md") == b"hello\n"
         with pytest.raises(FileNotFoundError):
-            await reviewer.fs.read("/repo/secrets/key.pem")
-        assert await ws.fs.read("/repo/secrets/key.pem") == b"PRIVATE\n"
-        assert reviewer.fs.records is ws.fs.records
+            await reviewer.vfs.read("/repo/secrets/key.pem")
+        assert await ws.vfs.read("/repo/secrets/key.pem") == b"PRIVATE\n"
+        assert reviewer.vfs.records is ws.vfs.records
     finally:
         await ws.close()
 
@@ -120,8 +120,8 @@ async def test_a_handle_forwards_per_call_options():
             # A session already bound is kept by the op door, so a
             # handle reached from inside the default session's own
             # command reads as that session, never wider.
-            assert await reviewer.fs.read("/repo/secrets/key.pem"
-                                          ) == b"PRIVATE\n"
+            assert await reviewer.vfs.read("/repo/secrets/key.pem"
+                                           ) == b"PRIVATE\n"
         finally:
             reset_current_session(token)
     finally:

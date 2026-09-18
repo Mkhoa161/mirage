@@ -971,7 +971,7 @@ REVIEWER_COMMANDS = {
 
 def _commands_ws() -> Workspace:
     # The frozen subtree is seeded on the VFS: the pure path rule
-    # holds at every op door, the host's `ws.fs` included.
+    # holds at every op door, the host's `ws.vfs` included.
     repo = RAMVFS()
     repo._store.dirs.add("/locked")
     repo._store.files["/locked/y"] = b"y\n"
@@ -1101,8 +1101,8 @@ async def test_deny_rules_by_source_scope_and_voice():
             ws,
             "cat /repo/locked/y") == (1, "", "cat: /repo/locked/y: frozen\n")
         with pytest.raises(PermissionError):
-            await ws.fs.write("/repo/locked/y", b"changed")
-        assert await ws.fs.read("/repo/d/x") == b""
+            await ws.vfs.write("/repo/locked/y", b"changed")
+        assert await ws.vfs.read("/repo/d/x") == b""
         # A mount section's rule applies when the line works inside the
         # mount (cwd under it, or a path under it), whole command; the
         # verb walk reads `-C /repo reset --hard` as `git reset --hard`.
@@ -1136,7 +1136,7 @@ async def test_find_delete_is_gated_at_the_op_door_not_by_a_named_rule():
         assert (await _line(ws, "cat /repo/locked/y"))[0] == 1
         # The same rule holds for the host's own door, read or write.
         with pytest.raises(PermissionError):
-            await ws.fs.read("/repo/locked/y")
+            await ws.vfs.read("/repo/locked/y")
     finally:
         await ws.close()
 
@@ -1967,11 +1967,11 @@ async def test_the_op_door_stats_a_refused_entry_and_withholds_its_content():
         sess = ws.get_session("g")
         token = set_current_session(sess)
         try:
-            assert (await ws.fs.stat("/data/t/locked/y")).size == 2
+            assert (await ws.vfs.stat("/data/t/locked/y")).size == 2
             with pytest.raises(PermissionError):
-                await ws.fs.read("/data/t/locked/y")
+                await ws.vfs.read("/data/t/locked/y")
             with pytest.raises(FileNotFoundError):
-                await ws.fs.stat("/data/t/ghost/g")
+                await ws.vfs.stat("/data/t/ghost/g")
         finally:
             reset_current_session(token)
     finally:

@@ -114,13 +114,13 @@ import { MountMode, RAMVFS } from '@struktoai/mirage-core'
 const ram = new RAMVFS()
 ws.addMount('/ram', ram, MountMode.WRITE)
 
-await ws.fs.writeFile('/ram/in.txt', 'hello')
+await ws.vfs.writeFile('/ram/in.txt', 'hello')
 const r = await ws.shell(`python3 -c 'print(open("/ram/in.txt").read())'`)
 r.stdoutText // "hello\n"
 
 // Writes flush back through the bridge:
 await ws.shell(`python3 -c 'open("/ram/out.txt","w").write("from python")'`)
-await ws.fs.readFileText('/ram/out.txt') // "from python"
+await ws.vfs.readFileText('/ram/out.txt') // "from python"
 ```
 
 PIL and other native-extension libs that go through Python's `open()` work too:
@@ -131,8 +131,8 @@ from PIL import Image
 img = Image.new("RGB", (4, 4), color="red")
 img.save("/ram/icon.png")
 '`)
-const png = await ws.fs.readFile('/ram/icon.png')
-// PNG bytes, ws.fs sees what Python wrote
+const png = await ws.vfs.readFile('/ram/icon.png')
+// PNG bytes, ws.vfs sees what Python wrote
 ```
 
 See [Pyodide workspace file access](/typescript/runtime/python#workspace-file-access)

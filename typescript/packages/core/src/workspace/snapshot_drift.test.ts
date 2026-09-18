@@ -306,7 +306,7 @@ describe('Workspace snapshot: capture and replay drift detection', () => {
       { mode: MountMode.WRITE, ops, shellParser: parser, driftPolicy: DriftPolicy.STRICT },
       { '/remote/': new FakeRemoteVFS(accessor) },
     )
-    await expect(loaded.fs.readFile('/remote/a.txt')).rejects.toBeInstanceOf(ContentDriftError)
+    await expect(loaded.vfs.readFile('/remote/a.txt')).rejects.toBeInstanceOf(ContentDriftError)
     await ws.close()
     await loaded.close()
   })

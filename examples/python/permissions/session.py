@@ -20,8 +20,8 @@ from mirage.vfs.ram import RAMVFS
 from mirage.workspace import SessionHandle
 
 # One agent, one handle. `ws.session(id, profile=...)` creates a session
-# under a role and hands back its two doors bound together: `execute`
-# runs a shell line as the session and `fs` is the op facade run as it.
+# under a role and hands back its two doors bound together: `shell`
+# runs a shell line as the session and `vfs` is the op facade run as it.
 # Whichever door an agent's tools use, the same profile answers.
 #
 # Two roles read one world and see two filesystems. The reviewer's
@@ -30,8 +30,8 @@ from mirage.workspace import SessionHandle
 # read-only file system on either door. The editor may write, and a
 # deny rule keeps it out of the secrets by name, so the same file is
 # "does not exist" for one role and "permission denied" for the other,
-# through the shell and through fs.read alike. The workspace names no
-# default profile, so its own doors (`ws.fs`, bare `ws.shell`) are
+# through the shell and through vfs.read alike. The workspace names no
+# default profile, so its own doors (`ws.vfs`, bare `ws.shell`) are
 # the host's view. A second `ws.session(id)` adopts the session as is;
 # naming a profile for a session that already exists is refused.
 
@@ -81,8 +81,8 @@ def show(role: str, door: str, call: str, answer: str, note: str) -> None:
         answer (str): what came back.
         note (str): why it matters.
     """
-    print(f"{role:9} {door:8} {call:34} {answer}")
-    print(f"{'':9} {'':8} {'':34} {note}")
+    print(f"{role:9} {door:9} {call:34} {answer}")
+    print(f"{'':9} {'':9} {'':34} {note}")
 
 
 async def line(role: str, handle: SessionHandle | Workspace, cmd: str,
@@ -118,11 +118,11 @@ async def read(role: str,
     """
     call = path if session_id is None else f"{path} as {session_id}"
     try:
-        data = await handle.fs.read(path, session_id=session_id)
+        data = await handle.vfs.read(path, session_id=session_id)
     except OSError as exc:
-        show(role, "fs.read", call, errno.errorcode[exc.errno], note)
+        show(role, "vfs.read", call, errno.errorcode[exc.errno], note)
     else:
-        show(role, "fs.read", call, data.decode().strip(), note)
+        show(role, "vfs.read", call, data.decode().strip(), note)
 
 
 async def write(role: str, handle: SessionHandle | Workspace, path: str,
@@ -136,11 +136,11 @@ async def write(role: str, handle: SessionHandle | Workspace, path: str,
         note (str): why it matters.
     """
     try:
-        await handle.fs.write(path, f"{role} wrote\n".encode())
+        await handle.vfs.write(path, f"{role} wrote\n".encode())
     except OSError as exc:
-        show(role, "fs.write", path, errno.errorcode[exc.errno], note)
+        show(role, "vfs.write", path, errno.errorcode[exc.errno], note)
     else:
-        show(role, "fs.write", path, "ok", note)
+        show(role, "vfs.write", path, "ok", note)
 
 
 async def main() -> None:

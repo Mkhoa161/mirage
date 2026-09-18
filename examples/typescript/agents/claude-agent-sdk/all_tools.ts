@@ -83,6 +83,6 @@ console.log(
   missing.length > 0 ? missing : 'none',
 )
 
-const final = await ws.fs.readFileText('/notes.txt')
+const final = await ws.vfs.readFileText('/notes.txt')
 console.log('\n=== /notes.txt final content (from the Mirage workspace) ===')
 console.log(final)

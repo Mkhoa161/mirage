@@ -85,7 +85,7 @@ with Workspace(
     print(">>> Press Enter to unmount and exit...")
     input()
 
-    records = ws.fs.records
+    records = ws.vfs.records
     total = sum(r.bytes for r in records)
     print(f"\nStats: {len(records)} ops, "
           f"{total} bytes transferred")

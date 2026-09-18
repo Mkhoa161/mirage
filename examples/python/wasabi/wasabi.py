@@ -33,7 +33,7 @@ ws = Workspace({"/wasabi/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:
-    records = ws.fs.records
+    records = ws.vfs.records
     return f"{len(records)} ops, {sum(r.bytes for r in records)} bytes"
 
 

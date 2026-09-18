@@ -54,7 +54,7 @@ function doorOn(ws: Workspace): RuntimeVFS {
 describe('runtime door readdir', () => {
   it('a dangling link degrades to a zero row instead of failing the listing', async () => {
     const { ws } = mkWorld()
-    await ws.fs.writeFile('/data/a.txt', 'hi')
+    await ws.vfs.writeFile('/data/a.txt', 'hi')
     await ws.namespace.symlink('/data/lnk', '/data/gone', 1)
     const entries = await doorOn(ws).readdir('/data')
     const row = entries.find((e) => e.path.endsWith('/lnk'))
@@ -67,7 +67,7 @@ describe('runtime door readdir', () => {
     // backend bugs must surface, or an incomplete listing replaces a
     // healthy snapshot.
     const { ws, ops, vfs } = mkWorld()
-    await ws.fs.writeFile('/data/a.txt', 'hi')
+    await ws.vfs.writeFile('/data/a.txt', 'hi')
     ops.register({
       name: 'stat',
       vfs: vfs.kind,
@@ -84,7 +84,7 @@ describe('runtime door readdir', () => {
   // about it; only the node table does.
   it('marks a live link whose stat followed through to a file', async () => {
     const { ws } = mkWorld()
-    await ws.fs.writeFile('/data/a.txt', 'hello')
+    await ws.vfs.writeFile('/data/a.txt', 'hello')
     await ws.namespace.symlink('/data/lnk', '/data/a.txt', 1)
     const entries = await doorOn(ws).readdir('/data')
     expect(entries.find((e) => e.path.endsWith('/lnk'))).toMatchObject({ size: 5, isLink: true })
@@ -100,7 +100,7 @@ describe('runtime door readdir', () => {
   it('marks the links inside a directory reached through a link', async () => {
     const { ws } = mkWorld()
     await ws.dispatch('mkdir', '/data/real')
-    await ws.fs.writeFile('/data/real/t.txt', 'hi')
+    await ws.vfs.writeFile('/data/real/t.txt', 'hi')
     await ws.namespace.symlink('/data/real/lk', '/data/real/t.txt', 1)
     await ws.namespace.symlink('/data/alias', '/data/real', 1)
     const entries = await doorOn(ws).readdir('/data/alias')

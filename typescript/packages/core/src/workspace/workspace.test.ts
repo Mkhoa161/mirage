@@ -376,7 +376,7 @@ describe('Workspace dynamic mount index', () => {
             if (!shadow) await ws.unmount('/data')
             const replacement = new RAMVFS()
             ws.addMount('/data', replacement)
-            if (shadow) expect(await ws.fs.readdir('/data')).toEqual([])
+            if (shadow) expect(await ws.vfs.readdir('/data')).toEqual([])
             for (const candidate of [index, replacement.index]) {
               for (const path of ['/data', '/data/private.txt', '/data/nested/private.txt']) {
                 expect((await candidate.get(path)).status).toBe(LookupStatus.NOT_FOUND)
@@ -438,7 +438,7 @@ describe('Workspace dynamic mount index', () => {
       expect(() => ws.addMount('late/', rejected)).toThrow('duplicate mount prefix')
       expect(rejected.index).toBe(rejectedIndex)
       // Mutations must evict the configured store, including after aliasing.
-      await ws.fs.writeFile('/late/new.txt', 'new')
+      await ws.vfs.writeFile('/late/new.txt', 'new')
       expect((await index.listDir('/late')).status).toBe(LookupStatus.NOT_FOUND)
     } finally {
       await ws.close()
@@ -569,7 +569,7 @@ describe('Workspace.unmount', () => {
       await expect(identity('/first/file', 'unique')).rejects.toMatchObject({ code: 'ENOTSUP' })
       await ws.unmount('/third')
       expect(await identity('/first/file')).toBe('first')
-      expect((await ws.fs.readdir('/')).length).toBeGreaterThan(0)
+      expect((await ws.vfs.readdir('/')).length).toBeGreaterThan(0)
     } finally {
       await ws.close()
     }
@@ -591,7 +591,7 @@ describe('Workspace.unmount', () => {
       )
       const cache = ws.cache
       ws.addMount('/alias', vfs)
-      const aliasEntries = await ws.fs.readdir('/alias')
+      const aliasEntries = await ws.vfs.readdir('/alias')
       let enter = (): void => undefined
       let resume = (): void => undefined
       const entered = new Promise<void>((resolve) => {
@@ -624,10 +624,12 @@ describe('Workspace.unmount', () => {
         await entered
         expect((await ws.resolve('/alias'))[0]).toBe(vfs)
         expect(() => ws.addMount('/data', new RAMVFS())).toThrow('duplicate mount prefix')
-        await expect(ws.fs.readdir('/data')).rejects.toMatchObject({ code: 'EBUSY' })
-        await expect(ws.fs.writeFile('/data/file', bytes.encode('changed'))).rejects.toMatchObject({
-          code: 'EBUSY',
-        })
+        await expect(ws.vfs.readdir('/data')).rejects.toMatchObject({ code: 'EBUSY' })
+        await expect(ws.vfs.writeFile('/data/file', bytes.encode('changed'))).rejects.toMatchObject(
+          {
+            code: 'EBUSY',
+          },
+        )
         for (const line of ['cat /data/file', 'echo changed > /data/file']) {
           expect((await ws.shell(line)).exitCode).not.toBe(0)
         }
@@ -644,7 +646,7 @@ describe('Workspace.unmount', () => {
         expect(await cache.get('/data')).toBeNull()
         expect(await cache.get('/data/file')).toBeNull()
         expect(await cache.get('/database/file')).toEqual(bytes.encode('peer'))
-        expect(await ws.fs.readdir('/alias')).toEqual(aliasEntries)
+        expect(await ws.vfs.readdir('/alias')).toEqual(aliasEntries)
         ws.addMount('/data', new RAMVFS())
       } finally {
         resume()
@@ -662,8 +664,8 @@ describe('Workspace.unmount', () => {
       const ws = new Workspace(mounts, { shellParser: await getTestParser() })
       try {
         await ws.unmount('/data')
-        await expect(ws.fs.readdir('/')).resolves.toContain('/dev')
-        await expect(ws.fs.stat('/')).resolves.toMatchObject({ type: FileType.DIRECTORY })
+        await expect(ws.vfs.readdir('/')).resolves.toContain('/dev')
+        await expect(ws.vfs.stat('/')).resolves.toMatchObject({ type: FileType.DIRECTORY })
         const result = await ws.shell('ls /')
         expect(result.exitCode).toBe(0)
         expect(result.stdoutText).toBe('dev\n')
@@ -682,9 +684,9 @@ describe('Workspace.unmount', () => {
     const ws = new Workspace({ '/a': a, '/b': b })
     try {
       await ws.unmount('/a')
-      await expect(ws.fs.readFile('/b/file.txt')).resolves.toEqual(content)
+      await expect(ws.vfs.readFile('/b/file.txt')).resolves.toEqual(content)
       await ws.unmount('/b')
-      await expect(ws.fs.readdir('/')).resolves.toContain('/dev')
+      await expect(ws.vfs.readdir('/')).resolves.toContain('/dev')
     } finally {
       await ws.close()
     }
@@ -704,12 +706,12 @@ describe('Workspace.unmount', () => {
     })
     const ws = new Workspace({ '/a': a, '/b': b }, { ops })
     try {
-      await ws.fs.readFile('/a/file.txt')
-      await ws.fs.readFile('/b/file.txt')
+      await ws.vfs.readFile('/a/file.txt')
+      await ws.vfs.readFile('/b/file.txt')
       await ws.unmount('/a')
       expect(a.closes).toBe(1)
       expect(b.closes).toBe(0)
-      await expect(ws.fs.readFile('/b/file.txt')).resolves.toEqual(content)
+      await expect(ws.vfs.readFile('/b/file.txt')).resolves.toEqual(content)
       await ws.unmount('/b')
       expect(b.closes).toBe(1)
       expect(ops.find('read', 'mock')).toBeNull()
@@ -1078,12 +1080,12 @@ describe('runtime-visible mounts', () => {
 it('changes mount modes without remounting and refuses invalid modes atomically', async () => {
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
   try {
-    const fs = ws.fs
+    const fs = ws.vfs
     const mount = ws.mount('/data')
     await fs.writeFile('/data/file', new TextEncoder().encode('kept'))
     for (const mode of [MountMode.READ, MountMode.EXEC, MountMode.WRITE]) {
       ws.setMountMode('data/', mode)
-      expect(ws.fs).toBe(fs)
+      expect(ws.vfs).toBe(fs)
       expect(ws.mount('/data')).toBe(mount)
       expect(mount.mode).toBe(mode)
       expect(new TextDecoder().decode(await fs.readFile('/data/file'))).toBe('kept')
@@ -1101,13 +1103,13 @@ it('updates default-profile policy for unbound ops without replacing the session
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
   try {
     const session = ws.getSession(ws.defaultSessionId)
-    await ws.fs.writeFile('/data/file', new TextEncoder().encode('kept'))
+    await ws.vfs.writeFile('/data/file', new TextEncoder().encode('kept'))
     const profile = { commands: { deny: [{ paths: ['/data/file'], reason: 'sealed' }] } }
     expect(await ws.setSessionProfile(ws.defaultSessionId, profile)).toBe(session)
-    await expect(ws.fs.readFile('/data/file')).rejects.toThrow()
+    await expect(ws.vfs.readFile('/data/file')).rejects.toThrow()
     await ws.setSessionProfile(ws.defaultSessionId, {})
     expect(ws.getSession(ws.defaultSessionId)).toBe(session)
-    expect(new TextDecoder().decode(await ws.fs.readFile('/data/file'))).toBe('kept')
+    expect(new TextDecoder().decode(await ws.vfs.readFile('/data/file'))).toBe('kept')
   } finally {
     await ws.close()
   }

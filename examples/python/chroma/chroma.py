@@ -108,9 +108,9 @@ async def main() -> None:
               f"chroma-query --top-k 5 {quoted_query} /knowledge/",
               max_chars=1500)
 
-    records = ws.fs.records
-    network_bytes = ws.fs.network_bytes
-    cache_bytes = ws.fs.cache_bytes
+    records = ws.vfs.records
+    network_bytes = ws.vfs.network_bytes
+    cache_bytes = ws.vfs.cache_bytes
     print("=== Stats ===")
     print(f"{len(records)} ops, {network_bytes} network bytes, "
           f"{cache_bytes} cache bytes")

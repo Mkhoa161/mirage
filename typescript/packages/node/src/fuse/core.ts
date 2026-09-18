@@ -76,7 +76,7 @@ export interface MountCoreOptions {
  * interface. Adapters translate the errors thrown here into their own
  * error codes with `classifyErrno`. Mirrors Python's `MountCore`.
  *
- * Every op goes through `ws.fs`, which delegates to the dispatcher, so
+ * Every op goes through `ws.vfs`, which delegates to the dispatcher, so
  * a mount walks the same door as a shell line (mount modes, policies,
  * cache, invalidation) and every op it runs lands in `ws.records` for
  * `drainOps`. Reaching `ws.dispatch` from here instead would skip the

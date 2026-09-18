@@ -37,7 +37,7 @@ async def test_registered_commands_used_for_dispatch():
         {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
-    await ws.fs.write("/tmp/a.txt", b"hello world\n")
+    await ws.vfs.write("/tmp/a.txt", b"hello world\n")
     result = await ws.shell("cat /tmp/a.txt")
     assert (await result.stdout_str()) == "hello world\n"
 

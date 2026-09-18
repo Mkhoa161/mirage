@@ -48,8 +48,8 @@ async function runSizelessProbe(
   const ws = new Workspace({
     '/api': new Mount(api, { mode: MountMode.READ }),
   })
-  const realStat = ws.fs.stat.bind(ws.fs)
-  ws.fs.stat = async (path) => {
+  const realStat = ws.vfs.stat.bind(ws.vfs)
+  ws.vfs.stat = async (path) => {
     const s = await realStat(path)
     if (s.type === FileType.DIRECTORY) return s
     return new FileStat({ name: s.name, type: s.type, size: null })
@@ -229,7 +229,7 @@ async function runSessionProbe(
   result.session_shell_listing = dec.decode(listing.stdout).trim()
   const capped = await ws.shell('echo x > /data/pub.txt', { sessionId: 'agent' })
   result.session_shell_write_refused = capped.exitCode !== 0
-  result.session_host_reads_hidden = (await ws.fs.readFileText('/data/vault/secret.txt')).trim()
+  result.session_host_reads_hidden = (await ws.vfs.readFileText('/data/vault/secret.txt')).trim()
   const handle = await fuseMount(ws, { session })
   const data = join(handle.mountpoint, 'data')
   try {

@@ -87,7 +87,7 @@ describe('S3 cache consistency (mocked)', () => {
         if (surface === 'shell') {
           expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v2')
         } else {
-          expect(DEC.decode(await ws.fs.readFile('/s3/c.txt'))).toBe('v2')
+          expect(DEC.decode(await ws.vfs.readFile('/s3/c.txt'))).toBe('v2')
         }
         mock.store.objects(BUCKET).delete('c.txt')
         if (surface === 'shell') {
@@ -95,7 +95,7 @@ describe('S3 cache consistency (mocked)', () => {
           expect(result.exitCode).toBe(1)
           expect(result.stdout.byteLength).toBe(0)
         } else {
-          await expect(ws.fs.readFile('/s3/c.txt')).rejects.toMatchObject({ code: 'ENOENT' })
+          await expect(ws.vfs.readFile('/s3/c.txt')).rejects.toMatchObject({ code: 'ENOENT' })
         }
       } finally {
         await vfs.index.clear()

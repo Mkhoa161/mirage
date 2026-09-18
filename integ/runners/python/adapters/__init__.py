@@ -2637,7 +2637,7 @@ def cli_install(service: "Service | None",
 
 async def mutate_write(shadow_ws: Workspace, path: str,
                        content: bytes) -> None:
-    await shadow_ws.fs.write(path, content)
+    await shadow_ws.vfs.write(path, content)
 
 
 async def teardown_target(

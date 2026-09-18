@@ -162,10 +162,10 @@ async function seedWorkspace(ws: Workspace): Promise<void> {
       const dir = '/' + parts.slice(0, depth).join('/')
       if (!made.has(dir)) {
         made.add(dir)
-        await ws.fs.mkdir(dir)
+        await ws.vfs.mkdir(dir)
       }
     }
-    await ws.fs.writeFile(path, content)
+    await ws.vfs.writeFile(path, content)
   }
 }
 

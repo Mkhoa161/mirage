@@ -386,7 +386,7 @@ describe('a named facade session on the fallback storage', () => {
     // take that frame for its ambient context: a wide session held
     // live by a concurrent task would otherwise judge the named
     // session's ops. The unnamed door keeps the ambient frame, which
-    // is what a command's runtime reaching `ws.fs` relies on.
+    // is what a command's runtime reaching `ws.vfs` relies on.
     const parser = await getTestParser()
     const ws = new Workspace(
       { '/data': [new RAMVFS(), MountMode.WRITE] as const },
@@ -399,14 +399,14 @@ describe('a named facade session on the fallback storage', () => {
     )
     try {
       const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-      const wide = new SessionHandle(ws, host.sessionId).fs
+      const wide = new SessionHandle(ws, host.sessionId).vfs
       await wide.mkdir('/data/vault')
       await wide.writeFile('/data/vault/secret', 'top\n')
       const [held, release] = gate()
       const holding = runWithSession(host, () => held, ws.sessionManager)
-      const named = new SessionHandle(ws, ws.defaultSessionId).fs
+      const named = new SessionHandle(ws, ws.defaultSessionId).vfs
       await expect(named.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
+      expect(await ws.vfs.readFileText('/data/vault/secret')).toBe('top\n')
       release()
       await holding
     } finally {

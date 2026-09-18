@@ -136,7 +136,7 @@ describe('mirageExtension', () => {
 
   it('routes interactive ! commands through Mirage at the virtual cwd', async () => {
     const ws = mkWs()
-    await ws.fs.mkdir('/data')
+    await ws.vfs.mkdir('/data')
     const pi = fakePi()
     await extensionFactory(ws, { cwd: '/data' })(pi.api)
     expect(pi.userBash).toBeDefined()

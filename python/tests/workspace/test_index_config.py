@@ -113,7 +113,7 @@ async def test_added_mount_keeps_index_coherent_across_aliases_and_duplicates(
         assert rejected.index is rejected_index
         # The manager must invalidate the configured index, not the store
         # the VFS had before it was attached to the workspace.
-        await ws.fs.write("/late/new.txt", b"new")
+        await ws.vfs.write("/late/new.txt", b"new")
         assert (await index.list_dir("/late")).status == LookupStatus.NOT_FOUND
     finally:
         await ws.close()

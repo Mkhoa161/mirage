@@ -287,7 +287,7 @@ class Workspace:
         self._registry.mount(HISTORY_PREFIX, HistoryViewVFS(self.observer),
                              MountMode.READ)
         # The facade delegates every op to the dispatcher, so FUSE and
-        # programmatic ws.fs walk the same pipeline as a shell command
+        # programmatic ws.vfs walk the same pipeline as a shell command
         # and the policy gates fire exactly once, at that door. It runs
         # as the default session, as a bare ``shell`` does, so the
         # default profile confines it too.
@@ -431,10 +431,10 @@ class Workspace:
         return self._session_mgr.has_managed_env
 
     @property
-    def fs(self) -> Ops:
+    def vfs(self) -> Ops:
         """The op facade: read/write/stat/readdir/... against the mounts.
 
-        Named as TypeScript names it (`ws.fs`), so one host API reads the
+        Named as TypeScript names it (`ws.vfs`), so one host API reads the
         same in both languages; the `Ops` class name stays, since it is
         the op vocabulary the dispatcher speaks, not a filesystem.
         """
@@ -1028,7 +1028,7 @@ class Workspace:
         profile: str | SessionProfile | Mapping[str, Any] | None = None,
         permissions: SessionProfile | Mapping[str, Any] | None = None,
     ) -> SessionHandle:
-        """One session's two doors: ``shell`` and ``fs`` bound to it.
+        """One session's two doors: ``shell`` and ``vfs`` bound to it.
 
         Creates the session under the given profile when the id is new
         (the same call as ``create_session``), and adopts it as is when
@@ -1206,7 +1206,7 @@ class Workspace:
         """Run one op door call as ``session_id``.
 
         A session already bound in this context is kept: a command's
-        runtime reaching ``ws.fs`` stays in its own session, and a
+        runtime reaching ``ws.vfs`` stays in its own session, and a
         kernel mount serving one session keeps that one, so the door
         never widens a caller's view. A session another workspace
         bound is the exception: its hides and grants describe that
@@ -1240,7 +1240,7 @@ class Workspace:
                        **kwargs: Any) -> tuple[Any, IOResult]:
         # The door owns pre-dispatch initialization (namespace load,
         # pending drift checks), so FUSE and the ops facade get it too.
-        # Runs as the default session unless one is bound, like ws.fs.
+        # Runs as the default session unless one is bound, like ws.vfs.
         return await self._bind_session(
             None, partial(self._dispatcher.dispatch, op, path, **kwargs))
 

@@ -166,6 +166,6 @@ async def test_always_reads_current_github_blob_after_probe(
         if surface == "shell":
             assert (await ws.shell("cat /gh/f.txt")).stdout == b"v2"
         else:
-            assert await ws.fs.read("/gh/f.txt") == b"v2"
+            assert await ws.vfs.read("/gh/f.txt") == b"v2"
     finally:
         await ws.close()

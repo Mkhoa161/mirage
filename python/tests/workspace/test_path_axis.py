@@ -132,7 +132,7 @@ def test_hide_speaks_before_the_mode():
 
 
 def test_the_op_door_runs_as_the_default_session():
-    # `ws.fs`, `ws.dispatch`, `ws.stat` and `ws.readdir` are judged
+    # `ws.vfs`, `ws.dispatch`, `ws.stat` and `ws.readdir` are judged
     # under the default session's profile, the way a bare `execute`
     # is, so an agent whose file tool reads through the facade is
     # confined like its shell. A session already bound is kept, and
@@ -150,23 +150,23 @@ def test_the_op_door_runs_as_the_default_session():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = SessionHandle(ws, host.session_id).fs
-        assert door.records is ws.fs.records
+        door = SessionHandle(ws, host.session_id).vfs
+        assert door.records is ws.vfs.records
         await door.mkdir("/data/vault")
         await door.write("/data/vault/secret", b"top\n")
         assert await door.read("/data/vault/secret") == b"top\n"
         with pytest.raises(FileNotFoundError):
-            await ws.fs.read("/data/vault/secret")
+            await ws.vfs.read("/data/vault/secret")
         with pytest.raises(FileNotFoundError):
             await ws.stat("/data/vault")
         with pytest.raises(FileNotFoundError):
             await ws.dispatch("read",
                               PathSpec.from_str_path("/data/vault/secret"))
         assert await ws.readdir("/data") == []
-        assert await ws.fs.readdir("/data") == []
+        assert await ws.vfs.readdir("/data") == []
         token = set_current_session(host)
         try:
-            assert await ws.fs.read("/data/vault/secret") == b"top\n"
+            assert await ws.vfs.read("/data/vault/secret") == b"top\n"
         finally:
             reset_current_session(token)
 
@@ -197,19 +197,19 @@ def test_the_op_door_does_not_adopt_another_workspaces_session():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = SessionHandle(ws, host.session_id).fs
+        door = SessionHandle(ws, host.session_id).vfs
         await door.mkdir("/data/vault")
         await door.write("/data/vault/secret", b"top\n")
         token = set_current_session(wide, other._session_mgr)
         try:
             with pytest.raises(FileNotFoundError):
-                await ws.fs.read("/data/vault/secret")
+                await ws.vfs.read("/data/vault/secret")
             assert await door.read("/data/vault/secret") == b"top\n"
         finally:
             reset_current_session(token)
         token = set_current_session(wide)
         try:
-            assert await ws.fs.read("/data/vault/secret") == b"top\n"
+            assert await ws.vfs.read("/data/vault/secret") == b"top\n"
         finally:
             reset_current_session(token)
 
@@ -227,15 +227,15 @@ def test_the_op_door_does_not_follow_a_link_the_session_cannot_see():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = SessionHandle(ws, host.session_id).fs
+        door = SessionHandle(ws, host.session_id).vfs
         await door.write("/data/pub.txt", b"pub\n")
         await door.mkdir("/data/vault")
         await door.symlink("/data/vault/lk", "/data/pub.txt")
         assert await door.read("/data/vault/lk") == b"pub\n"
         with pytest.raises(FileNotFoundError):
-            await ws.fs.read("/data/vault/lk")
+            await ws.vfs.read("/data/vault/lk")
         with pytest.raises(FileNotFoundError):
-            await ws.fs.write("/data/vault/lk", b"x\n")
+            await ws.vfs.write("/data/vault/lk", b"x\n")
         assert await door.read("/data/pub.txt") == b"pub\n"
 
     asyncio.run(run())
@@ -640,7 +640,7 @@ def test_ops_rmdir_keeps_the_refusal_when_a_mounted_child_remains():
 
     async def probe():
         try:
-            await ws.fs.rmdir("/a/d")
+            await ws.vfs.rmdir("/a/d")
         except OSError as exc:
             return exc
         return None

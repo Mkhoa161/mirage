@@ -24,8 +24,8 @@ def workspace():
 
 @pytest.mark.asyncio
 async def test_grep_positional_pattern(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt", b"orange line\nplain line\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt", b"orange line\nplain line\n")
 
     io = await workspace.shell("grep orange /data/a.txt")
     assert io.exit_code == 0
@@ -34,8 +34,8 @@ async def test_grep_positional_pattern(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_dash_e_matches_like_positional_pattern(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt", b"orange line\nplain line\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt", b"orange line\nplain line\n")
 
     io = await workspace.shell("grep -e orange /data/a.txt")
     assert io.exit_code == 0
@@ -44,9 +44,9 @@ async def test_grep_dash_e_matches_like_positional_pattern(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_repeated_dash_e_matches_any_pattern(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt",
-                             b"orange line\nplain line\nlast line\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt",
+                              b"orange line\nplain line\nlast line\n")
 
     io = await workspace.shell("grep -e orange -e plain /data/a.txt")
     assert io.exit_code == 0
@@ -55,10 +55,10 @@ async def test_grep_repeated_dash_e_matches_any_pattern(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_dash_f_reads_patterns_from_file(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt",
-                             b"orange line\nplain line\nlast line\n")
-    await workspace.fs.write("/data/pats.txt", b"orange\nlast\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt",
+                              b"orange line\nplain line\nlast line\n")
+    await workspace.vfs.write("/data/pats.txt", b"orange\nlast\n")
 
     io = await workspace.shell("grep -f /data/pats.txt /data/a.txt")
     assert io.exit_code == 0
@@ -67,10 +67,10 @@ async def test_grep_dash_f_reads_patterns_from_file(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_dash_e_and_dash_f_union(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt",
-                             b"orange line\nplain line\nlast line\n")
-    await workspace.fs.write("/data/pats.txt", b"last\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt",
+                              b"orange line\nplain line\nlast line\n")
+    await workspace.vfs.write("/data/pats.txt", b"last\n")
 
     io = await workspace.shell("grep -e plain -f /data/pats.txt /data/a.txt")
     assert io.exit_code == 0
@@ -79,11 +79,11 @@ async def test_grep_dash_e_and_dash_f_union(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_repeated_dash_f_unions_pattern_files(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt",
-                             b"orange line\nplain line\nlast line\n")
-    await workspace.fs.write("/data/p1.txt", b"orange\n")
-    await workspace.fs.write("/data/p2.txt", b"last\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt",
+                              b"orange line\nplain line\nlast line\n")
+    await workspace.vfs.write("/data/p1.txt", b"orange\n")
+    await workspace.vfs.write("/data/p2.txt", b"last\n")
 
     io = await workspace.shell(
         "grep -f /data/p1.txt -f /data/p2.txt /data/a.txt")
@@ -93,11 +93,11 @@ async def test_grep_repeated_dash_f_unions_pattern_files(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_dash_e_and_repeated_dash_f_union(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt",
-                             b"orange line\nplain line\nlast line\n")
-    await workspace.fs.write("/data/p1.txt", b"orange\n")
-    await workspace.fs.write("/data/p2.txt", b"last\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt",
+                              b"orange line\nplain line\nlast line\n")
+    await workspace.vfs.write("/data/p1.txt", b"orange\n")
+    await workspace.vfs.write("/data/p2.txt", b"last\n")
 
     io = await workspace.shell(
         "grep -e plain -f /data/p1.txt -f /data/p2.txt /data/a.txt")
@@ -108,8 +108,8 @@ async def test_grep_dash_e_and_repeated_dash_f_union(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_color_accepted_as_gnu_noop(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt", b"orange line\nplain line\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt", b"orange line\nplain line\n")
 
     io = await workspace.shell("grep --color=auto orange /data/a.txt")
     assert io.exit_code == 0
@@ -120,8 +120,8 @@ async def test_grep_color_accepted_as_gnu_noop(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_unknown_flag_refuses_with_gnu_error(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt", b"orange line\nplain line\n")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt", b"orange line\nplain line\n")
 
     io = await workspace.shell("grep --bogus orange /data/a.txt")
     assert io.exit_code == 2
@@ -133,9 +133,9 @@ async def test_grep_unknown_flag_refuses_with_gnu_error(workspace):
 async def test_grep_dash_f_empty_file_matches_nothing(workspace):
     # GNU semantics: an empty -f file contains zero patterns and matches
     # nothing (BSD grep diverges and matches everything).
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt", b"orange line\n")
-    await workspace.fs.write("/data/empty.txt", b"")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt", b"orange line\n")
+    await workspace.vfs.write("/data/empty.txt", b"")
 
     io = await workspace.shell("grep -f /data/empty.txt /data/a.txt")
     assert io.exit_code == 1
@@ -144,9 +144,9 @@ async def test_grep_dash_f_empty_file_matches_nothing(workspace):
 
 @pytest.mark.asyncio
 async def test_grep_v_dash_f_empty_file_matches_all(workspace):
-    await workspace.fs.mkdir("/data")
-    await workspace.fs.write("/data/a.txt", b"orange line\nplain line\n")
-    await workspace.fs.write("/data/empty.txt", b"")
+    await workspace.vfs.mkdir("/data")
+    await workspace.vfs.write("/data/a.txt", b"orange line\nplain line\n")
+    await workspace.vfs.write("/data/empty.txt", b"")
 
     io = await workspace.shell("grep -v -f /data/empty.txt /data/a.txt")
     assert io.exit_code == 0

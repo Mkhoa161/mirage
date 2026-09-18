@@ -24,7 +24,7 @@ export type SessionExecuteOptions = Omit<ExecuteOptions, 'sessionId'>
 /**
  * One session's two doors, bound together.
  *
- * `shell` runs a line as the session and `fs` is the op facade run
+ * `shell` runs a line as the session and `vfs` is the op facade run
  * as it, so a host holds one object per agent and both doors answer
  * under the same profile: hides, mount modes, grants and standing
  * decisions. Nothing is stored here; the session record stays with the
@@ -46,8 +46,8 @@ export class SessionHandle {
   }
 
   /** The op facade run as this session. */
-  get fs(): Ops {
-    return this.ws.fs.forSession(this.sessionId)
+  get vfs(): Ops {
+    return this.ws.vfs.forSession(this.sessionId)
   }
 
   /** Run a shell line as this session; `Workspace.shell` with the session fixed. */

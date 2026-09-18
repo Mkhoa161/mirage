@@ -39,7 +39,7 @@ ws = Workspace({"/supabase/": backend}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:
-    records = ws.fs.records
+    records = ws.vfs.records
     total = sum(r.bytes for r in records)
     return f"{len(records)} ops, {total} bytes transferred"
 

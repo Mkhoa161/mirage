@@ -22,7 +22,7 @@ from mirage.vfs.ram import RAMVFS
 def _make_ops() -> tuple[Ops, RAMVFS]:
     mem = RAMVFS()
     ws = Workspace({"/data/": mem}, mode=MountMode.WRITE)
-    return ws.fs, mem
+    return ws.vfs, mem
 
 
 def test_append_creates_file():

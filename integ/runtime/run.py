@@ -496,7 +496,7 @@ async def _run_facade(ws: Workspace, expect: dict[str, Any],
         spec (dict[str, Any]): ``method`` (the python facade spelling,
             e.g. ``is_dir``), ``path``, and ``data`` for ``append``.
     """
-    method = getattr(ws.fs, spec["method"])
+    method = getattr(ws.vfs, spec["method"])
     args: list[Any] = [spec["path"]]
     if "data" in spec:
         args.append(spec["data"].encode())
@@ -557,12 +557,12 @@ async def _run_step(ws: Workspace, case_id: str, index: int,
                     step: dict[str, Any]) -> list[str]:
     expect = step.get("expect", {})
     label = f"step[{index}]"
-    # The ledger slice this step adds: ws.fs.records is the one
+    # The ledger slice this step adds: ws.vfs.records is the one
     # workspace-wide account, so the step's own ops are the tail.
-    ledger_before = len(ws.fs.records)
+    ledger_before = len(ws.vfs.records)
     if "facade" in step:
         problems = await _run_facade(ws, expect, step["facade"])
-        seen = [f"{r.op} {r.path}" for r in ws.fs.records[ledger_before:]]
+        seen = [f"{r.op} {r.path}" for r in ws.vfs.records[ledger_before:]]
         problems.extend(_check_ops(expect, seen))
         return [f"{case_id} {label}: {p}" for p in problems]
     if "s3_put" in step:
@@ -633,7 +633,7 @@ async def _run_step(ws: Workspace, case_id: str, index: int,
     stdout = await result.stdout_str()
     stderr = await result.stderr_str()
     problems = _check(case_id, label, expect, result.exit_code, stdout, stderr)
-    seen = [f"{r.op} {r.path}" for r in ws.fs.records[ledger_before:]]
+    seen = [f"{r.op} {r.path}" for r in ws.vfs.records[ledger_before:]]
     problems.extend(f"{case_id} {label}: {p}"
                     for p in _check_ops(expect, seen))
     return problems

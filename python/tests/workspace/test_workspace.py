@@ -1931,10 +1931,10 @@ def test_cache_hit_serves_from_ram():
     ws = _ws()
     io1 = _exec(ws, "cat /s3/data.txt")
     assert _stdout(io1) == b"hello from s3\n"
-    records_after_first = list(ws.fs.records)
+    records_after_first = list(ws.vfs.records)
     io2 = _exec(ws, "cat /s3/data.txt")
     assert _stdout(io2) == b"hello from s3\n"
-    new_records = ws.fs.records[len(records_after_first):]
+    new_records = ws.vfs.records[len(records_after_first):]
     sources = [r.source for r in new_records if r.op == "read"]
     assert all(s == "ram" for s in sources)
 
@@ -1943,7 +1943,7 @@ def test_cache_miss_reads_from_vfs():
     ws = _ws()
     io = _exec(ws, "cat /s3/data.txt")
     assert _stdout(io) == b"hello from s3\n"
-    sources = [r.source for r in ws.fs.records if r.op == "read"]
+    sources = [r.source for r in ws.vfs.records if r.op == "read"]
     assert sources[0] == "ram"
 
 
@@ -1960,10 +1960,10 @@ def test_cache_invalidation_after_write():
 def test_grep_uses_cache():
     ws = _ws()
     _exec(ws, "cat /s3/report.csv")
-    records_before = len(ws.fs.records)
+    records_before = len(ws.vfs.records)
     io = _exec(ws, "grep alice /s3/report.csv")
     assert b"alice" in _stdout(io)
-    new_records = ws.fs.records[records_before:]
+    new_records = ws.vfs.records[records_before:]
     sources = [r.source for r in new_records if r.op == "read"]
     assert all(s == "ram" for s in sources)
 
@@ -2689,7 +2689,7 @@ def test_while_loop_under_limit_no_warning():
 
 def test_add_mount_refreshes_the_existing_filesystem_facade():
     ws = Workspace({}, mode=MountMode.WRITE)
-    fs = ws.fs
+    fs = ws.vfs
 
     async def run():
         try:
@@ -2699,7 +2699,7 @@ def test_add_mount_refreshes_the_existing_filesystem_facade():
             entry = ws.add_mount("/data/nested", vfs, MountMode.WRITE)
             assert entry.prefix == "/data/nested/"
             assert entry.vfs is vfs
-            assert ws.fs is fs
+            assert ws.vfs is fs
             assert fs.records == records
             assert "/data/nested/" in fs.mount_prefixes()
             assert ("/data/nested/", "ram") in fs.writable_mounts()
@@ -2725,7 +2725,7 @@ def test_add_mount_defaults_to_read_only():
     async def run():
         try:
             with pytest.raises(PermissionError):
-                await ws.fs.write("/data/file.txt", b"refused")
+                await ws.vfs.write("/data/file.txt", b"refused")
         finally:
             await ws.close()
 
@@ -2760,10 +2760,10 @@ def test_add_mount_keeps_a_shared_vfs_open_until_its_last_unmount():
 
     async def run():
         try:
-            await ws.fs.write("/a/file.txt", b"shared")
+            await ws.vfs.write("/a/file.txt", b"shared")
             await ws.unmount("/a")
             assert closed == []
-            assert await ws.fs.read("/b/file.txt") == b"shared"
+            assert await ws.vfs.read("/b/file.txt") == b"shared"
             await ws.unmount("/b")
             assert closed == ["closed"]
         finally:
@@ -2783,8 +2783,8 @@ def test_unmount_preserves_root_operations(explicit_root):
     async def run():
         try:
             await ws.unmount("/data")
-            assert "/dev" in await ws.fs.readdir("/")
-            assert (await ws.fs.stat("/")).type == FileType.DIRECTORY
+            assert "/dev" in await ws.vfs.readdir("/")
+            assert (await ws.vfs.stat("/")).type == FileType.DIRECTORY
             result = await ws.shell("ls /")
             assert result.exit_code == 0
             assert result.stdout == b"dev\n"
@@ -2804,9 +2804,9 @@ def test_unmount_keeps_other_ram_instances_readable():
     async def run():
         try:
             await ws.unmount("/a")
-            assert await ws.fs.read("/b/file.txt") == content
+            assert await ws.vfs.read("/b/file.txt") == content
             await ws.unmount("/b")
-            assert "/dev" in await ws.fs.readdir("/")
+            assert "/dev" in await ws.vfs.readdir("/")
         finally:
             await ws.close()
 
@@ -2976,12 +2976,12 @@ def test_man_index_lists_commands():
 async def test_set_mount_mode_refreshes_facade_without_remounting():
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        fs = ws.fs
+        fs = ws.vfs
         mount = ws.mount("/data")
         await fs.write("/data/file", b"kept")
         for mode in (MountMode.READ, MountMode.EXEC, MountMode.WRITE):
             ws.set_mount_mode("data/", mode)
-            assert ws.fs is fs
+            assert ws.vfs is fs
             assert ws.mount("/data") is mount
             assert mount.mode == mode
             assert (("/data/", "ram")
@@ -3000,7 +3000,7 @@ async def test_live_default_profile_updates_unbound_policy():
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
         session = ws.get_session(ws.default_session_id)
-        await ws.fs.write("/data/file", b"kept")
+        await ws.vfs.write("/data/file", b"kept")
         profile = {
             "commands": {
                 "deny": [{
@@ -3012,9 +3012,9 @@ async def test_live_default_profile_updates_unbound_policy():
         assert await ws.set_session_profile(ws.default_session_id,
                                             profile) is session
         with pytest.raises(PermissionError):
-            await ws.fs.read("/data/file")
+            await ws.vfs.read("/data/file")
         await ws.set_session_profile(ws.default_session_id, {})
         assert ws.get_session(ws.default_session_id) is session
-        assert await ws.fs.read("/data/file") == b"kept"
+        assert await ws.vfs.read("/data/file") == b"kept"
     finally:
         await ws.close()

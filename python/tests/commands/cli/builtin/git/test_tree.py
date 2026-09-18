@@ -86,7 +86,7 @@ async def test_status_reports_the_checked_out_branch():
     with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.shell("mkdir -p /data/repo/.git")
-        await ws.fs.write("/data/repo/.git/HEAD", HEAD_MAIN)
+        await ws.vfs.write("/data/repo/.git/HEAD", HEAD_MAIN)
         result = await ws.shell("git -C /data/repo status")
     assert result.exit_code == 0
     assert result.stdout == ON_MAIN
@@ -98,7 +98,7 @@ async def test_discovery_walks_up_from_a_subdirectory():
         ws.register_cli("git", GIT)
         await ws.shell("mkdir -p /data/repo/.git")
         await ws.shell("mkdir -p /data/repo/src/deep")
-        await ws.fs.write("/data/repo/.git/HEAD", HEAD_MAIN)
+        await ws.vfs.write("/data/repo/.git/HEAD", HEAD_MAIN)
         result = await ws.shell("git -C /data/repo/src/deep status")
     assert result.exit_code == 0
     assert result.stdout == ON_MAIN
@@ -114,7 +114,7 @@ async def test_discovery_stops_at_the_mount_root():
     }, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.shell("mkdir -p /.git")
-        await ws.fs.write("/.git/HEAD", HEAD_MAIN)
+        await ws.vfs.write("/.git/HEAD", HEAD_MAIN)
         await ws.shell("mkdir -p /data/work")
         result = await ws.shell("git -C /data/work status")
     assert result.exit_code == 128
@@ -126,8 +126,8 @@ async def test_detached_head_reports_the_short_commit():
     with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.shell("mkdir -p /data/repo/.git")
-        await ws.fs.write("/data/repo/.git/HEAD",
-                          b"cdd6234342b147880f5d86c55dad6c1fbe222bfe\n")
+        await ws.vfs.write("/data/repo/.git/HEAD",
+                           b"cdd6234342b147880f5d86c55dad6c1fbe222bfe\n")
         result = await ws.shell("git -C /data/repo status")
     assert result.exit_code == 0
     assert result.stdout == b"HEAD detached at cdd6234" + NOTHING_YET
@@ -138,7 +138,7 @@ async def test_bare_status_uses_the_session_cwd():
     with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.shell("mkdir -p /data/repo/.git")
-        await ws.fs.write("/data/repo/.git/HEAD", HEAD_MAIN)
+        await ws.vfs.write("/data/repo/.git/HEAD", HEAD_MAIN)
         result = await ws.shell("cd /data/repo && git status")
     assert result.exit_code == 0
     assert result.stdout == ON_MAIN

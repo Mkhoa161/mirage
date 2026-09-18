@@ -29,7 +29,7 @@ def _make_gslides_ops() -> tuple[Ops, IndexCacheStore]:
     # config, so the store to seed is the one the mount ends up with.
     vfs = GSlidesVFS(config=GSlidesConfig(client_id="x", refresh_token="y"))
     ws = Workspace({"/gslides/": vfs}, mode=MountMode.READ)
-    return ws.fs, vfs.index
+    return ws.vfs, vfs.index
 
 
 @pytest.mark.asyncio
