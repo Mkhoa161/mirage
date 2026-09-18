@@ -115,17 +115,19 @@ async function read(
   handle: Doors,
   path: string,
   note: string,
+  sessionId?: string,
 ): Promise<void> {
+  const call = sessionId === undefined ? path : `${path} as ${sessionId}`;
   try {
     show(
       role,
       "fs.read",
-      path,
-      (await handle.fs.readFileText(path)).trim(),
+      call,
+      (await handle.fs.readFileText(path, "utf-8", sessionId)).trim(),
       note,
     );
   } catch (err) {
-    show(role, "fs.read", path, codeOf(err), note);
+    show(role, "fs.read", call, codeOf(err), note);
   }
 }
 
@@ -203,6 +205,20 @@ async function main(): Promise<void> {
     host,
     "/repo/secrets/key.pem",
     "no default profile: the workspace's own door sees it",
+  );
+  await read(
+    "host",
+    host,
+    "/repo/secrets/key.pem",
+    "the same door, named per call: the reviewer's hide",
+    "reviewer",
+  );
+  await read(
+    "host",
+    host,
+    "/repo/secrets/key.pem",
+    "and the editor's own rule, from the same call site",
+    "editor",
   );
 
   await write(
