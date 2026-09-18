@@ -101,8 +101,11 @@ async def line(role: str, handle: SessionHandle | Workspace, cmd: str,
          shell(res.stdout or b"", res.stderr or b"", res.exit_code), note)
 
 
-async def read(role: str, handle: SessionHandle | Workspace, path: str,
-               note: str) -> None:
+async def read(role: str,
+               handle: SessionHandle | Workspace,
+               path: str,
+               note: str,
+               session_id: str | None = None) -> None:
     """Read one path through a handle's op door and print the answer.
 
     Args:
@@ -110,13 +113,16 @@ async def read(role: str, handle: SessionHandle | Workspace, path: str,
         handle (SessionHandle | Workspace): the doors.
         path (str): the virtual path.
         note (str): why it matters.
+        session_id (str | None): name one session for this call alone,
+            the way ``shell`` takes one; None reads as the door's own.
     """
+    call = path if session_id is None else f"{path} as {session_id}"
     try:
-        data = await handle.fs.read(path)
+        data = await handle.fs.read(path, session_id=session_id)
     except OSError as exc:
-        show(role, "fs.read", path, errno.errorcode[exc.errno], note)
+        show(role, "fs.read", call, errno.errorcode[exc.errno], note)
     else:
-        show(role, "fs.read", path, data.decode().strip(), note)
+        show(role, "fs.read", call, data.decode().strip(), note)
 
 
 async def write(role: str, handle: SessionHandle | Workspace, path: str,
@@ -161,6 +167,16 @@ async def main() -> None:
                "the op door, the same rule, the same answer")
     await read("host", ws, "/repo/secrets/key.pem",
                "no default profile: the workspace's own door sees it")
+    await read("host",
+               ws,
+               "/repo/secrets/key.pem",
+               "the same door, named per call: the reviewer's hide",
+               session_id="reviewer")
+    await read("host",
+               ws,
+               "/repo/secrets/key.pem",
+               "and the editor's own rule, from the same call site",
+               session_id="editor")
 
     await write("reviewer", reviewer, "/repo/new.txt",
                 "the reviewer's handle caps /repo at read")
