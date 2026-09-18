@@ -58,7 +58,7 @@ const result = await run(agent, task)
 console.log(result.finalOutput)
 
 console.log('\n--- Verifying files in workspace ---')
-const findAll = await ws.execute("find / -type f | grep -v '^/dev/'")
+const findAll = await ws.shell("find / -type f | grep -v '^/dev/'")
 const findOut = findAll.stdoutText
 console.log(`workspace files:\n${findOut}`)
 

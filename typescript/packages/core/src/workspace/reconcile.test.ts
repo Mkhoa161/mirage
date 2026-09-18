@@ -40,7 +40,7 @@ async function wsWithOverlay(): Promise<Workspace> {
 describe('Reconciler', () => {
   it('onOpMissing GCs an orphaned overlay under ALWAYS + stat + ENOENT', async () => {
     const ws = await wsWithOverlay()
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     await rec.onOpMissing('stat', '/data/f.txt', enoent('/data/f.txt'))
     expect(ws.namespace.metaFor('/data/f.txt')).toBeNull()
     await ws.close()
@@ -50,7 +50,7 @@ describe('Reconciler', () => {
     const ws = new Workspace({ '/data': new RAMVFS() })
     await ws.namespace.ensureLoaded()
     await ws.namespace.symlink('/data/link', '/data/t', 1)
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     await rec.onOpMissing('stat', '/data/link', enoent('/data/link'))
     expect(ws.namespace.readlink('/data/link')).toBe('/data/t')
     await ws.close()
@@ -58,7 +58,7 @@ describe('Reconciler', () => {
 
   it('onOpMissing skips under LAZY', async () => {
     const ws = await wsWithOverlay()
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.LAZY)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.LAZY)
     await rec.onOpMissing('stat', '/data/f.txt', enoent('/data/f.txt'))
     expect(ws.namespace.metaFor('/data/f.txt')).not.toBeNull()
     await ws.close()
@@ -66,7 +66,7 @@ describe('Reconciler', () => {
 
   it('onOpMissing skips a non-revalidate op', async () => {
     const ws = await wsWithOverlay()
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     await rec.onOpMissing('write', '/data/f.txt', enoent('/data/f.txt'))
     expect(ws.namespace.metaFor('/data/f.txt')).not.toBeNull()
     await ws.close()
@@ -74,7 +74,7 @@ describe('Reconciler', () => {
 
   it('onOpMissing ignores a non-ENOENT error', async () => {
     const ws = await wsWithOverlay()
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     await rec.onOpMissing('stat', '/data/f.txt', new Error('boom'))
     expect(ws.namespace.metaFor('/data/f.txt')).not.toBeNull()
     await ws.close()
@@ -83,7 +83,7 @@ describe('Reconciler', () => {
   it('mayServeCached trusts the cache under LAZY', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/f.txt')
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.LAZY)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.LAZY)
     expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(true)
     await ws.close()
   })
@@ -91,7 +91,7 @@ describe('Reconciler', () => {
   it('mayServeCached forces a re-read for a live-only backend under ALWAYS', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/f.txt')
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(false)
     await ws.close()
   })
@@ -101,7 +101,7 @@ describe('Reconciler', () => {
     await ws.namespace.ensureLoaded()
     await ws.namespace.setAttrs('/data/gone.txt', { mode: 0o600 })
     const mount = mountOf(ws, '/data/gone.txt')
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     await rec.reconcileRead(mount, '/data/gone.txt')
     expect(ws.namespace.metaFor('/data/gone.txt')).toBeNull()
     await ws.close()
@@ -110,7 +110,7 @@ describe('Reconciler', () => {
   it('reconcileRead is a no-op without an overlay or cached copy', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/plain.txt')
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     await rec.reconcileRead(mount, '/data/plain.txt')
     await ws.close()
   })
@@ -120,7 +120,7 @@ describe('Reconciler', () => {
     await ws.namespace.ensureLoaded()
     await ws.namespace.setAttrs('/data/gone.txt', { mode: 0o600 })
     const mount = mountOf(ws, '/data/gone.txt')
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.LAZY)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.LAZY)
     await rec.reconcileRead(mount, '/data/gone.txt')
     expect(ws.namespace.metaFor('/data/gone.txt')).not.toBeNull()
     await ws.close()
@@ -136,7 +136,7 @@ describe('unverified freshness probes', () => {
         const path = '/data/f.txt'
         const mount = mountOf(ws, path)
         Object.defineProperty(mount.vfs, 'supportsSnapshot', { value: true })
-        vi.spyOn(ws.ops, 'call').mockImplementation(() => {
+        vi.spyOn(ws.opsRegistry, 'call').mockImplementation(() => {
           if (probe === 'failed') return Promise.reject(new Error('probe unavailable'))
           if (probe === 'none') return Promise.resolve(null)
           return Promise.resolve(
@@ -147,7 +147,7 @@ describe('unverified freshness probes', () => {
             }),
           )
         })
-        const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+        const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
         await ws.cache.set(path, new TextEncoder().encode('v1'), { fingerprint: 'fp1' })
         if (probe === 'failed') {
           await expect(rec.mayServeCached(mount, path)).rejects.toThrow('probe unavailable')
@@ -192,11 +192,11 @@ it.each(['gate', 'shell'])('reconciles GitHub IDs before the %s reread', async (
     const scope = new PathSpec({ virtual: path, vfsPath: 'f.txt', directory: '/gh/' })
     expect((await githubStat(accessor, scope, vfs.index)).fingerprint).toBe('v1')
     await ws.cache.set(path, new TextEncoder().encode('v1'), { fingerprint: 'v1' })
-    vi.spyOn(ws.ops, 'call').mockImplementation((_op, _vfs, _accessor, p, _args, kwargs) =>
+    vi.spyOn(ws.opsRegistry, 'call').mockImplementation((_op, _vfs, _accessor, p, _args, kwargs) =>
       githubStat(accessor, p, kwargs?.index),
     )
     const mount = mountOf(ws, path)
-    const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
+    const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
     // An unchanged live object must not be mistaken for a missing path.
     expect(await rec.mayServeCached(mount, path)).toBe(true)
     sha = 'v2'

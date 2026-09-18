@@ -49,12 +49,12 @@ async def disk_demo() -> None:
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.LAZY,
         )
-        io1 = await ws.execute("cat /data/file.txt")
+        io1 = await ws.shell("cat /data/file.txt")
         print(f"  first  read (v1 expected)        : "
               f"{(await io1.materialize_stdout())!r}")
         time.sleep(1.1)
         (lazy_root / "file.txt").write_bytes(b"v2-external")
-        io2 = await ws.execute("cat /data/file.txt")
+        io2 = await ws.shell("cat /data/file.txt")
         print(f"  second read after external write : "
               f"{(await io2.materialize_stdout())!r}  <-- LAZY, stale")
     finally:
@@ -70,12 +70,12 @@ async def disk_demo() -> None:
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.ALWAYS,
         )
-        io1 = await ws.execute("cat /data/file.txt")
+        io1 = await ws.shell("cat /data/file.txt")
         print(f"  first  read (v1 expected)        : "
               f"{(await io1.materialize_stdout())!r}")
         time.sleep(1.1)
         (always_root / "file.txt").write_bytes(b"v2-external")
-        io2 = await ws.execute("cat /data/file.txt")
+        io2 = await ws.shell("cat /data/file.txt")
         print(f"  second read after external write : "
               f"{(await io2.materialize_stdout())!r}  <-- ALWAYS, fresh")
     finally:
@@ -95,11 +95,11 @@ async def ram_demo() -> None:
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )
-    io1 = await ws.execute("cat /data/file.txt")
+    io1 = await ws.shell("cat /data/file.txt")
     print(f"  first  read (v1 expected)              : "
           f"{(await io1.materialize_stdout())!r}")
     vfs._store.files["/file.txt"] = b"v2-external"
-    io2 = await ws.execute("cat /data/file.txt")
+    io2 = await ws.shell("cat /data/file.txt")
     print(f"  second read after external mutation    : "
           f"{(await io2.materialize_stdout())!r}  <-- ALWAYS→LAZY, stale")
 
@@ -111,11 +111,11 @@ async def ram_demo() -> None:
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )
-    io3 = await ws2.execute("cat /data/file.txt")
+    io3 = await ws2.shell("cat /data/file.txt")
     print(f"  first read (v1 expected)               : "
           f"{(await io3.materialize_stdout())!r}")
-    await ws2.execute('echo -n "v2-via-workspace" > /data/file.txt')
-    io4 = await ws2.execute("cat /data/file.txt")
+    await ws2.shell('echo -n "v2-via-workspace" > /data/file.txt')
+    io4 = await ws2.shell("cat /data/file.txt")
     print(f"  read after workspace-owned write       : "
           f"{(await io4.materialize_stdout())!r}  <-- cache invalidated")
 
@@ -140,14 +140,14 @@ async def redis_demo() -> None:
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.LAZY,
     )
-    await ws_primer.execute('echo -n "v1" > /data/file.txt')
+    await ws_primer.shell('echo -n "v1" > /data/file.txt')
     try:
         ws = Workspace(
             {"/data": (vfs, MountMode.WRITE)},
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.ALWAYS,
         )
-        io1 = await ws.execute("cat /data/file.txt")
+        io1 = await ws.shell("cat /data/file.txt")
         print(f"  first  read (v1 expected)              : "
               f"{(await io1.materialize_stdout())!r}")
 
@@ -161,16 +161,16 @@ async def redis_demo() -> None:
             },
             mode=MountMode.WRITE,
         )
-        await ws_other.execute('echo -n "v2-external" > /data/file.txt')
+        await ws_other.shell('echo -n "v2-external" > /data/file.txt')
 
-        io2 = await ws.execute("cat /data/file.txt")
+        io2 = await ws.shell("cat /data/file.txt")
         print(f"  second read after external mutation    : "
               f"{(await io2.materialize_stdout())!r}  <-- ALWAYS→LAZY, stale")
 
         # Workspace-owned write invalidates the local cache
         _banner("redis — workspace-originated write invalidates cache (fresh)")
-        await ws.execute('echo -n "v3-via-workspace" > /data/file.txt')
-        io3 = await ws.execute("cat /data/file.txt")
+        await ws.shell('echo -n "v3-via-workspace" > /data/file.txt')
+        io3 = await ws.shell("cat /data/file.txt")
         print(f"  read after workspace-owned write       : "
               f"{(await io3.materialize_stdout())!r}  <-- cache invalidated")
     finally:

@@ -66,7 +66,7 @@ def _ws():
 
 
 def _exec(ws, cmd, stdin=None):
-    return _run(ws.execute(cmd, stdin=stdin))
+    return _run(ws.shell(cmd, stdin=stdin))
 
 
 def _stdout(io):
@@ -2663,7 +2663,7 @@ def test_while_loop_warns_on_max_iterations():
 
     async def _run():
         # _MAX_WHILE = 10000; loop unconditionally to trigger the cap
-        io = await ws.execute("while true; do export X=$X.; done")
+        io = await ws.shell("while true; do export X=$X.; done")
         return await io.stderr_str()
 
     err = asyncio.run(_run())
@@ -2677,7 +2677,7 @@ def test_while_loop_under_limit_no_warning():
     ws = _ws()
 
     async def _run():
-        io = await ws.execute("i=0; while [ $i -lt 5 ]; do i=$((i+1)); done")
+        io = await ws.shell("i=0; while [ $i -lt 5 ]; do i=$((i+1)); done")
         return await io.stderr_str()
 
     err = asyncio.run(_run())
@@ -2706,7 +2706,7 @@ def test_add_mount_refreshes_the_existing_filesystem_facade():
             assert not fs.unsized_mounts("/data/nested")
             await fs.write("/data/nested/file.txt", b"dynamic")
             assert await fs.read("/data/nested/file.txt") == b"dynamic"
-            result = await ws.execute("cat /data/nested/file.txt")
+            result = await ws.shell("cat /data/nested/file.txt")
             assert result.exit_code == 0 and result.stdout == b"dynamic"
             await ws.unmount("/data/nested")
             assert "/data/nested/" not in fs.mount_prefixes()
@@ -2785,7 +2785,7 @@ def test_unmount_preserves_root_operations(explicit_root):
             await ws.unmount("/data")
             assert "/dev" in await ws.fs.readdir("/")
             assert (await ws.fs.stat("/")).type == FileType.DIRECTORY
-            result = await ws.execute("ls /")
+            result = await ws.shell("ls /")
             assert result.exit_code == 0
             assert result.stdout == b"dev\n"
             assert not result.stderr

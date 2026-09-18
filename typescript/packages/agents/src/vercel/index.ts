@@ -73,7 +73,7 @@ export function mirageTools(ws: Workspace): ToolSet {
         command: z.string().describe('The shell command to execute.'),
       }),
       execute: async ({ command }) => {
-        const io = await ws.execute(command)
+        const io = await ws.shell(command)
         return {
           stdout: io.stdoutText,
           stderr: io.stderrText,

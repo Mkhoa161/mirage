@@ -378,7 +378,7 @@ export async function handleRedirect(
  * set by the other shell-attributed error, `nosuchcmd: command not found`
  * (bash prints `bash: line 1: nosuchcmd: command not found`) — `bash:` is
  * bash's `$0` and mirage is not bash, and `line N` has no meaning for a
- * one-line `Workspace.execute` call.
+ * one-line `Workspace.shell` call.
  *
  * The label is the target's own spelling, never the error's message: backends
  * raise write failures with prose in the message (`parent directory does not

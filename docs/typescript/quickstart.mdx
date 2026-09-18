@@ -26,8 +26,8 @@ import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 async function main(): Promise<void> {
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
 
-  await ws.execute('echo "hello mirage" | tee /data/hello.txt')
-  const result = await ws.execute('cat /data/hello.txt')
+  await ws.shell('echo "hello mirage" | tee /data/hello.txt')
+  const result = await ws.shell('cat /data/hello.txt')
   process.stdout.write(result.stdoutText)
 
   await ws.close()
@@ -52,15 +52,15 @@ import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 async function main(): Promise<void> {
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
 
-  await ws.execute(`echo '{"name": "alice"}' | tee /data/user.json`)
+  await ws.shell(`echo '{"name": "alice"}' | tee /data/user.json`)
 
-  const files = await ws.execute('ls /data/')
+  const files = await ws.shell('ls /data/')
   process.stdout.write(files.stdoutText)
 
-  const name = await ws.execute('jq ".name" /data/user.json')
+  const name = await ws.shell('jq ".name" /data/user.json')
   process.stdout.write(name.stdoutText)
 
-  const match = await ws.execute('grep alice /data/user.json')
+  const match = await ws.shell('grep alice /data/user.json')
   process.stdout.write(match.stdoutText)
 
   await ws.close()
@@ -78,7 +78,7 @@ of running the command: network/cache bytes, read ops, and a
 `&&`/`||`, `if`/`case`, loops, and subshells aggregate automatically.
 
 ```ts
-const plan = await ws.execute('cat /data/user.json | wc -l', { provision: true })
+const plan = await ws.shell('cat /data/user.json | wc -l', { provision: true })
 console.log(plan.networkRead, plan.readOps, plan.precision)
 ```
 

@@ -87,7 +87,7 @@ def test_pipeline_transparent(line, transparent):
 
 async def _out(ws: Workspace, line: str) -> str:
     ws.create_session(line)
-    io = await ws.execute(line, session_id=line)
+    io = await ws.shell(line, session_id=line)
     return (await io.stdout_str()).strip()
 
 
@@ -176,5 +176,5 @@ async def test_pipestatus_matches_bash(line, expected):
 @pytest.mark.asyncio
 async def test_pipestatus_is_not_listed_by_declare():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("declare -p PIPESTATUS")
+    io = await ws.shell("declare -p PIPESTATUS")
     assert io.exit_code == 1

@@ -62,10 +62,10 @@ vfs = QingStorVFS(config)
 async def main() -> None:
     ws = Workspace({"/data/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /data/")
+    r = await ws.shell("ls /data/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /data/ -name '*.json' | head -n 5")
+    r = await ws.shell("find /data/ -name '*.json' | head -n 5")
     print(await r.stdout_str())
 
 

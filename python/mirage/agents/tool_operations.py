@@ -117,7 +117,7 @@ class MirageToolOperations:
         Returns:
             ToolResult: The command's rendered output.
         """
-        return _io_result(await self._ws.execute(command))
+        return _io_result(await self._ws.shell(command))
 
     async def read(self,
                    path: str,
@@ -207,7 +207,7 @@ class MirageToolOperations:
         Returns:
             ToolResult: The listing, or the failure.
         """
-        return _io_result(await self._ws.execute(f"ls {shlex.quote(path)}"))
+        return _io_result(await self._ws.shell(f"ls {shlex.quote(path)}"))
 
     async def grep(self, pattern: str, path: str) -> ToolResult:
         """Search recursively for a pattern.
@@ -219,7 +219,7 @@ class MirageToolOperations:
         Returns:
             ToolResult: The matches.
         """
-        io = await self._ws.execute(
+        io = await self._ws.shell(
             f"grep -rn {shlex.quote(pattern)} {shlex.quote(path)}")
         # grep exits 1 for "no match", which is a normal empty answer,
         # and >1 for a real failure (bad regex, unreadable path). Only

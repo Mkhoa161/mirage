@@ -40,25 +40,25 @@ async function makeWs(): Promise<Workspace> {
 describe('rg with no path operand', () => {
   it('searches the cwd and prints bare relative names', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('rg hello')
+    const io = await ws.shell('rg hello')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('a.txt:hello\nsub/b.txt:hello\n')
   })
 
   it('an attached stdin wins, even empty', async () => {
     const ws = await makeWs()
-    let io = await ws.execute('rg hello', { stdin: ENC.encode('hello pipe\n') })
+    let io = await ws.shell('rg hello', { stdin: ENC.encode('hello pipe\n') })
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('hello pipe\n')
 
-    io = await ws.execute('rg hello', { stdin: new Uint8Array() })
+    io = await ws.shell('rg hello', { stdin: new Uint8Array() })
     expect(io.exitCode).toBe(1)
     expect(stdoutStr(io)).toBe('')
   })
 
   it('exits 1 silently when nothing matches', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('rg zzz')
+    const io = await ws.shell('rg zzz')
     expect(io.exitCode).toBe(1)
     expect(stdoutStr(io)).toBe('')
   })

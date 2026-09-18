@@ -129,13 +129,13 @@ vfs = Mem0VFS(config=config)
 async def main() -> None:
     ws = Workspace({"/memory/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /memory/")
+    r = await ws.shell("ls /memory/")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep -r -i 'allergic' /memory/")
+    r = await ws.shell("grep -r -i 'allergic' /memory/")
     print(await r.stdout_str())
 
-    r = await ws.execute('search --top-k 5 "morning routine" /memory/')
+    r = await ws.shell('search --top-k 5 "morning routine" /memory/')
     print(await r.stdout_str())
 
 

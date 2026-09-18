@@ -61,7 +61,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
         const release = new Promise<void>((resolve) => {
           resume = resolve
         })
-        ws.ops.register({
+        ws.opsRegistry.register({
           name: 'stat',
           vfs: 'ram',
           filetype: null,
@@ -164,7 +164,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
             })
           }
         }
-        ws.ops.register({
+        ws.opsRegistry.register({
           name: 'readdir',
           vfs: 'ram',
           filetype: null,

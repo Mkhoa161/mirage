@@ -40,7 +40,7 @@ async def ws():
 
 
 async def _run(ws, cmd, stdin=None):
-    io = await ws.execute(cmd, stdin=stdin)
+    io = await ws.shell(cmd, stdin=stdin)
     stdout = io.stdout
     if stdout is None:
         return ""

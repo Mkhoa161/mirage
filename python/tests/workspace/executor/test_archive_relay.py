@@ -55,7 +55,7 @@ def ws() -> Workspace:
 
 
 def _run(ws: Workspace, line: str):
-    return asyncio.run(ws.execute(line))
+    return asyncio.run(ws.shell(line))
 
 
 def test_tar_selector_does_not_join_routing(ws):

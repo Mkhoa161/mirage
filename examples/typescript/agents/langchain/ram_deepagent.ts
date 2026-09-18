@@ -54,7 +54,7 @@ for (const text of extractText(result.messages.slice(-1))) {
 }
 
 console.log('\n--- Files in workspace ---')
-const findAll = await ws.execute('find / -type f')
+const findAll = await ws.shell('find / -type f')
 const findOut = findAll.stdoutText
 console.log(findOut)
 

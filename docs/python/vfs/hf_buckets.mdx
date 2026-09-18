@@ -100,22 +100,22 @@ vfs = HfBucketsVFS(config)
 async def main() -> None:
     ws = Workspace({"/hf/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /hf/")
+    r = await ws.shell("ls /hf/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /hf/data/file.txt")
+    r = await ws.shell("cat /hf/data/file.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /hf/")
+    r = await ws.shell("tree /hf/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /hf/ -name '*.json'")
+    r = await ws.shell("find /hf/ -name '*.json'")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep example /hf/data/config.json")
+    r = await ws.shell("grep example /hf/data/config.json")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /hf/data/file.txt")
+    r = await ws.shell("stat /hf/data/file.txt")
     print(await r.stdout_str())
 
 

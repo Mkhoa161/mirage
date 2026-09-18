@@ -32,7 +32,7 @@ def _build_ws() -> Workspace:
 async def _run(cmd: str):
     ws = _build_ws()
     try:
-        io = await ws.execute(cmd)
+        io = await ws.shell(cmd)
         stdout = await io.stdout_str()
         return io.exit_code, stdout
     finally:
@@ -91,12 +91,12 @@ async def test_binary_only_match_survives_nested_mount_fanout():
         "/work/remote": (inner, MountMode.WRITE)
     })
     try:
-        io = await ws.execute("grep -r needle /work")
+        io = await ws.shell("grep -r needle /work")
         assert await io.materialize_stdout() == b""
         assert io.exit_code == 0
         stderr = await io.materialize_stderr()
         assert b"/work/remote/paper.pdf: binary file matches" in stderr
-        io = await ws.execute("grep -Ir needle /work")
+        io = await ws.shell("grep -Ir needle /work")
         assert await io.materialize_stdout() == b""
         assert io.exit_code == 1
     finally:

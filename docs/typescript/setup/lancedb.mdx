@@ -34,8 +34,8 @@ const fashion = new LanceDBVFS({
 
 const ws = new Workspace({ '/fashion/': fashion }, { mode: MountMode.READ })
 
-await ws.execute('ls /fashion/Men/Shoes/White')
-await ws.execute('search "red running shoes" /fashion') // ranked paths + score + card
+await ws.shell('ls /fashion/Men/Shoes/White')
+await ws.shell('search "red running shoes" /fashion') // ranked paths + score + card
 ```
 
 ## Filesystem layout

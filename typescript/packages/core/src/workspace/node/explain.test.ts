@@ -88,10 +88,10 @@ async function ws(): Promise<Workspace> {
     { mode: MountMode.WRITE, shellParser: parser, profiles: { r: PROFILE } },
   )
   open.push(w)
-  await w.execute('mkdir -p /data/prod')
-  await w.execute('echo x > /data/prod/x.txt')
-  await w.execute('echo a > /data/a.txt')
-  await w.execute('echo s > /data/secret.txt')
+  await w.shell('mkdir -p /data/prod')
+  await w.shell('echo x > /data/prod/x.txt')
+  await w.shell('echo a > /data/a.txt')
+  await w.shell('echo s > /data/secret.txt')
   w.createSession('s', { profile: 'r' })
   return w
 }
@@ -107,10 +107,10 @@ async function inlineWs(onAsk: AskHandler, profile = PROFILE): Promise<Workspace
     { mode: MountMode.WRITE, shellParser: parser, profiles: { r: profile }, onAsk },
   )
   open.push(w)
-  await w.execute('mkdir -p /data/prod')
-  await w.execute('echo x > /data/prod/x.txt')
-  await w.execute('echo a > /data/a.txt')
-  await w.execute('echo s > /data/secret.txt')
+  await w.shell('mkdir -p /data/prod')
+  await w.shell('echo x > /data/prod/x.txt')
+  await w.shell('echo a > /data/a.txt')
+  await w.shell('echo s > /data/secret.txt')
   w.createSession('s', { profile: 'r' })
   return w
 }
@@ -122,7 +122,7 @@ async function inlineWs(onAsk: AskHandler, profile = PROFILE): Promise<Workspace
  */
 async function aliased(asked: string[]): Promise<Workspace> {
   const w = await inlineWs(answering(asked, Outcome.ALLOW))
-  const defined = await w.execute("shopt -s expand_aliases; alias c='cat /data/secret.txt' d=c", {
+  const defined = await w.shell("shopt -s expand_aliases; alias c='cat /data/secret.txt' d=c", {
     sessionId: 's',
   })
   expect(defined.exitCode).toBe(0)
@@ -195,7 +195,7 @@ describe('explain', () => {
   it('says exactly what the run would say', async () => {
     const w = await ws()
     for (const line of ['rm /data/prod/x.txt', 'git push origin main', 'gerp x']) {
-      const ran = await w.execute(line, { sessionId: 's' })
+      const ran = await w.shell(line, { sessionId: 's' })
       const [said] = await w.explain(line, 's')
       expect(said?.exitCode).toBe(ran.exitCode)
       expect(said?.stderr).toBe(DEC.decode(ran.stderr))
@@ -224,7 +224,7 @@ describe('explain', () => {
     // dispatcher reached it deleted the first file and refused the
     // second.
     const w = await ws()
-    const ran = await w.execute('rm /data/a.txt && rm /data/prod/x.txt', { sessionId: 's' })
+    const ran = await w.shell('rm /data/a.txt && rm /data/prod/x.txt', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).toBe('rm: /data/prod/x.txt: production data is protected\n')
     expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
@@ -235,7 +235,7 @@ describe('explain', () => {
     // verdict, so it stays bash. A typo must not cost an agent the work
     // the line already did.
     const w = await ws()
-    const ran = await w.execute('rm /data/a.txt && gerp x', { sessionId: 's' })
+    const ran = await w.shell('rm /data/a.txt && gerp x', { sessionId: 's' })
     expect(ran.exitCode).toBe(127)
     expect(DEC.decode(ran.stderr)).toBe('gerp: command not found\n')
     expect(await w.fs.readdir('/data')).not.toContain('/data/a.txt')
@@ -244,7 +244,7 @@ describe('explain', () => {
   it('holds a line with an asked command until it is answered', async () => {
     const w = await ws()
     const line = 'rm /data/a.txt && cat /data/secret.txt'
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(126)
     expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
     // Exactly one request, from the one pass that judged the line.
@@ -254,7 +254,7 @@ describe('explain', () => {
     // The whole line replays, which is only sound because none of it
     // ran the first time, and the grant is spent exactly once even
     // though two passes now read it.
-    const again = await w.execute(line, { sessionId: 's' })
+    const again = await w.shell(line, { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(await w.fs.readdir('/data')).not.toContain('/data/a.txt')
     expect(w.decisions.pending()).toEqual([])
@@ -265,7 +265,7 @@ describe('explain', () => {
     // literal `cd` itself or a rule about /data/prod would answer about
     // whatever directory the session happened to be in.
     const w = await ws()
-    const ran = await w.execute('cd /data/prod && rm x.txt', { sessionId: 's' })
+    const ran = await w.shell('cd /data/prod && rm x.txt', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).toBe('rm: x.txt: production data is protected\n')
   })
@@ -278,7 +278,7 @@ describe('explain', () => {
     const line = 'cd /data/prod && rm x.txt'
     const [, removed] = await w.explain(line, 's')
     expect(removed?.outcome).toBe(Outcome.DENY)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(removed?.exitCode).toBe(ran.exitCode)
     expect(removed?.stderr).toBe(DEC.decode(ran.stderr))
   })
@@ -291,7 +291,7 @@ describe('explain', () => {
     // the cost lands on the replay: approving this re-runs a line whose
     // first half is already done.
     const w = await ws()
-    const ran = await w.execute('S=/data/secret.txt; rm /data/a.txt && cat $S', {
+    const ran = await w.shell('S=/data/secret.txt; rm /data/a.txt && cat $S', {
       sessionId: 's',
     })
     expect(ran.exitCode).toBe(126)
@@ -303,7 +303,7 @@ describe('explain', () => {
     // bash restores the cwd when the subshell exits, so carrying the cd
     // past it refused a line that was never going to touch /data/prod.
     const w = await ws()
-    const ran = await w.execute('(cd /data/prod && ls) && rm x.txt', { sessionId: 's' })
+    const ran = await w.shell('(cd /data/prod && ls) && rm x.txt', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).not.toContain('production data is protected')
     expect(await w.fs.readdir('/data/prod')).toContain('/data/prod/x.txt')
@@ -311,7 +311,7 @@ describe('explain', () => {
 
   it('shows a line running once the session holds a grant', async () => {
     const w = await ws()
-    const ran = await w.execute('git push origin main', { sessionId: 's' })
+    const ran = await w.shell('git push origin main', { sessionId: 's' })
     expect(ran.exitCode).toBe(126)
     const [pending] = w.decisions.pending()
     await w.decisions.answer(pending?.id ?? '', Outcome.ALLOW, Scope.SESSION)
@@ -338,9 +338,9 @@ async function sealedWs(): Promise<Workspace> {
     { mode: MountMode.WRITE, shellParser: parser, profiles: { r: SEALED } },
   )
   open.push(w)
-  await w.execute('mkdir -p /data/prod')
-  await w.execute('echo x > /data/prod/x.txt')
-  await w.execute('echo a > /data/a.txt')
+  await w.shell('mkdir -p /data/prod')
+  await w.shell('echo x > /data/prod/x.txt')
+  await w.shell('echo a > /data/a.txt')
   w.createSession('s', { profile: 'r' })
   return w
 }
@@ -369,7 +369,7 @@ describe('prejudge', () => {
     // so the target belongs to the last command of the chain, not the
     // statement's first child.
     const w = await sealedWs()
-    const ran = await w.execute('rm /data/a.txt && echo x > /data/prod/x.txt', { sessionId: 's' })
+    const ran = await w.shell('rm /data/a.txt && echo x > /data/prod/x.txt', { sessionId: 's' })
     expect(ran.exitCode).not.toBe(0)
     expect(DEC.decode(ran.stderr)).toContain('sealed until review')
     expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
@@ -387,9 +387,9 @@ describe('prejudge', () => {
       { mode: MountMode.WRITE, shellParser: parser, policies: [new NoCat()] },
     )
     open.push(w)
-    await w.execute('echo a > /data/a.txt')
-    await w.execute('echo b > /data/b.txt')
-    const ran = await w.execute('rm /data/a.txt && cat /data/b.txt')
+    await w.shell('echo a > /data/a.txt')
+    await w.shell('echo b > /data/b.txt')
+    const ran = await w.shell('rm /data/a.txt && cat /data/b.txt')
     expect(ran.exitCode).not.toBe(0)
     expect(DEC.decode(ran.stderr)).toBe('cat: Permission denied\n')
     expect(ran.refusal?.reason).toBe('cat is refused by policy')
@@ -403,7 +403,7 @@ describe('prejudge', () => {
     // the half-line behavior in its worst form, since the agent was told
     // yes.
     const w = await inlineWs(answering([], Outcome.ALLOW))
-    const ran = await w.execute('cat /data/secret.txt && rm /data/prod/x.txt', { sessionId: 's' })
+    const ran = await w.shell('cat /data/secret.txt && rm /data/prod/x.txt', { sessionId: 's' })
     expect(ran.exitCode).not.toBe(0)
     expect(DEC.decode(ran.stderr)).toContain('production data is protected')
     expect(DEC.decode(ran.stdout)).not.toContain('s')
@@ -419,12 +419,12 @@ describe('prejudge', () => {
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
     const line = 'rm /data/a.txt && cat /data/secret.txt'
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('s\n')
     expect(asked).toHaveLength(1)
-    await w.execute('echo a > /data/a.txt', { sessionId: 's' })
-    const again = await w.execute(line, { sessionId: 's' })
+    await w.shell('echo a > /data/a.txt', { sessionId: 's' })
+    const again = await w.shell(line, { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(asked).toHaveLength(2)
     // Both grants were spent by the lines they were given for.
@@ -440,7 +440,7 @@ describe('prejudge', () => {
     const w = await inlineWs(answering(asked, Outcome.DENY))
     const line = 'rm /data/a.txt && cat /data/secret.txt'
     for (const expected of [1, 1, 2]) {
-      const ran = await w.execute(line, { sessionId: 's' })
+      const ran = await w.shell(line, { sessionId: 's' })
       expect(ran.exitCode).toBe(126)
       expect(asked).toHaveLength(expected)
     }
@@ -455,11 +455,11 @@ describe('prejudge', () => {
     // next cat is a question again.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute('cat /data/secret.txt && rm /data/prod/x.txt', { sessionId: 's' })
+    const ran = await w.shell('cat /data/secret.txt && rm /data/prod/x.txt', { sessionId: 's' })
     expect(ran.exitCode).not.toBe(0)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
-    const again = await w.execute('cat /data/secret.txt', { sessionId: 's' })
+    const again = await w.shell('cat /data/secret.txt', { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(DEC.decode(again.stdout)).toBe('s\n')
     expect(asked).toHaveLength(2)
@@ -472,12 +472,12 @@ describe('prejudge', () => {
     // swept with it and the next cat is a question again.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute('cat /data/missing && cat /data/secret.txt', { sessionId: 's' })
+    const ran = await w.shell('cat /data/missing && cat /data/secret.txt', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stdout)).toBe('')
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
-    const again = await w.execute('cat /data/secret.txt', { sessionId: 's' })
+    const again = await w.shell('cat /data/secret.txt', { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(DEC.decode(again.stdout)).toBe('s\n')
     expect(asked).toHaveLength(2)
@@ -504,14 +504,14 @@ describe('prejudge', () => {
       },
     )
     open.push(w)
-    await w.execute('echo s > /data/secret.txt')
+    await w.shell('echo s > /data/secret.txt')
     w.createSession('s', { profile: 'r' })
-    const ran = await w.execute('cat /data/secret.txt && echo $TOKEN', { sessionId: 's' })
+    const ran = await w.shell('cat /data/secret.txt && echo $TOKEN', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).toBe('TOKEN: cannot fetch from fake-dead-handoff\n')
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
-    const again = await w.execute('cat /data/secret.txt', { sessionId: 's' })
+    const again = await w.shell('cat /data/secret.txt', { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(DEC.decode(again.stdout)).toBe('s\n')
     expect(asked).toHaveLength(2)
@@ -535,11 +535,11 @@ describe('prejudge', () => {
     // again from inside the job.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toHaveLength(1)
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
@@ -548,15 +548,15 @@ describe('prejudge', () => {
   it('keeps an out-of-band grant with a nested background job', async () => {
     const w = await ws()
     const line = "eval 'sleep 0.2 && cat /data/secret.txt > /data/read.txt &'"
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(w.decisions.list('s')).toHaveLength(1)
     const elsewhere = await w.explain('cat /data/secret.txt', 's')
     expect(elsewhere[0]?.outcome).toBe(Outcome.ASK)
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(await w.fs.readFileText('/data/read.txt')).toBe('s\n')
     expect(w.decisions.list('s')).toEqual([])
@@ -570,7 +570,7 @@ describe('prejudge', () => {
     // line's reservation and asked the human a second time for one run.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute('echo $(cat /data/secret.txt) && ls /data', { sessionId: 's' })
+    const ran = await w.shell('echo $(cat /data/secret.txt) && ls /data', { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout).startsWith('s\n')).toBe(true)
     expect(asked).toHaveLength(1)
@@ -582,11 +582,11 @@ describe('prejudge', () => {
     // to reach the gate inside the substitution on the retry.
     const w = await ws()
     const line = 'echo $(cat /data/secret.txt) && ls /data'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout).startsWith('s\n')).toBe(true)
     expect(w.decisions.list('s')).toEqual([])
@@ -599,7 +599,7 @@ describe('prejudge', () => {
     // gates spend them.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute("eval 'cat /data/secret.txt && cat /data/secret.txt' && ls /data", {
+    const ran = await w.shell("eval 'cat /data/secret.txt && cat /data/secret.txt' && ls /data", {
       sessionId: 's',
     })
     expect(ran.exitCode).toBe(0)
@@ -628,17 +628,17 @@ describe('prejudge', () => {
     open.push(w)
     w.createSession('s', { profile: 'r' })
     const line = 'cat /data/secret.txt && git push origin main'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const second = await w.execute(line, { sessionId: 's' })
+    const second = await w.shell(line, { sessionId: 's' })
     expect(second.exitCode).toBe(126)
     expect(second.refusal?.kind).toBe('pending')
     expect(w.decisions.list('s')).toHaveLength(2)
     expect(box.lines).toEqual([])
     await w.decisions.answer(second.refusal?.askId ?? '', Outcome.ALLOW)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(box.lines).toEqual([line])
     expect(w.decisions.list('s')).toEqual([])
@@ -667,14 +667,14 @@ describe('prejudge', () => {
       },
     )
     open.push(w)
-    await w.execute('echo s > /data/secret.txt')
+    await w.shell('echo s > /data/secret.txt')
     w.createSession('s', { profile: 'r' })
-    const ran = await w.execute('cat /data/secret.txt & ls /data', { sessionId: 's' })
+    const ran = await w.shell('cat /data/secret.txt & ls /data', { sessionId: 's' })
     expect(ran.exitCode).not.toBe(0)
     expect(consoles).toBe(1)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
-    const again = await w.execute('cat /data/secret.txt', { sessionId: 's' })
+    const again = await w.shell('cat /data/secret.txt', { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(DEC.decode(again.stdout)).toBe('s\n')
     expect(asked).toHaveLength(2)
@@ -687,17 +687,17 @@ describe('prejudge', () => {
     // until the second spelling has its own answer.
     const w = await ws()
     const line = 'cat /data/secret.txt && cat /data/secret.txt'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const second = await w.execute(line, { sessionId: 's' })
+    const second = await w.shell(line, { sessionId: 's' })
     expect(second.exitCode).toBe(126)
     expect(DEC.decode(second.stdout)).toBe('')
     expect(second.refusal?.kind).toBe('pending')
     expect(w.decisions.list('s')).toHaveLength(2)
     await w.decisions.answer(second.refusal?.askId ?? '', Outcome.ALLOW)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('s\ns\n')
     expect(w.decisions.list('s')).toEqual([])
@@ -710,12 +710,12 @@ describe('prejudge', () => {
     // find the grant gone at its cat.
     const w = await ws()
     const line = 'ls /data && cat /data/secret.txt'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
     const both = await Promise.all([
-      w.execute(line, { sessionId: 's' }),
-      w.execute(line, { sessionId: 's' }),
+      w.shell(line, { sessionId: 's' }),
+      w.shell(line, { sessionId: 's' }),
     ])
     const [ran, held] = [...both].sort((a, b) => a.exitCode - b.exitCode)
     if (ran === undefined || held === undefined) throw new Error('unreachable')
@@ -734,15 +734,15 @@ describe('prejudge', () => {
     // ran.
     const w = await ws()
     const line = 'cat /data/secret.txt && rm /data/prod/x.txt'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const retry = await w.execute(line, { sessionId: 's' })
+    const retry = await w.shell(line, { sessionId: 's' })
     expect(retry.exitCode).not.toBe(0)
     expect(DEC.decode(retry.stderr)).toContain('production data is protected')
     expect(w.decisions.list('s')).toEqual([])
-    const again = await w.execute('cat /data/secret.txt', { sessionId: 's' })
+    const again = await w.shell('cat /data/secret.txt', { sessionId: 's' })
     expect(again.exitCode).toBe(126)
     expect(again.refusal?.kind).toBe('pending')
   })
@@ -755,7 +755,7 @@ describe('prejudge scope', () => {
     // the rule about /data/prod reads x.txt as the file it is. Reading a
     // subshell as "no cd applies" judged the command at the session cwd.
     const w = await ws()
-    const ran = await w.execute('(cd /data/prod && rm x.txt)', { sessionId: 's' })
+    const ran = await w.shell('(cd /data/prod && rm x.txt)', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).toBe('rm: x.txt: production data is protected\n')
     expect(await w.fs.readdir('/data/prod')).toContain('/data/prod/x.txt')
@@ -769,7 +769,7 @@ describe('prejudge scope', () => {
     // pass answers above the redirect layer and would leave it on
     // stderr.
     const w = await ws()
-    const ran = await w.execute('rm /data/prod/x.txt 2>&1', { sessionId: 's' })
+    const ran = await w.shell('rm /data/prod/x.txt 2>&1', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stdout)).toBe('rm: /data/prod/x.txt: production data is protected\n')
     expect(DEC.decode(ran.stderr)).toBe('')
@@ -785,17 +785,17 @@ describe('prejudge scope', () => {
     // retry runs both on their own answers.
     const w = await ws()
     const line = 'F=/data/secret.txt; cat $F && cat /data/secret.txt'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const second = await w.execute(line, { sessionId: 's' })
+    const second = await w.shell(line, { sessionId: 's' })
     expect(second.exitCode).toBe(126)
     expect(DEC.decode(second.stdout)).toBe('')
     expect(second.refusal?.kind).toBe('pending')
     expect(w.decisions.list('s')).toHaveLength(2)
     await w.decisions.answer(second.refusal?.askId ?? '', Outcome.ALLOW)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('s\ns\n')
     expect(w.decisions.list('s')).toEqual([])
@@ -807,12 +807,9 @@ describe('prejudge scope', () => {
     // the first body's nod, nor ask a third time.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute(
-      'echo $(cat /data/secret.txt) $(cat /data/secret.txt) && ls /data',
-      {
-        sessionId: 's',
-      },
-    )
+    const ran = await w.shell('echo $(cat /data/secret.txt) $(cat /data/secret.txt) && ls /data', {
+      sessionId: 's',
+    })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout).startsWith('s s\n')).toBe(true)
     expect(asked).toHaveLength(2)
@@ -827,8 +824,8 @@ describe('prejudge scope', () => {
     // asks a second time after the echo has already run.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    await w.execute("echo s > '/data/secret file'")
-    const ran = await w.execute("echo x && command cat '/data/secret file'", { sessionId: 's' })
+    await w.shell("echo s > '/data/secret file'")
+    const ran = await w.shell("echo x && command cat '/data/secret file'", { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('x\ns\n')
     expect(asked).toHaveLength(1)
@@ -844,16 +841,16 @@ describe('prejudge scope', () => {
     // other line asks, and the job runs on its nod.
     const w = await ws()
     const line = 'F=/data/secret.txt; sleep 0.5 && cat /data/secret.txt & cat $F'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const held = await w.execute(line, { sessionId: 's' })
+    const held = await w.shell(line, { sessionId: 's' })
     expect(held.exitCode).toBe(126)
     expect(held.refusal?.kind).toBe('pending')
-    const other = await w.execute('cat /data/secret.txt', { sessionId: 's' })
+    const other = await w.shell('cat /data/secret.txt', { sessionId: 's' })
     expect(other.exitCode).toBe(126)
     expect(other.refusal?.kind).toBe('pending')
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(w.decisions.pending('s')).toHaveLength(w.decisions.list('s').length)
   })
@@ -867,12 +864,12 @@ describe('prejudge scope', () => {
     // holds the whole line.
     const w = await ws()
     const line = 'echo x && echo `cat /data/secret.txt` `echo ok`'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(DEC.decode(first.stdout)).toBe('')
     expect(first.refusal?.kind).toBe('pending')
     await w.decisions.answer(first.refusal?.askId ?? '', Outcome.ALLOW)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('x\ns ok\n')
     expect(w.decisions.list('s')).toEqual([])
@@ -881,7 +878,7 @@ describe('prejudge scope', () => {
   it('reads two backtick pairs of one node as two occurrences', async () => {
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute('echo `cat /data/secret.txt` `cat /data/secret.txt`', {
+    const ran = await w.shell('echo `cat /data/secret.txt` `cat /data/secret.txt`', {
       sessionId: 's',
     })
     expect(ran.exitCode).toBe(0)
@@ -896,8 +893,8 @@ describe('prejudge scope', () => {
     // gate and the cat asks again after the echo has run.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    await w.execute('echo s > /data/secrét')
-    const ran = await w.execute('echo x && command cat /data/secrét', { sessionId: 's' })
+    await w.shell('echo s > /data/secrét')
+    const ran = await w.shell('echo x && command cat /data/secrét', { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('x\ns\n')
     expect(asked).toHaveLength(1)
@@ -907,7 +904,7 @@ describe('prejudge scope', () => {
   it('runs a pair after a multibyte character on its own nod', async () => {
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute('echo `echo é` `cat /data/secret.txt`', { sessionId: 's' })
+    const ran = await w.shell('echo `echo é` `cat /data/secret.txt`', { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('é s\n')
     expect(asked).toHaveLength(1)
@@ -925,7 +922,7 @@ describe('prejudge scope', () => {
     // instead of asking again after the touch ran once more.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('s\ns\n')
     expect(asked).toHaveLength(1)
@@ -935,13 +932,13 @@ describe('prejudge scope', () => {
   it('replays a held loop on the one answer it was given', async () => {
     const w = await ws()
     const line = 'for i in 1 2; do touch /data/mark.txt; cat /data/secret.txt; done'
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
     expect(await w.fs.readdir('/data')).not.toContain('/data/mark.txt')
     const [pending] = w.decisions.pending()
     expect(w.decisions.pending()).toHaveLength(1)
     await w.decisions.answer(pending?.id ?? '', Outcome.ALLOW)
-    const again = await w.execute(line, { sessionId: 's' })
+    const again = await w.shell(line, { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(DEC.decode(again.stdout)).toBe('s\ns\n')
     expect(w.decisions.list('s')).toEqual([])
@@ -964,7 +961,7 @@ describe('prejudge scope', () => {
       seen.push([record.command, ...record.argv])
       return Promise.resolve({ ...record, outcome: Outcome.ALLOW, scope: Scope.ONCE })
     }, ASK_CAT)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('s\n')
     expect(seen).toEqual([['cat', '/data/secret.txt']])
@@ -979,7 +976,7 @@ describe('prejudge scope', () => {
     // whatever the runtime appends, so it still refuses the whole line
     // before the touch runs.
     const w = await inlineWs(answering([], Outcome.ALLOW), DENY_CAT)
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(126)
     expect(DEC.decode(ran.stderr)).toBe('cat: Permission denied\n')
     expect(await w.fs.readdir('/data')).not.toContain('/data/mark.txt')
@@ -992,7 +989,7 @@ describe('prejudge scope', () => {
     // line when the batch ends, and the second batch runs on it.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute("printf '/data/secret.txt /data/secret.txt' | xargs -n1 cat", {
+    const ran = await w.shell("printf '/data/secret.txt /data/secret.txt' | xargs -n1 cat", {
       sessionId: 's',
     })
     expect(ran.exitCode).toBe(0)
@@ -1004,12 +1001,12 @@ describe('prejudge scope', () => {
   it('replays every batch of a held xargs line on one answer', async () => {
     const w = await ws()
     const line = "printf '/data/secret.txt /data/secret.txt' | xargs -n1 cat"
-    const first = await w.execute(line, { sessionId: 's' })
+    const first = await w.shell(line, { sessionId: 's' })
     expect(first.refusal?.kind).toBe('pending')
     const [pending] = w.decisions.pending()
     expect(w.decisions.pending()).toHaveLength(1)
     await w.decisions.answer(pending?.id ?? '', Outcome.ALLOW)
-    const again = await w.execute(line, { sessionId: 's' })
+    const again = await w.shell(line, { sessionId: 's' })
     expect(again.exitCode).toBe(0)
     expect(DEC.decode(again.stdout)).toBe('s\ns\n')
     expect(w.decisions.list('s')).toEqual([])
@@ -1022,14 +1019,14 @@ describe('prejudge scope', () => {
     // holds it, and the last job's end spends it.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute(
+    const ran = await w.shell(
       "for i in 1 2; do eval 'sleep 0.2 && cat /data/secret.txt >> /data/read.txt &'; done",
       { sessionId: 's' },
     )
     expect(ran.exitCode).toBe(0)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toHaveLength(1)
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(await w.fs.readFileText('/data/read.txt')).toBe('s\ns\n')
     expect(asked).toHaveLength(1)
@@ -1049,10 +1046,10 @@ describe('prejudge scope', () => {
     // back to a hand-off nothing revokes, standing for good.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute(line, { sessionId: 's' })
+    const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(asked).toHaveLength(1)
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
@@ -1066,12 +1063,12 @@ describe('prejudge scope', () => {
     // the finished line's, it would stand unspent for good.
     const asked: string[] = []
     const w = await inlineWs(answering(asked, Outcome.ALLOW))
-    const ran = await w.execute('sleep 0.2 && echo /data/secret.txt | xargs cat &', {
+    const ran = await w.shell('sleep 0.2 && echo /data/secret.txt | xargs cat &', {
       sessionId: 's',
     })
     expect(ran.exitCode).toBe(0)
     expect(asked).toEqual([])
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
@@ -1088,7 +1085,7 @@ describe('prejudge scope', () => {
       // same text, and the second ran on the first's nod.
       const asked: string[] = []
       const w = await aliased(asked)
-      const ran = await w.execute(line, { sessionId: 's' })
+      const ran = await w.shell(line, { sessionId: 's' })
       expect(ran.exitCode).toBe(0)
       expect(DEC.decode(ran.stdout)).toBe('s\ns\n')
       expect(asked).toHaveLength(2)
@@ -1103,7 +1100,7 @@ describe('prejudge scope', () => {
     // spends it.
     const asked: string[] = []
     const w = await aliased(asked)
-    const ran = await w.execute('for i in 1 2; do c; done', { sessionId: 's' })
+    const ran = await w.shell('for i in 1 2; do c; done', { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
     expect(DEC.decode(ran.stdout)).toBe('s\ns\n')
     expect(asked).toHaveLength(1)
@@ -1117,9 +1114,9 @@ describe('prejudge scope', () => {
     // end spends it rather than leaving it standing for good.
     const asked: string[] = []
     const w = await aliased(asked)
-    const ran = await w.execute('sleep 0.2 && c &', { sessionId: 's' })
+    const ran = await w.shell('sleep 0.2 && c &', { sessionId: 's' })
     expect(ran.exitCode).toBe(0)
-    const waited = await w.execute('wait', { sessionId: 's' })
+    const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
     expect(DEC.decode(waited.stdout)).toBe('s\n')
     expect(asked).toHaveLength(1)
@@ -1136,7 +1133,7 @@ describe('prejudge scope', () => {
       seen.push([record.command, ...record.argv])
       return Promise.resolve({ ...record, outcome: Outcome.ALLOW, scope: Scope.ONCE })
     }, ASK_CAT)
-    await w.execute(
+    await w.shell(
       "touch /data/mark.txt && printf 'x\\n' | mapfile -t -c 1 -C 'cat /data/secret.txt'",
       {
         sessionId: 's',

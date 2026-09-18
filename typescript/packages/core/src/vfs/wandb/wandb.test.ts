@@ -15,10 +15,10 @@ it('isolates mount scopes and directory indexes', async () => {
   const workspaces = mounts.map((vfs) => new Workspace({ '/wandb': vfs }, { shellParser }))
   try {
     for (const [i, ws] of workspaces.entries()) {
-      const result = await ws.execute('ls /wandb')
+      const result = await ws.shell('ls /wandb')
       expect(result.exitCode).toBe(0)
       expect(new TextDecoder().decode(result.stdout).trim()).toBe(i === 0 ? 'lab' : 'other')
-      expect((await ws.execute(`ls /wandb/${i === 0 ? 'other' : 'lab'}`)).exitCode).not.toBe(0)
+      expect((await ws.shell(`ls /wandb/${i === 0 ? 'other' : 'lab'}`)).exitCode).not.toBe(0)
     }
     for (const request of requests) expect(request).not.toHaveBeenCalled()
   } finally {
@@ -42,7 +42,7 @@ it('refuses W&B mutations and CLI dispatch even in a write workspace', async () 
       'mkdir /wandb/lab/new-project',
       'type -t wandb',
     ])
-      expect((await ws.execute(command)).exitCode).not.toBe(0)
+      expect((await ws.shell(command)).exitCode).not.toBe(0)
     expect(request).not.toHaveBeenCalled()
   } finally {
     await ws.close()

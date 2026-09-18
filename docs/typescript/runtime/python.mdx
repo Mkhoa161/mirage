@@ -25,8 +25,8 @@ Installed Python script CLIs receive bare `argv` (including the installed name a
 import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
 const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.EXEC })
-await ws.execute('echo hello > /data/a.txt')
-const io = await ws.execute(`python3 -c "print(open('/data/a.txt').read().strip())"`)
+await ws.shell('echo hello > /data/a.txt')
+const io = await ws.shell(`python3 -c "print(open('/data/a.txt').read().strip())"`)
 ```
 
 ### Workspace file access
@@ -82,7 +82,7 @@ const ws = new Workspace(
   { '/data': new RAMVFS() },
   { mode: MountMode.EXEC, runtimes: ['monty', 'workspace'] },
 )
-const io = await ws.execute(
+const io = await ws.shell(
   `python3 -c "from pathlib import Path; print(Path('/data/a.txt').read_text())"`,
 )
 ```

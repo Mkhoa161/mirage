@@ -24,8 +24,8 @@ const gridfs = new GridFSVFS({
 })
 
 const ws = new Workspace({ '/gridfs/': gridfs }, { mode: MountMode.WRITE })
-await ws.execute('echo hello | tee /gridfs/notes/a.txt > /dev/null')
-const res = await ws.execute("find /gridfs/ -name '*.txt'")
+await ws.shell('echo hello | tee /gridfs/notes/a.txt > /dev/null')
+const res = await ws.shell("find /gridfs/ -name '*.txt'")
 console.log(res.stdoutText)
 ```
 

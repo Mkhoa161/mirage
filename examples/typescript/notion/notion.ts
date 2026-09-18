@@ -31,7 +31,7 @@ function buildConfig(): NotionConfig {
 
 async function run(ws: Workspace, cmd: string, limit = 1500): Promise<string> {
   console.log(`=== ${cmd} ===`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   const out = r.stdoutText.replace(/\s+$/, '')
   console.log(out !== '' ? out.slice(0, limit) : '(empty)')
   if (r.stderrText.trim() !== '') console.log(`  [stderr] ${r.stderrText.trim().slice(0, 300)}`)
@@ -40,13 +40,13 @@ async function run(ws: Workspace, cmd: string, limit = 1500): Promise<string> {
 }
 
 async function firstEntry(ws: Workspace, path: string): Promise<string> {
-  const out = (await ws.execute(`ls ${path}`)).stdoutText.trim()
+  const out = (await ws.shell(`ls ${path}`)).stdoutText.trim()
   if (out === '') return ''
   return basename(out.split('\n')[0]!.replace(/\/$/, ''))
 }
 
 async function pickChild(ws: Workspace, path: string, skip: string): Promise<string> {
-  const listing = (await ws.execute(`ls "${path}/"`)).stdoutText.trim().split('\n')
+  const listing = (await ws.shell(`ls "${path}/"`)).stdoutText.trim().split('\n')
   for (const line of listing) {
     const name = basename(line.replace(/\/$/, ''))
     if (name !== skip && name !== '') return name
@@ -75,7 +75,7 @@ async function explorePages(ws: Workspace): Promise<void> {
   // workspace namespace (durable, snapshot-captured) and merge into
   // dispatch-level stat.
   console.log(`=== metadata overlay on ${base}/page.json ===`)
-  const metaRes = await ws.execute(
+  const metaRes = await ws.shell(
     `chmod 640 "${base}/page.json" && chown 500:dev "${base}/page.json" && touch -t 202601021530 "${base}/page.json"`,
   )
   console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

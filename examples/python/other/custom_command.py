@@ -56,14 +56,14 @@ async def main():
     ws.mount("/ram/").register_fns([greet])
     ws.mount("/disk/").register_fns([greet])
 
-    await ws.execute("echo content > /ram/note.txt")
+    await ws.shell("echo content > /ram/note.txt")
 
     print("\n=== greet on /ram/ (RAMAccessor wins) ===")
-    result = await ws.execute("greet /ram/note.txt")
+    result = await ws.shell("greet /ram/note.txt")
     print(await result.stdout_str())
 
     print("=== greet on /disk/ (DiskAccessor wins) ===")
-    result = await ws.execute("greet /disk/note.txt")
+    result = await ws.shell("greet /disk/note.txt")
     print(await result.stdout_str())
 
 

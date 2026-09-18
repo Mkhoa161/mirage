@@ -23,7 +23,7 @@ const pg = new PostgresVFS({
 })
 
 const ws = new Workspace({ '/pg': pg }, { mode: MountMode.READ })
-await ws.execute('ls /pg/public/')
+await ws.shell('ls /pg/public/')
 ```
 
 ## Browser

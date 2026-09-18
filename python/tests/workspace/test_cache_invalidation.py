@@ -51,7 +51,7 @@ def _s3_workspace(endpoint: str, bucket: str) -> Workspace:
 
 
 async def _exec(ws: Workspace, cmd: str) -> tuple[int, str, str]:
-    result = await ws.execute(cmd)
+    result = await ws.shell(cmd)
     out = await result.stdout_str()
     err = await result.stderr_str()
     return result.exit_code, out, err

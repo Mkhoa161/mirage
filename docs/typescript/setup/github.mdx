@@ -27,7 +27,7 @@ const gh = await GitHubVFS.create({
 })
 
 const ws = new Workspace({ '/repo': gh }, { mode: MountMode.READ })
-await ws.execute('cat /repo/README.md')
+await ws.shell('cat /repo/README.md')
 ```
 
 The constructor is private: `create` fetches the repo's git tree before it

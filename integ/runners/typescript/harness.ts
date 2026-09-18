@@ -195,7 +195,7 @@ export interface ProvisionInfo {
 }
 
 interface ProvisionExec {
-  execute(cmd: string, opts: { provision: true }): Promise<ProvisionInfo>
+  shell(cmd: string, opts: { provision: true }): Promise<ProvisionInfo>
 }
 
 export interface ExplainRow {
@@ -453,8 +453,8 @@ async function seedFrom(ws: ExecWorkspace, base: string, mountPath: string): Pro
     const rel = relative(base, file).split(sep).join('/')
     const dest = `${mountPath.replace(/\/+$/, '')}/${rel}`
     const parent = dest.slice(0, dest.lastIndexOf('/'))
-    await ws.execute(`mkdir -p ${parent}`)
-    await ws.execute(`tee ${dest} > /dev/null`, { stdin: new Uint8Array(readFileSync(file)) })
+    await ws.shell(`mkdir -p ${parent}`)
+    await ws.shell(`tee ${dest} > /dev/null`, { stdin: new Uint8Array(readFileSync(file)) })
   }
 }
 
@@ -467,8 +467,8 @@ export async function seedMountRoot(ws: ExecWorkspace, mountPath: string): Promi
   // the upload auto-creates the folder chain and the delete leaves the
   // folders behind, so the mount lists as empty like every other target.
   const marker = `${mountPath.replace(/\/+$/, '')}/.seed`
-  await ws.execute(`tee ${marker} > /dev/null`, { stdin: ENC.encode('seed\n') })
-  await ws.execute(`rm ${marker}`)
+  await ws.shell(`tee ${marker} > /dev/null`, { stdin: ENC.encode('seed\n') })
+  await ws.shell(`rm ${marker}`)
 }
 
 export async function runScenario(
@@ -483,7 +483,7 @@ export async function runScenario(
       await mutate(step.mutate.path, ENC.encode(step.mutate.content))
       continue
     }
-    const result = await ws.execute(step.command)
+    const result = await ws.shell(step.command)
     outputs.push(DEC.decode(result.stdout))
     exitCode = result.exitCode
   }
@@ -738,7 +738,7 @@ export async function runCase(
   }
   const start = performance.now()
   if (c.provision === true) {
-    const plan = await (ws as unknown as ProvisionExec).execute(c.command, { provision: true })
+    const plan = await (ws as unknown as ProvisionExec).shell(c.command, { provision: true })
     return {
       exitCode: 0,
       out: provisionLine(plan) + '\n',
@@ -759,7 +759,7 @@ export async function runCase(
     // and charging that to the dry run would fail every ask case.
     recorded = ws.decisions.pending().length - before
   }
-  const result = await ws.execute(c.command, { sessionId: c.session })
+  const result = await ws.shell(c.command, { sessionId: c.session })
   const elapsed = (performance.now() - start) / 1000
   const out = DEC.decode(result.stdout)
   const err = DEC.decode(result.stderr)

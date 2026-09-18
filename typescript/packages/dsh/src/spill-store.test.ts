@@ -149,9 +149,9 @@ describe('saveText', () => {
     expect(await ws.fs.readFileText(locator)).toBe('PAYLOAD')
     // The whole point: a shell reading the locator back finds it.
     ws.createSession('probe')
-    const read = await ws.execute(`cat ${locator}`, { sessionId: 'probe' })
+    const read = await ws.shell(`cat ${locator}`, { sessionId: 'probe' })
     expect(read.exitCode).toBe(0)
-    // `ws.execute` answers in bytes, unlike the dsh shell seam's text.
+    // `ws.shell` answers in bytes, unlike the dsh shell seam's text.
     expect(new TextDecoder().decode(read.stdout)).toBe('PAYLOAD')
   })
 

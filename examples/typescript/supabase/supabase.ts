@@ -53,7 +53,7 @@ async function run(
   ws: Workspace,
   command: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const r = await ws.execute(command)
+  const r = await ws.shell(command)
   return { stdout: r.stdoutText, stderr: r.stderrText, exitCode: r.exitCode }
 }
 
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on ${key} ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "${key}" && chown 500:dev "${key}" && touch -t 202601021530 "${key}"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

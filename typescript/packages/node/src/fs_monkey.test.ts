@@ -49,7 +49,7 @@ describe('patchNodeFs — mounted paths', () => {
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
-    await ws.execute('echo hello | tee /data/x.txt')
+    await ws.shell('echo hello | tee /data/x.txt')
     const text = await fs.promises.readFile('/data/x.txt', 'utf-8')
     expect(text).toBe('hello\n')
     await ws.close()
@@ -134,7 +134,7 @@ describe('patchNodeFs — fall-through to native fs', () => {
 
     const realPath = join(scratch, 'real.txt')
     await fs.promises.writeFile(realPath, 'on-disk')
-    await ws.execute('echo virtual | tee /data/v.txt')
+    await ws.shell('echo virtual | tee /data/v.txt')
 
     expect(await fs.promises.readFile(realPath, 'utf-8')).toBe('on-disk')
     expect(await fs.promises.readFile('/data/v.txt', 'utf-8')).toBe('virtual\n')
@@ -157,7 +157,7 @@ describe('patchNodeFs — sync methods + restore()', () => {
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
-    await ws.execute('echo cb | tee /data/cb.txt')
+    await ws.shell('echo cb | tee /data/cb.txt')
     const bytes = await new Promise<Buffer>((resolve, reject) => {
       fs.readFile('/data/cb.txt', (err, data) => {
         if (err) reject(err)

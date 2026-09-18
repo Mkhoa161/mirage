@@ -60,7 +60,7 @@ function realGit(args: string[]): string {
 }
 
 async function run(line: string): Promise<[number, string, string]> {
-  const result = await ws.execute(`git -C /repo ${line}`)
+  const result = await ws.shell(`git -C /repo ${line}`)
   return [result.exitCode, DEC.decode(result.stdout), DEC.decode(result.stderr)]
 }
 
@@ -205,7 +205,7 @@ describe('git log', () => {
   })
 
   it('emits %xHH as a raw byte, not UTF-8 of the code point', async () => {
-    const result = await ws.execute("git -C /repo log -n 1 --format='a%x80b'")
+    const result = await ws.shell("git -C /repo log -n 1 --format='a%x80b'")
     const real = execFileSync('git', ['-C', repoPath, 'log', '-n', '1', '--format=a%x80b'])
     expect(Array.from(result.stdout)).toEqual(Array.from(real))
   })
@@ -362,7 +362,7 @@ describe('git branch', () => {
 
 describe('the git root', () => {
   it('refuses an unknown verb', async () => {
-    const result = await ws.execute('git nosuchverb')
+    const result = await ws.shell('git nosuchverb')
     expect(result.exitCode).toBe(1)
     expect(DEC.decode(result.stderr)).toBe(
       "git: 'nosuchverb' is not a git command. See 'git --help'.\n",
@@ -370,7 +370,7 @@ describe('the git root', () => {
   })
 
   it('reports a directory that is not a repository', async () => {
-    const result = await ws.execute('git -C / log')
+    const result = await ws.shell('git -C / log')
     expect(result.exitCode).toBe(128)
     expect(DEC.decode(result.stderr)).toBe(
       'fatal: not a git repository (or any of the parent directories): .git\n',
@@ -380,7 +380,7 @@ describe('the git root', () => {
   // git tells the two apart: a directory it could not enter is not the same
   // complaint as a directory holding no repository.
   it('reports a directory that is not there as a chdir failure', async () => {
-    const result = await ws.execute('git -C /repo/nowhere log')
+    const result = await ws.shell('git -C /repo/nowhere log')
     expect(result.exitCode).toBe(128)
     expect(DEC.decode(result.stderr)).toBe(
       "fatal: cannot change to '/repo/nowhere': No such file or directory\n",
@@ -391,7 +391,7 @@ describe('the git root', () => {
   // looks: discovery walks upwards, so tolerating it would run in the
   // repository above and let a write verb mutate one nobody named.
   it('reports a file operand as a chdir failure too', async () => {
-    const result = await ws.execute('git -C /repo/letters.txt log')
+    const result = await ws.shell('git -C /repo/letters.txt log')
     expect(result.exitCode).toBe(128)
     expect(DEC.decode(result.stderr)).toBe(
       "fatal: cannot change to '/repo/letters.txt': Not a directory\n",

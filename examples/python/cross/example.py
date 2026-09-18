@@ -67,7 +67,7 @@ _FINGERPRINT_COMMANDS = [
 
 
 async def _capture(ws, cmd):
-    r = await ws.execute(cmd)
+    r = await ws.shell(cmd)
     return {
         "command": cmd,
         "exit_code": r.exit_code,
@@ -90,7 +90,7 @@ async def main():
 
     # gdrive needs `ls` of the parent folder first so the index has
     # the file_id mapping the loader will need too.
-    await ws.execute("ls /gdrive/")
+    await ws.shell("ls /gdrive/")
 
     # Warm the cache by running each fingerprint command once and
     # discarding the output. This way the snapshot's cache state
@@ -99,7 +99,7 @@ async def main():
     # format slightly differently between cache-hit and source-read
     # paths; warming makes the comparison apples-to-apples).
     for cmd in _FINGERPRINT_COMMANDS:
-        await ws.execute(cmd)
+        await ws.shell(cmd)
 
     # ── exercise the workspace (read-only for determinism) ──────────
     print("=== capturing fingerprint commands ===\n")

@@ -28,9 +28,9 @@ async function main(): Promise<void> {
   )
 
   // Seed a file so the parent has something to read.
-  await ws.execute('echo "hello from helper" | tee /data/hello.txt')
+  await ws.shell('echo "hello from helper" | tee /data/hello.txt')
   // Use printf (not echo) so the \n escapes expand to real newlines.
-  await ws.execute(`printf 'line1\\nline2\\nline3\\n' | tee /data/multi.txt`)
+  await ws.shell(`printf 'line1\\nline2\\nline3\\n' | tee /data/multi.txt`)
 
   const fm = new FuseManager()
   const mp = await fm.setup(ws)

@@ -778,7 +778,7 @@ describe('expr through the shell', () => {
     ["expr '(' 1 +", '', "expr: syntax error: missing argument after '+'\n", 2],
   ])('%s', async (line, out, err, exitCode) => {
     const ws = await makeWs()
-    const io = await ws.execute(line)
+    const io = await ws.shell(line)
     expect([io.stdoutText, io.stderrText, io.exitCode]).toEqual([out, err, exitCode])
     await ws.close()
   })
@@ -788,7 +788,7 @@ describe('expr through the shell', () => {
     // in half, so stdout is one invalid byte and not a replacement
     // character. GNU writes `a9 c3` here.
     const ws = await makeWs()
-    const io = await ws.execute('expr substr \u00e9\u00e9 2 2')
+    const io = await ws.shell('expr substr \u00e9\u00e9 2 2')
     expect([...io.stdout]).toEqual([0xa9, 0xc3, 0x0a])
     expect(io.exitCode).toBe(0)
     await ws.close()

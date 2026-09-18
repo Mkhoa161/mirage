@@ -113,7 +113,7 @@ async def main() -> None:
         async for change in ws.watch(PathSpec.from_str_path(MOUNT)):
             print(f"event: {change.kind.value} {change.path.virtual}")
             if change.kind is not FileChangeKind.DELETE:
-                result = await ws.execute(f"head -c 200 {change.path.virtual}")
+                result = await ws.shell(f"head -c 200 {change.path.virtual}")
                 fresh = (await result.stdout_str()).strip()
                 print(f"  fresh content: {fresh[:80]!r}")
     finally:

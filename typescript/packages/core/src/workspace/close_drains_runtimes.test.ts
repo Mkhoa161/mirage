@@ -87,7 +87,7 @@ describe('Workspace.close', () => {
     // The top-level door too: a line that got in here could submit a
     // background job after killAll had already run, and teardown would close
     // resources out from under it.
-    await expect(ws.execute('echo hi')).rejects.toThrow('Workspace is closed')
+    await expect(ws.shell('echo hi')).rejects.toThrow('Workspace is closed')
     await closing
   })
 
@@ -135,7 +135,7 @@ describe('Workspace.close', () => {
       }),
     )
 
-    const running = ws.execute("pause; eval 'echo hi'")
+    const running = ws.shell("pause; eval 'echo hi'")
     await entered.promise
     const closing = ws.close()
     await watch.closeStarted.promise

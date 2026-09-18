@@ -40,28 +40,28 @@ async function makeWs(): Promise<Workspace> {
 describe('grep -r with no path operand', () => {
   it('searches the cwd and prints bare relative names', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('grep -r hello')
+    const io = await ws.shell('grep -r hello')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('a.txt:hello\nsub/b.txt:hello\n')
   })
 
   it('ignores stdin when the cwd operand is synthesized', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('grep -r hello', { stdin: ENC.encode('hello from stdin\n') })
+    const io = await ws.shell('grep -r hello', { stdin: ENC.encode('hello from stdin\n') })
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('a.txt:hello\nsub/b.txt:hello\n')
   })
 
   it('exits 1 silently when nothing matches', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('grep -r zzz')
+    const io = await ws.shell('grep -r zzz')
     expect(io.exitCode).toBe(1)
     expect(stdoutStr(io)).toBe('')
   })
 
   it('keeps the usage error without -r', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('grep hello')
+    const io = await ws.shell('grep hello')
     expect(io.exitCode).toBe(2)
   })
 })

@@ -39,12 +39,12 @@ function brokenBootstrap(source: string): SecretEntries {
 describe('cloneWorkspaceWithOverride', () => {
   it('produces an independent workspace whose writes do not touch the source', async () => {
     const src = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
-    await src.execute('echo source-only > /file.txt')
+    await src.shell('echo source-only > /file.txt')
     const clone = await cloneWorkspaceWithOverride(src, null)
-    await clone.execute('echo clone-write > /file.txt')
-    const srcRead = await src.execute('cat /file.txt')
+    await clone.shell('echo clone-write > /file.txt')
+    const srcRead = await src.shell('cat /file.txt')
     expect(srcRead.stdoutText.trim()).toBe('source-only')
-    const cloneRead = await clone.execute('cat /file.txt')
+    const cloneRead = await clone.shell('cat /file.txt')
     expect(cloneRead.stdoutText.trim()).toBe('clone-write')
     await src.close()
     await clone.close()
@@ -66,7 +66,7 @@ describe('cloneWorkspaceWithOverride', () => {
       },
     )
     const clone = await cloneWorkspaceWithOverride(src, null)
-    const read = await clone.execute('echo "$TOKEN"')
+    const read = await clone.shell('echo "$TOKEN"')
     expect(read.exitCode).toBe(0)
     expect(read.stdoutText.trim()).toBe('a1:r')
     await src.close()
@@ -90,7 +90,7 @@ describe('cloneWorkspaceWithOverride', () => {
     const clone = await cloneWorkspaceWithOverride(src, {
       secrets: { prod: { source: 'acct-override', config: { account: 'staging' } } },
     })
-    expect((await clone.execute('echo "$TOKEN"')).stdoutText.trim()).toBe('staging:r')
+    expect((await clone.shell('echo "$TOKEN"')).stdoutText.trim()).toBe('staging:r')
     await src.close()
     await clone.close()
   })

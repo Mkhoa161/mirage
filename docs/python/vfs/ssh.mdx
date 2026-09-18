@@ -89,23 +89,23 @@ async def main():
     ws = Workspace({"/logs": vfs}, mode=MountMode.READ)
 
     # List remote directory
-    r = await ws.execute("ls /logs/")
+    r = await ws.shell("ls /logs/")
     print(await r.stdout_str())
 
     # Read last 20 lines of a log
-    r = await ws.execute("tail -n 20 /logs/nginx/access.log")
+    r = await ws.shell("tail -n 20 /logs/nginx/access.log")
     print(await r.stdout_str())
 
     # Search across log files
-    r = await ws.execute('grep "ERROR" /logs/app.log')
+    r = await ws.shell('grep "ERROR" /logs/app.log')
     print(await r.stdout_str())
 
     # Find large files
-    r = await ws.execute("find /logs/ -name '*.log'")
+    r = await ws.shell("find /logs/ -name '*.log'")
     print(await r.stdout_str())
 
     # File metadata
-    r = await ws.execute("stat /logs/app.log")
+    r = await ws.shell("stat /logs/app.log")
     print(await r.stdout_str())
 
 

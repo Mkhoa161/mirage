@@ -41,7 +41,7 @@ ws = Workspace({"/dropbox": backend}, mode=MountMode.WRITE)
 
 async def show(cmd: str, max_chars: int = 600) -> None:
     print(f"=== {cmd} ===")
-    result = await ws.execute(cmd)
+    result = await ws.shell(cmd)
     out = await result.stdout_str()
     if out:
         print(out[:max_chars] + ("..." if len(out) > max_chars else ""))
@@ -57,7 +57,7 @@ async def main() -> None:
     await show("find /dropbox -name '*.txt' | head -n 5")
     await show("du /dropbox/")
     print("=== not-found errors show the full virtual path ===")
-    result = await ws.execute("cat /dropbox/__nf_missing__.txt")
+    result = await ws.shell("cat /dropbox/__nf_missing__.txt")
     print(f"exit={result.exit_code}  "
           f"{(await result.stderr_str()).strip()}")
 

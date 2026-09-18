@@ -487,8 +487,8 @@ async def test_workspace_execute_databricks_volume_touch_and_rm():
     seed_directory(files, root)
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.WRITE)
 
-    touch_io = await ws.execute("touch /dbx/created.txt")
-    rm_io = await ws.execute("rm /dbx/created.txt")
+    touch_io = await ws.shell("touch /dbx/created.txt")
+    rm_io = await ws.shell("rm /dbx/created.txt")
 
     assert touch_io.exit_code == 0
     assert touch_io.writes == {"/dbx/created.txt": b""}
@@ -508,7 +508,7 @@ async def test_workspace_execute_databricks_volume_rm_resolves_glob():
     seed_file(files, f"{root}/keep.md", b"keep")
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.WRITE)
 
-    io = await ws.execute("rm /dbx/*.txt")
+    io = await ws.shell("rm /dbx/*.txt")
 
     assert io.exit_code == 0
     assert files.delete_calls == [f"{root}/one.txt", f"{root}/two.txt"]
@@ -529,7 +529,7 @@ async def test_workspace_execute_databricks_volume_touch_resolves_glob():
     seed_file(files, f"{root}/existing.txt", b"existing")
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.WRITE)
 
-    io = await ws.execute("touch /dbx/*.txt")
+    io = await ws.shell("touch /dbx/*.txt")
 
     assert io.exit_code == 0
     assert files.upload_calls == []
@@ -545,7 +545,7 @@ async def test_workspace_execute_databricks_volume_rm_rejects_directory():
     seed_directory(files, f"{root}/dir")
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.WRITE)
 
-    io = await ws.execute("rm /dbx/dir")
+    io = await ws.shell("rm /dbx/dir")
 
     assert io.exit_code == 1
     assert b"IsADirectoryError" in io.stderr or b"Is a directory" in io.stderr
@@ -558,8 +558,8 @@ async def test_read_only_mount_rejects_file_write_commands():
     seed_directory(files, root)
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.READ)
 
-    touch_io = await ws.execute("touch /dbx/created.txt")
-    rm_io = await ws.execute("rm /dbx/created.txt")
+    touch_io = await ws.shell("touch /dbx/created.txt")
+    rm_io = await ws.shell("rm /dbx/created.txt")
 
     assert touch_io.exit_code == 1
     assert b"read-only mount" in touch_io.stderr
@@ -586,8 +586,8 @@ async def test_workspace_execute_uses_databricks_volume_mount_for_ls():
     ]
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.READ)
 
-    io = await ws.execute("ls /dbx")
-    slash_io = await ws.execute("ls /dbx/")
+    io = await ws.shell("ls /dbx")
+    slash_io = await ws.shell("ls /dbx/")
 
     assert io.exit_code == 0
     assert b"debug_output.json" in io.stdout
@@ -614,9 +614,9 @@ async def test_workspace_execute_databricks_volume_stat_and_cat():
     )
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.READ)
 
-    stat_io = await ws.execute("stat /dbx/debug_output.json")
-    cat_io = await ws.execute("cat /dbx/debug_output.json")
-    head_io = await ws.execute("head -n 1 /dbx/debug_output.json")
+    stat_io = await ws.shell("stat /dbx/debug_output.json")
+    cat_io = await ws.shell("cat /dbx/debug_output.json")
+    head_io = await ws.shell("head -n 1 /dbx/debug_output.json")
 
     assert stat_io.exit_code == 0
     assert b"name=debug_output.json" in stat_io.stdout
@@ -659,7 +659,7 @@ async def test_workspace_execute_databricks_volume_find_files():
     ]
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.READ)
 
-    io = await ws.execute("find /dbx -maxdepth 2 -type f")
+    io = await ws.shell("find /dbx -maxdepth 2 -type f")
 
     assert io.exit_code == 0
     assert b"/dbx/debug_output.json" in io.stdout
@@ -711,8 +711,8 @@ async def test_workspace_execute_databricks_volume_recursive_grep_and_rg():
     ]
     ws = Workspace({"/dbx/": make_vfs(files)}, mode=MountMode.READ)
 
-    grep_io = await ws.execute("grep -R -n debug /dbx/nested")
-    rg_io = await ws.execute("rg debug /dbx/nested")
+    grep_io = await ws.shell("grep -R -n debug /dbx/nested")
+    rg_io = await ws.shell("rg debug /dbx/nested")
 
     assert grep_io.exit_code == 0
     assert b"/dbx/nested/info.txt:1:alpha debug line" in grep_io.stdout

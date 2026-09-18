@@ -41,7 +41,7 @@ def ws(dbx_files: FakeFiles) -> Workspace:
 
 @pytest.mark.asyncio
 async def test_find_name_glob(ws):
-    io = await ws.execute("find /dbx/ -name '*.txt'")
+    io = await ws.shell("find /dbx/ -name '*.txt'")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -52,7 +52,7 @@ async def test_find_name_glob(ws):
 
 @pytest.mark.asyncio
 async def test_find_type_d(ws):
-    io = await ws.execute("find /dbx/ -type d")
+    io = await ws.shell("find /dbx/ -type d")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -62,7 +62,7 @@ async def test_find_type_d(ws):
 
 @pytest.mark.asyncio
 async def test_find_maxdepth(ws):
-    io = await ws.execute("find /dbx/ -maxdepth 1")
+    io = await ws.shell("find /dbx/ -maxdepth 1")
 
     assert io.exit_code == 0
     out = io.stdout.decode()

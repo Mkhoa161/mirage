@@ -31,7 +31,7 @@ const MOUNT = '/notion'
 const DEC = new TextDecoder()
 
 async function render(ws: Workspace, cmd: string, withExit: boolean): Promise<string> {
-  const result = await ws.execute(cmd)
+  const result = await ws.shell(cmd)
   const out = DEC.decode(result.stdout)
   const tail = out.endsWith('\n') || out === '' ? out : out + '\n'
   return withExit ? `exit=${String(result.exitCode)}\n${tail}` : tail

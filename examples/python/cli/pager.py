@@ -115,7 +115,7 @@ PAGER = CLISpec(
 
 async def show(ws: Workspace, line: str) -> None:
     print(f"$ {line}")
-    result = await ws.execute(line)
+    result = await ws.shell(line)
     stdout = await result.stdout_str()
     stderr = await result.stderr_str()
     if stdout:

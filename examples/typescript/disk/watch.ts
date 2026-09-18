@@ -63,9 +63,9 @@ async function main(): Promise<void> {
   // notify invalidates the caches for the changed path and its ancestor
   // listings before delivering, so a read after an event can never serve
   // pre-change bytes.
-  let result = await ws.execute(`cat ${MOUNT}/reports/q1.txt`)
+  let result = await ws.shell(`cat ${MOUNT}/reports/q1.txt`)
   console.log(`\nread after notify: '${result.stdoutText.trim()}'`)
-  result = await ws.execute(`ls ${MOUNT}/reports`)
+  result = await ws.shell(`ls ${MOUNT}/reports`)
   console.log(`listing: ${result.stdoutText.split(/\s+/).filter(Boolean).join(' ')}`)
 
   await ws.close()

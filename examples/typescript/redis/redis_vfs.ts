@@ -42,9 +42,9 @@ async function main(): Promise<void> {
     { '/data': new RedisVFS({ url: REDIS_URL }) },
     { mode: MountMode.WRITE },
   )
-  await seedWs.execute('echo "hello world" | tee /data/hello.txt')
-  await seedWs.execute('mkdir /data/sub')
-  await seedWs.execute('echo "nested" | tee /data/sub/nested.txt')
+  await seedWs.shell('echo "hello world" | tee /data/hello.txt')
+  await seedWs.shell('mkdir /data/sub')
+  await seedWs.shell('echo "nested" | tee /data/sub/nested.txt')
   await seedWs.close()
 
   const ws = new Workspace(

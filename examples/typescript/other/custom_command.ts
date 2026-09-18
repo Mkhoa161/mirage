@@ -61,14 +61,14 @@ async function main(): Promise<void> {
   ws.mount('/ram/')?.registerFns(greet)
   ws.mount('/disk/')?.registerFns(greet)
 
-  await ws.execute('echo content > /ram/note.txt')
+  await ws.shell('echo content > /ram/note.txt')
 
   console.log('\n=== greet on /ram/ (RAMAccessor wins) ===')
-  const ramRes = await ws.execute('greet /ram/note.txt')
+  const ramRes = await ws.shell('greet /ram/note.txt')
   process.stdout.write(ramRes.stdoutText)
 
   console.log('=== greet on /disk/ (DiskAccessor wins) ===')
-  const diskRes = await ws.execute('greet /disk/note.txt')
+  const diskRes = await ws.shell('greet /disk/note.txt')
   process.stdout.write(diskRes.stdoutText)
 
   await ws.close()

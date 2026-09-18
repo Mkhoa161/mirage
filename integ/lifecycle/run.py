@@ -169,8 +169,8 @@ async def action(ws: Workspace, step: dict[str, Any],
         row = await ws.fs.stat(step["path"])
         return {"type": row.type.value, "size": row.size}
     elif op == "exec":
-        result = await ws.execute(step["command"],
-                                  session_id=step.get("session"))
+        result = await ws.shell(step["command"],
+                                session_id=step.get("session"))
         return {
             "exit_code": result.exit_code,
             "stdout": await result.stdout_str(),

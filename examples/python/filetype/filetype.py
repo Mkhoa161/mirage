@@ -64,11 +64,11 @@ async def main() -> None:
                           fn=tally_cat))
 
     # .tally routes to the renderer above; .txt falls back to the generic cat.
-    print((await ws.execute("cat /data/hits.tally")).stdout.decode(), end="")
-    print((await ws.execute("cat /data/notes.txt")).stdout.decode(), end="")
+    print((await ws.shell("cat /data/hits.tally")).stdout.decode(), end="")
+    print((await ws.shell("cat /data/notes.txt")).stdout.decode(), end="")
 
     # The renderer composes with the rest of the shell like any other command.
-    out = await ws.execute("cat /data/hits.tally | sort -k2 -n | tail -1")
+    out = await ws.shell("cat /data/hits.tally | sort -k2 -n | tail -1")
     print("largest:", out.stdout.decode().strip())
 
 

@@ -23,7 +23,7 @@ let restoreNav: () => void
 const DEC = new TextDecoder()
 
 async function run(cmd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   return {
     stdout: DEC.decode(r.stdout),
     stderr: DEC.decode(r.stderr),

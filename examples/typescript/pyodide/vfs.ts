@@ -55,7 +55,7 @@ function buildS3(): S3Config | undefined {
 async function py(ws: Workspace, label: string, code: string): Promise<void> {
   console.log(`\n--- ${label} ---`)
   await ws.fs.writeFile('/ram/__demo.py', code)
-  const r = await ws.execute('python3 /ram/__demo.py')
+  const r = await ws.shell('python3 /ram/__demo.py')
   if (r.stdoutText !== '') process.stdout.write(r.stdoutText)
   if (r.exitCode !== 0) console.error(`  exit=${String(r.exitCode)} ${r.stderrText.trim().slice(0, 200)}`)
 }
@@ -91,7 +91,7 @@ print('wrote /ram/out.txt')
     console.log('host sees:', await ws.fs.readFileText('/ram/out.txt'))
 
     // 2. Lazy-on-miss — host writes a new path AFTER preload; Python still sees it.
-    await ws.execute('mkdir -p /ram/synth/today')
+    await ws.shell('mkdir -p /ram/synth/today')
     await ws.fs.writeFile('/ram/synth/today/note.md', 'lazy demo')
     await py(
       ws,

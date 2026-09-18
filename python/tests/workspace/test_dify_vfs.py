@@ -60,7 +60,7 @@ async def test_workspace_executes_dify_ls(monkeypatch):
     monkeypatch.setattr(tree, "list_all_documents", list_documents)
     workspace = Workspace({"/knowledge": vfs()}, mode=MountMode.READ)
 
-    result = await workspace.execute("ls /knowledge")
+    result = await workspace.shell("ls /knowledge")
 
     assert result.exit_code == 0
     assert await result.stdout_str() == "guides\n"

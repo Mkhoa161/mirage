@@ -40,8 +40,8 @@ async function buildWs(): Promise<Workspace> {
     { '/': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
   )
-  await ws.execute('mkdir -p /data/sub')
-  await ws.execute('touch /data/a.txt /data/sub/nested.txt')
+  await ws.shell('mkdir -p /data/sub')
+  await ws.shell('touch /data/a.txt /data/sub/nested.txt')
   return ws
 }
 
@@ -49,7 +49,7 @@ async function run(
   ws: Workspace,
   cmd: string,
 ): Promise<{ code: number; out: string; err: string }> {
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   return { code: res.exitCode, out: DEC.decode(res.stdout), err: DEC.decode(res.stderr) }
 }
 

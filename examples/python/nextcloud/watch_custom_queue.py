@@ -74,7 +74,7 @@ async def main() -> None:
     print(f"  {event.kind.value} {event.path.virtual}"
           "  (precision degraded, dirtiness kept)")
 
-    result = await ws.execute(f"ls {MOUNT}/{FOLDER}")
+    result = await ws.shell(f"ls {MOUNT}/{FOLDER}")
     listing = (await result.stdout_str()).split()
     print(f"  re-inventory: {len(listing)} entries, guaranteed fresh")
 

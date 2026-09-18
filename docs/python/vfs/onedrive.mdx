@@ -151,18 +151,18 @@ vfs = OneDriveVFS(config)
 async def main() -> None:
     ws = Workspace({"/onedrive/": vfs}, mode=MountMode.WRITE)
 
-    r = await ws.execute("ls /onedrive/")
+    r = await ws.shell("ls /onedrive/")
     print(await r.stdout_str())
 
-    await ws.execute("echo 'hello from mirage' > /onedrive/note.txt")
+    await ws.shell("echo 'hello from mirage' > /onedrive/note.txt")
 
-    r = await ws.execute("cat /onedrive/note.txt")
+    r = await ws.shell("cat /onedrive/note.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /onedrive/note.txt")
+    r = await ws.shell("stat /onedrive/note.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /onedrive/")
+    r = await ws.shell("tree /onedrive/")
     print(await r.stdout_str())
 
 

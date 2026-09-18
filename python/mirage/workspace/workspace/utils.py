@@ -33,7 +33,7 @@ def command_name(command: str) -> str:
 
 def fork_for_call(session: Session, cwd: str | None,
                   env: dict[str, str] | None) -> Session:
-    """Session a single ``execute`` call runs in.
+    """Session a single ``shell`` call runs in.
 
     A per-call ``cwd``/``env`` runs in an ephemeral clone, matching a
     bash subshell: ``cd`` and ``export`` inside the line do not leak

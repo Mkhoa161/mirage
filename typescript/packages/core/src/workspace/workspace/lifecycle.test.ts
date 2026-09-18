@@ -229,7 +229,7 @@ it.each(
       expect(closed).toBe(false)
       return { state: CapacityState.UNKNOWN }
     })
-    ws.ops.register({ name: 'read', vfs: 'ram', filetype: null, write: false, fn: read })
+    ws.opsRegistry.register({ name: 'read', vfs: 'ram', filetype: null, write: false, fn: read })
     const [registered] = command({
       name: 'readvalue',
       vfs: 'ram',
@@ -245,12 +245,12 @@ it.each(
     })
     const running = (async () => {
       if (surface === 'df') {
-        const result = await ws.execute('df /data')
+        const result = await ws.shell('df /data')
         expect(result.exitCode).toBe(0)
         return 'value'
       }
       if (surface === 'command')
-        return new TextDecoder().decode((await ws.execute('readvalue /data/file')).stdout)
+        return new TextDecoder().decode((await ws.shell('readvalue /data/file')).stdout)
       const value = (await ws.dispatch('read', '/data/file')) as
         | Uint8Array
         | AsyncIterable<Uint8Array>
@@ -480,7 +480,7 @@ describe('closeWorkspace surfaces closer failures', () => {
     // the terminal flag has to be set or the guards that read only `closed`
     // would let a settled runner resolve and reopen one.
     expect((ws as unknown as { closed: boolean }).closed).toBe(true)
-    await expect(ws.execute('echo hi')).rejects.toThrow('Workspace is closed')
+    await expect(ws.shell('echo hi')).rejects.toThrow('Workspace is closed')
     await expect(ws.dispatch('stat', '/m')).rejects.toThrow('Workspace is closed')
     // Teardown ran once and is not retried, so a second caller has to be told
     // why it failed rather than reading the memoized attempt as success.

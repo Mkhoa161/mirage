@@ -689,7 +689,7 @@ describe('the session the adapter reads as', () => {
   })
 
   it('reads links as the ambient session the door will keep', async () => {
-    // A callback reaching ctx.fs from inside `ws.execute` dispatches as
+    // A callback reaching ctx.fs from inside `ws.shell` dispatches as
     // that line's session, so the link table is judged as it too: a
     // link the ambient session hides stays typed for the door to refuse,
     // even though the adapter's own configured session could see it.

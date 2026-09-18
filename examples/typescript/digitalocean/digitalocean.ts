@@ -41,13 +41,13 @@ async function main(): Promise<void> {
   try {
     console.log(`=== DigitalOcean Spaces at ${resolvedDigitalOceanEndpoint(config)} ===`)
 
-    let r = await ws.execute('ls /do/')
+    let r = await ws.shell('ls /do/')
     console.log('ls /do/:\n' + r.stdoutText)
 
-    r = await ws.execute("find /do/ -name '*.json' | head -n 5")
+    r = await ws.shell("find /do/ -name '*.json' | head -n 5")
     console.log('find *.json:\n' + r.stdoutText)
 
-    const plan = await ws.execute('grep -m 1 mirage /do/data/example.jsonl', { provision: true })
+    const plan = await ws.shell('grep -m 1 mirage /do/data/example.jsonl', { provision: true })
     console.log(`plan grep -m 1: network_read=${plan.networkRead} precision=${plan.precision}`)
 
     const bytes = ws.records.reduce((acc, rec) => acc + rec.bytes, 0)
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on /do/data/example.jsonl ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "/do/data/example.jsonl" && chown 500:dev "/do/data/example.jsonl" && touch -t 202601021530 "/do/data/example.jsonl"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

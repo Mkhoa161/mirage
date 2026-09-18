@@ -34,10 +34,10 @@ const bucket = new HfBucketsVFS({
 
 const ws = new Workspace({ '/hf/': bucket }, { mode: MountMode.READ })
 
-console.log((await ws.execute('ls /hf/')).stdoutText)
-console.log((await ws.execute('tree /hf/')).stdoutText)
-console.log((await ws.execute("find /hf/ -name '*.json'")).stdoutText)
-console.log((await ws.execute('stat /hf/data/file.txt')).stdoutText)
+console.log((await ws.shell('ls /hf/')).stdoutText)
+console.log((await ws.shell('tree /hf/')).stdoutText)
+console.log((await ws.shell("find /hf/ -name '*.json'")).stdoutText)
+console.log((await ws.shell('stat /hf/data/file.txt')).stdoutText)
 ```
 
 `HfBucketsVFS` takes the bucket in `namespace/bucket-name` form plus an

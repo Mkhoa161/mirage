@@ -36,7 +36,7 @@ def test_arith_exit_shape():
 ])
 async def test_arithmetic_error_aborts_the_line(line, err):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute(line)
+    io = await ws.shell(line)
     assert io.exit_code == 1
     assert await io.stdout_str() == ""
     assert await io.stderr_str() == err
@@ -45,6 +45,6 @@ async def test_arithmetic_error_aborts_the_line(line, err):
 @pytest.mark.asyncio
 async def test_arithmetic_error_is_contained_by_a_subshell():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("(echo $((1/0))); echo sub=$?")
+    io = await ws.shell("(echo $((1/0))); echo sub=$?")
     assert await io.stdout_str() == "sub=1\n"
     assert io.exit_code == 0

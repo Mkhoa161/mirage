@@ -40,7 +40,7 @@ def _load(*args, **kwargs):
 def _read(ws, path):
 
     async def _do():
-        r = await ws.execute(f"cat {path}")
+        r = await ws.shell(f"cat {path}")
         return await r.stdout_str()
 
     return asyncio.run(_do())
@@ -51,7 +51,7 @@ def _read(ws, path):
 
 def test_workspace_save_then_load_classmethod(tmp_path):
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo hi > /m/a.txt"))
+    asyncio.run(src.shell("echo hi > /m/a.txt"))
 
     snap = tmp_path / "ws.tar"
     asyncio.run(src.snapshot(snap))
@@ -63,7 +63,7 @@ def test_workspace_save_then_load_classmethod(tmp_path):
 
 def test_workspace_save_compressed(tmp_path):
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo hi > /m/a.txt"))
+    asyncio.run(src.shell("echo hi > /m/a.txt"))
 
     snap = tmp_path / "ws.tar.gz"
     asyncio.run(src.snapshot(snap, compress="gz"))
@@ -93,10 +93,10 @@ def test_workspace_load_with_disk_override(tmp_path):
 
 def test_workspace_copy_method_independence_ram():
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo hi > /m/a.txt"))
+    asyncio.run(src.shell("echo hi > /m/a.txt"))
 
     cp = asyncio.run(src.copy())
-    asyncio.run(cp.execute("echo bye > /m/a.txt"))
+    asyncio.run(cp.shell("echo bye > /m/a.txt"))
 
     assert _read(src, "/m/a.txt") == "hi\n"
     assert _read(cp, "/m/a.txt") == "bye\n"
@@ -107,10 +107,10 @@ def test_workspace_copy_method_independence_ram():
 
 def test_deepcopy_via_stdlib():
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo hi > /m/a.txt"))
+    asyncio.run(src.shell("echo hi > /m/a.txt"))
 
     cp = asyncio.run((src).copy())
-    asyncio.run(cp.execute("echo bye > /m/a.txt"))
+    asyncio.run(cp.shell("echo bye > /m/a.txt"))
 
     assert _read(src, "/m/a.txt") == "hi\n"
     assert _read(cp, "/m/a.txt") == "bye\n"
@@ -152,9 +152,9 @@ def test_save_load_preserves_max_drain_bytes(tmp_path):
 
 def test_history_round_trip(tmp_path):
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo a > /m/a.txt"))
-    asyncio.run(src.execute("echo b > /m/b.txt"))
-    asyncio.run(src.execute("cat /m/a.txt"))
+    asyncio.run(src.shell("echo a > /m/a.txt"))
+    asyncio.run(src.shell("echo b > /m/b.txt"))
+    asyncio.run(src.shell("cat /m/a.txt"))
     expected_commands = [e["command"] for e in asyncio.run(src.history())]
     assert len(expected_commands) == 3
 
@@ -223,7 +223,7 @@ def test_copy_shares_redis_backend():
     sc.close()
 
     cp = asyncio.run(src.copy())
-    asyncio.run(cp.execute("echo new > /r/added.txt"))
+    asyncio.run(cp.shell("echo new > /r/added.txt"))
 
     sc = sync_redis.Redis.from_url(REDIS_URL)
     try:

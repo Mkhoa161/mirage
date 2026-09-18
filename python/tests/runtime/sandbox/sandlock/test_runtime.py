@@ -83,7 +83,7 @@ async def test_workspace_routes_named_programs_as_argv(cli):
     ws = Workspace({"/": RAMVFS()}, runtimes=[runtime])
     try:
         for line in ("python3 --version", "node --version"):
-            io = await ws.execute(line)
+            io = await ws.shell(line)
             assert io.exit_code == 0
             data = json.loads(await io.stdout_str())
             assert data["argv"][-3:] == ["--", *line.split()]

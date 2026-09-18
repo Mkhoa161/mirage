@@ -252,7 +252,7 @@ describe('fanOutTraversal du at a descendant mount boundary', () => {
     )
     try {
       let out = ''
-      for (const cmd of cmds) out = stdoutStr(await ws.execute(cmd))
+      for (const cmd of cmds) out = stdoutStr(await ws.shell(cmd))
       return out
     } finally {
       await ws.close()
@@ -384,7 +384,7 @@ describe('fanOutTraversal operands spanning mounts', () => {
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
     )
     try {
-      return stdoutStr(await ws.execute(cmd))
+      return stdoutStr(await ws.shell(cmd))
     } finally {
       await ws.close()
     }
@@ -458,7 +458,7 @@ describe('ls -R across a mount boundary', () => {
     for (const vfs of Object.values(mounts)) registry.registerVfs(vfs)
     const ws = new Workspace(mounts, { mode: MountMode.WRITE, ops: registry, shellParser: parser })
     try {
-      return stdoutStr(await ws.execute(cmd))
+      return stdoutStr(await ws.shell(cmd))
     } finally {
       await ws.close()
     }

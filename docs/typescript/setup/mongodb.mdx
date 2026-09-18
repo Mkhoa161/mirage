@@ -23,7 +23,7 @@ const mongo = new MongoDBVFS({
 })
 
 const ws = new Workspace({ '/mongo': mongo }, { mode: MountMode.READ })
-await ws.execute('ls /mongo/app/users/')
+await ws.shell('ls /mongo/app/users/')
 ```
 
 ## Browser

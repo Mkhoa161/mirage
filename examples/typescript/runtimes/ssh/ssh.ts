@@ -70,7 +70,7 @@ const POINTS_CSV = 'name,value\nalpha,1.5\nbeta,2.5\ngamma,4.0\n'
 const ENC = new TextEncoder()
 
 async function show(ws: Workspace, command: string): Promise<void> {
-  const result = await ws.execute(command, { cwd: REMOTE_DIR })
+  const result = await ws.shell(command, { cwd: REMOTE_DIR })
   console.log(`$ ${command}`)
   if (result.stdoutText) {
     process.stdout.write(result.stdoutText.endsWith('\n') ? result.stdoutText : `${result.stdoutText}\n`)
@@ -93,8 +93,8 @@ async function main(): Promise<void> {
   try {
     // Seed both sides through the workspace: the dataset into S3, the
     // loader onto the box (an SFTP write; the box provisions itself).
-    await ws.execute('cat > /data/points.csv', { stdin: ENC.encode(POINTS_CSV) })
-    await ws.execute(`cat > ${REMOTE_DIR}/load.py`, { stdin: ENC.encode(LOAD_PY) })
+    await ws.shell('cat > /data/points.csv', { stdin: ENC.encode(POINTS_CSV) })
+    await ws.shell(`cat > ${REMOTE_DIR}/load.py`, { stdin: ENC.encode(LOAD_PY) })
     await show(ws, 'ls /data')
     await show(ws, 'ls')
 

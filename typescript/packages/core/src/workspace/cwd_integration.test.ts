@@ -58,7 +58,7 @@ async function makeWsSpecial(): Promise<Workspace> {
 }
 
 async function runOut(ws: Workspace, cmd: string): Promise<string> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return stdoutStr(io)
 }
 
@@ -96,14 +96,14 @@ describe('cwd integration (port of tests/workspace/test_cwd_integration.py)', ()
 
   it('cd ~ with $HOME unset → error', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cd /ram/subdir && cd ~')
+    const io = await ws.shell('cd /ram/subdir && cd ~')
     expect(io.exitCode).not.toBe(0)
     await ws.close()
   })
 
   it('bare cd with $HOME unset → error (HOME not set)', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cd /ram/subdir && cd')
+    const io = await ws.shell('cd /ram/subdir && cd')
     expect(io.exitCode).toBe(1)
     expect(stderrStr(io)).toContain('HOME not set')
     await ws.close()
@@ -220,7 +220,7 @@ describe('cwd integration (port of tests/workspace/test_cwd_integration.py)', ()
 
   it('cd - without OLDPWD errors', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cd -')
+    const io = await ws.shell('cd -')
     expect(io.exitCode).toBe(1)
     expect(stderrStr(io)).toContain('OLDPWD not set')
     await ws.close()
@@ -246,7 +246,7 @@ describe('cwd integration (port of tests/workspace/test_cwd_integration.py)', ()
 
   it('quoted tilde is not expanded', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('export HOME=/ram/subdir && cat "~/file.txt"')
+    const io = await ws.shell('export HOME=/ram/subdir && cat "~/file.txt"')
     expect(io.exitCode).not.toBe(0)
     await ws.close()
   })
@@ -301,7 +301,7 @@ describe('cwd integration (port of tests/workspace/test_cwd_integration.py)', ()
 
   it('cd -x → invalid option, exit 2', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cd -x /ram')
+    const io = await ws.shell('cd -x /ram')
     expect(io.exitCode).toBe(2)
     expect(stderrStr(io)).toContain('invalid option')
     await ws.close()
@@ -309,7 +309,7 @@ describe('cwd integration (port of tests/workspace/test_cwd_integration.py)', ()
 
   it('cd a b → too many arguments, exit 1', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cd /ram /ram/subdir')
+    const io = await ws.shell('cd /ram /ram/subdir')
     expect(io.exitCode).toBe(1)
     expect(stderrStr(io)).toContain('too many arguments')
     await ws.close()
@@ -317,7 +317,7 @@ describe('cwd integration (port of tests/workspace/test_cwd_integration.py)', ()
 
   it("cd '~' (quoted) is literal, not $HOME", async () => {
     const ws = await makeWs()
-    const io = await ws.execute("cd /ram && cd '~'")
+    const io = await ws.shell("cd /ram && cd '~'")
     expect(io.exitCode).not.toBe(0)
     await ws.close()
   })

@@ -31,7 +31,7 @@ from mirage.workspace import SessionHandle
 # deny rule keeps it out of the secrets by name, so the same file is
 # "does not exist" for one role and "permission denied" for the other,
 # through the shell and through fs.read alike. The workspace names no
-# default profile, so its own doors (`ws.fs`, bare `ws.execute`) are
+# default profile, so its own doors (`ws.fs`, bare `ws.shell`) are
 # the host's view. A second `ws.session(id)` adopts the session as is;
 # naming a profile for a session that already exists is refused.
 
@@ -96,7 +96,7 @@ async def line(role: str, handle: SessionHandle | Workspace, cmd: str,
         cmd (str): the shell line.
         note (str): why it matters.
     """
-    res = await handle.execute(cmd)
+    res = await handle.shell(cmd)
     show(role, "execute", cmd,
          shell(res.stdout or b"", res.stderr or b"", res.exit_code), note)
 
@@ -142,7 +142,7 @@ async def main() -> None:
                    mode=MountMode.WRITE,
                    profiles=PROFILES)
     for seed in SEED:
-        await ws.execute(seed)
+        await ws.shell(seed)
 
     reviewer = await ws.session("reviewer",
                                 profile="reviewer",

@@ -59,7 +59,7 @@ async def test_a_clone_keeps_the_declared_instances():
     try:
         clone = await clone_workspace_with_override(src, None)
         try:
-            result = await clone.execute('echo "$TOKEN"')
+            result = await clone.shell('echo "$TOKEN"')
             assert result.exit_code == 0
             assert (await result.stdout_str()) == "a1:r\n"
         finally:
@@ -102,7 +102,7 @@ async def test_an_override_replaces_the_declared_instances():
                 }
             })
         try:
-            result = await clone.execute('echo "$TOKEN"')
+            result = await clone.shell('echo "$TOKEN"')
             assert (await result.stdout_str()) == "staging:r\n"
         finally:
             await clone.close()
@@ -134,7 +134,7 @@ async def test_an_empty_override_drops_the_declared_instances():
     try:
         clone = await clone_workspace_with_override(src, {"secrets": {}})
         try:
-            result = await clone.execute('echo "$TOKEN"')
+            result = await clone.shell('echo "$TOKEN"')
             assert (await result.stdout_str()) == "default:r\n"
         finally:
             await clone.close()

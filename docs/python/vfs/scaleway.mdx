@@ -60,10 +60,10 @@ vfs = ScalewayVFS(config)
 async def main() -> None:
     ws = Workspace({"/data/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /data/")
+    r = await ws.shell("ls /data/")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /data/")
+    r = await ws.shell("tree /data/")
     print(await r.stdout_str())
 
 

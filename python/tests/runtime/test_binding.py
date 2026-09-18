@@ -102,7 +102,7 @@ async def test_callbacks_retain_session_and_gate_after_capture():
     },
                    mode=MountMode.EXEC,
                    policies=[DenySecret()]) as ws:
-        await ws.execute("echo private > /secret/a")
+        await ws.shell("echo private > /secret/a")
         ws.create_session("agent", profile={"paths": {"hide": ["/secret"]}})
         context = ws.runtime_context("agent")
         other = ws.runtime_context()
@@ -132,9 +132,9 @@ async def test_callbacks_retain_session_and_gate_after_capture():
 @pytest.mark.asyncio
 async def test_context_keeps_namespace_live_and_matches_native_projection():
     with Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC) as ws:
-        await ws.execute("echo shared > /data/a; chmod 600 /data/a")
+        await ws.shell("echo shared > /data/a; chmod 600 /data/a")
         context = ws.runtime_context()
-        await ws.execute("ln -s /data/a /data/link")
+        await ws.shell("ln -s /data/a /data/link")
         assert context.ns.links is not None
         assert context.ns.links.resolve("/data/link") == "/data/a"
         ws.add_mount("/data/nested", RAMVFS(), mode=MountMode.EXEC)
@@ -173,14 +173,14 @@ async def test_command_execution_supplies_its_active_workspace_context():
                    mode=MountMode.EXEC,
                    runtimes=[runtime, "workspace"]) as ws:
         ws.create_session("agent")
-        await ws.execute("export PUBLIC=agent; cd /data", session_id="agent")
-        result = await ws.execute("python3 -c hello", session_id="agent")
+        await ws.shell("export PUBLIC=agent; cd /data", session_id="agent")
+        result = await ws.shell("python3 -c hello", session_id="agent")
         assert result.stdout == b"hello"
         captured = runtime.contexts[-1]
         assert captured.cwd.virtual == "/data"
         assert captured.env["PUBLIC"] == "agent"
         assert captured.session_view.get("PUBLIC") == "agent"
-        await ws.execute("python3 -c other")
+        await ws.shell("python3 -c other")
         assert "PUBLIC" not in runtime.contexts[-1].env
         assert captured.session_view.get("PUBLIC") == "agent"
 
@@ -208,8 +208,7 @@ async def test_adapters_use_each_execution_context_for_filesystem_callbacks(
     with Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[runtime, "workspace"]) as ws:
-        await ws.execute(
-            "echo shared > /data/file; ln -s /data/file /data/link")
+        await ws.shell("echo shared > /data/file; ln -s /data/file /data/link")
         ws.create_session("one")
         ws.create_session("two")
         calls = [[], []]

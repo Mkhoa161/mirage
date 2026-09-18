@@ -64,13 +64,13 @@ async def test_ls_no_args_after_cd_returns_cwd_entries(config):
 
     with patch("mirage.core.slack.paginate.slack_get", new=fake_get), \
          patch("mirage.core.slack.readdir.slack_get", new=fake_get):
-        r = await ws.execute("cd /slack/channels/general__C001")
+        r = await ws.shell("cd /slack/channels/general__C001")
         assert r.exit_code == 0
-        r = await ws.execute("pwd")
+        r = await ws.shell("pwd")
         assert (await
                 r.stdout_str()).strip() == "/slack/channels/general__C001"
 
-        r = await ws.execute("ls")
+        r = await ws.shell("ls")
         out = (await r.stdout_str()).strip()
     assert r.exit_code == 0
     assert out != "", "ls no-args after cd returned empty"

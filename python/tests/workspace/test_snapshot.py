@@ -42,8 +42,8 @@ def _load(*args, **kwargs):
 def _seed(ws, mount: str = "/m") -> None:
 
     async def _do():
-        await ws.execute(f"echo hello > {mount}/a.txt")
-        await ws.execute(
+        await ws.shell(f"echo hello > {mount}/a.txt")
+        await ws.shell(
             f"mkdir -p {mount}/sub && echo world > {mount}/sub/b.txt")
 
     asyncio.run(_do())
@@ -52,7 +52,7 @@ def _seed(ws, mount: str = "/m") -> None:
 def _read(ws, path: str) -> str:
 
     async def _do():
-        r = await ws.execute(f"cat {path}")
+        r = await ws.shell(f"cat {path}")
         return await r.stdout_str()
 
     return asyncio.run(_do())
@@ -75,8 +75,8 @@ def test_save_load_ram_round_trip(tmp_path):
 
 def test_history_survives_snapshot_round_trip(tmp_path):
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo one"))
-    asyncio.run(src.execute("echo two"))
+    asyncio.run(src.shell("echo one"))
+    asyncio.run(src.shell("echo two"))
     assert len(asyncio.run(src.history())) == 2
     snap = tmp_path / "history.tar"
     asyncio.run(src.snapshot(snap))
@@ -309,10 +309,10 @@ def test_load_rejects_path_traversal_in_blob_ref(tmp_path):
 
 def test_workspace_copy_independence_ram():
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo hi > /m/a.txt"))
+    asyncio.run(src.shell("echo hi > /m/a.txt"))
 
     cp = asyncio.run(src.copy())
-    asyncio.run(cp.execute("echo bye > /m/a.txt"))
+    asyncio.run(cp.shell("echo bye > /m/a.txt"))
 
     assert _read(src, "/m/a.txt") == "hi\n"
     assert _read(cp, "/m/a.txt") == "bye\n"
@@ -492,7 +492,7 @@ async def test_cli_registry_snapshots_with_redacted_config():
                 "token": "sek2",
                 "channel": "eng"
             }})
-        io = await ws2.execute("snapcli run")
+        io = await ws2.shell("snapcli run")
         assert io.exit_code == 0
         assert io.stdout == b"tok=sek2\n"
         await ws.close()
@@ -508,7 +508,7 @@ async def test_copy_shares_live_cli_secrets():
         ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
         ws.register_cli("snapcli", _CLI_SPEC, config={"token": "sek"})
         clone = await ws.copy()
-        io = await clone.execute("snapcli run")
+        io = await clone.shell("snapcli run")
         assert io.exit_code == 0
         assert io.stdout == b"tok=sek\n"
         await ws.close()
@@ -524,7 +524,7 @@ async def test_copy_carries_a_directly_installed_spec():
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     ws.register_cli("snapcli", _CLI_SPEC, config={"token": "sek"})
     clone = await ws.copy()
-    io = await clone.execute("snapcli run")
+    io = await clone.shell("snapcli run")
     assert io.exit_code == 0
     assert io.stdout == b"tok=sek\n"
     await ws.close()
@@ -565,7 +565,7 @@ async def test_nested_cli_secrets_redact_and_demand_an_override():
         with pytest.raises(ValueError, match="clis= must include"):
             await Workspace.from_state(state)
         clone = await ws.copy()
-        io = await clone.execute("nestcli run")
+        io = await clone.shell("nestcli run")
         assert io.exit_code == 0
         assert io.stdout == b"tok=sek\n"
         await ws.close()
@@ -595,7 +595,7 @@ async def test_script_cli_survives_a_tar_snapshot(tmp_path):
     assert entry[CLIKey.SCRIPT][ScriptKey.MODULE] is False
 
     restored = await Workspace.load(str(path))
-    io = await restored.execute("pager b.txt")
+    io = await restored.shell("pager b.txt")
     assert io.exit_code == 0
     assert io.stdout == b'b.txt {"width": 80}\n'
     await ws.close()
@@ -615,7 +615,7 @@ async def test_script_cli_config_captures_verbatim_without_a_schema():
     # copy() reveals secrets through the same helper, so it must not
     # crash on a mapping config either.
     clone = await ws.copy()
-    io = await clone.execute("pager")
+    io = await clone.shell("pager")
     assert io.exit_code == 0
     await ws.close()
     await clone.close()

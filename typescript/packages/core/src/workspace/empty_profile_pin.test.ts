@@ -65,7 +65,7 @@ async function seeded(): Promise<Workspace> {
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
   )
   open.push(ws)
-  const io = await ws.execute(
+  const io = await ws.shell(
     'mkdir -p /a/sub /b/deep && ' +
       "printf 'needle a\\n' > /a/x.txt && " +
       "printf 'plain\\n' > /a/sub/inner.txt && " +
@@ -81,7 +81,7 @@ async function outputs(
 ): Promise<[string, number, string, string][]> {
   const out: [string, number, string, string][] = []
   for (const line of BATTERY) {
-    const io = await ws.execute(line, { sessionId })
+    const io = await ws.shell(line, { sessionId })
     out.push([line, io.exitCode, stdoutStr(io), stderrStr(io)])
   }
   return out

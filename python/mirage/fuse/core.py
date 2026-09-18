@@ -123,7 +123,7 @@ class MountCore:
 
         The session context is set inside the coroutine so it lands on
         the event-loop task that executes the op, mirroring how
-        ``execute`` brackets a command with the session token.
+        ``shell`` brackets a command with the session token.
 
         Args:
             coro (Coroutine): the op coroutine to run under the session.

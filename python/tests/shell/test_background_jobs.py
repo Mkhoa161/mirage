@@ -203,7 +203,7 @@ def test_background_does_not_consume_stdin():
             mode=MountMode.WRITE,
         )
         ws.get_session(ws.default_session_id).cwd = "/data"
-        io = await ws.execute("sleep 0 & cat", stdin=b"hello\n")
+        io = await ws.shell("sleep 0 & cat", stdin=b"hello\n")
         assert (await io.stdout_str()).strip() == "hello"
 
     asyncio.run(_run())

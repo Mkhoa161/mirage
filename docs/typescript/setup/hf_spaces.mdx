@@ -37,9 +37,9 @@ const space = new HfSpacesVFS({
 
 const ws = new Workspace({ '/s/': space }, { mode: MountMode.READ })
 
-console.log((await ws.execute('ls /s/')).stdoutText)
-console.log((await ws.execute("find /s/ -name '*.py'")).stdoutText)
-console.log((await ws.execute('cat /s/README.md | head -n 15')).stdoutText)
+console.log((await ws.shell('ls /s/')).stdoutText)
+console.log((await ws.shell("find /s/ -name '*.py'")).stdoutText)
+console.log((await ws.shell('cat /s/README.md | head -n 15')).stdoutText)
 ```
 
 ## Reading, not writing

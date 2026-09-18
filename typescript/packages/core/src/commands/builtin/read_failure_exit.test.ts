@@ -71,8 +71,8 @@ async function makeWs(): Promise<Workspace> {
     { '/ram': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
   )
-  await ws.execute('mkdir -p /ram/dir')
-  await ws.execute('echo inner > /ram/dir/inner.txt')
+  await ws.shell('mkdir -p /ram/dir')
+  await ws.shell('echo inner > /ram/dir/inner.txt')
   return ws
 }
 
@@ -80,19 +80,19 @@ describe('a read that fails answers like GNU', () => {
   for (const [template, [dirExit, missExit]] of Object.entries(GNU_READ_EXIT)) {
     it(`${template}: directory exits ${String(dirExit)}`, async () => {
       const ws = await makeWs()
-      const io = await ws.execute(template.replaceAll('{p}', '/ram/dir'))
+      const io = await ws.shell(template.replaceAll('{p}', '/ram/dir'))
       expect(io.exitCode).toBe(dirExit)
     })
 
     it(`${template}: missing file exits ${String(missExit)}`, async () => {
       const ws = await makeWs()
-      const io = await ws.execute(template.replaceAll('{p}', '/ram/nope.txt'))
+      const io = await ws.shell(template.replaceAll('{p}', '/ram/nope.txt'))
       expect(io.exitCode).toBe(missExit)
     })
 
     it(`${template}: directory says Is a directory`, async () => {
       const ws = await makeWs()
-      const io = await ws.execute(template.replaceAll('{p}', '/ram/dir'))
+      const io = await ws.shell(template.replaceAll('{p}', '/ram/dir'))
       const stderr = io.stderrText
       expect(stderr).toContain('/ram/dir: Is a directory')
       expect(stderr).not.toContain('No such file')
@@ -152,9 +152,9 @@ describe('a multi-operand read failure answers like GNU', () => {
   for (const [line, code, out, err] of GNU_MULTI) {
     it(line, async () => {
       const ws = await makeWs()
-      await ws.execute("printf 'a\\nb\\n' > /ram/ok.txt")
-      await ws.execute("printf 'c\\nd\\n' > /ram/ok2.txt")
-      const io = await ws.execute(line)
+      await ws.shell("printf 'a\\nb\\n' > /ram/ok.txt")
+      await ws.shell("printf 'c\\nd\\n' > /ram/ok2.txt")
+      const io = await ws.shell(line)
       expect(io.stderrText).toBe(err)
       expect(io.stdoutText).toBe(out)
       expect(io.exitCode).toBe(code)

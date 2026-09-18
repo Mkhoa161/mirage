@@ -50,7 +50,7 @@ async def test_slack_grep_glob_expanded_to_60_paths_reads_those_60_days():
                 "mirage.commands.builtin.slack.grep.slack_read",
                 new=read), patch("mirage.commands.builtin.slack.grep._stat",
                                  new=stat):
-            result = await ws.execute(f"grep -iw hello {expanded}")
+            result = await ws.shell(f"grep -iw hello {expanded}")
         fake_search.assert_not_awaited()
         assert read.await_count == len(DAYS)
         assert result.exit_code == 0

@@ -84,7 +84,7 @@ def test_unzip_p_missing_member_exits_11(env):
     env.create_file("a.txt", b"hello\n")
     env.mirage("zip /data/out.zip /data/a.txt")
     env.ws._cwd = "/data"
-    io = asyncio.run(env.ws.execute("unzip -p /data/out.zip NOSUCHFILE.xml"))
+    io = asyncio.run(env.ws.shell("unzip -p /data/out.zip NOSUCHFILE.xml"))
     assert io.exit_code == 11
     assert _bytes_of(io.stdout) == b""
     assert _bytes_of(io.stderr).decode() == (
@@ -113,11 +113,11 @@ def test_unzip_p_member_is_not_resolved_as_a_path():
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("xl/workbook.xml", b"WORKBOOK-CONTENT\n")
         zf.writestr("docProps/app.xml", b"APPXML-CONTENT\n")
-    asyncio.run(ws.execute("tee /work/book.zip", stdin=buf.getvalue()))
+    asyncio.run(ws.shell("tee /work/book.zip", stdin=buf.getvalue()))
     ws._cwd = "/"
-    result = asyncio.run(ws.execute("unzip -p /work/book.zip xl/workbook.xml"))
+    result = asyncio.run(ws.shell("unzip -p /work/book.zip xl/workbook.xml"))
     assert result.exit_code == 0
     assert _bytes_of(result.stdout) == b"WORKBOOK-CONTENT\n"
-    result = asyncio.run(ws.execute("unzip -p /work/book.zip NOSUCHFILE.xml"))
+    result = asyncio.run(ws.shell("unzip -p /work/book.zip NOSUCHFILE.xml"))
     assert result.exit_code == 11
     assert _bytes_of(result.stdout) == b""

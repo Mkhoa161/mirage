@@ -107,22 +107,22 @@ vfs = NextcloudVFS(config)
 async def main() -> None:
     ws = Workspace({"/nc/": vfs}, mode=MountMode.WRITE)
 
-    r = await ws.execute("ls /nc/")
+    r = await ws.shell("ls /nc/")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /nc/")
+    r = await ws.shell("tree /nc/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /nc/ -name '*.md'")
+    r = await ws.shell("find /nc/ -name '*.md'")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /nc/Documents/notes.md")
+    r = await ws.shell("cat /nc/Documents/notes.md")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep TODO /nc/Documents/notes.md")
+    r = await ws.shell("grep TODO /nc/Documents/notes.md")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /nc/Documents/notes.md")
+    r = await ws.shell("stat /nc/Documents/notes.md")
     print(await r.stdout_str())
 
 

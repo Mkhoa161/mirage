@@ -47,7 +47,7 @@ const sb = new SupabaseVFS({
 })
 
 const ws = new Workspace({ '/bucket/': sb }, { mode: MountMode.READ })
-const res = await ws.execute('ls /bucket/')
+const res = await ws.shell('ls /bucket/')
 console.log(res.stdoutText)
 ```
 

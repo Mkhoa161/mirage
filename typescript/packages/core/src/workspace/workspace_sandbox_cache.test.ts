@@ -46,13 +46,13 @@ describe('sandbox bridge shares the shell file cache', () => {
   it('js read is served from the warm cache, not the backend', async () => {
     const { ws, ram } = await makeCachingWorkspace()
     try {
-      await ws.execute('echo v1 > /r/f.txt')
-      const first = DEC.decode((await ws.execute('cat /r/f.txt')).stdout)
+      await ws.shell('echo v1 > /r/f.txt')
+      const first = DEC.decode((await ws.shell('cat /r/f.txt')).stdout)
       expect(first).toContain('v1')
       // Out-of-band mutation: under LAZY the cache is not revalidated,
       // so the warm read must keep serving v1 — from the sandbox too.
       ram.store.files.set('/f.txt', ENC.encode('v2-out-of-band\n'))
-      const io = await ws.execute(
+      const io = await ws.shell(
         "js -e \"const f = std.open('/r/f.txt', 'r'); console.log(f.readAsString().trim()); f.close()\"",
       )
       expect(io.exitCode).toBe(0)
@@ -65,14 +65,14 @@ describe('sandbox bridge shares the shell file cache', () => {
   it('js write invalidates the cache so cat sees the new bytes', async () => {
     const { ws } = await makeCachingWorkspace()
     try {
-      await ws.execute('echo v1 > /r/f.txt')
-      const warm = DEC.decode((await ws.execute('cat /r/f.txt')).stdout)
+      await ws.shell('echo v1 > /r/f.txt')
+      const warm = DEC.decode((await ws.shell('cat /r/f.txt')).stdout)
       expect(warm).toContain('v1')
-      const io = await ws.execute(
+      const io = await ws.shell(
         "js -e \"const f = std.open('/r/f.txt', 'w'); f.puts('v2-from-js'); f.close()\"",
       )
       expect(io.exitCode).toBe(0)
-      const after = DEC.decode((await ws.execute('cat /r/f.txt')).stdout)
+      const after = DEC.decode((await ws.shell('cat /r/f.txt')).stdout)
       expect(after).toBe('v2-from-js')
     } finally {
       await ws.close()
@@ -82,10 +82,10 @@ describe('sandbox bridge shares the shell file cache', () => {
   it('Workspace.dispatch write invalidates the cache', async () => {
     const { ws } = await makeCachingWorkspace()
     try {
-      await ws.execute('echo v1 > /r/f.txt')
-      expect(DEC.decode((await ws.execute('cat /r/f.txt')).stdout)).toContain('v1')
+      await ws.shell('echo v1 > /r/f.txt')
+      expect(DEC.decode((await ws.shell('cat /r/f.txt')).stdout)).toContain('v1')
       await ws.dispatch('write', '/r/f.txt', [ENC.encode('v3-from-dispatch\n')])
-      const after = DEC.decode((await ws.execute('cat /r/f.txt')).stdout)
+      const after = DEC.decode((await ws.shell('cat /r/f.txt')).stdout)
       expect(after).toBe('v3-from-dispatch\n')
     } finally {
       await ws.close()
@@ -95,12 +95,12 @@ describe('sandbox bridge shares the shell file cache', () => {
   it('Workspace.dispatch rename drops the stale source cache entry', async () => {
     const { ws } = await makeCachingWorkspace()
     try {
-      await ws.execute('echo v1 > /r/f.txt')
-      expect(DEC.decode((await ws.execute('cat /r/f.txt')).stdout)).toContain('v1')
+      await ws.shell('echo v1 > /r/f.txt')
+      expect(DEC.decode((await ws.shell('cat /r/f.txt')).stdout)).toContain('v1')
       await ws.dispatch('rename', '/r/f.txt', [PathSpec.fromStrPath('/r/g.txt')])
-      const gone = await ws.execute('cat /r/f.txt')
+      const gone = await ws.shell('cat /r/f.txt')
       expect(gone.exitCode).not.toBe(0)
-      const moved = DEC.decode((await ws.execute('cat /r/g.txt')).stdout)
+      const moved = DEC.decode((await ws.shell('cat /r/g.txt')).stdout)
       expect(moved).toContain('v1')
     } finally {
       await ws.close()

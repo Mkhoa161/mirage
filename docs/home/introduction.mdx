@@ -41,9 +41,9 @@ mode: "frame"
     })
 
     # Same shell vocabulary, three different backends.
-    await ws.execute('echo "hello mirage" > /data/hello.txt')
-    await ws.execute("ls /s3/reports/")
-    result = await ws.execute('grep -r "release" /slack/channels/eng__C04QX')
+    await ws.shell('echo "hello mirage" > /data/hello.txt')
+    await ws.shell("ls /s3/reports/")
+    result = await ws.shell('grep -r "release" /slack/channels/eng__C04QX')
     print(await result.stdout_str())
     ```
   </Tab>
@@ -65,9 +65,9 @@ mode: "frame"
     })
 
     // Same shell vocabulary, three different backends.
-    await ws.execute('echo "hello mirage" > /data/hello.txt')
-    await ws.execute('ls /s3/reports/')
-    const res = await ws.execute('grep -r "release" /slack/channels/eng__C04QX')
+    await ws.shell('echo "hello mirage" > /data/hello.txt')
+    await ws.shell('ls /s3/reports/')
+    const res = await ws.shell('grep -r "release" /slack/channels/eng__C04QX')
     console.log(new TextDecoder().decode(res.stdout))
     ```
   </Tab>
@@ -331,7 +331,7 @@ EOF
 
 <AccordionGroup>
   <Accordion title="Do I need FUSE?">
-    No. Mirage runs the workspace in-process: <code>ws.execute(...)</code> parses and dispatches commands without mounting anything on the host. FUSE is an optional surface if you also want host tools (editors, language servers, <code>rg</code>) to see the workspace.
+    No. Mirage runs the workspace in-process: <code>ws.shell(...)</code> parses and dispatches commands without mounting anything on the host. FUSE is an optional surface if you also want host tools (editors, language servers, <code>rg</code>) to see the workspace.
   </Accordion>
   <Accordion title="Where does the shell run? Is it really bash?">
     The shell runs in your Mirage process. It's a tree-sitter bash parser plus a custom executor that routes commands to per-mount handlers, so there is no subshell to <code>/bin/bash</code> and no <code>os.system</code>. Most common Unix verbs work (<code>ls</code>, <code>cat</code>, <code>grep</code>, <code>find</code>, <code>head</code>, <code>wc</code>, <code>jq</code>, ...) plus pipes, redirects, globs, and <code>&&</code>/<code>||</code>.

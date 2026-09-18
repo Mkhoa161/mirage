@@ -44,7 +44,7 @@ const discord = new DiscordVFS({
 })
 
 const ws = new Workspace({ '/discord': discord }, { mode: MountMode.READ })
-const res = await ws.execute('ls /discord/')
+const res = await ws.shell('ls /discord/')
 console.log(res.stdoutText)
 ```
 
@@ -110,7 +110,7 @@ const discord = new DiscordVFS({
 })
 
 const ws = new Workspace({ '/discord': discord }, { mode: MountMode.READ })
-const res = await ws.execute('ls /discord/')
+const res = await ws.shell('ls /discord/')
 console.log(res.stdoutText)
 ```
 

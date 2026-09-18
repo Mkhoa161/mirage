@@ -288,10 +288,10 @@ async def test_two_workspaces_run_in_isolation():
         runner_b = registry.get(wid_b).runner
 
         slow = asyncio.create_task(
-            runner_a.call(runner_a.ws.execute("sleep 1.0")))
+            runner_a.call(runner_a.ws.shell("sleep 1.0")))
         await asyncio.sleep(0.05)
         start = time.monotonic()
-        result = await runner_b.call(runner_b.ws.execute("echo quick"))
+        result = await runner_b.call(runner_b.ws.shell("echo quick"))
         elapsed = time.monotonic() - start
         assert result.exit_code == 0
         assert elapsed < 0.5, (

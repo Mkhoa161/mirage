@@ -54,7 +54,7 @@ export interface WorkspaceOptions {
    * workspaces never have fingerprints to check.
    *
    * - `STRICT` (load default): raise `ContentDriftError` on the first
-   *   mismatch when the workspace's first `dispatch`/`execute` runs.
+   *   mismatch when the workspace's first `dispatch`/`shell` runs.
    * - `OFF`: skip drift checks entirely and evict the snapshot cache
    *   for fingerprinted paths.
    */
@@ -229,7 +229,7 @@ export interface ExecuteOptions {
    * isolated session, like a bash subshell `(cd <cwd> && cmd)`. Mutations
    * (cd, export) inside the call do NOT persist back to the workspace's
    * session. To change the persistent cwd, assign `ws.cwd` directly or run
-   * `ws.execute('cd <path>')` without this option.
+   * `ws.shell('cd <path>')` without this option.
    */
   cwd?: string
   /**
@@ -237,7 +237,7 @@ export interface ExecuteOptions {
    * session's env. Providing this runs the command in an isolated session,
    * like `env FOO=bar cmd`. Mutations (export) inside the call do NOT
    * persist back to the workspace's session. To change the persistent env,
-   * assign `ws.env` directly or run `ws.execute('export FOO=bar')` without
+   * assign `ws.env` directly or run `ws.shell('export FOO=bar')` without
    * this option.
    */
   env?: Record<string, string>

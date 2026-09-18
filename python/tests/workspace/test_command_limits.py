@@ -35,7 +35,7 @@ def _override(ws: Workspace, name: str, limit: Limit) -> None:
 
 async def _run(ws: Workspace, cmd: str):
     try:
-        io = await ws.execute(cmd)
+        io = await ws.shell(cmd)
         stdout = await io.stdout_str()
         stderr = await io.stderr_str()
         return io.exit_code, stdout, stderr

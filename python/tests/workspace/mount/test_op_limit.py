@@ -34,7 +34,7 @@ async def _read_short(accessor, scope, *args, **kwargs):
 
 async def _ws_mount():
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("echo hi > /data/f.txt")
+    await ws.shell("echo hi > /data/f.txt")
     mount = next(m for m in ws._registry._mounts if m.prefix == "/data/")
     return ws, mount
 

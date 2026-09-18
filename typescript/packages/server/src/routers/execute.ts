@@ -93,7 +93,7 @@ export function registerExecuteRoutes(app: FastifyInstance, deps: ExecuteRoutesD
       const background = req.query.background === 'true'
       const entry = deps.registry.get(wsId)
       const job = deps.jobs.submit(wsId, body.command, async (signal) =>
-        entry.runner.ws.execute(body.command, {
+        entry.runner.ws.shell(body.command, {
           ...(body.sessionId !== undefined ? { sessionId: body.sessionId } : {}),
           ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
           ...(body.cwd !== undefined ? { cwd: body.cwd } : {}),

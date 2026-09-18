@@ -31,8 +31,8 @@ def _seeded() -> Workspace:
 
 
 async def _seed(ws: Workspace) -> None:
-    await ws.execute("mkdir -p /repo/secrets && echo hello > /repo/README.md"
-                     " && echo PRIVATE > /repo/secrets/key.pem")
+    await ws.shell("mkdir -p /repo/secrets && echo hello > /repo/README.md"
+                   " && echo PRIVATE > /repo/secrets/key.pem")
 
 
 @pytest.mark.asyncio
@@ -47,9 +47,9 @@ async def test_a_handle_binds_both_doors_to_one_session():
         assert isinstance(reviewer, SessionHandle)
         assert reviewer.session_id == "reviewer"
         assert reviewer.state is ws.get_session("reviewer")
-        shown = await reviewer.execute("cat /repo/README.md")
+        shown = await reviewer.shell("cat /repo/README.md")
         assert shown.stdout == b"hello\n"
-        hidden = await reviewer.execute("cat /repo/secrets/key.pem")
+        hidden = await reviewer.shell("cat /repo/secrets/key.pem")
         assert hidden.exit_code == 1
         assert await reviewer.fs.read("/repo/README.md") == b"hello\n"
         with pytest.raises(FileNotFoundError):
@@ -110,10 +110,10 @@ async def test_a_handle_forwards_per_call_options():
     try:
         await _seed(ws)
         reviewer = await ws.session("reviewer", profile="reviewer")
-        forked = await reviewer.execute("pwd", cwd="/repo")
+        forked = await reviewer.shell("pwd", cwd="/repo")
         assert forked.stdout == b"/repo\n"
         assert reviewer.state.cwd != "/repo"
-        plan = await reviewer.execute("cat /repo/README.md", provision=True)
+        plan = await reviewer.shell("cat /repo/README.md", provision=True)
         assert plan is not None
         token = set_current_session(ws.get_session(ws.default_session_id))
         try:

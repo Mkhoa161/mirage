@@ -24,7 +24,7 @@ export type SessionExecuteOptions = Omit<ExecuteOptions, 'sessionId'>
 /**
  * One session's two doors, bound together.
  *
- * `execute` runs a line as the session and `fs` is the op facade run
+ * `shell` runs a line as the session and `fs` is the op facade run
  * as it, so a host holds one object per agent and both doors answer
  * under the same profile: hides, mount modes, grants and standing
  * decisions. Nothing is stored here; the session record stays with the
@@ -50,19 +50,20 @@ export class SessionHandle {
     return this.ws.fs.forSession(this.sessionId)
   }
 
-  /** Run a shell line as this session; `Workspace.execute` with the session fixed. */
-  execute(
+  /** Run a shell line as this session; `Workspace.shell` with the session fixed. */
+  shell(
     command: string,
     options?: SessionExecuteOptions & { provision?: false | undefined },
   ): Promise<ExecuteResult>
-  execute(
+  shell(
     command: string,
     options: SessionExecuteOptions & { provision: true },
   ): Promise<ProvisionResult>
-  execute(
+  shell(command: string, options: SessionExecuteOptions): Promise<ExecuteResult | ProvisionResult>
+  shell(
     command: string,
     options: SessionExecuteOptions = {},
   ): Promise<ExecuteResult | ProvisionResult> {
-    return this.ws.execute(command, { ...options, sessionId: this.sessionId })
+    return this.ws.shell(command, { ...options, sessionId: this.sessionId })
   }
 }

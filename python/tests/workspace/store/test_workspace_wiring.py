@@ -91,7 +91,7 @@ async def test_meta_written_on_first_execute():
                    mode=MountMode.EXEC,
                    workspace_id="ws-a",
                    store=store)
-    await ws.execute("echo hi")
+    await ws.shell("echo hi")
     meta = await store.load_meta("ws-a")
     assert meta is not None
     assert meta["workspace_id"] == "ws-a"
@@ -121,7 +121,7 @@ async def test_attach_adopts_stored_default_session():
                      mode=MountMode.EXEC,
                      workspace_id="shared",
                      store=store)
-    await ws_a.execute("export MARK=1")
+    await ws_a.shell("export MARK=1")
     await ws_a.flush_sessions()
 
     ws_b = Workspace({"/data": RAMVFS()},
@@ -149,7 +149,7 @@ async def test_the_op_door_adopts_the_stored_default_before_binding():
                      mode=MountMode.WRITE,
                      workspace_id="shared",
                      store=store)
-    await ws_a.execute("mkdir -p /data/vault && echo top > /data/vault/secret")
+    await ws_a.shell("mkdir -p /data/vault && echo top > /data/vault/secret")
     await ws_a.set_session_profile(ws_a.default_session_id,
                                    {"paths": {
                                        "hide": ["/data/vault"]
@@ -176,7 +176,7 @@ async def test_explicit_session_id_is_not_adopted_away():
                      mode=MountMode.EXEC,
                      workspace_id="shared",
                      store=store)
-    await ws_a.execute("echo hi")
+    await ws_a.shell("echo hi")
 
     ws_b = Workspace({"/data": RAMVFS()},
                      mode=MountMode.EXEC,
@@ -264,7 +264,7 @@ async def test_existing_meta_wins():
                    mode=MountMode.EXEC,
                    workspace_id="ws-a",
                    store=store)
-    await ws.execute("echo hi")
+    await ws.shell("echo hi")
     meta = await ws.workspace_meta()
     assert meta["default_session_id"] == "sess_x"
     assert meta["created_at"] == 1.0
@@ -312,8 +312,8 @@ async def test_same_workspace_id_shares_sessions():
                      mode=MountMode.EXEC,
                      workspace_id="shared",
                      store=store)
-    result = await ws_b.execute("echo blocked > /data/x.txt",
-                                session_id="narrow")
+    result = await ws_b.shell("echo blocked > /data/x.txt",
+                              session_id="narrow")
     assert result.exit_code != 0
     await ws_a.close()
     await ws_b.close()
@@ -348,13 +348,13 @@ async def test_shared_history_through_provider():
                      mode=MountMode.EXEC,
                      workspace_id="shared",
                      store=store)
-    await ws_a.execute("echo one")
+    await ws_a.shell("echo one")
 
     ws_b = Workspace({"/data": ram},
                      mode=MountMode.EXEC,
                      workspace_id="shared",
                      store=store)
-    result = await ws_b.execute("history")
+    result = await ws_b.shell("history")
     assert b"echo one" in result.stdout
     await ws_a.close()
     await ws_b.close()
@@ -371,13 +371,13 @@ async def test_plane_override_param_beats_provider():
                    workspace_id="ws-a",
                    store=store,
                    observe=direct)
-    await ws.execute("echo hi")
+    await ws.shell("echo hi")
 
     sibling = Workspace({"/data": RAMVFS()},
                         mode=MountMode.EXEC,
                         workspace_id="ws-a",
                         store=store)
-    result = await sibling.execute("history")
+    result = await sibling.shell("history")
     assert b"echo hi" not in result.stdout
     await ws.close()
     await sibling.close()

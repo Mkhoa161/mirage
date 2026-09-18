@@ -100,10 +100,10 @@ async function main(): Promise<void> {
         console.log('app/users.jsonl:')
         for (const line of usersText) console.log(`  ${line}`)
 
-        const grepRes = await ws.execute('grep alice /m/app/users.jsonl')
+        const grepRes = await ws.shell('grep alice /m/app/users.jsonl')
         console.log('\ngrep alice:', DEC.decode(grepRes.stdout).trim())
 
-        const eventsRes = await ws.execute('grep login /m/app/events.jsonl')
+        const eventsRes = await ws.shell('grep login /m/app/events.jsonl')
         console.log('grep login (events):')
         for (const line of DEC.decode(eventsRes.stdout).trim().split('\n')) {
           console.log(`  ${line}`)

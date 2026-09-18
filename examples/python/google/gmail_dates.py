@@ -32,7 +32,7 @@ vfs = GmailVFS(config=config)
 
 async def show(ws, cmd):
     print(f"\n$ {cmd}")
-    r = await ws.execute(cmd)
+    r = await ws.shell(cmd)
     out = await r.stdout_str()
     err = await r.stderr_str()
     if out:
@@ -70,7 +70,7 @@ async def main():
     # so "<name>.gmail.json" is its message file.
     print("\n=== finding a message with attachments ===")
     for d in dates:
-        r = await ws.execute(f"ls /gmail/INBOX/{d}")
+        r = await ws.shell(f"ls /gmail/INBOX/{d}")
         items = [e for e in (await r.stdout_str()).strip().split("\n") if e]
         att_dir = next((e for e in items if not e.endswith(".gmail.json")),
                        None)

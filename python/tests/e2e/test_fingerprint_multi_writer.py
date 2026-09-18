@@ -45,12 +45,12 @@ def test_two_workspaces_always_sees_other_writers_update():
         ws_b = _make_ws(ConsistencyPolicy.ALWAYS)
 
         async def run() -> tuple[bytes, bytes]:
-            io_b1 = await ws_b.execute("cat /data/file.txt")
+            io_b1 = await ws_b.shell("cat /data/file.txt")
             b_first = await io_b1.materialize_stdout()
 
-            await ws_a.execute('echo -n "v2" > /data/file.txt')
+            await ws_a.shell('echo -n "v2" > /data/file.txt')
 
-            io_b2 = await ws_b.execute("cat /data/file.txt")
+            io_b2 = await ws_b.shell("cat /data/file.txt")
             b_second = await io_b2.materialize_stdout()
             return b_first, b_second
 
@@ -72,12 +72,12 @@ def test_two_workspaces_lazy_may_serve_stale_after_other_writer():
         ws_b = _make_ws(ConsistencyPolicy.LAZY)
 
         async def run() -> bytes:
-            io_b1 = await ws_b.execute("cat /data/file.txt")
+            io_b1 = await ws_b.shell("cat /data/file.txt")
             await io_b1.materialize_stdout()
 
-            await ws_a.execute('echo -n "v2" > /data/file.txt')
+            await ws_a.shell('echo -n "v2" > /data/file.txt')
 
-            io_b2 = await ws_b.execute("cat /data/file.txt")
+            io_b2 = await ws_b.shell("cat /data/file.txt")
             return await io_b2.materialize_stdout()
 
         b_second = asyncio.run(run())

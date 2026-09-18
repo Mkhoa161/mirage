@@ -133,7 +133,7 @@ export class LangchainWorkspace implements SandboxBackendProtocol {
   }
 
   async execute(command: string): Promise<ExecuteResponse> {
-    const io = await this.ws.execute(command)
+    const io = await this.ws.shell(command)
     return ioToExecuteResponse(io)
   }
 
@@ -256,7 +256,7 @@ export class LangchainWorkspace implements SandboxBackendProtocol {
     }
     parts.push(shellQuote(pattern))
     parts.push(shellQuote(path ?? '/'))
-    const io = await this.ws.execute(parts.join(' '))
+    const io = await this.ws.shell(parts.join(' '))
     const matches = ioToGrepMatches(io)
     if (maxCount === undefined || maxCount === null || matches.length <= maxCount) {
       return { matches }
@@ -266,7 +266,7 @@ export class LangchainWorkspace implements SandboxBackendProtocol {
 
   async glob(pattern: string, path = '/'): Promise<GlobResult> {
     const name = pattern.includes('/') ? (pattern.split('/').pop() ?? pattern) : pattern
-    const io = await this.ws.execute(`find ${shellQuote(path)} -name ${shellQuote(name)}`)
+    const io = await this.ws.shell(`find ${shellQuote(path)} -name ${shellQuote(name)}`)
     return { files: ioToFileInfos(io) }
   }
 

@@ -148,16 +148,16 @@ async def test_always_probes_live_s3_with_warm_index(index_type, surface,
                        index=index,
                        consistency=ConsistencyPolicy.ALWAYS)
         try:
-            assert (await ws.execute("ls /s3/")).exit_code == 0
+            assert (await ws.shell("ls /s3/")).exit_code == 0
             assert (await vfs.index.get("/s3/f.txt")).entry is not None
-            assert (await ws.execute("cat /s3/f.txt")).stdout == b"v1"
+            assert (await ws.shell("cat /s3/f.txt")).stdout == b"v1"
             assert await ws.cache.exists("/s3/f.txt")
             if change == "overwrite":
                 objects["f.txt"] = b"v2"
             else:
                 del objects["f.txt"]
             if surface == "shell":
-                result = await ws.execute("cat /s3/f.txt")
+                result = await ws.shell("cat /s3/f.txt")
                 assert result.stdout == (b"v2"
                                          if change == "overwrite" else b"")
                 assert result.exit_code == (0 if change == "overwrite" else 1)

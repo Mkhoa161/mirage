@@ -39,7 +39,7 @@ function provisionOpts(command: string): CommandOpts {
 
 async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<void> {
   console.log(`=== ${label} ===`)
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   print(res.stdout)
 }
 
@@ -52,10 +52,10 @@ async function main(): Promise<void> {
   const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
 
   console.log('=== tee (create files) ===')
-  await ws.execute('echo "hello world" | tee /data/hello.txt')
-  await ws.execute(`echo '{"name": "alice", "age": 30}' | tee /data/user.json`)
-  await ws.execute('mkdir /data/reports')
-  await ws.execute('echo "revenue,100\\nexpense,80" | tee /data/reports/q1.csv')
+  await ws.shell('echo "hello world" | tee /data/hello.txt')
+  await ws.shell(`echo '{"name": "alice", "age": 30}' | tee /data/user.json`)
+  await ws.shell('mkdir /data/reports')
+  await ws.shell('echo "revenue,100\\nexpense,80" | tee /data/reports/q1.csv')
 
   await runLabeled(ws, 'ls /data/', 'ls /data/')
   await runLabeled(ws, 'cat /data/hello.txt', 'cat /data/hello.txt')
@@ -66,15 +66,15 @@ async function main(): Promise<void> {
 
   // Redis has a native setattr slot: chmod/chown/touch persist in
   // per-path attr hashes and render in ls -l.
-  await ws.execute('chmod 640 /data/hello.txt')
-  await ws.execute('chown 500:staff /data/hello.txt')
-  await ws.execute('touch -t 202601021530 /data/hello.txt')
+  await ws.shell('chmod 640 /data/hello.txt')
+  await ws.shell('chown 500:staff /data/hello.txt')
+  await ws.shell('touch -t 202601021530 /data/hello.txt')
   await runLabeled(ws, 'METADATA (chmod / chown / touch, native)', 'ls -l /data/hello.txt')
   await runLabeled(ws, 'jq .name /data/user.json', 'jq ".name" /data/user.json')
 
   console.log('=== not-found errors show the full virtual path ===')
   for (const cmd of ['cat /data/missing.txt', 'head /data/missing.txt', 'stat /data/missing.txt']) {
-    const res = await ws.execute(cmd)
+    const res = await ws.shell(cmd)
     console.log(`$ ${cmd}`)
     console.log(`  exit=${String(res.exitCode)}  ${new TextDecoder().decode(res.stderr).trim()}`)
   }
@@ -91,18 +91,18 @@ async function main(): Promise<void> {
   await runLabeled(ws, 'tr a-z A-Z < /data/hello.txt', 'cat /data/hello.txt | tr a-z A-Z')
 
   console.log('=== cp /data/hello.txt /data/hello_copy.txt ===')
-  await ws.execute('cp /data/hello.txt /data/hello_copy.txt')
-  const cpOut = await ws.execute('cat /data/hello_copy.txt')
+  await ws.shell('cp /data/hello.txt /data/hello_copy.txt')
+  const cpOut = await ws.shell('cat /data/hello_copy.txt')
   print(cpOut.stdout)
 
   console.log('=== mv /data/hello_copy.txt /data/renamed.txt ===')
-  await ws.execute('mv /data/hello_copy.txt /data/renamed.txt')
-  const mvOut = await ws.execute('ls /data/')
+  await ws.shell('mv /data/hello_copy.txt /data/renamed.txt')
+  const mvOut = await ws.shell('ls /data/')
   print(mvOut.stdout)
 
   console.log('=== rm /data/renamed.txt ===')
-  await ws.execute('rm /data/renamed.txt')
-  const rmOut = await ws.execute('ls /data/')
+  await ws.shell('rm /data/renamed.txt')
+  const rmOut = await ws.shell('ls /data/')
   print(rmOut.stdout)
 
   await runLabeled(ws, 'du /data/', 'du /data/')
@@ -110,8 +110,8 @@ async function main(): Promise<void> {
   await runLabeled(ws, 'awk', `cat /data/reports/q1.csv | awk -F, '{print $1}'`)
 
   console.log('=== uniq ===')
-  await ws.execute('echo "a\\na\\nb\\nb\\nc" | tee /data/dup.txt')
-  const uniqOut = await ws.execute('sort /data/dup.txt | uniq')
+  await ws.shell('echo "a\\na\\nb\\nb\\nc" | tee /data/dup.txt')
+  const uniqOut = await ws.shell('sort /data/dup.txt | uniq')
   print(uniqOut.stdout)
 
   await runLabeled(ws, 'rev', 'cat /data/hello.txt | rev')
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
   console.log('=== HISTORY (/.bash_history) ===')
   console.log('  every executed command is recorded in GNU bash histfile format')
   console.log('')
-  const log = await ws.execute('tail -n 5 /.bash_history')
+  const log = await ws.shell('tail -n 5 /.bash_history')
   process.stdout.write(log.stdoutText + '\n')
 
   console.log('')
@@ -132,10 +132,10 @@ async function main(): Promise<void> {
   console.log('  Provision lets the agent budget IO / compute before running.')
   console.log('')
 
-  // 1. Workspace-level — mirrors Python's ws.execute(cmd, provision=True)
-  const wsProv = await ws.execute('cat /data/hello.txt', { provision: true })
+  // 1. Workspace-level — mirrors Python's ws.shell(cmd, provision=True)
+  const wsProv = await ws.shell('cat /data/hello.txt', { provision: true })
   if (!(wsProv instanceof ProvisionResult)) throw new Error('expected ProvisionResult')
-  console.log(`  ws.execute('cat /data/hello.txt', { provision: true }):`)
+  console.log(`  ws.shell('cat /data/hello.txt', { provision: true }):`)
   console.log(`    command        = ${wsProv.command ?? '(none)'}`)
   console.log(`    networkRead    = ${wsProv.networkRead}`)
   console.log(`    readOps        = ${String(wsProv.readOps)}`)
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
     // local ones are reconstructed. Both copies see the same Redis state.
     const cp = await ws.copy()
     console.log(`  copy() mounts: [${cp.mounts().map((m) => m.prefix).join(', ')}]`)
-    const cpCat = await cp.execute('cat /data/hello.txt')
+    const cpCat = await cp.shell('cat /data/hello.txt')
     console.log(`  copy() sees original's writes: ${cpCat.stdoutText.trim()}`)
     await cp.close()
   } finally {

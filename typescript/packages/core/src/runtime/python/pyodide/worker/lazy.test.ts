@@ -130,9 +130,9 @@ describe('Pyodide lazy VFS', { timeout: 60_000 }, () => {
       )
       try {
         // Cover both cancellation during startup and an already executing guest.
-        if (warm) expect((await ws.execute("python3 -c 'pass'")).exitCode).toBe(0)
-        expect((await ws.execute('spin')).exitCode).toBe(124)
-        const next = await ws.execute("python3 -c 'print(42)'")
+        if (warm) expect((await ws.shell("python3 -c 'pass'")).exitCode).toBe(0)
+        expect((await ws.shell('spin')).exitCode).toBe(124)
+        const next = await ws.shell("python3 -c 'print(42)'")
         expect(next.exitCode).toBe(0)
         expect(DEC.decode(next.stdout)).toBe('42\n')
       } finally {

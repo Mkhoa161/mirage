@@ -56,9 +56,9 @@ async def main():
     # workspace namespace (durable, snapshot-captured) and merge into
     # dispatch-level stat.
     print("=== metadata overlay on /minio/notes.txt ===")
-    meta_res = await ws.execute('chmod 640 "/minio/notes.txt"'
-                                ' && chown 500:dev "/minio/notes.txt"'
-                                ' && touch -t 202601021530 "/minio/notes.txt"')
+    meta_res = await ws.shell('chmod 640 "/minio/notes.txt"'
+                              ' && chown 500:dev "/minio/notes.txt"'
+                              ' && touch -t 202601021530 "/minio/notes.txt"')
     print(f"  chmod/chown/touch exit={meta_res.exit_code}")
     meta_st, _ = await ws.dispatch("stat",
                                    PathSpec.from_str_path("/minio/notes.txt"))
@@ -66,49 +66,48 @@ async def main():
           f"gid={meta_st.gid} mtime={meta_st.modified}")
 
     print("\n--- ls /minio/ ---")
-    r = await ws.execute("ls /minio/")
+    r = await ws.shell("ls /minio/")
     print(await r.stdout_str())
 
     print("--- tree /minio/ ---")
-    r = await ws.execute("tree /minio/")
+    r = await ws.shell("tree /minio/")
     print(await r.stdout_str())
 
     print("--- stat /minio/notes.txt ---")
-    r = await ws.execute("stat /minio/notes.txt")
+    r = await ws.shell("stat /minio/notes.txt")
     print(f"  {(await r.stdout_str()).strip()}")
 
     print("\n--- cat /minio/notes.txt ---")
-    r = await ws.execute("cat /minio/notes.txt")
+    r = await ws.shell("cat /minio/notes.txt")
     print(f"  {(await r.stdout_str()).strip()!r}")
 
     print("\n--- head -c 40 /minio/data/example.jsonl (byte range) ---")
-    r = await ws.execute("head -c 40 /minio/data/example.jsonl")
+    r = await ws.shell("head -c 40 /minio/data/example.jsonl")
     print(f"  {(await r.stdout_str()).strip()!r}")
 
     print("\n--- grep -c queue-operation /minio/data/example.jsonl ---")
-    r = await ws.execute("grep -c queue-operation /minio/data/example.jsonl")
+    r = await ws.shell("grep -c queue-operation /minio/data/example.jsonl")
     print(f"  count: {(await r.stdout_str()).strip()}")
 
     print("--- find /minio/ -name '*.json' ---")
-    r = await ws.execute("find /minio/ -name '*.json'")
+    r = await ws.shell("find /minio/ -name '*.json'")
     print(await r.stdout_str())
 
     print("--- jq .tags /minio/data/config.json ---")
-    r = await ws.execute("jq .tags /minio/data/config.json")
+    r = await ws.shell("jq .tags /minio/data/config.json")
     print(f"  {(await r.stdout_str()).strip()}")
 
     print("\n--- PROVISION: cat (plan only) vs head -c (byte budget) ---")
-    dr = await ws.execute("cat /minio/data/example.jsonl", provision=True)
+    dr = await ws.shell("cat /minio/data/example.jsonl", provision=True)
     print(f"  cat: network_read={dr.network_read} precision={dr.precision}")
-    dr = await ws.execute("head -c 20 /minio/data/example.jsonl",
-                          provision=True)
+    dr = await ws.shell("head -c 20 /minio/data/example.jsonl", provision=True)
     print(f"  head -c 20: network_read={dr.network_read} "
           f"precision={dr.precision}")
 
     print("\n--- rm seeded objects ---")
     for key in ("/minio/data/example.jsonl", "/minio/data/config.json",
                 "/minio/notes.txt"):
-        await ws.execute(f"rm {key}")
+        await ws.shell(f"rm {key}")
     print("  cleaned")
 
     print(f"\nStats: {ops_summary()}")

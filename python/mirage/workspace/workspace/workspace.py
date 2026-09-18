@@ -289,7 +289,7 @@ class Workspace:
         # The facade delegates every op to the dispatcher, so FUSE and
         # programmatic ws.fs walk the same pipeline as a shell command
         # and the policy gates fire exactly once, at that door. It runs
-        # as the default session, as a bare ``execute`` does, so the
+        # as the default session, as a bare ``shell`` does, so the
         # default profile confines it too.
         self._ops = Ops(self._registry.ops_mounts(),
                         observer=self.observer,
@@ -1028,7 +1028,7 @@ class Workspace:
         profile: str | SessionProfile | Mapping[str, Any] | None = None,
         permissions: SessionProfile | Mapping[str, Any] | None = None,
     ) -> SessionHandle:
-        """One session's two doors: ``execute`` and ``fs`` bound to it.
+        """One session's two doors: ``shell`` and ``fs`` bound to it.
 
         Creates the session under the given profile when the id is new
         (the same call as ``create_session``), and adopts it as is when
@@ -1213,7 +1213,7 @@ class Workspace:
         workspace, so an embedder callback reaching this door from
         inside the other's line runs as the session it asked for,
         judged by this workspace's own profile. Otherwise the named
-        session is bound the way ``execute`` binds it.
+        session is bound the way ``shell`` binds it.
 
         Args:
             session_id (str | None): the session to run as when none is
@@ -1272,39 +1272,39 @@ class Workspace:
                                         is_cacheable=is_cacheable)
 
     @overload
-    async def execute(self,
-                      command: str,
-                      session_id: str | None = ...,
-                      stdin: ByteSource | None = ...,
-                      provision: Literal[False] = ...,
-                      agent_id: str | None = ...,
-                      cwd: str | None = ...,
-                      env: dict[str, str] | None = ...,
-                      cancel: asyncio.Event | None = ...,
-                      record: bool = ...,
-                      runtime: str | None = ...,
-                      routing_decision: "RouteDecision | None" = ...,
-                      handed: "HandOff | None" = ...) -> IOResult:
+    async def shell(self,
+                    command: str,
+                    session_id: str | None = ...,
+                    stdin: ByteSource | None = ...,
+                    provision: Literal[False] = ...,
+                    agent_id: str | None = ...,
+                    cwd: str | None = ...,
+                    env: dict[str, str] | None = ...,
+                    cancel: asyncio.Event | None = ...,
+                    record: bool = ...,
+                    runtime: str | None = ...,
+                    routing_decision: "RouteDecision | None" = ...,
+                    handed: "HandOff | None" = ...) -> IOResult:
         ...
 
     @overload
-    async def execute(self,
-                      command: str,
-                      session_id: str | None = ...,
-                      stdin: ByteSource | None = ...,
-                      *,
-                      provision: Literal[True],
-                      agent_id: str | None = ...,
-                      cwd: str | None = ...,
-                      env: dict[str, str] | None = ...,
-                      cancel: asyncio.Event | None = ...,
-                      record: bool = ...,
-                      runtime: str | None = ...,
-                      routing_decision: "RouteDecision | None" = ...,
-                      handed: "HandOff | None" = ...) -> ProvisionResult:
+    async def shell(self,
+                    command: str,
+                    session_id: str | None = ...,
+                    stdin: ByteSource | None = ...,
+                    *,
+                    provision: Literal[True],
+                    agent_id: str | None = ...,
+                    cwd: str | None = ...,
+                    env: dict[str, str] | None = ...,
+                    cancel: asyncio.Event | None = ...,
+                    record: bool = ...,
+                    runtime: str | None = ...,
+                    routing_decision: "RouteDecision | None" = ...,
+                    handed: "HandOff | None" = ...) -> ProvisionResult:
         ...
 
-    async def execute(
+    async def shell(
         self,
         command: str,
         session_id: str | None = None,

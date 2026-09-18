@@ -38,8 +38,8 @@ describe('dispatch applies limits on the executing mount', () => {
       { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('echo 0123456789abcdef > /data/big.txt')
-      await ws.execute('ln -s /data/big.txt /r/link')
+      await ws.shell('echo 0123456789abcdef > /data/big.txt')
+      await ws.shell('ln -s /data/big.txt /r/link')
       const direct = (await ws.dispatch('read', '/data/big.txt')) as Uint8Array
       const viaLink = (await ws.dispatch('read', '/r/link')) as Uint8Array
       // The link lives on the unlimited mount, but the read executes
@@ -60,7 +60,7 @@ describe('dispatch rename addresses dst against the source mount', () => {
       { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('echo moved-bytes > /a/x.txt')
+      await ws.shell('echo moved-bytes > /a/x.txt')
       // Both languages execute the rename on the source backend and address
       // the dst key against it, so '/b/y.txt' means 'b/y.txt' inside /a, a
       // directory that does not exist there. The store-backed backends
@@ -69,9 +69,9 @@ describe('dispatch rename addresses dst against the source mount', () => {
       await expect(
         ws.dispatch('rename', '/a/x.txt', [PathSpec.fromStrPath('/b/y.txt')]),
       ).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(DEC.decode((await ws.execute('cat /a/x.txt')).stdout)).toBe('moved-bytes\n')
-      expect((await ws.execute('cat /a/b/y.txt')).exitCode).not.toBe(0)
-      expect((await ws.execute('cat /b/y.txt')).exitCode).not.toBe(0)
+      expect(DEC.decode((await ws.shell('cat /a/x.txt')).stdout)).toBe('moved-bytes\n')
+      expect((await ws.shell('cat /a/b/y.txt')).exitCode).not.toBe(0)
+      expect((await ws.shell('cat /b/y.txt')).exitCode).not.toBe(0)
     } finally {
       await ws.close()
     }
@@ -101,7 +101,7 @@ describe('dispatch resolves filetype-registered ops by path extension', () => {
       { mode: MountMode.EXEC, ops: registry, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('echo raw > /m/doc.gdoc.json')
+      await ws.shell('echo raw > /m/doc.gdoc.json')
       const bytes = (await ws.dispatch('read', '/m/doc.gdoc.json')) as Uint8Array
       expect(DEC.decode(bytes)).toBe('rendered')
     } finally {
@@ -124,10 +124,10 @@ describe('unlink of a namespace link', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('echo hi > /ram/a.txt')
-      await ws.execute('ln -s a.txt /ram/link')
+      await ws.shell('echo hi > /ram/a.txt')
+      await ws.shell('ln -s a.txt /ram/link')
       await ws.dispatch('unlink', '/ram/link')
-      const listing = await ws.execute('ls /ram')
+      const listing = await ws.shell('ls /ram')
       expect(DEC.decode(listing.stdout)).not.toContain('link')
     } finally {
       await ws.close()
@@ -142,9 +142,9 @@ describe('unlink of a namespace link', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('echo hi > /ram/a.txt')
+      await ws.shell('echo hi > /ram/a.txt')
       await ws.dispatch('unlink', '/ram/a.txt')
-      const listing = await ws.execute('ls /ram')
+      const listing = await ws.shell('ls /ram')
       expect(DEC.decode(listing.stdout).trim()).toBe('')
     } finally {
       await ws.close()
@@ -160,9 +160,9 @@ describe('the node table answers every verb that names a link', () => {
       { '/ram': ram },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
-    await ws.execute('echo hi > /ram/a.txt')
-    await ws.execute('mkdir /ram/d')
-    await ws.execute('ln -s a.txt /ram/link')
+    await ws.shell('echo hi > /ram/a.txt')
+    await ws.shell('mkdir /ram/d')
+    await ws.shell('ln -s a.txt /ram/link')
     return ws
   }
 
@@ -173,8 +173,8 @@ describe('the node table answers every verb that names a link', () => {
     const ws = await linkWorkspace()
     try {
       await ws.dispatch('rename', '/ram/link', [PathSpec.fromStrPath('/ram/moved')])
-      expect(DEC.decode((await ws.execute('readlink /ram/moved')).stdout)).toBe('a.txt\n')
-      expect((await ws.execute('readlink /ram/link')).exitCode).toBe(1)
+      expect(DEC.decode((await ws.shell('readlink /ram/moved')).stdout)).toBe('a.txt\n')
+      expect((await ws.shell('readlink /ram/link')).exitCode).toBe(1)
     } finally {
       await ws.close()
     }
@@ -187,11 +187,11 @@ describe('the node table answers every verb that names a link', () => {
     // the old name still answered readlink.
     const ws = await linkWorkspace()
     try {
-      await ws.execute('echo hi > /ram/d/a.txt')
-      await ws.execute('ln -s a.txt /ram/d/inner')
+      await ws.shell('echo hi > /ram/d/a.txt')
+      await ws.shell('ln -s a.txt /ram/d/inner')
       await ws.dispatch('rename', '/ram/d', [PathSpec.fromStrPath('/ram/e')])
-      expect(DEC.decode((await ws.execute('readlink /ram/e/inner')).stdout)).toBe('a.txt\n')
-      expect((await ws.execute('readlink /ram/d/inner')).exitCode).toBe(1)
+      expect(DEC.decode((await ws.shell('readlink /ram/e/inner')).stdout)).toBe('a.txt\n')
+      expect((await ws.shell('readlink /ram/d/inner')).exitCode).toBe(1)
     } finally {
       await ws.close()
     }
@@ -206,16 +206,16 @@ describe('the node table answers every verb that names a link', () => {
     // where the kernel refuses.
     const ws = await linkWorkspace()
     try {
-      await ws.execute('echo hi > /ram/d/a.txt')
-      await ws.execute('ln -s a.txt /ram/d/inner')
-      await ws.execute('mkdir /ram/e')
-      await ws.execute('ln -s gone /ram/e/stale')
+      await ws.shell('echo hi > /ram/d/a.txt')
+      await ws.shell('ln -s a.txt /ram/d/inner')
+      await ws.shell('mkdir /ram/e')
+      await ws.shell('ln -s gone /ram/e/stale')
       await expect(
         ws.dispatch('rename', '/ram/d', [PathSpec.fromStrPath('/ram/e')]),
       ).rejects.toMatchObject({ code: 'ENOTEMPTY' })
       // Nothing moved: both ends are as they were.
-      expect(DEC.decode((await ws.execute('readlink /ram/e/stale')).stdout)).toBe('gone\n')
-      expect(DEC.decode((await ws.execute('readlink /ram/d/inner')).stdout)).toBe('a.txt\n')
+      expect(DEC.decode((await ws.shell('readlink /ram/e/stale')).stdout)).toBe('gone\n')
+      expect(DEC.decode((await ws.shell('readlink /ram/d/inner')).stdout)).toBe('a.txt\n')
     } finally {
       await ws.close()
     }
@@ -226,12 +226,12 @@ describe('the node table answers every verb that names a link', () => {
     // replaced, and the subtree re-anchors onto the new name.
     const ws = await linkWorkspace()
     try {
-      await ws.execute('echo hi > /ram/d/a.txt')
-      await ws.execute('ln -s a.txt /ram/d/inner')
-      await ws.execute('mkdir /ram/e')
+      await ws.shell('echo hi > /ram/d/a.txt')
+      await ws.shell('ln -s a.txt /ram/d/inner')
+      await ws.shell('mkdir /ram/e')
       await ws.dispatch('rename', '/ram/d', [PathSpec.fromStrPath('/ram/e')])
-      expect(DEC.decode((await ws.execute('readlink /ram/e/inner')).stdout)).toBe('a.txt\n')
-      expect((await ws.execute('readlink /ram/d/inner')).exitCode).toBe(1)
+      expect(DEC.decode((await ws.shell('readlink /ram/e/inner')).stdout)).toBe('a.txt\n')
+      expect((await ws.shell('readlink /ram/d/inner')).exitCode).toBe(1)
     } finally {
       await ws.close()
     }
@@ -265,8 +265,8 @@ describe('the node table answers every verb that names a link', () => {
     const ws = await linkWorkspace()
     try {
       await ws.dispatch('rename', '/ram/a.txt', [PathSpec.fromStrPath('/ram/link')])
-      expect(DEC.decode((await ws.execute('cat /ram/link')).stdout)).toBe('hi\n')
-      expect((await ws.execute('readlink /ram/link')).exitCode).toBe(1)
+      expect(DEC.decode((await ws.shell('cat /ram/link')).stdout)).toBe('hi\n')
+      expect((await ws.shell('readlink /ram/link')).exitCode).toBe(1)
     } finally {
       await ws.close()
     }
@@ -284,7 +284,7 @@ describe('the node table answers every verb that names a link', () => {
           ws.dispatch('symlink', occupied, [], { target: 'elsewhere' }),
         ).rejects.toMatchObject({ code: 'EEXIST' })
       }
-      expect(DEC.decode((await ws.execute('cat /ram/a.txt')).stdout)).toBe('hi\n')
+      expect(DEC.decode((await ws.shell('cat /ram/a.txt')).stdout)).toBe('hi\n')
     } finally {
       await ws.close()
     }
@@ -309,7 +309,7 @@ describe('the fenced remnant cascade rides the mount revisions', () => {
       { mode: MountMode.WRITE, ops: registry, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('mkdir /ram/d && echo x > /ram/d/h.txt')
+      await ws.shell('mkdir /ram/d && echo x > /ram/d/h.txt')
       // Mounting re-registers the VFS's ops (workspace.ts), so the
       // probe wraps readdir only after construction, or it is clobbered.
       const original = registry.find('readdir', 'ram')
@@ -352,8 +352,8 @@ describe('the turf mode gates the node table', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('echo b > /extra/plain.txt')
-      await ws.execute('ln -s plain.txt /extra/lk')
+      await ws.shell('echo b > /extra/plain.txt')
+      await ws.shell('ln -s plain.txt /extra/lk')
       const sess = ws.createSession('agent', { mounts: { '/extra/': 'read' } })
       await runWithSession(sess, async () => {
         await expect(ws.dispatch('unlink', '/extra/lk')).rejects.toMatchObject({
@@ -366,8 +366,8 @@ describe('the turf mode gates the node table', () => {
           ws.dispatch('rename', '/extra/lk', [PathSpec.fromStrPath('/extra/mv')]),
         ).rejects.toMatchObject({ code: 'EROFS' })
       })
-      expect(DEC.decode((await ws.execute('readlink /extra/lk')).stdout)).toBe('plain.txt\n')
-      expect((await ws.execute('readlink /extra/lk2')).exitCode).toBe(1)
+      expect(DEC.decode((await ws.shell('readlink /extra/lk')).stdout)).toBe('plain.txt\n')
+      expect((await ws.shell('readlink /extra/lk2')).exitCode).toBe(1)
     } finally {
       await ws.close()
     }
@@ -405,7 +405,7 @@ describe('the turf mode gates the node table', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('ln -s t /rw/lk')
+      await ws.shell('ln -s t /rw/lk')
       const sess = ws.createSession('agent', {
         mounts: { '/rw/': 'write', '/ro/': 'read' },
       })
@@ -433,7 +433,7 @@ describe('a rename moves what the node table holds', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('printf one > /a/f.txt')
+      await ws.shell('printf one > /a/f.txt')
       await ws.namespace.setAttrs('/a/f.txt', { mode: 0o400 })
       await ws.dispatch('rename', '/a/f.txt', [PathSpec.fromStrPath('/a/g.txt')])
       expect(ws.namespace.metaFor('/a/f.txt')).toBeNull()
@@ -452,7 +452,7 @@ describe('a rename moves what the node table holds', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute('printf one > /a/f.txt && printf two > /a/g.txt')
+      await ws.shell('printf one > /a/f.txt && printf two > /a/g.txt')
       await ws.namespace.setAttrs('/a/g.txt', { mode: 0o400 })
       await ws.dispatch('rename', '/a/f.txt', [PathSpec.fromStrPath('/a/g.txt')])
       expect(ws.namespace.metaFor('/a/g.txt')).toBeNull()
@@ -475,7 +475,7 @@ describe('a hide answers a create by what its parent answers', () => {
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
-      await ws.execute(
+      await ws.shell(
         'mkdir -p /ram/vault /ram/open && echo s > /ram/vault/secret && echo p > /ram/open/pub.txt && echo q > /ram/open/q.txt',
       )
       const sess = ws.createSession('agent', {
@@ -507,11 +507,11 @@ describe('a hide answers a create by what its parent answers', () => {
           ws.dispatch('rename', '/ram/open/q.txt', [PathSpec.fromStrPath('/ram/open/pub.txt')]),
         ).rejects.toMatchObject({ code: 'EACCES' })
       })
-      const under = await ws.execute('echo x > /ram/vault/new.txt', { sessionId: 'agent' })
+      const under = await ws.shell('echo x > /ram/vault/new.txt', { sessionId: 'agent' })
       expect(DEC.decode(under.stderr)).toBe('/ram/vault/new.txt: No such file or directory\n')
-      const control = await ws.execute('echo x > /ram/ghost/new.txt', { sessionId: 'agent' })
+      const control = await ws.shell('echo x > /ram/ghost/new.txt', { sessionId: 'agent' })
       expect(DEC.decode(control.stderr)).toBe('/ram/ghost/new.txt: No such file or directory\n')
-      expect(DEC.decode((await ws.execute('cat /ram/vault/secret')).stdout)).toBe('s\n')
+      expect(DEC.decode((await ws.shell('cat /ram/vault/secret')).stdout)).toBe('s\n')
     } finally {
       await ws.close()
     }

@@ -93,7 +93,7 @@ def _two_mounts() -> Workspace:
 @pytest.mark.asyncio
 async def test_cmdsub_reads_the_per_call_forks_cwd():
     ws = _make_ws()
-    r = await ws.execute("echo $(pwd)", cwd="/ram/subdir")
+    r = await ws.shell("echo $(pwd)", cwd="/ram/subdir")
     assert (await r.stdout_str()).strip() == "/ram/subdir"
 
 
@@ -101,7 +101,7 @@ async def test_cmdsub_reads_the_per_call_forks_cwd():
 async def test_eval_moves_the_fork_not_the_default_session():
     ws = _make_ws()
     before = ws.get_session(ws.default_session_id).cwd
-    r = await ws.execute("eval 'cd /ram/other'; pwd", cwd="/ram/subdir")
+    r = await ws.shell("eval 'cd /ram/other'; pwd", cwd="/ram/subdir")
     assert (await r.stdout_str()).strip() == "/ram/other"
     assert ws.get_session(ws.default_session_id).cwd == before
 
@@ -110,7 +110,7 @@ async def test_eval_moves_the_fork_not_the_default_session():
 async def test_cmdsub_cd_stays_in_the_fork():
     ws = _make_ws()
     before = ws.get_session(ws.default_session_id).cwd
-    await ws.execute("echo $(cd /ram/other)", env={"FOO": "bar"})
+    await ws.shell("echo $(cd /ram/other)", env={"FOO": "bar"})
     assert ws.get_session(ws.default_session_id).cwd == before
 
 
@@ -118,8 +118,8 @@ async def test_cmdsub_cd_stays_in_the_fork():
 async def test_cmdsub_reads_the_named_sessions_cwd():
     ws = _make_ws()
     ws.create_session("agent")
-    await ws.execute("cd /ram/subdir", session_id="agent")
-    r = await ws.execute("echo $(pwd)", session_id="agent")
+    await ws.shell("cd /ram/subdir", session_id="agent")
+    r = await ws.shell("echo $(pwd)", session_id="agent")
     assert (await r.stdout_str()).strip() == "/ram/subdir"
 
 
@@ -129,7 +129,7 @@ async def test_cmdsub_keeps_the_named_sessions_hides():
     # is as absent inside `$()` as outside it.
     ws = _two_mounts()
     ws.create_session("agent", profile={"paths": {"hide": ["/b"]}})
-    r = await ws.execute("echo $(cat /b/y.txt)", session_id="agent")
+    r = await ws.shell("echo $(cat /b/y.txt)", session_id="agent")
     assert "secret" not in (await r.stdout_str())
 
 
@@ -137,7 +137,7 @@ async def test_cmdsub_keeps_the_named_sessions_hides():
 async def test_cmdsub_cd_is_isolated_from_the_live_session():
     ws = _make_ws()
     before = ws.get_session(ws.default_session_id).cwd
-    io = await ws.execute("echo $(cd /ram/subdir; pwd)")
+    io = await ws.shell("echo $(cd /ram/subdir; pwd)")
     assert await io.stdout_str() == "/ram/subdir\n"
     assert ws.get_session(ws.default_session_id).cwd == before
 
@@ -151,7 +151,7 @@ async def test_cmdsub_cd_is_isolated_from_the_live_session():
 @pytest.mark.asyncio
 async def test_bg_job_cmdsub_reads_the_jobs_fork():
     ws = _make_ws()
-    r = await ws.execute("cd /ram/other && echo $(pwd) & wait %1")
+    r = await ws.shell("cd /ram/other && echo $(pwd) & wait %1")
     assert (await r.stdout_str()).strip() == "/ram/other"
 
 
@@ -159,7 +159,7 @@ async def test_bg_job_cmdsub_reads_the_jobs_fork():
 async def test_bg_job_cmdsub_cd_stays_in_the_jobs_fork():
     ws = _make_ws()
     before = ws.get_session(ws.default_session_id).cwd
-    await ws.execute("echo $(cd /ram/other) & wait %1")
+    await ws.shell("echo $(cd /ram/other) & wait %1")
     assert ws.get_session(ws.default_session_id).cwd == before
 
 
@@ -170,28 +170,28 @@ async def test_bg_job_cmdsub_cd_stays_in_the_jobs_fork():
 @pytest.mark.asyncio
 async def test_cmdsub_runs_every_statement():
     ws = _make_ws()
-    r = await ws.execute("echo $(echo a; echo b)")
+    r = await ws.shell("echo $(echo a; echo b)")
     assert (await r.stdout_str()).strip() == "a b"
 
 
 @pytest.mark.asyncio
 async def test_cmdsub_runs_control_flow():
     ws = _make_ws()
-    r = await ws.execute("echo $(if true; then echo yes; fi)")
+    r = await ws.shell("echo $(if true; then echo yes; fi)")
     assert (await r.stdout_str()).strip() == "yes"
 
 
 @pytest.mark.asyncio
 async def test_cmdsub_runs_assignments():
     ws = _make_ws()
-    r = await ws.execute("echo $(X=5; echo $X)")
+    r = await ws.shell("echo $(X=5; echo $X)")
     assert (await r.stdout_str()).strip() == "5"
 
 
 @pytest.mark.asyncio
 async def test_cmdsub_runs_declarations():
     ws = _make_ws()
-    r = await ws.execute("echo $(export Y=7; echo $Y)")
+    r = await ws.shell("echo $(export Y=7; echo $Y)")
     assert (await r.stdout_str()).strip() == "7"
 
 
@@ -209,12 +209,12 @@ async def test_another_workspace_resolves_its_own_session():
 
     @command("crossprobe", vfs="ram", spec=CommandSpec())
     async def crossprobe(accessor, paths, texts, opts):
-        result = await ws_b.execute("pwd")
+        result = await ws_b.shell("pwd")
         seen.append((await result.stdout_str()).strip())
         return b"", IOResult()
 
     _register(ws_a, "/ram/", crossprobe)
-    await ws_a.execute("crossprobe", cwd="/ram/subdir")
+    await ws_a.shell("crossprobe", cwd="/ram/subdir")
     assert seen == ["/"]
 
 
@@ -237,11 +237,11 @@ async def test_policy_reads_the_ambient_sessions_cwd():
 
     @command("policyprobe", vfs="ram", spec=CommandSpec())
     async def policyprobe(accessor, paths, texts, opts):
-        await ws.execute("pwd")
+        await ws.shell("pwd")
         return b"", IOResult()
 
     _register(ws, "/ram/", policyprobe)
-    await ws.execute("policyprobe", cwd="/ram/subdir")
+    await ws.shell("policyprobe", cwd="/ram/subdir")
     assert seen == ["/ram/subdir", "/ram/subdir"]
 
 
@@ -267,7 +267,7 @@ def _policed_ws() -> Workspace:
 @pytest.mark.asyncio
 async def test_command_name_keeps_the_record_the_inner_line_earned():
     ws = _policed_ws()
-    io = await ws.execute('V=secret; command echo "$V"')
+    io = await ws.shell('V=secret; command echo "$V"')
     assert io.exit_code == 126
     assert io.stderr == b"echo: Permission denied\n"
     assert io.refusal is not None
@@ -277,7 +277,7 @@ async def test_command_name_keeps_the_record_the_inner_line_earned():
 @pytest.mark.asyncio
 async def test_eval_keeps_the_record_the_inner_line_earned():
     ws = _policed_ws()
-    io = await ws.execute('V=secret; eval "echo $V"')
+    io = await ws.shell('V=secret; eval "echo $V"')
     assert io.exit_code == 126
     assert io.refusal is not None
     assert io.refusal.reason == "secrets stay put"
@@ -288,7 +288,7 @@ async def test_eval_keeps_the_record_the_inner_line_earned():
 @pytest.mark.asyncio
 async def test_a_substitution_keeps_the_record_the_inner_line_earned():
     ws = _policed_ws()
-    io = await ws.execute('V=secret; X=$(echo "$V")')
+    io = await ws.shell('V=secret; X=$(echo "$V")')
     assert io.exit_code == 126
     assert io.refusal is not None
     assert io.refusal.reason == "secrets stay put"
@@ -297,7 +297,7 @@ async def test_a_substitution_keeps_the_record_the_inner_line_earned():
 @pytest.mark.asyncio
 async def test_an_unrefused_outer_command_still_reports_the_inner_record():
     ws = _policed_ws()
-    io = await ws.execute('V=secret; echo "[$(echo "$V")]"')
+    io = await ws.shell('V=secret; echo "[$(echo "$V")]"')
     assert io.exit_code == 0
     assert io.stdout == b"[]\n"
     assert io.refusal is not None
@@ -310,7 +310,7 @@ async def test_an_unrefused_outer_command_still_reports_the_inner_record():
 @pytest.mark.asyncio
 async def test_a_negated_command_keeps_its_refusal():
     ws = _policed_ws()
-    io = await ws.execute('V=secret; ! echo "$V"')
+    io = await ws.shell('V=secret; ! echo "$V"')
     assert io.exit_code == 0
     assert io.stderr == b"echo: Permission denied\n"
     assert io.refusal is not None
@@ -320,7 +320,7 @@ async def test_a_negated_command_keeps_its_refusal():
 @pytest.mark.asyncio
 async def test_a_negated_pipeline_keeps_its_refusal():
     ws = _policed_ws()
-    io = await ws.execute('V=secret; ! true | echo "$V"')
+    io = await ws.shell('V=secret; ! true | echo "$V"')
     assert io.exit_code == 0
     assert io.refusal is not None
     assert io.refusal.reason == "secrets stay put"
@@ -337,7 +337,7 @@ async def test_cancel_releases_a_line_stalled_before_it_runs():
     timer = asyncio.get_running_loop().call_later(0.05, cancel.set)
     try:
         with pytest.raises(MirageAbortError):
-            await ws.execute("echo hi", cancel=cancel)
+            await ws.shell("echo hi", cancel=cancel)
     finally:
         timer.cancel()
 
@@ -354,7 +354,7 @@ async def test_abort_during_preflight_is_not_recorded():
     timer = asyncio.get_running_loop().call_later(0.05, cancel.set)
     try:
         with pytest.raises(MirageAbortError):
-            await ws.execute("echo hi", cancel=cancel)
+            await ws.shell("echo hi", cancel=cancel)
     finally:
         timer.cancel()
     assert await ws.observer.command_events() == []
@@ -368,19 +368,19 @@ async def test_abort_on_the_flush_restores_status():
     # generation the store knows.
     store = _StallableSessionStore()
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE, session_store=store)
-    await ws.execute("false")
+    await ws.shell("false")
     session = ws._session_mgr.get(ws._session_mgr.default_id)
     store.stall = True
     cancel = asyncio.Event()
     timer = asyncio.get_running_loop().call_later(0.05, cancel.set)
     try:
         with pytest.raises(MirageAbortError):
-            await ws.execute("export MARK=1", cancel=cancel)
+            await ws.shell("export MARK=1", cancel=cancel)
     finally:
         timer.cancel()
     assert session.last_exit_code == 1
     store.stall = False
-    r = await ws.execute("echo next")
+    r = await ws.shell("echo next")
     assert r.exit_code == 0
 
 
@@ -395,7 +395,7 @@ async def test_abort_on_the_history_record_restores_status():
     timer = asyncio.get_running_loop().call_later(0.05, cancel.set)
     try:
         with pytest.raises(MirageAbortError):
-            await ws.execute("echo hi", cancel=cancel)
+            await ws.shell("echo hi", cancel=cancel)
     finally:
         timer.cancel()
     assert session.last_exit_code == 7
@@ -415,7 +415,7 @@ async def test_abort_of_a_running_line_is_not_held_by_a_dead_history_store():
     timer = asyncio.get_running_loop().call_later(0.05, cancel.set)
     try:
         with pytest.raises(MirageAbortError):
-            await asyncio.wait_for(ws.execute("sleep 5", cancel=cancel), 2)
+            await asyncio.wait_for(ws.shell("sleep 5", cancel=cancel), 2)
     finally:
         timer.cancel()
     assert session.last_exit_code == 7
@@ -435,7 +435,7 @@ async def test_a_wait_for_timeout_is_not_held_by_a_dead_history_store():
     started = asyncio.get_running_loop().time()
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(
-            ws.execute("false; echo hi", cancel=asyncio.Event()), 0.05)
+            ws.shell("false; echo hi", cancel=asyncio.Event()), 0.05)
     elapsed = asyncio.get_running_loop().time() - started
     assert elapsed < ABORT_JOIN_SECONDS + 1
     assert session.last_exit_code == 7
@@ -445,7 +445,7 @@ async def test_a_wait_for_timeout_is_not_held_by_a_dead_history_store():
 async def test_abort_of_a_running_line_is_not_held_by_a_dead_session_store():
     store = _StallableSessionStore()
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE, session_store=store)
-    await ws.execute("false")
+    await ws.shell("false")
     session = ws._session_mgr.get(ws._session_mgr.default_id)
     store.stall = True
     cancel = asyncio.Event()
@@ -453,7 +453,7 @@ async def test_abort_of_a_running_line_is_not_held_by_a_dead_session_store():
     try:
         with pytest.raises(MirageAbortError):
             await asyncio.wait_for(
-                ws.execute("export MARK=1; sleep 5", cancel=cancel), 2)
+                ws.shell("export MARK=1; sleep 5", cancel=cancel), 2)
     finally:
         timer.cancel()
     assert session.last_exit_code == 1

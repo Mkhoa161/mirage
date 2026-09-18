@@ -124,10 +124,10 @@ describe('handlePipe', () => {
         'f() { true; }; false; f | echo $?',
         'false; true | echo $?',
       ]) {
-        const io = await ws.execute(line)
+        const io = await ws.shell(line)
         expect([io.stdoutText, io.exitCode], line).toEqual(['1\n', 0])
       }
-      expect((await ws.execute('false; { false; } | true; echo $?')).stdoutText).toBe('0\n')
+      expect((await ws.shell('false; { false; } | true; echo $?')).stdoutText).toBe('0\n')
     } finally {
       await ws.close()
     }

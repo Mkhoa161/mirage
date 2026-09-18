@@ -391,8 +391,8 @@ async def test_sessions_persist_across_workspaces_on_shared_store():
     await ws_a.flush_sessions()
 
     ws_b = Workspace({"/data": ram}, mode=MountMode.EXEC, session_store=store)
-    result = await ws_b.execute("echo blocked > /data/x.txt",
-                                session_id="narrow")
+    result = await ws_b.shell("echo blocked > /data/x.txt",
+                              session_id="narrow")
     assert result.exit_code != 0
 
 

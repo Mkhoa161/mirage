@@ -797,7 +797,7 @@ describe('himalaya dispatch', () => {
       username: 'me@example.com',
       password: 'p',
     })
-    const io = await ws.execute('himalaya message compose --to a@b.com --subject Hi --body yo')
+    const io = await ws.shell('himalaya message compose --to a@b.com --subject Hi --body yo')
     expect(io.exitCode).toBe(0)
     expect(new TextDecoder().decode(io.stdout)).toContain('To: a@b.com')
     await ws.close()
@@ -817,7 +817,7 @@ describe('himalaya dispatch', () => {
       password: 'p',
       use_ssl: true,
     })
-    const io = await ws.execute('himalaya message compose --to a@b.com --subject Hi --body yo')
+    const io = await ws.shell('himalaya message compose --to a@b.com --subject Hi --body yo')
     expect(io.exitCode).toBe(0)
     expect(new TextDecoder().decode(io.stdout)).toContain('To: a@b.com')
     await ws.close()
@@ -831,7 +831,7 @@ describe('himalaya dispatch', () => {
       username: 'u',
       password: 'p',
     })
-    const io = await ws.execute('himalaya message move 7 --to Archive')
+    const io = await ws.shell('himalaya message move 7 --to Archive')
     expect(io.exitCode).toBe(1)
     expect(new TextDecoder().decode(io.stderr)).toBe(
       "himalaya: 'move' is not a himalaya message command. See 'himalaya message --help'.\n",
@@ -874,7 +874,7 @@ describe('himalaya writes and a mounted account', () => {
   }
 
   async function out(ws: Workspace, line: string): Promise<string> {
-    const io = await ws.execute(line)
+    const io = await ws.shell(line)
     expect(io.exitCode, new TextDecoder().decode(io.stderr)).toBe(0)
     return new TextDecoder().decode(io.stdout)
   }

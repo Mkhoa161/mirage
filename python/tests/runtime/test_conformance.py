@@ -468,7 +468,7 @@ def _world(runtime: str) -> Workspace:
 
 
 async def _sh(ws: Workspace, line: str) -> tuple[int, str]:
-    io = await ws.execute(line)
+    io = await ws.shell(line)
     out = (await materialize(io.stdout)).decode()
     return io.exit_code, out
 

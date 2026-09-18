@@ -138,21 +138,21 @@ def test_a_child_shell_does_not_replay_a_pending_seed():
 @pytest.mark.asyncio
 async def test_random_expands_in_the_shell():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute(
+    io = await ws.shell(
         'RANDOM=42; a=$RANDOM; RANDOM=42; b=$RANDOM; echo $a $b')
     assert await io.stdout_str() == "17772 17772\n"
-    io = await ws.execute('echo $RANDOM $RANDOM')
+    io = await ws.shell('echo $RANDOM $RANDOM')
     x, y = (await io.stdout_str()).split()
     assert x != y and x.isdigit() and y.isdigit()
-    io = await ws.execute(
+    io = await ws.shell(
         'RANDOM=42; a=$RANDOM; RANDOM=42; (: $RANDOM); b=$RANDOM; echo $a $b')
     assert await io.stdout_str() == "17772 17772\n"
-    io = await ws.execute(
+    io = await ws.shell(
         "RANDOM='1+2'; a=$RANDOM; RANDOM=0x10; b=$RANDOM; x=42; RANDOM=x; "
         "c=$RANDOM; RANDOM=0; d=$RANDOM; RANDOM=1.5; e=$RANDOM; "
         "echo $a $b $c $d $e")
     assert await io.stdout_str() == "17653 6772 17772 20814 24386\n"
-    io = await ws.execute('unset RANDOM; echo "[$RANDOM]"')
+    io = await ws.shell('unset RANDOM; echo "[$RANDOM]"')
     assert await io.stdout_str() == "[]\n"
 
 
@@ -173,7 +173,7 @@ async def test_child_random_reads_preserve_the_parent_sequence(
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         prefix = 'RANDOM=42; ' + (': $RANDOM; ' if draw_first else '')
-        io = await ws.execute(prefix + child + '; echo $RANDOM')
+        io = await ws.shell(prefix + child + '; echo $RANDOM')
         assert io.exit_code == 0
         assert await io.stdout_str() == ('26794\n'
                                          if draw_first else '17772\n')
@@ -202,7 +202,7 @@ async def test_child_random_reads_preserve_the_parent_sequence(
 ])
 async def test_random_seed_diagnostics(command, stdout, prefix):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute(command)
+    io = await ws.shell(command)
     assert io.exit_code == 0
     assert await io.stdout_str() == stdout
     err = await io.stderr_str()
@@ -231,7 +231,7 @@ async def test_random_seed_diagnostics(command, stdout, prefix):
 async def test_arithmetic_random_reads_are_lazy(command, stdout):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        io = await ws.execute(command)
+        io = await ws.shell(command)
         assert io.exit_code == 0
         assert await io.stdout_str() == stdout
         assert await io.stderr_str() == ""
@@ -305,7 +305,7 @@ async def test_arithmetic_random_assignment_seeds_within_the_expression(
         command, stdout):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        io = await ws.execute(command)
+        io = await ws.shell(command)
         assert io.exit_code == 0
         assert await io.stdout_str() == stdout
         assert await io.stderr_str() == ""
@@ -366,7 +366,7 @@ async def test_arithmetic_random_assignment_seeds_within_the_expression(
 async def test_subscripts_and_offsets_land_their_assignments(command, stdout):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        io = await ws.execute(command)
+        io = await ws.shell(command)
         assert io.exit_code == 0
         assert await io.stdout_str() == stdout
         assert await io.stderr_str() == ""
@@ -413,12 +413,12 @@ async def test_a_subscript_or_operand_that_fails_ends_the_line(
         command, stderr):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        io = await ws.execute(command)
+        io = await ws.shell(command)
         assert io.exit_code == 1
         assert await io.stdout_str() == ""
         assert await io.stderr_str() == stderr
         if "x=3" in command:
-            landed = await ws.execute("echo $x")
+            landed = await ws.shell("echo $x")
             assert await landed.stdout_str() == "3\n"
     finally:
         await ws.close()
@@ -432,8 +432,8 @@ async def test_operand_env_is_a_view_over_the_visible_env():
     # nor hides the write.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        io = await ws.execute("declare -a nrb=(1); declare -n nrc=nrb; "
-                              'v=abcdef; echo "${v:(x=1):2}" $x')
+        io = await ws.shell("declare -a nrb=(1); declare -n nrc=nrb; "
+                            'v=abcdef; echo "${v:(x=1):2}" $x')
         assert await io.stdout_str() == "bc 1\n"
         assert await io.stderr_str() == ""
     finally:
@@ -460,7 +460,7 @@ async def test_a_conditional_operators_word_expands_only_when_selected(
         command, stdout, stderr):
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        io = await ws.execute(command)
+        io = await ws.shell(command)
         assert io.exit_code == 0
         assert await io.stdout_str() == stdout
         assert await io.stderr_str() == stderr
@@ -513,7 +513,7 @@ async def test_an_array_on_random_ends_its_special_meaning(command, stdout):
     # there, so element 0 holds a later draw of the same sequence; and a
     # popped local RANDOM reseeds bash's generator where mirage resumes.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute(command)
+    io = await ws.shell(command)
     assert await io.stderr_str() == ''
     assert io.exit_code == 0
     assert await io.stdout_str() == stdout

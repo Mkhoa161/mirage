@@ -107,39 +107,39 @@ async def main():
     ws.register_cli("gws", GWS, config.model_dump())
 
     # List structure
-    r = await ws.execute("ls /gdocs/")
+    r = await ws.shell("ls /gdocs/")
     print(await r.stdout_str())
 
     # List owned documents
-    r = await ws.execute("ls /gdocs/owned/")
+    r = await ws.shell("ls /gdocs/owned/")
     print(await r.stdout_str())
 
     # Read a document
-    r = await ws.execute(
+    r = await ws.shell(
         "cat /gdocs/owned/2026-04-04_Project_Plan__1AbCdEf.gdoc.json")
     print(await r.stdout_str())
 
     # Extract title with jq
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".title"'
         " /gdocs/owned/2026-04-04_Project_Plan__1AbCdEf.gdoc.json")
     print(await r.stdout_str())
 
     # Search across all documents
-    r = await ws.execute('rg "quarterly" /gdocs/owned/')
+    r = await ws.shell('rg "quarterly" /gdocs/owned/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 1 /gdocs/")
+    r = await ws.shell("tree -L 1 /gdocs/")
     print(await r.stdout_str())
 
     # Create a new document
-    r = await ws.execute(
+    r = await ws.shell(
         'gws docs documents create --json \'{"title":"MIRAGE Example Doc"}\'')
     print(await r.stdout_str())
 
     # Append text to a document
-    r = await ws.execute(
+    r = await ws.shell(
         'gws docs write --document 1AbCdEf --text "Appended via MIRAGE."')
     print(await r.stdout_str())
 

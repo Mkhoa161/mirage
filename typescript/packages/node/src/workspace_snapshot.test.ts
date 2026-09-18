@@ -131,7 +131,7 @@ describe('snapshot rebuild through the registry', () => {
     expect(mount[MountKey.VFS_REF]).toBeNull()
     const restored = await Workspace.fromState(state)
     try {
-      const out = await restored.execute('cat /n/a.md')
+      const out = await restored.shell('cat /n/a.md')
       expect(out.stdoutText).toBe('one\n')
       const notes = restored.mounts().find((m) => m.prefix === '/n/')
       expect(notes?.vfs).toBeInstanceOf(Notes)
@@ -160,7 +160,7 @@ describe('snapshot rebuild through the registry', () => {
   it('rebuilds an alias over a builtin through its ref, not its type', async () => {
     register('seeded-test', () => Promise.resolve(new SeededRAM()))
     const ws = new Workspace({ '/s/': await buildVfs('seeded-test') }, { mode: MountMode.WRITE })
-    await ws.execute('echo one > /s/a.txt')
+    await ws.shell('echo one > /s/a.txt')
     const state = await toStateDict(ws)
     await ws.close()
     const [mount] = state.mounts
@@ -174,7 +174,7 @@ describe('snapshot rebuild through the registry', () => {
       const seeded = restored.mounts().find((m) => m.prefix === '/s/')
       expect(seeded?.vfs).toBeInstanceOf(SeededRAM)
       expect(seeded === undefined ? null : vfsRefOf(seeded.vfs)).toBe('seeded-test')
-      const out = await restored.execute('cat /s/a.txt')
+      const out = await restored.shell('cat /s/a.txt')
       expect(out.stdoutText).toBe('one\n')
     } finally {
       await restored.close()

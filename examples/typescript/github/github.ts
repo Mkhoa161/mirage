@@ -27,7 +27,7 @@ if (TOKEN === undefined || TOKEN === "") {
 
 async function show(ws: Workspace, cmd: string): Promise<void> {
   try {
-    const r = await ws.execute(cmd);
+    const r = await ws.shell(cmd);
     console.log(r.stdoutText);
     if (r.stderrText !== "") process.stderr.write(r.stderrText);
   } catch (err) {
@@ -44,7 +44,7 @@ async function header(
 ): Promise<void> {
   console.log(`=== ${label} ===`);
   try {
-    const r = await ws.execute(cmd);
+    const r = await ws.shell(cmd);
     console.log(r.stdoutText);
     if (r.stderrText !== "") process.stderr.write(r.stderrText);
   } catch (err) {
@@ -56,7 +56,7 @@ async function header(
 
 async function timed(ws: Workspace, cmd: string): Promise<[number, string]> {
   const start = performance.now();
-  const r = await ws.execute(cmd);
+  const r = await ws.shell(cmd);
   return [performance.now() - start, r.stdoutText];
 }
 
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
   // workspace namespace (durable, snapshot-captured) and merge into
   // dispatch-level stat.
   console.log(`=== metadata overlay on /github/python/mirage/types.py ===`)
-  const metaRes = await ws.execute(
+  const metaRes = await ws.shell(
     `chmod 640 "/github/python/mirage/types.py" && chown 500:dev "/github/python/mirage/types.py" && touch -t 202601021530 "/github/python/mirage/types.py"`,
   )
   console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
     console.log(`\n=== ${label} ===`);
     let r;
     try {
-      r = await ws.execute(cmd);
+      r = await ws.shell(cmd);
     } catch (err) {
       console.log(
         `  error: ${err instanceof Error ? err.message : String(err)}`,
@@ -290,7 +290,7 @@ async function main(): Promise<void> {
 
   console.log("=== grep dir operands (POSIX warn) ===");
   {
-    const r = await ws.execute("grep 'import' /github/python/mirage/*");
+    const r = await ws.shell("grep 'import' /github/python/mirage/*");
     const out = r.stdoutText.trim();
     const err = r.stderrText.trim();
     const matches = out === "" ? 0 : out.split("\n").length;

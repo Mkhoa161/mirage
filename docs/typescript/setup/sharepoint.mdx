@@ -15,8 +15,8 @@ const sharepoint = new SharePointVFS({
 })
 
 const ws = new Workspace({ '/sharepoint': sharepoint }, { mode: MountMode.WRITE })
-await ws.execute('ls /sharepoint/')
-await ws.execute('ls /sharepoint/Engineering/Documents/')
+await ws.shell('ls /sharepoint/')
+await ws.shell('ls /sharepoint/Engineering/Documents/')
 ```
 
 An unscoped mount uses `/site/library/path`. To hide the site and library levels, configure `site` and `drive` together; `keyPrefix` can narrow that drive further.

@@ -14,7 +14,7 @@ so only real top-level commands land.
 
 ```mermaid
 flowchart TD
-    Exec["ws.execute(cmd)"] --> Obs[Observer]
+    Exec["ws.shell(cmd)"] --> Obs[Observer]
     Obs --> Store[("ObserverStore<br/>RAM · Disk · Redis")]
     Store --> Hist["history builtin<br/>(calling session)"]
     Store --> File["/.bash_history<br/>(all sessions)"]

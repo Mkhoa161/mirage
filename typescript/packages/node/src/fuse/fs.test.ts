@@ -47,8 +47,8 @@ async function mkWs(): Promise<Workspace> {
     { '/data/': new RAMVFS(), '/extra/': new RAMVFS() },
     { mode: MountMode.WRITE },
   )
-  await ws.execute("echo 'hello world' | tee /data/greeting.txt")
-  await ws.execute("mkdir -p /data/sub && echo 'nested' > /data/sub/inner.txt")
+  await ws.shell("echo 'hello world' | tee /data/greeting.txt")
+  await ws.shell("mkdir -p /data/sub && echo 'nested' > /data/sub/inner.txt")
   return ws
 }
 
@@ -562,7 +562,7 @@ describe('MirageFS — xattr', () => {
     expect(moved?.toString()).toBe('v')
     await callOp(mfs, 'unlink', '/data/renamed.txt')
     // A new file at the same path must not inherit the deleted file's xattrs.
-    await ws.execute("echo 'new' > /data/renamed.txt")
+    await ws.shell("echo 'new' > /data/renamed.txt")
     const [, list] = await callOp<[number, string[]]>(mfs, 'listxattr', '/data/renamed.txt')
     expect(list).toEqual([])
   })
@@ -571,7 +571,7 @@ describe('MirageFS — xattr', () => {
 describe('MirageFS — namespace links', () => {
   it('getattr reports a link with S_IFLNK and target length', async () => {
     const ws = await mkWs()
-    await ws.execute('ln -s /data/greeting.txt /data/lnk')
+    await ws.shell('ln -s /data/greeting.txt /data/lnk')
     const mfs = new MirageFS(ws.fs)
     const [code, attr] = await callOp<[number, FuseAttr]>(mfs, 'getattr', '/data/lnk')
     expect(code).toBe(0)
@@ -581,7 +581,7 @@ describe('MirageFS — namespace links', () => {
 
   it('readlink rewrites an absolute target relative to the link dir', async () => {
     const ws = await mkWs()
-    await ws.execute('ln -s /data/sub/inner.txt /data/lnk')
+    await ws.shell('ln -s /data/sub/inner.txt /data/lnk')
     const mfs = new MirageFS(ws.fs)
     const [code, target] = await callOp<[number, string]>(mfs, 'readlink', '/data/lnk')
     expect(code).toBe(0)
@@ -597,7 +597,7 @@ describe('MirageFS — namespace links', () => {
 
   it('readdir lists link entries', async () => {
     const ws = await mkWs()
-    await ws.execute('ln -s /data/greeting.txt /data/lnk')
+    await ws.shell('ln -s /data/greeting.txt /data/lnk')
     const mfs = new MirageFS(ws.fs)
     const [code, entries] = await callOp<[number, string[]]>(mfs, 'readdir', '/data')
     expect(code).toBe(0)
@@ -606,7 +606,7 @@ describe('MirageFS — namespace links', () => {
 
   it('read follows the link to the target content', async () => {
     const ws = await mkWs()
-    await ws.execute('ln -s /data/greeting.txt /data/lnk')
+    await ws.shell('ln -s /data/greeting.txt /data/lnk')
     const mfs = new MirageFS(ws.fs)
     const buf = Buffer.alloc(256)
     const [n] = await callOp<[number]>(mfs, 'read', '/data/lnk', 0, buf, 256, 0)
@@ -626,7 +626,7 @@ describe('MirageFS — namespace links', () => {
 
   it('unlink removes the link entry but keeps the target', async () => {
     const ws = await mkWs()
-    await ws.execute('ln -s /data/greeting.txt /data/lnk')
+    await ws.shell('ln -s /data/greeting.txt /data/lnk')
     const mfs = new MirageFS(ws.fs)
     const [code] = await callOp<[number]>(mfs, 'unlink', '/data/lnk')
     expect(code).toBe(0)
@@ -638,7 +638,7 @@ describe('MirageFS — namespace links', () => {
 
   it('scoped root displays link targets in mount-relative form', async () => {
     const ws = await mkWs()
-    await ws.execute('ln -s /data/sub/inner.txt /data/sub/lnk')
+    await ws.shell('ln -s /data/sub/inner.txt /data/sub/lnk')
     const mfs = new MirageFS(ws.fs, { rootPrefix: '/data/sub' })
     const [code, target] = await callOp<[number, string]>(mfs, 'readlink', '/lnk')
     expect(code).toBe(0)
@@ -649,7 +649,7 @@ describe('MirageFS — namespace links', () => {
 describe('MirageFS — stat attr overlay', () => {
   it('getattr honors chmod overlay bits', async () => {
     const ws = await mkWs()
-    await ws.execute('chmod 640 /data/greeting.txt')
+    await ws.shell('chmod 640 /data/greeting.txt')
     const mfs = new MirageFS(ws.fs)
     const [code, attr] = await callOp<[number, FuseAttr]>(mfs, 'getattr', '/data/greeting.txt')
     expect(code).toBe(0)
@@ -659,7 +659,7 @@ describe('MirageFS — stat attr overlay', () => {
 
   it('getattr honors touched mtime', async () => {
     const ws = await mkWs()
-    await ws.execute('touch -t 202603041200 /data/greeting.txt')
+    await ws.shell('touch -t 202603041200 /data/greeting.txt')
     const mfs = new MirageFS(ws.fs)
     const [code, attr] = await callOp<[number, FuseAttr]>(mfs, 'getattr', '/data/greeting.txt')
     expect(code).toBe(0)
@@ -670,7 +670,7 @@ describe('MirageFS — stat attr overlay', () => {
 describe('MirageFS — session binding', () => {
   it("a bound tree enforces the session's view", async () => {
     const ws = await mkWs()
-    await ws.execute("echo 'hidden' > /extra/secret.txt")
+    await ws.shell("echo 'hidden' > /extra/secret.txt")
     const session = ws.createSession('narrow', { profile: { paths: { hide: ['/extra'] } } })
 
     const bound = new MirageFS(ws.fs, { session })

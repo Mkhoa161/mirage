@@ -205,7 +205,7 @@ def test_find_command_stderr_on_missing_dir():
     ws = _ws()
 
     async def _run():
-        result = await ws.execute("find /nonexistent")
+        result = await ws.shell("find /nonexistent")
         assert result.exit_code == 1
         assert b"nonexistent" in await result.materialize_stderr()
 
@@ -216,7 +216,7 @@ def test_grep_command_stderr_on_missing_file():
     ws = _ws()
 
     async def _run():
-        result = await ws.execute("grep hello /nonexistent")
+        result = await ws.shell("grep hello /nonexistent")
         # GNU grep exits 2 for an operand it could not search.
         assert result.exit_code == 2
         assert b"nonexistent" in await result.materialize_stderr()
@@ -228,7 +228,7 @@ def test_ls_command_stderr_on_missing_dir():
     ws = _ws()
 
     async def _run():
-        result = await ws.execute("ls /nonexistent")
+        result = await ws.shell("ls /nonexistent")
         # GNU ls exits 2 for an inaccessible command-line operand.
         assert result.exit_code == 2
         assert b"nonexistent" in await result.materialize_stderr()

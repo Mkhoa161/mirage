@@ -52,7 +52,7 @@ async def main():
                 print(f.read().rstrip())
 
         print("\n--- shell view ---")
-        r = await ws.execute("find /s/ -name '*.py' | head -n 5")
+        r = await ws.shell("find /s/ -name '*.py' | head -n 5")
         print(f"  python files: {(await r.stdout_str()).strip()}")
 
 

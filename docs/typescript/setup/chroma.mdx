@@ -34,10 +34,10 @@ const knowledge = new ChromaVFS({
 
 const ws = new Workspace({ '/knowledge': knowledge }, { mode: MountMode.READ })
 
-console.log(await (await ws.execute('tree /knowledge/')).stdoutStr())
-console.log(await (await ws.execute('grep -r refund /knowledge/policies/')).stdoutStr())
+console.log(await (await ws.shell('tree /knowledge/')).stdoutStr())
+console.log(await (await ws.shell('grep -r refund /knowledge/policies/')).stdoutStr())
 console.log(
-  await (await ws.execute('chroma-query "how am I throttled" /knowledge/')).stdoutStr(),
+  await (await ws.shell('chroma-query "how am I throttled" /knowledge/')).stdoutStr(),
 )
 ```
 

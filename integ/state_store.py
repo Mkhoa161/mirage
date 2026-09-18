@@ -82,11 +82,11 @@ async def write(prefix: str) -> None:
     """Populate all four planes: observer (history), namespace (symlink),
     sessions (narrowed grant), and the workspace metadata record."""
     ws, store = make_workspace(prefix)
-    result = await ws.execute(f"echo {MARKER}")
+    result = await ws.shell(f"echo {MARKER}")
     check("py write: marker command", result.exit_code == 0)
-    result = await ws.execute("tee /data/f.txt", stdin=b"shared-bytes\n")
+    result = await ws.shell("tee /data/f.txt", stdin=b"shared-bytes\n")
     check("py write: seed file", result.exit_code == 0)
-    result = await ws.execute("ln -s /data/f.txt /data/l.txt")
+    result = await ws.shell("ln -s /data/f.txt /data/l.txt")
     check("py write: symlink", result.exit_code == 0)
     ws.create_session("narrow", mounts={"/data": "read"})
     shared = ws.create_session("shared")
@@ -117,10 +117,10 @@ async def read(prefix: str) -> None:
     check("py read: adopted writer's default session",
           ws.default_session_id == pointer,
           f"got {ws.default_session_id!r} want {pointer!r}")
-    result = await ws.execute("history")
+    result = await ws.shell("history")
     check("py read: history has marker", MARKER
           in result.stdout.decode(errors="replace"), f"got {result.stdout!r}")
-    result = await ws.execute("readlink /data/l.txt")
+    result = await ws.shell("readlink /data/l.txt")
     check("py read: symlink target",
           result.stdout.decode().strip() == "/data/f.txt",
           f"got {result.stdout!r}")
@@ -131,8 +131,7 @@ async def read(prefix: str) -> None:
         and session.mount_modes.get("/data") == MountMode.READ)
     check("py read: generation survived the wire", session.generation >= 1,
           f"got {session.generation}")
-    result = await ws.execute("echo blocked > /data/x.txt",
-                              session_id="narrow")
+    result = await ws.shell("echo blocked > /data/x.txt", session_id="narrow")
     check("py read: narrowed write denied", result.exit_code != 0)
 
     # CAS against the record the other language wrote: the Lua compare

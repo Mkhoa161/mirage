@@ -187,7 +187,7 @@ describe('MirageService', () => {
     const ws = await ctx.mirage.ready
     // The role reached the workspace and governs its default session: a
     // patch file's plain YAML became a live permission document.
-    const denied = await ws.execute('rm /data/x.txt')
+    const denied = await ws.shell('rm /data/x.txt')
     expect(denied.exitCode).toBe(126)
     expect(denied.stderrText).toBe('rm: Permission denied\n')
     expect(denied.refusal?.reason).toBe('no removes')

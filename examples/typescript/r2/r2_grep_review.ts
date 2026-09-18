@@ -42,7 +42,7 @@ function configFromEnv(): R2Config {
 
 async function run(ws: Workspace, cmd: string): Promise<void> {
   console.log(`\n$ ${cmd}`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   console.log('--- stdout ---')
   console.log(r.stdoutText.trim())
   if (r.stderrText.trim().length > 0) {

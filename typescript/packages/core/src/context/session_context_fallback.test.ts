@@ -39,6 +39,7 @@ import { Session } from '../workspace/session/session.ts'
 import { parseSessionProfile } from '../policy/profile.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import { getTestParser } from '../workspace/fixtures/workspace_fixture.ts'
+import { SessionHandle } from '../workspace/workspace/handle.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
 import type * as asyncContextModule from '../utils/async_context.ts'
 
@@ -398,12 +399,12 @@ describe('a named facade session on the fallback storage', () => {
     )
     try {
       const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-      const wide = ws.fs.forSession(host.sessionId)
+      const wide = new SessionHandle(ws, host.sessionId).fs
       await wide.mkdir('/data/vault')
       await wide.writeFile('/data/vault/secret', 'top\n')
       const [held, release] = gate()
       const holding = runWithSession(host, () => held, ws.sessionManager)
-      const named = ws.fs.forSession(ws.defaultSessionId)
+      const named = new SessionHandle(ws, ws.defaultSessionId).fs
       await expect(named.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
       release()

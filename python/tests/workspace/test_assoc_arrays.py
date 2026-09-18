@@ -429,7 +429,7 @@ def test_assoc_case(case_id, cmd, out, err, code):
     async def run():
         ws = Workspace({"data": RAMVFS()})
         try:
-            io = await ws.execute(cmd)
+            io = await ws.shell(cmd)
             stdout = await io.stdout_str()
             stderr = io.stderr or b""
             if isinstance(stderr, bytes):

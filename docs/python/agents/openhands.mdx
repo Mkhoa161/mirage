@@ -48,7 +48,7 @@ with MirageWorkspace(workspace=ws, working_dir="/") as mirage_ws:
 | Symbol | Purpose |
 | --- | --- |
 | `MirageWorkspace` | OpenHands `Workspace` implementation backed by a Mirage workspace. |
-| `MirageTerminalExecutor` | Terminal executor that pipes through `Workspace.execute()`. |
+| `MirageTerminalExecutor` | Terminal executor that pipes through `Workspace.shell()`. |
 | `register_mirage_terminal` | Registers the Mirage terminal tool so the agent can `Tool(name=...)` it. |
 
 ## Examples

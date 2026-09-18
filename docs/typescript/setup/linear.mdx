@@ -23,7 +23,7 @@ const linear = new LinearVFS({
 })
 
 const ws = new Workspace({ '/linear': linear }, { mode: MountMode.READ })
-await ws.execute('ls /linear/teams/')
+await ws.shell('ls /linear/teams/')
 ```
 
 ## Browser

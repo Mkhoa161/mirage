@@ -70,7 +70,7 @@ describe('command timeout', () => {
     DEFAULT_COMMAND_LIMITS.sleep = new Limit({ timeoutSeconds: 1 })
     const ws = buildWs()
     try {
-      const r = await ws.execute('sleep 0.05')
+      const r = await ws.shell('sleep 0.05')
       expect(r.exitCode).toBe(0)
     } finally {
       await ws.close()
@@ -81,7 +81,7 @@ describe('command timeout', () => {
     DEFAULT_COMMAND_LIMITS.sleep = new Limit({ timeoutSeconds: 0.05 })
     const ws = buildWs()
     try {
-      const r = await ws.execute('sleep 2')
+      const r = await ws.shell('sleep 2')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('sleep: timed out after 0.05s')
     } finally {
@@ -93,7 +93,7 @@ describe('command timeout', () => {
     DEFAULT_COMMAND_LIMITS.sleep = new Limit({ timeoutSeconds: 0.05 })
     const ws = buildWs()
     try {
-      const r = await ws.execute('sleep 2 | echo done')
+      const r = await ws.shell('sleep 2 | echo done')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('sleep: timed out')
     } finally {
@@ -105,7 +105,7 @@ describe('command timeout', () => {
     DEFAULT_COMMAND_LIMITS.sleep = new Limit({ timeoutSeconds: 0 })
     const ws = buildWs()
     try {
-      const r = await ws.execute('sleep 0.05')
+      const r = await ws.shell('sleep 0.05')
       expect(r.exitCode).toBe(0)
     } finally {
       await ws.close()
@@ -144,8 +144,8 @@ describe('python3 command timeout', () => {
     DEFAULT_COMMAND_LIMITS.python3 = new Limit({ timeoutSeconds: 0.25 })
     const ws = buildPyWs()
     try {
-      await ws.execute(SLOW_SCRIPT)
-      const r = await ws.execute('python3 /data/slow.py')
+      await ws.shell(SLOW_SCRIPT)
+      const r = await ws.shell('python3 /data/slow.py')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('python3: timed out after 0.25s')
     } finally {
@@ -158,8 +158,8 @@ describe('python3 command timeout', () => {
       '/data': { python3: new Limit({ timeoutSeconds: 0.25 }) },
     })
     try {
-      await ws.execute(SLOW_SCRIPT)
-      const r = await ws.execute('cd /data && python3 /data/slow.py')
+      await ws.shell(SLOW_SCRIPT)
+      const r = await ws.shell('cd /data && python3 /data/slow.py')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('python3: timed out after 0.25s')
     } finally {
@@ -172,8 +172,8 @@ describe('python3 command timeout', () => {
       '/data': { python3: new Limit({ timeoutSeconds: 0.25 }) },
     })
     try {
-      await ws.execute(SLOW_SCRIPT)
-      const r = await ws.execute('python3 /data/slow.py')
+      await ws.shell(SLOW_SCRIPT)
+      const r = await ws.shell('python3 /data/slow.py')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('python3: timed out after 0.25s')
     } finally {
@@ -199,7 +199,7 @@ describe('python3 command timeout', () => {
       },
     )
     try {
-      const r = await ws.execute('cd /data && python3 -c "hang"')
+      const r = await ws.shell('cd /data && python3 -c "hang"')
       expect(r.exitCode).toBe(124)
       expect(probe.aborted).toBe(true)
     } finally {
@@ -225,7 +225,7 @@ describe('python3 command timeout', () => {
     )
     try {
       const started = Date.now()
-      const r = await ws.execute('cd /data && python3 -c "while True: pass"')
+      const r = await ws.shell('cd /data && python3 -c "while True: pass"')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('timed out')
       expect(Date.now() - started).toBeLessThan(60_000)
@@ -239,7 +239,7 @@ describe('python3 command timeout', () => {
       '/data': { python3: new Limit({ timeoutSeconds: 0.25 }) },
     })
     try {
-      const r = await ws.execute('cd /data && python3 -c "while True: pass"')
+      const r = await ws.shell('cd /data && python3 -c "while True: pass"')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('python3: timed out after 0.25s')
     } finally {
@@ -266,7 +266,7 @@ describe('python3 command timeout', () => {
     )
     try {
       const started = Date.now()
-      const r = await ws.execute('cd /data && node -e "while (true) {}"')
+      const r = await ws.shell('cd /data && node -e "while (true) {}"')
       expect(r.exitCode).toBe(124)
       expect(DEC.decode(r.stderr)).toContain('timed out')
       expect(Date.now() - started).toBeLessThan(30_000)
@@ -287,8 +287,8 @@ describe('background job kill', () => {
       { mode: MountMode.EXEC, ops: registry, shellParser: parser, runtimes: [probe, 'workspace'] },
     )
     try {
-      await ws.execute('python3 -c "hang" &')
-      await ws.execute('kill %1')
+      await ws.shell('python3 -c "hang" &')
+      await ws.shell('kill %1')
       await new Promise((resolve) => setTimeout(resolve, 100))
       expect(probe.aborted).toBe(true)
     } finally {
@@ -300,9 +300,9 @@ describe('background job kill', () => {
     const ws = buildWs()
     try {
       const started = Date.now()
-      await ws.execute('sleep 60 &')
-      await ws.execute('kill %1')
-      await ws.execute('wait %1')
+      await ws.shell('sleep 60 &')
+      await ws.shell('kill %1')
+      await ws.shell('wait %1')
       expect(Date.now() - started).toBeLessThan(10_000)
     } finally {
       await ws.close()
@@ -323,7 +323,7 @@ describe('large in-memory commands', () => {
         abort.abort()
       }, 5)
       try {
-        await expect(ws.execute(command, { signal: abort.signal })).rejects.toMatchObject({
+        await expect(ws.shell(command, { signal: abort.signal })).rejects.toMatchObject({
           name: 'AbortError',
         })
       } finally {

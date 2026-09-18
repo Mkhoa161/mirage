@@ -30,7 +30,7 @@ cpSync(DATA_DIR, filesDir, { recursive: true })
 
 async function run(ws: Workspace, cmd: string): Promise<void> {
   console.log(`\n$ ${cmd}`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   const out = r.stdoutText.replace(/\s+$/, '')
   if (out !== '') console.log(out)
   const err = r.stderrText.replace(/\s+$/, '')
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
 
   console.log('\n━━━ not-found errors show the full virtual path ━━━')
   for (const cmd of ['cat /data/missing.json', 'head /data/missing.json', 'stat /data/missing.json']) {
-    const res = await ws.execute(cmd)
+    const res = await ws.shell(cmd)
     console.log(`$ ${cmd}\n  exit=${String(res.exitCode)}  ${new TextDecoder().decode(res.stderr).trim()}`)
   }
 

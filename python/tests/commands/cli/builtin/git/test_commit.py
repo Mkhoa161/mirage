@@ -47,7 +47,7 @@ async def run(ws, line: str) -> tuple[int, bytes, bytes]:
         ws (Workspace): workspace with the repository and CLI.
         line (str): the command line, without the leading directory.
     """
-    result = await ws.execute(f"git -C /repo {line}")
+    result = await ws.shell(f"git -C /repo {line}")
     return result.exit_code, result.stdout or b"", result.stderr or b""
 
 
@@ -207,7 +207,7 @@ async def test_commit_records_the_environment_author(git_rw, repo_path: Path):
     assert (await run(git_rw, "add -A"))[0] == 0
     line = ("GIT_AUTHOR_NAME=Ada GIT_AUTHOR_EMAIL=ada@x "
             "git -C /repo commit -m env")
-    assert (await git_rw.execute(line)).exit_code == 0
+    assert (await git_rw.shell(line)).exit_code == 0
     with Repo(str(repo_path)) as repo:
         head = repo[repo.refs[b"HEAD"]]
         assert head.author == b"Ada <ada@x>"

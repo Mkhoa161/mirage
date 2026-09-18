@@ -101,19 +101,19 @@ vfs = R2VFS(config=config)
 async def main() -> None:
     ws = Workspace({"/r2/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /r2/")
+    r = await ws.shell("ls /r2/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /r2/data/metrics.csv | head -n 10")
+    r = await ws.shell("cat /r2/data/metrics.csv | head -n 10")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /r2/")
+    r = await ws.shell("tree /r2/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /r2/ -name '*.csv'")
+    r = await ws.shell("find /r2/ -name '*.csv'")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /r2/assets/logo.png")
+    r = await ws.shell("stat /r2/assets/logo.png")
     print(await r.stdout_str())
 
 

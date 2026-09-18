@@ -38,8 +38,8 @@ def _mount_files(state: dict, prefix: str) -> dict:
 @pytest.mark.asyncio
 async def test_tree_inputs_from_state_ram_files():
     ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    await ws.execute("echo hello > /m/a.txt")
-    await ws.execute("mkdir -p /m/sub && echo world > /m/sub/b.txt")
+    await ws.shell("echo hello > /m/a.txt")
+    await ws.shell("mkdir -p /m/sub && echo world > /m/sub/b.txt")
 
     entries, meta = tree_inputs_from_state(await to_state_dict(ws))
 
@@ -53,8 +53,8 @@ async def test_tree_inputs_from_state_ram_files():
 @pytest.mark.asyncio
 async def test_to_state_round_trips_files():
     ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    await ws.execute("echo hello > /m/a.txt")
-    await ws.execute("mkdir -p /m/sub && echo world > /m/sub/b.txt")
+    await ws.shell("echo hello > /m/a.txt")
+    await ws.shell("mkdir -p /m/sub && echo world > /m/sub/b.txt")
 
     original_files = _mount_files(await to_state_dict(ws), "/m/")
     entries, meta = tree_inputs_from_state(await to_state_dict(ws))
@@ -66,7 +66,7 @@ async def test_to_state_round_trips_files():
 @pytest.mark.asyncio
 async def test_to_state_is_tar_loadable():
     ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    await ws.execute("echo hello > /m/a.txt")
+    await ws.shell("echo hello > /m/a.txt")
 
     entries, meta = tree_inputs_from_state(await to_state_dict(ws))
     state = to_state(entries, meta)
@@ -86,7 +86,7 @@ async def test_whole_world_round_trip_sessions_nodes_history():
     command history round-trip through the .mirage/ control-plane
     subtree. Cache stays out (derived, rebuildable)."""
     ws = Workspace({"/": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    await ws.execute("echo hi > /a.txt")
+    await ws.shell("echo hi > /a.txt")
     state = await to_state_dict(ws)
     state[StateKey.CACHE][CacheKey.ENTRIES] = [{
         CacheKey.KEY: "/a.txt",
@@ -157,7 +157,7 @@ async def test_whole_world_round_trip_sessions_nodes_history():
 @pytest.mark.asyncio
 async def test_control_plane_files_never_leak_into_mount_files():
     ws = Workspace({"/": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    await ws.execute("echo hi > /a.txt")
+    await ws.shell("echo hi > /a.txt")
     state = await to_state_dict(ws)
     state[StateKey.SESSIONS] = [{
         SessionKey.SESSION_ID: "agent_a",

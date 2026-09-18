@@ -56,7 +56,7 @@ async def main():
                 print(f"  {wf}: {size:>12,} bytes")
 
         print("\n--- shell view ---")
-        r = await ws.execute("ls -lh /m/")
+        r = await ws.shell("ls -lh /m/")
         print(await r.stdout_str())
 
 

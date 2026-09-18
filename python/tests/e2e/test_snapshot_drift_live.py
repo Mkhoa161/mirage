@@ -137,7 +137,7 @@ def test_live_strict_raises_on_etag_drift(tmp_path):
     client.put_object(Bucket=LIVE_BUCKET, Key=key, Body=b"v1 bytes\n")
     try:
         src = Workspace(_mount(), mode=MountMode.WRITE)
-        result = asyncio.run(src.execute(f"cat {probe}"))
+        result = asyncio.run(src.shell(f"cat {probe}"))
         assert b"v1 bytes" in result.stdout
 
         snap = tmp_path / "drift.tar"
@@ -147,7 +147,7 @@ def test_live_strict_raises_on_etag_drift(tmp_path):
 
         dst = Workspace.load(snap, mounts=_override())
         with pytest.raises(ContentDriftError) as exc_info:
-            asyncio.run(dst.execute(f"cat {probe}"))
+            asyncio.run(dst.shell(f"cat {probe}"))
         assert exc_info.value.path == probe
         assert (exc_info.value.snapshot_fingerprint
                 != exc_info.value.live_fingerprint)
@@ -165,13 +165,13 @@ def test_live_no_drift_passes(tmp_path):
     client.put_object(Bucket=LIVE_BUCKET, Key=key, Body=b"stable\n")
     try:
         src = Workspace(_mount(), mode=MountMode.WRITE)
-        asyncio.run(src.execute(f"cat {probe}"))
+        asyncio.run(src.shell(f"cat {probe}"))
 
         snap = tmp_path / "stable.tar"
         asyncio.run(src.snapshot(snap))
 
         dst = Workspace.load(snap, mounts=_override())
-        result = asyncio.run(dst.execute(f"cat {probe}"))
+        result = asyncio.run(dst.shell(f"cat {probe}"))
         assert b"stable" in result.stdout
     finally:
         _cleanup_key(key)
@@ -198,7 +198,7 @@ def test_live_pin_records_agent_version_not_snapshot_time_version(tmp_path):
     client.put_object(Bucket=LIVE_BUCKET, Key=key, Body=b"v1\n")
     try:
         src = Workspace(_mount(), mode=MountMode.WRITE)
-        result = asyncio.run(src.execute(f"cat {probe}"))
+        result = asyncio.run(src.shell(f"cat {probe}"))
         assert b"v1" in result.stdout
 
         # Race: upstream changes BEFORE snapshot fires
@@ -209,7 +209,7 @@ def test_live_pin_records_agent_version_not_snapshot_time_version(tmp_path):
 
         dst = Workspace.load(snap, mounts=_override())
         dst._cache.evict_paths([probe])
-        result = asyncio.run(dst.execute(f"cat {probe}"))
+        result = asyncio.run(dst.shell(f"cat {probe}"))
         assert result.stdout == b"v1\n", (
             f"snapshot pinned the wrong VersionId; served {result.stdout!r} "
             "instead of the V1 the agent actually saw")
@@ -239,7 +239,7 @@ def test_live_version_pin_serves_original_on_versioned_bucket(tmp_path):
     client.put_object(Bucket=LIVE_BUCKET, Key=key, Body=b"original\n")
     try:
         src = Workspace(_mount(), mode=MountMode.WRITE)
-        result = asyncio.run(src.execute(f"cat {probe}"))
+        result = asyncio.run(src.shell(f"cat {probe}"))
         assert b"original" in result.stdout
 
         snap = tmp_path / "pin.tar"
@@ -249,7 +249,7 @@ def test_live_version_pin_serves_original_on_versioned_bucket(tmp_path):
 
         dst = Workspace.load(snap, mounts=_override())
         dst._cache.evict_paths([probe])
-        result = asyncio.run(dst.execute(f"cat {probe}"))
+        result = asyncio.run(dst.shell(f"cat {probe}"))
         assert result.stdout == b"original\n", (
             "pinned read should serve the recorded version, "
             f"got {result.stdout!r}")
@@ -269,7 +269,7 @@ def test_live_off_policy_serves_current(tmp_path):
     client.put_object(Bucket=LIVE_BUCKET, Key=key, Body=b"original\n")
     try:
         src = Workspace(_mount(), mode=MountMode.WRITE)
-        asyncio.run(src.execute(f"cat {probe}"))
+        asyncio.run(src.shell(f"cat {probe}"))
 
         snap = tmp_path / "off.tar"
         asyncio.run(src.snapshot(snap))
@@ -280,7 +280,7 @@ def test_live_off_policy_serves_current(tmp_path):
                              mounts=_override(),
                              drift_policy=DriftPolicy.OFF)
         assert dst.revisions == {}
-        result = asyncio.run(dst.execute(f"cat {probe}"))
+        result = asyncio.run(dst.shell(f"cat {probe}"))
         assert b"mutated" in result.stdout
     finally:
         _cleanup_key(key)

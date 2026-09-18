@@ -99,7 +99,7 @@ def provision_line(result) -> str:
 
 
 async def list_dir(ws: Workspace, path: str) -> list[str]:
-    result = await ws.execute(f'ls "{path}"')
+    result = await ws.shell(f'ls "{path}"')
     base = path.rstrip("/")
     return [
         f"{base}/{entry.rstrip('/')}"
@@ -126,7 +126,7 @@ async def first_file(ws: Workspace, mount: str) -> str | None:
 async def probe(backend: str) -> None:
     ws = Workspace({f"/{backend}": build(backend)}, mode=MountMode.READ)
     try:
-        root = await ws.execute(f"ls /{backend}")
+        root = await ws.shell(f"ls /{backend}")
         if root.exit_code != 0:
             err = (root.stderr or b"").decode().strip()
             print(f"{backend}: mount unreachable: {err}")
@@ -139,7 +139,7 @@ async def probe(backend: str) -> None:
         for name, cmd in ((f"{backend} prov_cat", f'cat "{target}"'),
                           (f"{backend} prov_grep", f'grep x "{target}"'),
                           (f"{backend} prov_ls", f'ls "{parent}"')):
-            result = await ws.execute(cmd, provision=True)
+            result = await ws.shell(cmd, provision=True)
             print(f"{name}: {provision_line(result)}")
     finally:
         await ws.close()

@@ -40,7 +40,7 @@ def ws(dbx_files: FakeFiles) -> Workspace:
 
 @pytest.mark.asyncio
 async def test_grep_single_file(ws):
-    io = await ws.execute("grep alpha /dbx/words.txt")
+    io = await ws.shell("grep alpha /dbx/words.txt")
 
     assert io.exit_code == 0
     assert io.stdout == b"alpha\nalpha\n"
@@ -48,7 +48,7 @@ async def test_grep_single_file(ws):
 
 @pytest.mark.asyncio
 async def test_grep_line_numbers(ws):
-    io = await ws.execute("grep -n alpha /dbx/words.txt")
+    io = await ws.shell("grep -n alpha /dbx/words.txt")
 
     assert io.exit_code == 0
     assert io.stdout == b"2:alpha\n3:alpha\n"
@@ -56,7 +56,7 @@ async def test_grep_line_numbers(ws):
 
 @pytest.mark.asyncio
 async def test_grep_count_only(ws):
-    io = await ws.execute("grep -c alpha /dbx/words.txt")
+    io = await ws.shell("grep -c alpha /dbx/words.txt")
 
     assert io.exit_code == 0
     assert io.stdout == b"2\n"
@@ -64,7 +64,7 @@ async def test_grep_count_only(ws):
 
 @pytest.mark.asyncio
 async def test_grep_recursive(ws):
-    io = await ws.execute("grep -r alpha /dbx/")
+    io = await ws.shell("grep -r alpha /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -74,6 +74,6 @@ async def test_grep_recursive(ws):
 
 @pytest.mark.asyncio
 async def test_grep_no_match_exits_nonzero(ws):
-    io = await ws.execute("grep zeta /dbx/words.txt")
+    io = await ws.shell("grep zeta /dbx/words.txt")
 
     assert io.exit_code != 0

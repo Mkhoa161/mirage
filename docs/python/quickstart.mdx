@@ -39,8 +39,8 @@ from mirage.vfs.ram import RAMVFS
 async def main() -> None:
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
-    await ws.execute('echo "hello mirage" | tee /data/hello.txt')
-    result = await ws.execute("cat /data/hello.txt")
+    await ws.shell('echo "hello mirage" | tee /data/hello.txt')
+    result = await ws.shell("cat /data/hello.txt")
     print(await result.stdout_str())
 
     await ws.close()
@@ -64,18 +64,18 @@ from mirage.vfs.ram import RAMVFS
 async def main() -> None:
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
-    await ws.execute('echo \'{"name": "alice"}\' | tee /data/user.json')
+    await ws.shell('echo \'{"name": "alice"}\' | tee /data/user.json')
 
-    result = await ws.execute("ls /data/")
+    result = await ws.shell("ls /data/")
     print(await result.stdout_str())
 
-    result = await ws.execute("cat /data/hello.txt")
+    result = await ws.shell("cat /data/hello.txt")
     print(await result.stdout_str())
 
-    result = await ws.execute('jq ".name" /data/user.json')
+    result = await ws.shell('jq ".name" /data/user.json')
     print(await result.stdout_str())
 
-    result = await ws.execute("grep hello /data/hello.txt")
+    result = await ws.shell("grep hello /data/hello.txt")
     print(await result.stdout_str())
 
     await ws.close()
@@ -93,7 +93,7 @@ telling you how much to trust the numbers (`exact`, `range`,
 `if`/`case`, loops, and subshells aggregate automatically.
 
 ```python
-plan = await ws.execute("cat /data/user.json | wc -l", provision=True)
+plan = await ws.shell("cat /data/user.json | wc -l", provision=True)
 print(plan.network_read, plan.read_ops, plan.precision)
 ```
 

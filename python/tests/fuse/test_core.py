@@ -32,9 +32,9 @@ from mirage.workspace import Workspace
 @pytest_asyncio.fixture
 async def seeded():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("tee /a.txt", stdin=b"hello world")
-    await ws.execute("mkdir /sub")
-    await ws.execute("tee /sub/b.txt", stdin=b"nested")
+    await ws.shell("tee /a.txt", stdin=b"hello world")
+    await ws.shell("mkdir /sub")
+    await ws.shell("tee /sub/b.txt", stdin=b"nested")
     return MountCore(ws.fs)
 
 
@@ -133,8 +133,8 @@ async def test_o_trunc_open_through_a_link_settles_the_targets_handle():
     # the target and an O_TRUNC open through a link to it are the same
     # file: the queued write lands first and the truncation wins.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("tee /a.txt", stdin=b"hello world")
-    await ws.execute("ln -s a.txt /lk")
+    await ws.shell("tee /a.txt", stdin=b"hello world")
+    await ws.shell("ln -s a.txt /lk")
     core = MountCore(ws.fs)
     first = core.open("/a.txt", os.O_WRONLY)
     core.write("/a.txt", b"QUEUED", 0, first)
@@ -152,7 +152,7 @@ async def test_failed_settlement_keeps_the_other_handles_buffer():
     # than silently succeeding over an empty buffer.
     res = RAMVFS()
     seed = Workspace({"/": res}, mode=MountMode.WRITE)
-    await seed.execute("tee /a.txt", stdin=b"seed")
+    await seed.shell("tee /a.txt", stdin=b"seed")
     core = MountCore(Workspace({"/": res}, mode=MountMode.READ).fs)
     first = core.open("/a.txt", os.O_WRONLY)
     core.write("/a.txt", b"QUEUED", 0, first)
@@ -191,8 +191,8 @@ async def test_getattr_of_a_link_reports_the_nodes_own_row():
     # answered the mount's construction time for every link, so a
     # `touch -h` through the mount was invisible right after it landed.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("tee /a.txt", stdin=b"hello")
-    await ws.execute("ln -s a.txt /link")
+    await ws.shell("tee /a.txt", stdin=b"hello")
+    await ws.shell("ln -s a.txt /link")
     core = MountCore(ws.fs)
     await ws.dispatch("setattr",
                       PathSpec.from_str_path("/link"),
@@ -227,9 +227,9 @@ async def test_scoped_mount_may_not_touch_a_link_on_hidden_turf():
         "/extra/": RAMVFS()
     },
                    mode=MountMode.WRITE)
-    await ws.execute("tee /data/greeting.txt", stdin=b"hello")
-    await ws.execute("tee /extra/secret.txt", stdin=b"classified")
-    await ws.execute("ln -s secret.txt /extra/lk")
+    await ws.shell("tee /data/greeting.txt", stdin=b"hello")
+    await ws.shell("tee /extra/secret.txt", stdin=b"classified")
+    await ws.shell("ln -s secret.txt /extra/lk")
     sess = ws.create_session("agent", profile={"paths": {"hide": ["/extra"]}})
     core = MountCore(ws.fs, session=sess)
 
@@ -248,12 +248,12 @@ async def test_unlink_removes_a_link_and_keeps_its_target():
     # mount still drops the link entry, and only that, the way
     # unlink(2) on a symlink leaves the pointee alone.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("tee /f.txt", stdin=b"body")
-    await ws.execute("ln -s f.txt /lk")
+    await ws.shell("tee /f.txt", stdin=b"body")
+    await ws.shell("ln -s f.txt /lk")
     core = MountCore(ws.fs)
     core.unlink("/lk")
     assert not ws.namespace.is_link("/lk")
-    assert (await ws.execute("cat /f.txt")).stdout == b"body"
+    assert (await ws.shell("cat /f.txt")).stdout == b"body"
 
 
 @pytest.mark.asyncio
@@ -325,7 +325,7 @@ async def test_o_trunc_open_hydrates_through_the_renderer():
     vfs = RAMVFS()
     vfs.register_op(_read_tally)
     ws = Workspace({"/data/": vfs}, mode=MountMode.WRITE)
-    await ws.execute("tee /data/books.tally", stdin=b"0123456789")
+    await ws.shell("tee /data/books.tally", stdin=b"0123456789")
     core = MountCore(_Sizeless(ws.fs))
     fh = core.open("/data/books.tally", os.O_WRONLY | os.O_TRUNC)
     assert core._run(core._ops.read("/data/books.tally", raw=True)) == b""

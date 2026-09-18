@@ -21,7 +21,7 @@ const drive = new OneDriveVFS({
 })
 
 const ws = new Workspace({ '/onedrive': drive }, { mode: MountMode.WRITE })
-await ws.execute('ls /onedrive/')
+await ws.shell('ls /onedrive/')
 ```
 
 Use `@struktoai/mirage-browser` for the same API in a browser. An access-token callback is recommended so a `401` can refresh the token and retry once.

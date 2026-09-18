@@ -24,7 +24,7 @@ from mirage.workspace import Workspace
 
 def _run(ws, cmd, cwd="/"):
     ws._cwd = cwd
-    return asyncio.run(ws.execute(cmd))
+    return asyncio.run(ws.shell(cmd))
 
 
 def test_filetype_fns_passed_to_generic_command():

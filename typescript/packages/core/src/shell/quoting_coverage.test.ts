@@ -48,7 +48,7 @@ async function makeQuotingWs(): Promise<Workspace> {
 }
 
 async function run(ws: Workspace, cmd: string): Promise<{ out: string; exit: number }> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return { out: stdoutStr(io), exit: io.exitCode }
 }
 
@@ -111,7 +111,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
   describe('env vars in paths', () => {
     it('env var in double-quoted path expands', async () => {
       const ws = await makeQuotingWs()
-      await ws.execute('export DIR=/data')
+      await ws.shell('export DIR=/data')
       const r = await run(ws, 'cat "$DIR/plain.txt"')
       expect(r.out).toBe('plain content\n')
       await ws.close()
@@ -119,7 +119,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
 
     it('braced env var in double-quoted path expands', async () => {
       const ws = await makeQuotingWs()
-      await ws.execute('export DIR=/data')
+      await ws.shell('export DIR=/data')
       const r = await run(ws, 'cat "${DIR}/plain.txt"')
       expect(r.out).toBe('plain content\n')
       await ws.close()
@@ -127,7 +127,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
 
     it('env var in single-quoted path is literal (no expansion)', async () => {
       const ws = await makeQuotingWs()
-      await ws.execute('export DIR=/data')
+      await ws.shell('export DIR=/data')
       const r = await run(ws, "cat '$DIR/plain.txt'")
       // File doesn't literally exist → non-zero exit OR empty stdout.
       expect(r.exit !== 0 || r.out === '').toBe(true)
@@ -138,7 +138,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
   describe('command substitution in args', () => {
     it('command sub produces a path used by cat', async () => {
       const ws = await makeQuotingWs()
-      await ws.execute('echo /data/plain.txt > /data/path.txt')
+      await ws.shell('echo /data/plain.txt > /data/path.txt')
       const r = await run(ws, 'cat $(cat /data/path.txt)')
       expect(r.out).toBe('plain content\n')
       await ws.close()
@@ -146,7 +146,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
 
     it('command sub in grep pattern', async () => {
       const ws = await makeQuotingWs()
-      await ws.execute('echo plain > /data/needle.txt')
+      await ws.shell('echo plain > /data/needle.txt')
       const r = await run(ws, 'grep "$(cat /data/needle.txt)" /data/plain.txt')
       expect(r.out).toContain('plain content')
       await ws.close()
@@ -170,7 +170,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
 
     it('double-quoted "$X" expands', async () => {
       const ws = await makeQuotingWs()
-      await ws.execute('export X=hello')
+      await ws.shell('export X=hello')
       const r = await run(ws, 'echo "$X"')
       expect(r.out.trim()).toBe('hello')
       await ws.close()
@@ -421,7 +421,7 @@ describe('ANSI-C quoting $\'...\' and locale quoting $"..."', () => {
 
   it('emits high bytes as raw output bytes', async () => {
     const ws = await makeQuotingWs()
-    const io = await ws.execute("echo $'\\xe4\\xb8\\xad'")
+    const io = await ws.shell("echo $'\\xe4\\xb8\\xad'")
     expect(stdoutStr(io)).toBe('中\n')
     await ws.close()
   })
@@ -650,7 +650,7 @@ describe('quoted globs stay literal', () => {
     ['p=\'/data/*.txt\'; chmod 644 "$p"'],
   ])('%s addresses the literal name', async (line) => {
     const ws = await makeGlobbableWs()
-    const io = await ws.execute(line)
+    const io = await ws.shell(line)
     expect(io.exitCode).toBe(1)
     expect(stderrStr(io)).toBe("chmod: cannot access '/data/*.txt': No such file or directory\n")
     await ws.close()
@@ -658,7 +658,7 @@ describe('quoted globs stay literal', () => {
 
   it('touch creates the literal name', async () => {
     const ws = await makeGlobbableWs()
-    const io = await ws.execute("touch '/data/*.txt' && ls /data")
+    const io = await ws.shell("touch '/data/*.txt' && ls /data")
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('*.txt\na.txt\nb.txt\n')
     await ws.close()
@@ -666,8 +666,8 @@ describe('quoted globs stay literal', () => {
 
   it('rm removes only the literal name', async () => {
     const ws = await makeGlobbableWs()
-    await ws.execute("touch '/data/*.txt'")
-    const io = await ws.execute("rm '/data/*.txt' && ls /data")
+    await ws.shell("touch '/data/*.txt'")
+    const io = await ws.shell("rm '/data/*.txt' && ls /data")
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('a.txt\nb.txt\n')
     await ws.close()
@@ -752,13 +752,13 @@ describe('metacharacters are quoted one at a time', () => {
     ["echo '[*]'?.txt", '[*]?.txt\n'],
   ])('%s', async (line, out) => {
     const ws = await makeMetacharWs()
-    expect(stdoutStr(await ws.execute(line))).toBe(out)
+    expect(stdoutStr(await ws.shell(line))).toBe(out)
     await ws.close()
   })
 
   it('falls back to the word after quote removal when nothing matches', async () => {
     const ws = await makeMetacharWs()
-    const io = await ws.execute("echo '*'?.zzz")
+    const io = await ws.shell("echo '*'?.zzz")
     expect(stdoutStr(io)).toBe('*?.zzz\n')
     expect(io.exitCode).toBe(0)
     await ws.close()
@@ -768,9 +768,9 @@ describe('metacharacters are quoted one at a time', () => {
     // The regression this pins: reading the word as a whole would let the
     // quoted `*` match too, and rm would take xa.txt with it.
     const ws = await makeMetacharWs()
-    const io = await ws.execute("rm '/data/*'?.txt")
+    const io = await ws.shell("rm '/data/*'?.txt")
     expect(io.exitCode).toBe(0)
-    expect(stdoutStr(await ws.execute('ls -1 /data'))).toBe('?b.txt\n[c].txt\na.txt\nxa.txt\n')
+    expect(stdoutStr(await ws.shell('ls -1 /data'))).toBe('?b.txt\n[c].txt\na.txt\nxa.txt\n')
     await ws.close()
   })
 })

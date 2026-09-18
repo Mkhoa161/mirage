@@ -43,7 +43,7 @@ async def test_registered_command_dispatch():
     ws._registry.mount_for("/tmp/").register(rc)
 
     ws._cwd = "/"
-    result = await ws.execute("cat /tmp/a.txt")
+    result = await ws.shell("cat /tmp/a.txt")
     assert result.stdout == b"custom-cat"
 
 
@@ -66,7 +66,7 @@ async def test_registered_filetype_dispatch():
     ws._registry.mount_for("/tmp/").register(rc)
 
     ws._cwd = "/"
-    result = await ws.execute("cat /tmp/data.avro")
+    result = await ws.shell("cat /tmp/data.avro")
     assert result.stdout == b"avro-output"
 
 
@@ -99,11 +99,11 @@ async def test_filetype_takes_priority_over_generic():
                           fn=cat_avro))
 
     ws._cwd = "/"
-    result = await ws.execute("cat /tmp/data.avro")
+    result = await ws.shell("cat /tmp/data.avro")
     assert result.stdout == b"avro"
 
     await ws.fs.write("/tmp/data.csv", b"csv-data")
-    result = await ws.execute("cat /tmp/data.csv")
+    result = await ws.shell("cat /tmp/data.csv")
     assert result.stdout == b"generic"
 
 
@@ -115,7 +115,7 @@ async def test_registered_falls_back_to_builtin():
     )
     await ws.fs.write("/tmp/a.txt", b"hello world")
     ws._cwd = "/"
-    result = await ws.execute("wc -l /tmp/a.txt")
+    result = await ws.shell("wc -l /tmp/a.txt")
     out = await result.stdout_str()
     assert "0" in out or "1" in out
 
@@ -137,5 +137,5 @@ def test_general_command_dispatch():
     ws._registry.mount_for("/tmp/").register(rc)
 
     ws._cwd = "/tmp"
-    result = asyncio.run(ws.execute("stat /tmp/file.txt"))
+    result = asyncio.run(ws.shell("stat /tmp/file.txt"))
     assert result.stdout == b"custom-stat"

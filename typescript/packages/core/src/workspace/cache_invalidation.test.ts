@@ -46,7 +46,7 @@ function cachingWorkspace(): Workspace {
 }
 
 async function exec(ws: Workspace, cmd: string): Promise<{ code: number; out: string }> {
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   return { code: res.exitCode, out: DEC.decode(res.stdout) }
 }
 

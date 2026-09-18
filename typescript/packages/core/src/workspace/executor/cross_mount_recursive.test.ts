@@ -45,7 +45,7 @@ async function run(
   ws: Workspace,
   cmd: string,
 ): Promise<{ out: string; err: string; code: number }> {
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   return { out: DEC.decode(res.stdout), err: DEC.decode(res.stderr), code: res.exitCode }
 }
 

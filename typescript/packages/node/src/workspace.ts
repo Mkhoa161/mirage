@@ -153,24 +153,21 @@ export class Workspace extends CoreWorkspace {
     }
   }
 
-  override execute(
+  override shell(
     command: string,
     options?: ExecuteOptions & { provision?: false | undefined },
   ): Promise<ExecuteResult>
-  override execute(
+  override shell(
     command: string,
     options: ExecuteOptions & { provision: true },
   ): Promise<ProvisionResult>
-  override execute(
-    command: string,
-    options: ExecuteOptions,
-  ): Promise<ExecuteResult | ProvisionResult>
-  override async execute(
+  override shell(command: string, options: ExecuteOptions): Promise<ExecuteResult | ProvisionResult>
+  override async shell(
     command: string,
     options: ExecuteOptions = {},
   ): Promise<ExecuteResult | ProvisionResult> {
     await this.fuseReady()
-    return super.execute(command, options)
+    return super.shell(command, options)
   }
 
   override async close(): Promise<void> {

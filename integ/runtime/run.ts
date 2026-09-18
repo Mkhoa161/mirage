@@ -703,7 +703,7 @@ async function runStep(
   if (step.stdin !== undefined) options.stdin = ENC.encode(step.stdin)
   if (expect.throws_contains !== undefined) {
     try {
-      await ws.execute(command, options)
+      await ws.shell(command, options)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes(expect.throws_contains)) return []
@@ -714,7 +714,7 @@ async function runStep(
     }
     return [`${caseId} ${label}: expected an error, none raised`]
   }
-  const result = await ws.execute(command, options)
+  const result = await ws.shell(command, options)
   const stdout = DEC.decode(result.stdout)
   const stderr = DEC.decode(result.stderr)
   const problems = check(caseId, label, expect, result.exitCode, stdout, stderr)

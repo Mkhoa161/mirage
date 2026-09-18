@@ -60,10 +60,10 @@ vfs = BackblazeVFS(config)
 async def main() -> None:
     ws = Workspace({"/data/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /data/")
+    r = await ws.shell("ls /data/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /data/ -name '*.csv'")
+    r = await ws.shell("find /data/ -name '*.csv'")
     print(await r.stdout_str())
 
 

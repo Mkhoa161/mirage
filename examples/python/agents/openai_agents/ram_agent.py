@@ -57,14 +57,14 @@ async def main():
     print(result.final_output)
 
     print("\n--- Verifying files in workspace ---")
-    find_all = await ws.execute("find / -type f")
+    find_all = await ws.shell("find / -type f")
     print(f"find / -type f:\n{(find_all.stdout or b'').decode()}")
 
     for path in (find_all.stdout or b"").decode().strip().split("\n"):
         path = path.strip()
         if not path:
             continue
-        cat_result = await ws.execute(f"cat {path}")
+        cat_result = await ws.shell(f"cat {path}")
         print(f"cat {path}:\n{(cat_result.stdout or b'').decode()}")
 
     records = ws.fs.records

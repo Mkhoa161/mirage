@@ -13,7 +13,7 @@ def make_session() -> Session:
 
 async def _read_ws() -> Workspace:
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /data")
+    await ws.shell("mkdir -p /data")
     return ws
 
 
@@ -52,14 +52,14 @@ async def test_read_replaces_stale_stdin_buffer():
     # A previous read's exhausted herestring buffer must not shadow a
     # new command's stdin.
     ws = await _read_ws()
-    await ws.execute("read -r x <<< first")
-    io = await ws.execute('read -r y <<< second\necho "y=$y"')
+    await ws.shell("read -r x <<< first")
+    io = await ws.shell('read -r y <<< second\necho "y=$y"')
     assert (io.stdout or b"") == b"y=second\n"
 
 
 @pytest.mark.asyncio
 async def test_read_scalar_replaces_array():
     ws = await _read_ws()
-    await ws.execute("a=(x y z)")
-    io = await ws.execute('read -r a b <<< "one two"\necho "a=$a b=$b"')
+    await ws.shell("a=(x y z)")
+    io = await ws.shell('read -r a b <<< "one two"\necho "a=$a b=$b"')
     assert (io.stdout or b"") == b"a=one b=two\n"

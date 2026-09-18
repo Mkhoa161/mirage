@@ -20,7 +20,7 @@ import pytest
 from mirage.context import reset_current_session, set_current_session
 from mirage.types import MountMode, PathSpec
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import Workspace
+from mirage.workspace import SessionHandle, Workspace
 
 CARVE_PROFILE = {
     "mounts": {
@@ -39,7 +39,7 @@ def _seeded(mode: MountMode = MountMode.WRITE) -> Workspace:
     ws = Workspace({"/repo": (RAMVFS(), mode)}, mode=MountMode.WRITE)
 
     async def seed():
-        io = await ws.execute(
+        io = await ws.shell(
             "mkdir -p /repo/secrets /repo/public/docs && "
             "printf 'hello repo\\n' > /repo/README.md && "
             "printf 'PRIVATE needle\\n' > /repo/secrets/key.pem && "
@@ -60,7 +60,7 @@ def _carved() -> Workspace:
 def _run(ws: Workspace, line: str):
 
     async def go():
-        return await ws.execute(line, session_id="rev")
+        return await ws.shell(line, session_id="rev")
 
     return asyncio.run(go())
 
@@ -127,7 +127,7 @@ def test_hide_speaks_before_the_mode():
     clobber = _run(ws, "echo x > /repo/secrets/key.pem")
     assert (clobber.stderr
             or b"") == b"/repo/secrets/key.pem: No such file or directory\n"
-    kept = asyncio.run(ws.execute("cat /repo/secrets/key.pem"))
+    kept = asyncio.run(ws.shell("cat /repo/secrets/key.pem"))
     assert kept.stdout == b"PRIVATE needle\n"
 
 
@@ -136,7 +136,7 @@ def test_the_op_door_runs_as_the_default_session():
     # under the default session's profile, the way a bare `execute`
     # is, so an agent whose file tool reads through the facade is
     # confined like its shell. A session already bound is kept, and
-    # `for_session` runs the same door as another session over the
+    # A handle runs the same door as another session over the
     # same ledger; a session with an explicit empty profile is the
     # host's door to what the default profile hides.
     ws = Workspace({"/data/": RAMVFS()},
@@ -150,7 +150,7 @@ def test_the_op_door_runs_as_the_default_session():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = ws.fs.for_session(host.session_id)
+        door = SessionHandle(ws, host.session_id).fs
         assert door.records is ws.fs.records
         await door.mkdir("/data/vault")
         await door.write("/data/vault/secret", b"top\n")
@@ -197,7 +197,7 @@ def test_the_op_door_does_not_adopt_another_workspaces_session():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = ws.fs.for_session(host.session_id)
+        door = SessionHandle(ws, host.session_id).fs
         await door.mkdir("/data/vault")
         await door.write("/data/vault/secret", b"top\n")
         token = set_current_session(wide, other._session_mgr)
@@ -227,7 +227,7 @@ def test_the_op_door_does_not_follow_a_link_the_session_cannot_see():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = ws.fs.for_session(host.session_id)
+        door = SessionHandle(ws, host.session_id).fs
         await door.write("/data/pub.txt", b"pub\n")
         await door.mkdir("/data/vault")
         await door.symlink("/data/vault/lk", "/data/pub.txt")
@@ -389,9 +389,9 @@ def test_a_subtree_mutation_answers_for_the_regions_below_it():
     ws = _seeded()
 
     async def grow():
-        io = await ws.execute("mkdir -p /repo/tree/locked && "
-                              "printf 'kept\\n' > /repo/tree/locked/f.txt && "
-                              "printf 'open\\n' > /repo/tree/open.txt")
+        io = await ws.shell("mkdir -p /repo/tree/locked && "
+                            "printf 'kept\\n' > /repo/tree/locked/f.txt && "
+                            "printf 'open\\n' > /repo/tree/open.txt")
         assert io.exit_code == 0, io.stderr
 
     asyncio.run(grow())
@@ -458,11 +458,11 @@ def _boxed(profile: dict) -> Workspace:
     ws = Workspace({"/repo": RAMVFS()}, mode=MountMode.WRITE)
 
     async def seed():
-        io = await ws.execute("mkdir -p /repo/box/sec /repo/only && "
-                              "printf 'v\\n' > /repo/box/a.txt && "
-                              "printf 's\\n' > /repo/box/sec/k && "
-                              "printf 't\\n' > /repo/box/x.tkn && "
-                              "printf 'h\\n' > /repo/only/h")
+        io = await ws.shell("mkdir -p /repo/box/sec /repo/only && "
+                            "printf 'v\\n' > /repo/box/a.txt && "
+                            "printf 's\\n' > /repo/box/sec/k && "
+                            "printf 't\\n' > /repo/box/x.tkn && "
+                            "printf 'h\\n' > /repo/only/h")
         assert io.exit_code == 0, io.stderr
 
     asyncio.run(seed())
@@ -473,7 +473,7 @@ def _boxed(profile: dict) -> Workspace:
 def _host(ws: Workspace, line: str):
 
     async def go():
-        return await ws.execute(line)
+        return await ws.shell(line)
 
     return asyncio.run(go())
 
@@ -608,7 +608,7 @@ def test_a_mounted_child_keeps_the_command_planes_refusal():
                    mode=MountMode.WRITE)
 
     async def seed():
-        io = await ws.execute(
+        io = await ws.shell(
             "mkdir -p /repo/only && printf 'h\\n' > /repo/only/h")
         assert io.exit_code == 0, io.stderr
 
@@ -632,8 +632,7 @@ def test_ops_rmdir_keeps_the_refusal_when_a_mounted_child_remains():
     ws = Workspace({"/a": RAMVFS(), "/a/d/m": RAMVFS()}, mode=MountMode.WRITE)
 
     async def seed():
-        io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k"
-                              )
+        io = await ws.shell("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
         assert io.exit_code == 0, io.stderr
 
     asyncio.run(seed())

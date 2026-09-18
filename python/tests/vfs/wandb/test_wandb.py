@@ -16,10 +16,10 @@ async def test_mount_scopes_and_indexes_are_isolated() -> None:
     try:
         for ws, entity, excluded in zip(workspaces, ["lab", "other"],
                                         ["other", "lab"]):
-            result = await ws.execute("ls /wandb")
+            result = await ws.shell("ls /wandb")
             assert result.exit_code == 0
             assert result.stdout.decode().split() == [entity]
-            assert (await ws.execute(f"ls /wandb/{excluded}")).exit_code != 0
+            assert (await ws.shell(f"ls /wandb/{excluded}")).exit_code != 0
         first.accessor.client.request.assert_not_awaited()
         second.accessor.client.request.assert_not_awaited()
     finally:
@@ -39,7 +39,7 @@ async def test_write_workspace_cannot_mutate_wandb_or_invoke_a_wandb_cli(
                 "mkdir /wandb/lab/new-project",
                 "type -t wandb",
         ]:
-            assert (await ws.execute(command)).exit_code != 0
+            assert (await ws.shell(command)).exit_code != 0
         vfs.accessor.client.request.assert_not_awaited()
     finally:
         await ws.close()

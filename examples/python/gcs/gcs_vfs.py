@@ -69,7 +69,7 @@ async def main():
         print(f"  nonexistent: {os.path.exists('/gcs/data/nope.txt')}")
 
         print("\n--- VFS commands ---")
-        result = await ws.execute("grep -c mirage /gcs/data/example.jsonl")
+        result = await ws.shell("grep -c mirage /gcs/data/example.jsonl")
         print(f"  grep matches: {(await result.stdout_str()).strip()}")
 
         print("\n--- bash history ---")

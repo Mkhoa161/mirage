@@ -54,7 +54,7 @@ const result = await agent.generate(task, { maxSteps: 20 })
 console.log(result.text)
 
 console.log('\n--- Verifying files in workspace ---')
-const findAll = await ws.execute('find / -type f')
+const findAll = await ws.shell('find / -type f')
 const paths = findAll.stdoutText
   .trim()
   .split('\n')

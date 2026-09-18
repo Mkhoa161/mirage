@@ -81,7 +81,7 @@ class WorkspaceWriter:
             path (str): Mount-relative directory, trailing slash
                 optional.
         """
-        await self._ws.execute(f"mkdir -p {self._virtual(path)}")
+        await self._ws.shell(f"mkdir -p {self._virtual(path)}")
 
     async def write(self, path: str, data: bytes) -> None:
         """Args:
@@ -99,7 +99,7 @@ class WorkspaceWriter:
             path (str): Mount-relative path; a directory goes with its
                 subtree, matching opendal's delete.
         """
-        await self._ws.execute(f"rm -rf {self._virtual(path)}")
+        await self._ws.shell(f"rm -rf {self._virtual(path)}")
 
     async def remove_all(self, path: str) -> None:
         """Args:

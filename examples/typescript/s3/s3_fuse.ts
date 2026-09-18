@@ -74,15 +74,15 @@ async function main(): Promise<void> {
     console.log(`  /deep keyPrefix = ${JSON.stringify(deepCfg.keyPrefix)}\n`);
 
     console.log("--- virtual executor: stats via /deep ---");
-    const ls = await ws.execute("ls /deep");
+    const ls = await ws.shell("ls /deep");
     console.log(
       `  ls /deep      : ${ls.stdoutText.trim().split("\n").slice(0, 3).join(", ")}, ...`,
     );
-    const stat = await ws.execute("stat /deep/example.jsonl");
+    const stat = await ws.shell("stat /deep/example.jsonl");
     console.log(`  stat /deep/example.jsonl : ${stat.stdoutText.trim()}`);
-    const grep = await ws.execute("grep -c mirage /deep/example.jsonl");
+    const grep = await ws.shell("grep -c mirage /deep/example.jsonl");
     console.log(`  grep -c mirage           : ${grep.stdoutText.trim()}`);
-    const rg = await ws.execute("rg -l mirage /deep");
+    const rg = await ws.shell("rg -l mirage /deep");
     console.log(
       `  rg -l mirage /deep       : ${rg.stdoutText.trim().split("\n").join(" | ")}`,
     );
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     console.log(`>>>   cat ${mp}/example.json`);
     console.log(`>>>   wc -l ${mp}/example.jsonl`);
     console.log(
-      ">>> (/deep reads s3://<bucket>/subdata/subsubdata/ via ws.execute)",
+      ">>> (/deep reads s3://<bucket>/subdata/subsubdata/ via ws.shell)",
     );
   } finally {
     await ws.close();

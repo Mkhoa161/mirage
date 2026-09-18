@@ -85,7 +85,7 @@ async function cliWs(): Promise<Workspace> {
 describe('--help and man through the executor', () => {
   it('--help on a builtin renders help text without invoking the handler', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cat --help')
+    const io = await ws.shell('cat --help')
     const out = stdoutStr(io)
     expect(io.exitCode).toBe(0)
     expect(out).toContain('Usage: cat')
@@ -94,7 +94,7 @@ describe('--help and man through the executor', () => {
 
   it('--version on a builtin prints Mirage package version', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('tsort --version')
+    const io = await ws.shell('tsort --version')
     const out = stdoutStr(io)
     expect(io.exitCode).toBe(0)
     expect(out).toMatch(/^tsort \(Mirage\) \d+\.\d+\.\d+(?:-[\w.]+)?\n$/)
@@ -102,48 +102,48 @@ describe('--help and man through the executor', () => {
 
   it('--version is listed in --help for registered commands', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('cat --help')
+    const io = await ws.shell('cat --help')
     expect(stdoutStr(io)).toContain('--version')
   })
 
   it('--version beats the read-only mount refusal', async () => {
     const ws = await makeMultiWs()
-    const io = await ws.execute('rm --version /ro/c.txt')
+    const io = await ws.shell('rm --version /ro/c.txt')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toMatch(/^rm \(Mirage\) \d+\.\d+\.\d+(?:-[\w.]+)?\n$/)
   })
 
   it('--help beats the read-only mount refusal', async () => {
     const ws = await makeMultiWs()
-    const io = await ws.execute('rm --help /ro/c.txt')
+    const io = await ws.shell('rm --help /ro/c.txt')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toContain('Usage: rm')
   })
 
   it('--version beats cross-mount routing', async () => {
     const ws = await makeMultiWs()
-    const io = await ws.execute('cat --version /ram/a.txt /other/b.txt')
+    const io = await ws.shell('cat --version /ram/a.txt /other/b.txt')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toMatch(/^cat \(Mirage\) \d+\.\d+\.\d+(?:-[\w.]+)?\n$/)
   })
 
   it('--version does not run a write command', async () => {
     const ws = await makeMultiWs()
-    const io = await ws.execute('rm --version /ram/a.txt')
+    const io = await ws.shell('rm --version /ram/a.txt')
     expect(io.exitCode).toBe(0)
-    expect(stdoutStr(await ws.execute('cat /ram/a.txt'))).toBe('a\n')
+    expect(stdoutStr(await ws.shell('cat /ram/a.txt'))).toBe('a\n')
   })
 
   it('--version after the end-of-options marker stays an operand', async () => {
     const ws = await makeMultiWs()
-    const io = await ws.execute('grep -- --version /ram/a.txt')
+    const io = await ws.shell('grep -- --version /ram/a.txt')
     expect(io.exitCode).toBe(1)
     expect(stdoutStr(io)).toBe('')
   })
 
   it('man <cmd> prints help from the existing handleMan', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('man cat')
+    const io = await ws.shell('man cat')
     const out = stdoutStr(io)
     expect(io.exitCode).toBe(0)
     expect(out).toContain('cat')
@@ -151,7 +151,7 @@ describe('--help and man through the executor', () => {
 
   it('man with no args lists every command by kind of word', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('man')
+    const io = await ws.shell('man')
     const out = stdoutStr(io)
     expect(io.exitCode).toBe(0)
     expect(out.startsWith('# commands\n\n')).toBe(true)
@@ -163,18 +163,18 @@ describe('--help and man through the executor', () => {
 
   it('man on an unknown command exits 1', async () => {
     const ws = await makeWs()
-    const io = await ws.execute('man definitely-not-a-real-command')
+    const io = await ws.shell('man definitely-not-a-real-command')
     expect(io.exitCode).toBe(1)
     expect(stderrStr(io)).toContain('no entry for')
   })
 
   it('an installed CLI is discoverable from the shell', async () => {
     const ws = await cliWs()
-    expect(stdoutStr(await ws.execute('type linear'))).toBe('linear is a mirage CLI\n')
-    expect(stdoutStr(await ws.execute('type -t linear'))).toBe('cli\n')
-    expect(stdoutStr(await ws.execute('which linear'))).toBe('linear\n')
-    expect(stdoutStr(await ws.execute('man linear'))).toContain('Usage: linear')
-    expect(stdoutStr(await ws.execute('man'))).toContain('# clis')
+    expect(stdoutStr(await ws.shell('type linear'))).toBe('linear is a mirage CLI\n')
+    expect(stdoutStr(await ws.shell('type -t linear'))).toBe('cli\n')
+    expect(stdoutStr(await ws.shell('which linear'))).toBe('linear\n')
+    expect(stdoutStr(await ws.shell('man linear'))).toContain('Usage: linear')
+    expect(stdoutStr(await ws.shell('man'))).toContain('# clis')
   })
 
   it('man lists only the CLI verbs the profile can reach', async () => {
@@ -182,21 +182,21 @@ describe('--help and man through the executor', () => {
     ws.createSession('narrow', {
       profile: { commands: { allow: ['man', 'linear issue', 'which'], ask: [], deny: [] } },
     })
-    const page = stdoutStr(await ws.execute('man linear', { sessionId: 'narrow' }))
+    const page = stdoutStr(await ws.shell('man linear', { sessionId: 'narrow' }))
     expect(page).toContain('issue')
     expect(page).not.toContain('team')
     // The head word still routes, because one line of the tree runs.
-    expect(stdoutStr(await ws.execute('which linear', { sessionId: 'narrow' }))).toBe('linear\n')
+    expect(stdoutStr(await ws.shell('which linear', { sessionId: 'narrow' }))).toBe('linear\n')
     // A verb the list does not reach has no page.
-    const io = await ws.execute('man linear team', { sessionId: 'narrow' })
+    const io = await ws.shell('man linear team', { sessionId: 'narrow' })
     expect(io.exitCode).toBe(1)
     expect(stderrStr(io)).toBe('man: no entry for linear team\n')
     // The host's own view is unnarrowed.
-    expect(stdoutStr(await ws.execute('man linear'))).toContain('team')
+    expect(stdoutStr(await ws.shell('man linear'))).toContain('team')
   })
 
   it('which reports a missing name through the status only', async () => {
-    const io = await (await cliWs()).execute('which nope-xyz')
+    const io = await (await cliWs()).shell('which nope-xyz')
     expect(io.exitCode).toBe(1)
     expect(stdoutStr(io)).toBe('')
     expect(stderrStr(io)).toBe('')
@@ -204,7 +204,7 @@ describe('--help and man through the executor', () => {
 
   it('a shell function shadows a CLI and type -a shows both', async () => {
     const ws = await cliWs()
-    const io = await ws.execute('linear() { echo shadowed; }; type -a linear')
+    const io = await ws.shell('linear() { echo shadowed; }; type -a linear')
     expect(stdoutStr(io)).toBe('linear is a function\nlinear is a mirage CLI\n')
   })
 

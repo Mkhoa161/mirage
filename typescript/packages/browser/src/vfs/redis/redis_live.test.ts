@@ -49,7 +49,7 @@ describe.skipIf(skip)('RedisVFS against a live Upstash database', () => {
     async () => {
       await vfs.writeFile(spec('/a.bin'), ALL_BYTES)
       expect(await vfs.readFile(spec('/a.bin'))).toEqual(ALL_BYTES)
-      const r = await ws.execute('wc -c < /data/a.bin')
+      const r = await ws.shell('wc -c < /data/a.bin')
       expect(DEC.decode(r.stdout).trim()).toBe('256')
     },
     LIVE,
@@ -83,20 +83,20 @@ describe.skipIf(skip)('RedisVFS against a live Upstash database', () => {
   it(
     'serves shell commands end to end',
     async () => {
-      await ws.execute('mkdir -p /data/d/e')
-      await ws.execute('echo hello | tee /data/d/e/x.txt > /dev/null')
-      await ws.execute('echo world | tee /data/y.md > /dev/null')
-      expect(DEC.decode((await ws.execute('cat /data/d/e/x.txt')).stdout)).toBe('hello\n')
+      await ws.shell('mkdir -p /data/d/e')
+      await ws.shell('echo hello | tee /data/d/e/x.txt > /dev/null')
+      await ws.shell('echo world | tee /data/y.md > /dev/null')
+      expect(DEC.decode((await ws.shell('cat /data/d/e/x.txt')).stdout)).toBe('hello\n')
       expect(
-        DEC.decode((await ws.execute('ls /data')).stdout)
+        DEC.decode((await ws.shell('ls /data')).stdout)
           .trim()
           .split('\n'),
       ).toEqual(['d', 'y.md'])
-      expect(DEC.decode((await ws.execute("find /data -name '*.txt'")).stdout).trim()).toBe(
+      expect(DEC.decode((await ws.shell("find /data -name '*.txt'")).stdout).trim()).toBe(
         '/data/d/e/x.txt',
       )
-      await ws.execute('rm /data/y.md')
-      expect((await ws.execute('cat /data/y.md')).exitCode).toBe(1)
+      await ws.shell('rm /data/y.md')
+      expect((await ws.shell('cat /data/y.md')).exitCode).toBe(1)
     },
     LIVE,
   )
@@ -104,9 +104,9 @@ describe.skipIf(skip)('RedisVFS against a live Upstash database', () => {
   it(
     'stores the stat overlay as side keys',
     async () => {
-      await ws.execute('echo m | tee /data/m.txt > /dev/null')
-      await ws.execute('chmod 600 /data/m.txt')
-      expect(DEC.decode((await ws.execute('stat -c %a /data/m.txt')).stdout).trim()).toBe('600')
+      await ws.shell('echo m | tee /data/m.txt > /dev/null')
+      await ws.shell('chmod 600 /data/m.txt')
+      expect(DEC.decode((await ws.shell('stat -c %a /data/m.txt')).stdout).trim()).toBe('600')
       expect(await vfs.store.getAttrs('/m.txt')).toEqual({ mode: '384' })
       expect(await vfs.store.getModified('/m.txt')).not.toBeNull()
     },
@@ -116,8 +116,8 @@ describe.skipIf(skip)('RedisVFS against a live Upstash database', () => {
   it(
     'writes an empty file and a file larger than one request',
     async () => {
-      await ws.execute('touch /data/empty')
-      expect(DEC.decode((await ws.execute('wc -c < /data/empty')).stdout).trim()).toBe('0')
+      await ws.shell('touch /data/empty')
+      expect(DEC.decode((await ws.shell('wc -c < /data/empty')).stdout).trim()).toBe('0')
       const chunked = new RedisVFS({
         url: DB_URL ?? '',
         keyPrefix: prefix,

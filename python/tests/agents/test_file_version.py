@@ -112,7 +112,7 @@ async def test_alias_and_target_share_one_stamp(workspace):
     # "/a.txt" and clobber a change the agent never saw.
     tracker = FileVersionTracker(workspace)
     await workspace.fs.write("/a.txt", b"one")
-    assert (await workspace.execute("ln -s /a.txt /alias.txt")).exit_code == 0
+    assert (await workspace.shell("ln -s /a.txt /alias.txt")).exit_code == 0
     await tracker.read("/alias.txt")
     await workspace.fs.write("/a.txt", b"moved underneath")
     with pytest.raises(StaleMirageFileError):
@@ -124,7 +124,7 @@ async def test_alias_and_target_share_one_stamp(workspace):
 async def test_edit_through_an_alias_sees_the_read_of_the_target(workspace):
     tracker = FileVersionTracker(workspace)
     await workspace.fs.write("/a.txt", b"one")
-    assert (await workspace.execute("ln -s /a.txt /alias.txt")).exit_code == 0
+    assert (await workspace.shell("ln -s /a.txt /alias.txt")).exit_code == 0
     await tracker.read("/a.txt")
     await workspace.fs.write("/a.txt", b"moved underneath")
     with pytest.raises(StaleMirageFileError):

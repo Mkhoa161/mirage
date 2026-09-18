@@ -95,14 +95,14 @@ describe('DevVFS', () => {
 describe('character device commands', () => {
   it('serves ranged zero reads beyond the old finite buffer', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('head -c 2M /dev/zero | wc -c')
+    const result = await ws.shell('head -c 2M /dev/zero | wc -c')
     expect(result.stdoutText).toBe('2097152\n')
     await ws.close()
   })
 
   it('bounds an unqualified cat without changing its successful status', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('cat /dev/zero')
+    const result = await ws.shell('cat /dev/zero')
     expect(result.exitCode).toBe(0)
     expect(result.stdout.byteLength).toBe(8 << 20)
     expect(result.stdout.every((byte) => byte === 0)).toBe(true)
@@ -112,7 +112,7 @@ describe('character device commands', () => {
 
   it('bounds default head without buffering an endless unterminated line', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('head /dev/zero')
+    const result = await ws.shell('head /dev/zero')
     expect(result.exitCode).toBe(0)
     expect(result.stdout.byteLength).toBe(8 << 20)
     expect(result.stdout.every((byte) => byte === 0)).toBe(true)
@@ -124,7 +124,7 @@ describe('character device commands', () => {
     const ws = await makeWs()
     const size = (8 << 20) + 1
     await ws.fs.writeFile('/data/large.bin', new Uint8Array(size))
-    const result = await ws.execute('cat /dev/null /data/large.bin | wc -c')
+    const result = await ws.shell('cat /dev/null /data/large.bin | wc -c')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText).toBe(`${String(size)}\n`)
     expect(result.stderrText).not.toContain('output truncated')
@@ -133,31 +133,31 @@ describe('character device commands', () => {
 
   it('classifies and renders active synthetic devices', async () => {
     const ws = await makeWs()
-    expect((await ws.execute('find /dev -type f')).stdoutText).toBe('')
-    expect((await ws.execute('find /dev -type c')).stdoutText).toBe('/dev/null\n/dev/zero\n')
-    expect((await ws.execute('find /dev -empty')).stdoutText).toBe('')
-    expect((await ws.execute("stat -c '%F %t %T' /dev/null")).stdoutText).toBe(
+    expect((await ws.shell('find /dev -type f')).stdoutText).toBe('')
+    expect((await ws.shell('find /dev -type c')).stdoutText).toBe('/dev/null\n/dev/zero\n')
+    expect((await ws.shell('find /dev -empty')).stdoutText).toBe('')
+    expect((await ws.shell("stat -c '%F %t %T' /dev/null")).stdoutText).toBe(
       'character special file 1 3\n',
     )
-    const longZero = (await ws.execute('ls -l /dev/zero')).stdoutText
+    const longZero = (await ws.shell('ls -l /dev/zero')).stdoutText
     expect(longZero).toMatch(/^crw-rw-rw-/)
     expect(longZero).toContain('1, 5')
-    expect((await ws.execute('file /dev/zero')).stdoutText).toBe(
+    expect((await ws.shell('file /dev/zero')).stdoutText).toBe(
       '/dev/zero: character special (1/5)\n',
     )
-    expect((await ws.execute('du /dev/zero')).stdoutText).toBe('0\t/dev/zero\n')
-    expect((await ws.execute("find /dev/null -printf '%m %M\\n'")).stdoutText).toBe(
+    expect((await ws.shell('du /dev/zero')).stdoutText).toBe('0\t/dev/zero\n')
+    expect((await ws.shell("find /dev/null -printf '%m %M\\n'")).stdoutText).toBe(
       '666 crw-rw-rw-\n',
     )
-    expect((await ws.execute("stat -c '%a %f' /dev/null")).stdoutText).toBe('666 21b6\n')
+    expect((await ws.shell("stat -c '%a %f' /dev/null")).stdoutText).toBe('666 21b6\n')
     await ws.close()
   })
 
   it('answers regular-file and size predicates by kind', async () => {
     const ws = await makeWs()
-    expect((await ws.execute('test -f /dev/null; echo $?')).stdoutText).toBe('1\n')
-    expect((await ws.execute('test -c /dev/null; echo $?')).stdoutText).toBe('0\n')
-    expect((await ws.execute('test -s /dev/zero; echo $?')).stdoutText).toBe('1\n')
+    expect((await ws.shell('test -f /dev/null; echo $?')).stdoutText).toBe('1\n')
+    expect((await ws.shell('test -c /dev/null; echo $?')).stdoutText).toBe('0\n')
+    expect((await ws.shell('test -s /dev/zero; echo $?')).stdoutText).toBe('1\n')
     await ws.close()
   })
 
@@ -171,7 +171,7 @@ describe('character device commands', () => {
       'rg needle /dev/zero',
     ]
     for (const command of commands) {
-      const result = await ws.execute(command)
+      const result = await ws.shell(command)
       expect(result.exitCode).not.toBe(0)
       expect(result.stderrText).toContain('cannot read an endless device without a size')
     }
@@ -182,14 +182,14 @@ describe('character device commands', () => {
 describe('dev file removal (GNU rm /dev/null semantics)', () => {
   it('rm /dev/null exits 0 and the path is gone', async () => {
     const ws = await makeWs()
-    const rm = await ws.execute('rm /dev/null')
+    const rm = await ws.shell('rm /dev/null')
     expect(rm.exitCode).toBe(0)
     expect(rm.stdoutText).toBe('')
     expect(new TextDecoder().decode(rm.stderr)).toBe('')
-    const ls = await ws.execute('ls /dev')
+    const ls = await ws.shell('ls /dev')
     expect(ls.stdoutText.split('\n')).toContain('zero')
     expect(ls.stdoutText.split('\n')).not.toContain('null')
-    const cat = await ws.execute('cat /dev/null')
+    const cat = await ws.shell('cat /dev/null')
     expect(cat.exitCode).not.toBe(0)
     expect(new TextDecoder().decode(cat.stderr)).toMatch(/No such file or directory/)
     await ws.close()
@@ -197,45 +197,45 @@ describe('dev file removal (GNU rm /dev/null semantics)', () => {
 
   it('rm -v /dev/null prints a true removed claim', async () => {
     const ws = await makeWs()
-    const rm = await ws.execute('rm -v /dev/null')
+    const rm = await ws.shell('rm -v /dev/null')
     expect(rm.exitCode).toBe(0)
     expect(rm.stdoutText).toBe("removed '/dev/null'\n")
-    const ls = await ws.execute('ls /dev')
+    const ls = await ws.shell('ls /dev')
     expect(ls.stdoutText.split('\n')).not.toContain('null')
     await ws.close()
   })
 
   it('rm -rf /dev/null removes the file too', async () => {
     const ws = await makeWs()
-    const rm = await ws.execute('rm -rf /dev/null')
+    const rm = await ws.shell('rm -rf /dev/null')
     expect(rm.exitCode).toBe(0)
-    const ls = await ws.execute('ls /dev')
+    const ls = await ws.shell('ls /dev')
     expect(ls.stdoutText.split('\n')).not.toContain('null')
     await ws.close()
   })
 
   it('a redirect recreates a removed /dev/null as a regular file', async () => {
     const ws = await makeWs()
-    await ws.execute('rm /dev/null')
-    const write = await ws.execute('echo recreated > /dev/null')
+    await ws.shell('rm /dev/null')
+    const write = await ws.shell('echo recreated > /dev/null')
     expect(write.exitCode).toBe(0)
-    const cat = await ws.execute('cat /dev/null')
+    const cat = await ws.shell('cat /dev/null')
     expect(cat.stdoutText).toBe('recreated\n')
-    const test = await ws.execute('if [ -f /dev/null ]; then echo regular; fi')
+    const test = await ws.shell('if [ -f /dev/null ]; then echo regular; fi')
     expect(test.stdoutText).toBe('regular\n')
     await ws.close()
   })
 
   it('rm /dev/zero is symmetric', async () => {
     const ws = await makeWs()
-    const rm = await ws.execute('rm /dev/zero')
+    const rm = await ws.shell('rm /dev/zero')
     expect(rm.exitCode).toBe(0)
-    const ls = await ws.execute('ls /dev')
+    const ls = await ws.shell('ls /dev')
     expect(ls.stdoutText.split('\n')).toContain('null')
     expect(ls.stdoutText.split('\n')).not.toContain('zero')
-    const write = await ws.execute('echo z > /dev/zero')
+    const write = await ws.shell('echo z > /dev/zero')
     expect(write.exitCode).toBe(0)
-    const cat = await ws.execute('cat /dev/zero')
+    const cat = await ws.shell('cat /dev/zero')
     expect(cat.stdoutText).toBe('z\n')
     await ws.close()
   })

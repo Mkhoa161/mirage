@@ -76,8 +76,8 @@ async def test_both_redirect_forms_agree_end_to_end():
     plain-redirect path, so `exec > f` created a 644 file where
     `echo x > f` created a 600 one."""
     ws = Workspace({"data": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("umask 077; echo z > /data/p; "
-                          "( exec > /data/e; echo z ); "
-                          "stat -c '%a %n' /data/p /data/e")
+    io = await ws.shell("umask 077; echo z > /data/p; "
+                        "( exec > /data/e; echo z ); "
+                        "stat -c '%a %n' /data/p /data/e")
     assert (await io.stdout_str()) == "600 /data/p\n600 /data/e\n"
     await ws.close()

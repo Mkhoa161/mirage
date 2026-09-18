@@ -61,12 +61,12 @@ async def main():
                     print(f"  [{i}] {line.strip()[:100]}")
 
         print("\n--- VFS commands ---")
-        r = await ws.execute(f"ls {data_dir}")
+        r = await ws.shell(f"ls {data_dir}")
         print(f"  ls {data_dir}: {(await r.stdout_str()).strip()}")
         if target:
-            r = await ws.execute(f"head -n 3 {target}")
+            r = await ws.shell(f"head -n 3 {target}")
             print(f"  head -n 3:\n{(await r.stdout_str()).rstrip()}")
-            r = await ws.execute(f"wc -l {target}")
+            r = await ws.shell(f"wc -l {target}")
             print(f"  wc -l: {(await r.stdout_str()).strip()}")
 
 

@@ -32,7 +32,7 @@ def _ws() -> Workspace:
 
 def _run_raw(ws, cmd, cwd="/", stdin=None):
     ws._cwd = cwd
-    io = asyncio.run(ws.execute(cmd, stdin=stdin))
+    io = asyncio.run(ws.shell(cmd, stdin=stdin))
     return io.stdout, io
 
 

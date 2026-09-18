@@ -206,7 +206,7 @@ class SSHTestEnv:
         self._files[path] = content
 
     def run(self, cmd: str, stdin: bytes | None = None) -> str:
-        io = asyncio.run(self.ws.execute(cmd, stdin=stdin))
+        io = asyncio.run(self.ws.shell(cmd, stdin=stdin))
         stdout = io.stdout
         if stdout is None:
             return ""
@@ -216,10 +216,10 @@ class SSHTestEnv:
         return b"".join(chunks).decode(errors="replace")
 
     def run_io(self, cmd: str, stdin: bytes | None = None):
-        return asyncio.run(self.ws.execute(cmd, stdin=stdin))
+        return asyncio.run(self.ws.shell(cmd, stdin=stdin))
 
     def run_io_provision(self, cmd: str):
-        return asyncio.run(self.ws.execute(cmd, provision=True))
+        return asyncio.run(self.ws.shell(cmd, provision=True))
 
 
 async def _drain(ait):

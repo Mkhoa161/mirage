@@ -160,7 +160,7 @@ interface Shell {
 
 async function run(ws: Shell, cmd: string): Promise<void> {
   console.log(`$ ${cmd}`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   const out = r.stdoutText.replace(/\s+$/, '')
   if (out !== '') console.log(out)
   const err = r.stderrText.replace(/\s+$/, '')

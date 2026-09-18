@@ -24,7 +24,7 @@ import { Workspace } from './workspace.ts'
 describe('@struktoai/mirage-node Workspace', () => {
   it('lazy-loads the shell parser via readFileSync(require.resolve(...)) on first execute()', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-    const res = await ws.execute('echo hi')
+    const res = await ws.shell('echo hi')
     expect(res.exitCode).toBe(0)
     expect(new TextDecoder().decode(res.stdout)).toBe('hi\n')
     await ws.close()
@@ -32,8 +32,8 @@ describe('@struktoai/mirage-node Workspace', () => {
 
   it('reuses the cached parser across multiple execute() calls', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-    const r1 = await ws.execute('echo one')
-    const r2 = await ws.execute('echo two')
+    const r1 = await ws.shell('echo one')
+    const r2 = await ws.shell('echo two')
     expect(new TextDecoder().decode(r1.stdout)).toBe('one\n')
     expect(new TextDecoder().decode(r2.stdout)).toBe('two\n')
     await ws.close()
@@ -58,8 +58,8 @@ describe('@struktoai/mirage-node Workspace', () => {
         },
       },
     )
-    await ws.execute('echo a')
-    await ws.execute('echo b')
+    await ws.shell('echo a')
+    await ws.shell('echo b')
     expect(calls).toBe(1)
     await ws.close()
   })
@@ -68,7 +68,7 @@ describe('@struktoai/mirage-node Workspace', () => {
     'find %s exits 1 with a clean stderr instead of crashing',
     async (expr) => {
       const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
-      const res = await ws.execute(`find / ${expr}`)
+      const res = await ws.shell(`find / ${expr}`)
       expect(res.exitCode).toBe(1)
       const stderr = new TextDecoder().decode(res.stderr)
       expect(stderr.startsWith('find: invalid argument ')).toBe(true)
@@ -82,7 +82,7 @@ describe('@struktoai/mirage-node Workspace', () => {
     ['echo a "" b', 'a  b\n'],
   ])('keeps a quoted empty string as a real argument: %s', async (cmd, expected) => {
     const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
-    const res = await ws.execute(cmd)
+    const res = await ws.shell(cmd)
     expect(res.exitCode).toBe(0)
     expect(new TextDecoder().decode(res.stdout)).toBe(expected)
     await ws.close()
@@ -102,12 +102,12 @@ describe('@struktoai/mirage-node Workspace disk metadata', () => {
 
   it('chmod 000 shows zero in ls -l but keeps owner access', async () => {
     const { ws, root, cleanup } = makeDiskWs()
-    const c = await ws.execute('chmod 000 /data/f.txt')
+    const c = await ws.shell('chmod 000 /data/f.txt')
     expect(c.exitCode).toBe(0)
-    const ls = await ws.execute('ls -l /data')
+    const ls = await ws.shell('ls -l /data')
     expect(ls.stdoutText).toContain('----------')
     expect(statSync(join(root, 'f.txt')).mode & 0o777).toBe(0o600)
-    const cat = await ws.execute('cat /data/f.txt')
+    const cat = await ws.shell('cat /data/f.txt')
     expect(cat.exitCode).toBe(0)
     expect(cat.stdoutText).toBe('hello')
     await ws.close()
@@ -116,8 +116,8 @@ describe('@struktoai/mirage-node Workspace disk metadata', () => {
 
   it('relaxing chmod drops the stale residual overlay', async () => {
     const { ws, cleanup } = makeDiskWs()
-    await ws.execute('chmod 000 /data/f.txt')
-    await ws.execute('chmod 644 /data/f.txt')
+    await ws.shell('chmod 000 /data/f.txt')
+    await ws.shell('chmod 644 /data/f.txt')
     const st = (await ws.dispatch('stat', '/data/f.txt')) as { mode: number }
     expect(st.mode).toBe(0o644)
     expect(ws.namespace.metaFor('/data/f.txt')).toBeNull()
@@ -128,7 +128,7 @@ describe('@struktoai/mirage-node Workspace disk metadata', () => {
   it('shows an external chmod in ls -l', async () => {
     const { ws, root, cleanup } = makeDiskWs()
     chmodSync(join(root, 'f.txt'), 0o640)
-    const ls = await ws.execute('ls -l /data')
+    const ls = await ws.shell('ls -l /data')
     expect(ls.stdoutText).toContain('-rw-r-----')
     await ws.close()
     cleanup()
@@ -136,9 +136,9 @@ describe('@struktoai/mirage-node Workspace disk metadata', () => {
 
   it('overlays chown and renders owner/group in ls -l', async () => {
     const { ws, cleanup } = makeDiskWs()
-    const c = await ws.execute('chown 500:dev /data/f.txt')
+    const c = await ws.shell('chown 500:dev /data/f.txt')
     expect(c.exitCode).toBe(0)
-    const ls = await ws.execute('ls -l /data')
+    const ls = await ws.shell('ls -l /data')
     expect(ls.stdoutText).toContain(' 500 dev ')
     await ws.close()
     cleanup()

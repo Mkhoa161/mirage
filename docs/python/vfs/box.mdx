@@ -124,15 +124,15 @@ vfs = BoxVFS(config)
 async def main() -> None:
     ws = Workspace({"/box": vfs}, mode=MountMode.WRITE)
 
-    r = await ws.execute("ls /box/")
+    r = await ws.shell("ls /box/")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep -rl report /box/docs/")
+    r = await ws.shell("grep -rl report /box/docs/")
     print(await r.stdout_str())
 
     # Plain text from a Box Note:
     # A Box Note comes back as raw ProseMirror JSON:
-    r = await ws.execute("cat /box/notes/standup.boxnote | jq .")
+    r = await ws.shell("cat /box/notes/standup.boxnote | jq .")
     print(await r.stdout_str())
 
     await ws.close()

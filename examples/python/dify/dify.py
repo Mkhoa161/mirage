@@ -29,7 +29,7 @@ def build_vfs() -> DifyVFS:
 
 
 async def run(ws: Workspace, command: str, max_chars: int = 800) -> str:
-    result = await ws.execute(command)
+    result = await ws.shell(command)
     stdout = await result.stdout_str()
     stderr = (result.stderr or b"").decode(errors="replace")
     print(f"$ {command}")
@@ -76,9 +76,9 @@ async def main() -> None:
     # workspace namespace (durable, snapshot-captured) and merge into
     # dispatch-level stat.
     print(f"=== metadata overlay on {first_path} ===")
-    meta_res = await ws.execute(f"chmod 640 {quoted_path}"
-                                f" && chown 500:dev {quoted_path}"
-                                f" && touch -t 202601021530 {quoted_path}")
+    meta_res = await ws.shell(f"chmod 640 {quoted_path}"
+                              f" && chown 500:dev {quoted_path}"
+                              f" && touch -t 202601021530 {quoted_path}")
     print(f"  chmod/chown/touch exit={meta_res.exit_code}")
     meta_st, _ = await ws.dispatch("stat", PathSpec.from_str_path(first_path))
     print(f"  dispatch stat: mode={oct(meta_st.mode)[2:]} uid={meta_st.uid} "

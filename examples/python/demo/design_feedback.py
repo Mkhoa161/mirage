@@ -66,7 +66,7 @@ async def main() -> None:
         "linear", LINEAR,
         LinearConfig(api_key=os.environ["LINEAR_API_KEY"]).model_dump())
 
-    _orig_exec = ws.execute
+    _orig_exec = ws.shell
 
     async def _trace_exec(cmd_str, *args, **kwargs):
         print(f"[shell] {cmd_str}", flush=True)
@@ -76,7 +76,7 @@ async def main() -> None:
             print(f"[shell] -> {out!r}", flush=True)
         return result
 
-    ws.execute = _trace_exec  # type: ignore[assignment]
+    ws.shell = _trace_exec  # type: ignore[assignment]
 
     client = MirageSandboxClient(ws)
 

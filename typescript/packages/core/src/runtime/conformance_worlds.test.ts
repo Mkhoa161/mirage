@@ -92,7 +92,7 @@ async function run(
   line: string,
   sessionId?: string,
 ): Promise<[number, string, string]> {
-  const io = await ws.execute(line, sessionId !== undefined ? { sessionId } : undefined)
+  const io = await ws.shell(line, sessionId !== undefined ? { sessionId } : undefined)
   return [io.exitCode, stdoutStr(io), stderrStr(io)]
 }
 

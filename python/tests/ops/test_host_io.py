@@ -49,7 +49,7 @@ async def main():
             print("read", f.read())
         os.mkdir(os.path.join(root, "sub"))
         print("mkdir", os.path.isdir(os.path.join(root, "sub")))
-        result = await ws.execute("cat " + root + "/a.txt")
+        result = await ws.shell("cat " + root + "/a.txt")
         print("cat", await result.stdout_str())
 
 

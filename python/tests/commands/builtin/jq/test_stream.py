@@ -232,7 +232,7 @@ class TestJqPlanDryRun:
     def test_plan_json_full_read(self):
         data = json.dumps({"a": 1, "b": 2}).encode()
         ws = self._plan_ws("f.json", data)
-        result = asyncio.run(ws.execute("jq .a /m/f.json", provision=True))
+        result = asyncio.run(ws.shell("jq .a /m/f.json", provision=True))
         assert result.network_read_high == len(data)
         assert result.network_read_low == len(data)
 
@@ -241,7 +241,7 @@ class TestJqPlanDryRun:
         data = ("\n".join(lines) + "\n").encode()
         ws = self._plan_ws("data.jsonl", data)
         result = asyncio.run(
-            ws.execute("jq '.[] | .x' /m/data.jsonl", provision=True))
+            ws.shell("jq '.[] | .x' /m/data.jsonl", provision=True))
         assert result.network_read_low == 0
         assert result.network_read_high == len(data)
 
@@ -250,6 +250,6 @@ class TestJqPlanDryRun:
         data = ("\n".join(lines) + "\n").encode()
         ws = self._plan_ws("data.jsonl", data)
         result = asyncio.run(
-            ws.execute("jq length /m/data.jsonl", provision=True))
+            ws.shell("jq length /m/data.jsonl", provision=True))
         assert result.network_read_low == len(data)
         assert result.network_read_high == len(data)

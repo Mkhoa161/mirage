@@ -50,15 +50,15 @@ async function buildWs(): Promise<Workspace> {
       },
     },
   )
-  await ws.execute("printf '1\\n2\\n3\\n4\\n5\\n' > /a/f.txt")
-  await ws.execute("printf '6\\n7\\n8\\n9\\n10\\n' > /b/f.txt")
+  await ws.shell("printf '1\\n2\\n3\\n4\\n5\\n' > /a/f.txt")
+  await ws.shell("printf '6\\n7\\n8\\n9\\n10\\n' > /b/f.txt")
   return ws
 }
 
 describe('connection limit (src)', () => {
   it('single cat /a truncates to 4', async () => {
     const ws = await buildWs()
-    const res = await ws.execute('cat /a/f.txt')
+    const res = await ws.shell('cat /a/f.txt')
     await ws.close()
     expect(DEC.decode(res.stdout)).toBe('1\n2\n3\n4\n')
     expect(DEC.decode(res.stderr)).toContain('truncated')
@@ -66,7 +66,7 @@ describe('connection limit (src)', () => {
 
   it('semicolon: rightmost /a limit caps combined to 4', async () => {
     const ws = await buildWs()
-    const res = await ws.execute('cat /b/f.txt ; cat /a/f.txt')
+    const res = await ws.shell('cat /b/f.txt ; cat /a/f.txt')
     await ws.close()
     expect(DEC.decode(res.stdout)).toBe('6\n7\n8\n9\n')
     expect(DEC.decode(res.stderr)).toContain('truncated')
@@ -74,7 +74,7 @@ describe('connection limit (src)', () => {
 
   it('or: rightmost /a limit caps to 4', async () => {
     const ws = await buildWs()
-    const res = await ws.execute('false || cat /a/f.txt')
+    const res = await ws.shell('false || cat /a/f.txt')
     await ws.close()
     expect(DEC.decode(res.stdout)).toBe('1\n2\n3\n4\n')
     expect(DEC.decode(res.stderr)).toContain('truncated')
@@ -82,7 +82,7 @@ describe('connection limit (src)', () => {
 
   it('and: rightmost /b limit errors', async () => {
     const ws = await buildWs()
-    const res = await ws.execute('cat /a/f.txt && cat /b/f.txt')
+    const res = await ws.shell('cat /a/f.txt && cat /b/f.txt')
     await ws.close()
     expect(res.exitCode).toBe(1)
     expect(DEC.decode(res.stderr)).toContain('truncated')
@@ -90,7 +90,7 @@ describe('connection limit (src)', () => {
 
   it('subshell: rightmost /a limit caps combined to 4', async () => {
     const ws = await buildWs()
-    const res = await ws.execute('( cat /b/f.txt ; cat /a/f.txt )')
+    const res = await ws.shell('( cat /b/f.txt ; cat /a/f.txt )')
     await ws.close()
     expect(DEC.decode(res.stdout)).toBe('6\n7\n8\n9\n')
     expect(DEC.decode(res.stderr)).toContain('truncated')
@@ -98,8 +98,8 @@ describe('connection limit (src)', () => {
 
   it('repeated read keeps the per-mount limit (no cache-mount fallthrough)', async () => {
     const ws = await buildWs()
-    const first = await ws.execute('cat /a/f.txt')
-    const second = await ws.execute('cat /a/f.txt')
+    const first = await ws.shell('cat /a/f.txt')
+    const second = await ws.shell('cat /a/f.txt')
     await ws.close()
     expect(DEC.decode(first.stdout)).toBe('1\n2\n3\n4\n')
     expect(DEC.decode(second.stdout)).toBe('1\n2\n3\n4\n')

@@ -33,14 +33,14 @@ async def test_state_diff_covers_every_category(tmp_path):
     ws = _ws()
     store = await VersionStore.open(LocalBackend(str(tmp_path)), "ws")
 
-    await ws.execute("echo one > /m/a.txt")
+    await ws.shell("echo one > /m/a.txt")
     session = ws.create_session("narrow", mounts={"/m": "read"})
     seed_var(session, "API_KEY", "@aws:prod-key")
     await ws.flush_sessions()
     v1 = await commit(store, ws, "main", "v1")
 
-    await ws.execute("echo two > /m/a.txt")
-    await ws.execute("ln -s /m/a.txt /m/l.txt")
+    await ws.shell("echo two > /m/a.txt")
+    await ws.shell("ln -s /m/a.txt /m/l.txt")
     seed_var(session, "API_KEY", "@aws:other-key")
     session.mount_modes = {**session.mount_modes, "/m": MountMode.WRITE}
     await ws.flush_sessions()
@@ -91,9 +91,9 @@ async def test_state_diff_reports_grant_changes_with_direction(tmp_path):
 async def test_state_diff_accepts_branch_refs(tmp_path):
     ws = _ws()
     store = await VersionStore.open(LocalBackend(str(tmp_path)), "ws")
-    await ws.execute("echo one > /m/a.txt")
+    await ws.shell("echo one > /m/a.txt")
     v1 = await commit(store, ws, "main", "v1")
-    await ws.execute("echo new > /m/b.txt")
+    await ws.shell("echo new > /m/b.txt")
     await commit(store, ws, "main", "v2")
 
     diff = await state_diff(store, v1, "main")

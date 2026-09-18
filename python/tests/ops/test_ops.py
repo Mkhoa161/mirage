@@ -23,6 +23,7 @@ from mirage.policy import (Action, Deny, OpsContext, OpsResultContext, Policy,
                            PolicyDenied)
 from mirage.types import FileType, HiddenPaths, MountMode
 from mirage.vfs.ram import RAMVFS
+from mirage.workspace import SessionHandle
 from mirage.workspace.session import Session
 
 from .conftest import make_ops, run
@@ -40,10 +41,10 @@ class TestMountPrefixes:
         assert "/data/" not in ops.mount_prefixes()
 
     def test_a_derived_facade_sees_an_unmount(self):
-        # `for_session` shares the mount list so a later mount reaches
+        # A derived facade shares the mount list so a later mount reaches
         # both; an unmount has to reach both the same way.
         ops, _ = make_ops()
-        derived = ops.for_session("agent")
+        derived = ops._for_session("agent")
         ops.unmount("/data/")
         assert "/data/" not in derived.mount_prefixes()
         assert "/data/" not in [p for p, _ in derived.writable_mounts()]
@@ -564,3 +565,84 @@ class TestProbesAndConveniences:
         run(ops.write("/data/dir/a.txt", b"1"))
         run(ops.mkdir("/data/dir/sub"))
         assert run(ops.list_files("/data/dir")) == ["a.txt"]
+
+
+class TestPerCallSession:
+    """``session_id`` on an op, and the one rule that bounds it.
+
+    A shell line *sets* the session; an op *inherits* it. So the
+    argument names the session to run as when no line is running, and
+    the line's session wins when one is. That second half is what keeps
+    a handler reaching this door from widening the view it was given.
+    """
+
+    @staticmethod
+    def _split_ws() -> Workspace:
+        ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
+        run(ws.fs.write("/data/secret.txt", b"classified"))
+        run(ws.fs.write("/data/open.txt", b"public"))
+        ws.create_session(
+            "blind", permissions={"paths": {
+                "hide": ["/data/secret.txt"]
+            }})
+        ws.create_session("seeing", permissions={})
+        return ws
+
+    def test_an_op_runs_as_the_session_it_names(self):
+        ws = self._split_ws()
+        try:
+            assert run(ws.fs.read("/data/secret.txt",
+                                  session_id="seeing")) == b"classified"
+            assert run(ws.fs.exists("/data/secret.txt",
+                                    session_id="blind")) is False
+            assert run(ws.fs.readdir(
+                "/data", session_id="blind")) == ["/data/open.txt"]
+        finally:
+            run(ws.close())
+
+    def test_the_named_session_confines_a_write(self):
+        ws = self._split_ws()
+        try:
+            with pytest.raises(PermissionError):
+                run(ws.fs.write("/data/secret.txt", b"x", session_id="blind"))
+        finally:
+            run(ws.close())
+
+    def test_a_forwarding_method_carries_the_session(self):
+        # cat/list_files/is_file answer through read/readdir/stat, so
+        # the session has to survive the hop or a convenience method
+        # would quietly read as the default.
+        ws = self._split_ws()
+        try:
+            assert run(ws.fs.cat("/data/secret.txt",
+                                 session_id="seeing")) == "classified"
+            assert run(ws.fs.list_files("/data",
+                                        session_id="blind")) == ["open.txt"]
+            assert run(ws.fs.is_file("/data/secret.txt",
+                                     session_id="blind")) is False
+        finally:
+            run(ws.close())
+
+    def test_a_line_in_progress_outranks_the_named_session(self):
+        # The door never widens a caller's view: a command running for
+        # a confined session cannot read as a wider one by naming it.
+        ws = self._split_ws()
+        session = Session(
+            session_id="blind",
+            hidden_paths=HiddenPaths(paths=("/data/secret.txt", )))
+        token = set_current_session(session)
+        try:
+            assert run(ws.fs.exists("/data/secret.txt",
+                                    session_id="seeing")) is False
+        finally:
+            reset_current_session(token)
+            run(ws.close())
+
+    def test_no_session_named_is_the_facade_s_own(self):
+        ws = self._split_ws()
+        try:
+            door = SessionHandle(ws, "blind").fs
+            assert run(door.exists("/data/secret.txt")) is False
+            assert run(ws.fs.exists("/data/secret.txt")) is True
+        finally:
+            run(ws.close())

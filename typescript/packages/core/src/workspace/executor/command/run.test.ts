@@ -53,9 +53,9 @@ async function seed(ram: RAMVFS, other: RAMVFS): Promise<void> {
 }
 
 async function warm(ws: Workspace): Promise<void> {
-  await ws.execute('cat /r/a.txt')
-  await ws.execute('ls /r')
-  await ws.execute('cat /o/b.txt')
+  await ws.shell('cat /r/a.txt')
+  await ws.shell('ls /r')
+  await ws.shell('cat /o/b.txt')
 }
 
 async function mutateOutOfBand(ram: RAMVFS, other: RAMVFS): Promise<void> {
@@ -66,9 +66,9 @@ async function mutateOutOfBand(ram: RAMVFS, other: RAMVFS): Promise<void> {
 
 async function readBack(ws: Workspace): Promise<[string, string, string]> {
   return [
-    DEC.decode((await ws.execute('cat /r/a.txt')).stdout),
-    DEC.decode((await ws.execute('ls /r')).stdout),
-    DEC.decode((await ws.execute('cat /o/b.txt')).stdout),
+    DEC.decode((await ws.shell('cat /r/a.txt')).stdout),
+    DEC.decode((await ws.shell('ls /r')).stdout),
+    DEC.decode((await ws.shell('cat /o/b.txt')).stdout),
   ]
 }
 
@@ -82,7 +82,7 @@ describe('dropMountCaches', () => {
     try {
       await seed(ram, other)
       await warm(ws)
-      expect(DEC.decode((await ws.execute('cat /r/a.txt')).stdout)).toContain('v1')
+      expect(DEC.decode((await ws.shell('cat /r/a.txt')).stdout)).toContain('v1')
       await mutateOutOfBand(ram, other)
       await dropMountCaches(ws.registry)
       const [body, listing, otherBody] = await readBack(ws)
@@ -122,7 +122,7 @@ describe('a CLI write and the mount caches', () => {
       await seed(ram, other)
       await warm(ws)
       await mutateOutOfBand(ram, other)
-      expect((await ws.execute('acme close')).exitCode).toBe(0)
+      expect((await ws.shell('acme close')).exitCode).toBe(0)
       const [body, listing, otherBody] = await readBack(ws)
       expect(body).toContain('v2')
       expect(listing).toContain('made.txt')
@@ -147,7 +147,7 @@ describe('a CLI write and the mount caches', () => {
       await seed(ram, other)
       await warm(ws)
       await mutateOutOfBand(ram, other)
-      expect((await ws.execute('acme peek')).exitCode).toBe(0)
+      expect((await ws.shell('acme peek')).exitCode).toBe(0)
       // RAM lists its store live, so the cached body is what shows the
       // mount stayed warm.
       const [body, , otherBody] = await readBack(ws)
@@ -174,7 +174,7 @@ describe('a CLI write and the mount caches', () => {
       await seed(ram, other)
       await warm(ws)
       await mutateOutOfBand(ram, other)
-      expect((await ws.execute('tool poke')).exitCode).toBe(0)
+      expect((await ws.shell('tool poke')).exitCode).toBe(0)
       const [body, , otherBody] = await readBack(ws)
       expect(body).toContain('v1')
       expect(otherBody).toContain('v1')

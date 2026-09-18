@@ -22,6 +22,7 @@ import type { Action, OpsContext, OpsResultContext } from '../policy/types.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import { FileType, Limit, MountMode, OnExceed } from '../types.ts'
 import { enoent, enotdir } from '../utils/errors.ts'
+import { SessionHandle } from '../workspace/workspace/handle.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
 
 const DEC = new TextDecoder()
@@ -765,5 +766,64 @@ describe('Ops.readlink', () => {
     }
     const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops, policies: [noProbe] })
     expect(await codeOf(ws, '/data/missing')).toBe('EINVAL')
+  })
+})
+
+// `sessionId` on an op, and the one rule that bounds it. A shell line
+// *sets* the session; an op *inherits* it. So the argument names the
+// session to run as when no line is running, and the line's session
+// wins when one is -- which is what keeps a handler reaching this door
+// from widening the view it was given. Mirrors python's
+// `TestPerCallSession`.
+describe('Ops per-call sessionId', () => {
+  async function splitWs(): Promise<Workspace> {
+    const vfs = new RAMVFS()
+    const ops = new OpsRegistry()
+    for (const op of vfs.ops()) ops.register(op)
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops })
+    await ws.fs.writeFile('/data/secret.txt', 'classified')
+    await ws.fs.writeFile('/data/open.txt', 'public')
+    ws.createSession('blind', {
+      permissions: { paths: { hide: ['/data/secret.txt'] } },
+    })
+    ws.createSession('seeing', { permissions: {} })
+    return ws
+  }
+
+  it('runs the op as the session it names', async () => {
+    const ws = await splitWs()
+    expect(await ws.fs.readFileText('/data/secret.txt', 'utf-8', 'seeing')).toBe('classified')
+    expect(await ws.fs.exists('/data/secret.txt', 'blind')).toBe(false)
+    expect(await ws.fs.readdir('/data', 'blind')).toEqual(['/data/open.txt'])
+  })
+
+  it('confines a write to the session it names', async () => {
+    const ws = await splitWs()
+    await expect(ws.fs.writeFile('/data/secret.txt', 'x', 'blind')).rejects.toThrow()
+  })
+
+  it('carries the session through a forwarding method', async () => {
+    // cat/listFiles/isFile answer through readFile/readdir/stat, so the
+    // session has to survive the hop or a convenience method would
+    // quietly read as the default.
+    const ws = await splitWs()
+    expect(await ws.fs.cat('/data/secret.txt', 'seeing')).toBe('classified')
+    expect(await ws.fs.listFiles('/data', 'blind')).toEqual(['open.txt'])
+    expect(await ws.fs.isFile('/data/secret.txt', 'blind')).toBe(false)
+  })
+
+  it('lets a line in progress outrank the named session', async () => {
+    // The door never widens a caller's view: a command running for a
+    // confined session cannot read as a wider one by naming it.
+    const ws = await splitWs()
+    const blind = ws.getSession('blind')
+    const seen = await runWithSession(blind, () => ws.fs.exists('/data/secret.txt', 'seeing'))
+    expect(seen).toBe(false)
+  })
+
+  it("falls back to the facade's own session when none is named", async () => {
+    const ws = await splitWs()
+    expect(await new SessionHandle(ws, 'blind').fs.exists('/data/secret.txt')).toBe(false)
+    expect(await ws.fs.exists('/data/secret.txt')).toBe(true)
   })
 })

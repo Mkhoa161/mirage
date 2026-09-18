@@ -194,22 +194,22 @@ async def test_workspace_execution_end_to_end():
     ws = Workspace({"/wiki/": make_vfs(commands=[wiki_hello])},
                    mode=MountMode.READ)
 
-    result = await ws.execute("ls /wiki/guides")
+    result = await ws.shell("ls /wiki/guides")
     assert "quickstart.md" in await result.stdout_str()
 
-    result = await ws.execute("cat /wiki/notes.md")
+    result = await ws.shell("cat /wiki/notes.md")
     assert await result.stdout_str() == "agents speak bash\n"
 
-    result = await ws.execute("grep -r Quickstart /wiki/")
+    result = await ws.shell("grep -r Quickstart /wiki/")
     assert "/wiki/guides/quickstart.md:# Quickstart" in (await
                                                          result.stdout_str())
 
-    result = await ws.execute("find /wiki -name '*.md'")
+    result = await ws.shell("find /wiki -name '*.md'")
     out = await result.stdout_str()
     assert "/wiki/guides/quickstart.md" in out
     assert "/wiki/notes.md" in out
 
-    result = await ws.execute("wiki_hello")
+    result = await ws.shell("wiki_hello")
     assert await result.stdout_str() == "hello custom verb\n"
 
     # The derived ops serve the VFS surface too, not just the commands.

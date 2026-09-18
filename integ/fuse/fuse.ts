@@ -153,8 +153,8 @@ async function runLinkProbe(
   // Seeded before the mount goes live: creating a link through the mountpoint
   // would depend on libfuse's symlink argument order, which is the adapter's
   // business, not this probe's.
-  await ws.execute('ln -s f.txt /data/lk.pinned')
-  await ws.execute('ln -s f.txt /data/lk.plain')
+  await ws.shell('ln -s f.txt /data/lk.pinned')
+  await ws.shell('ln -s f.txt /data/lk.plain')
   const handle = await fuseMount(ws)
   const mp = handle.mountpoint
   try {
@@ -223,11 +223,11 @@ async function runSessionProbe(
       mounts: { '/data': 'read' },
     }),
   })
-  const hidden = await ws.execute('cat /data/vault/secret.txt', { sessionId: 'agent' })
+  const hidden = await ws.shell('cat /data/vault/secret.txt', { sessionId: 'agent' })
   result.session_shell_hidden_exit = hidden.exitCode
-  const listing = await ws.execute('ls /data', { sessionId: 'agent' })
+  const listing = await ws.shell('ls /data', { sessionId: 'agent' })
   result.session_shell_listing = dec.decode(listing.stdout).trim()
-  const capped = await ws.execute('echo x > /data/pub.txt', { sessionId: 'agent' })
+  const capped = await ws.shell('echo x > /data/pub.txt', { sessionId: 'agent' })
   result.session_shell_write_refused = capped.exitCode !== 0
   result.session_host_reads_hidden = (await ws.fs.readFileText('/data/vault/secret.txt')).trim()
   const handle = await fuseMount(ws, { session })

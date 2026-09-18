@@ -51,7 +51,7 @@ async function runCmd(
   cmd: string,
 ): Promise<{ code: number; out: string; err: string }> {
   try {
-    const res = await ws.execute(cmd)
+    const res = await ws.shell(cmd)
     return { code: res.exitCode, out: DEC.decode(res.stdout), err: DEC.decode(res.stderr) }
   } finally {
     await ws.close()

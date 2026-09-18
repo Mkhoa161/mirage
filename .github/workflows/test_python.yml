@@ -384,7 +384,7 @@ jobs:
 
           async def main():
               ws = Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC)
-              io = await ws.execute("python3 -c 'print(1)'")
+              io = await ws.shell("python3 -c 'print(1)'")
               assert io.exit_code == 127, io.exit_code
               assert b"monty' extra" in io.stderr, io.stderr
               ws2 = Workspace({"/data": RAMVFS()},

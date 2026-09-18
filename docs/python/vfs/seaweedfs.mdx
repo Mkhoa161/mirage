@@ -62,13 +62,13 @@ vfs = SeaweedFSVFS(config)
 async def main() -> None:
     ws = Workspace({"/seaweedfs/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /seaweedfs/")
+    r = await ws.shell("ls /seaweedfs/")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /seaweedfs/")
+    r = await ws.shell("tree /seaweedfs/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /seaweedfs/data/config.json")
+    r = await ws.shell("cat /seaweedfs/data/config.json")
     print(await r.stdout_str())
 
 

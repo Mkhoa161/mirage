@@ -14,22 +14,22 @@ Providing `cwd` or `env` runs the command in an ephemeral session clone, like a 
   <Tab title="Python​" icon="/images/python-logo.svg">
     ```python
     # Persistent mutation (no options): like `cd /data; cmd`
-    await ws.execute("cd /data")
-    await ws.execute("ls")  # sees /data
+    await ws.shell("cd /data")
+    await ws.shell("ls")  # sees /data
 
     # One-shot subshell (with cwd): like `(cd /data && cmd)`
-    await ws.execute("ls", cwd="/data")
+    await ws.shell("ls", cwd="/data")
     # ws.cwd is unchanged; mutations inside don't leak
     ```
   </Tab>
   <Tab title="TypeScript​" icon="/images/typescript-logo.svg">
     ```typescript
     // Persistent mutation
-    await ws.execute("cd /data")
-    await ws.execute("ls")  // sees /data
+    await ws.shell("cd /data")
+    await ws.shell("ls")  // sees /data
 
     // One-shot subshell
-    await ws.execute("ls", { cwd: "/data" })
+    await ws.shell("ls", { cwd: "/data" })
     // ws.cwd is unchanged; mutations inside don't leak
     ```
   </Tab>
@@ -74,7 +74,7 @@ Both bindings support cooperative cancellation. TypeScript observes the signal a
 
     asyncio.create_task(trigger())
     try:
-        await ws.execute("sleep 5", cancel=cancel)
+        await ws.shell("sleep 5", cancel=cancel)
     except MirageAbortError:
         print("aborted")
     ```
@@ -82,7 +82,7 @@ Both bindings support cooperative cancellation. TypeScript observes the signal a
   <Tab title="TypeScript​​" icon="/images/typescript-logo.svg">
     ```typescript
     try {
-      await ws.execute("sleep 5", { signal: AbortSignal.timeout(100) })
+      await ws.shell("sleep 5", { signal: AbortSignal.timeout(100) })
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         console.log("aborted")
@@ -307,8 +307,8 @@ Both halves fire for every code path that reaches a mount: shell commands (`cat`
                       profile={"paths": {"hide": ["/linear", "/s3"]}})
     ws.create_session("data-agent", mounts={"/s3": "rw", "/github": "r"})
 
-    await ws.execute("ls /slack", session_id="slack-agent")  # ok
-    await ws.execute("cat /linear/issues/SEC-42",
+    await ws.shell("ls /slack", session_id="slack-agent")  # ok
+    await ws.shell("cat /linear/issues/SEC-42",
                      session_id="slack-agent")
     # exit_code=1, stderr=b"cat: /linear/issues/SEC-42: "
     #                     b"No such file or directory\n"
@@ -342,7 +342,7 @@ Agent harnesses commonly fan out tool calls in parallel, each with its own `cwd`
     async def tool_call(cmd: str, cwd: str, env: dict[str, str], timeout: float):
         cancel = asyncio.Event()
         asyncio.get_event_loop().call_later(timeout, cancel.set)
-        return await ws.execute(cmd, cwd=cwd, env=env, cancel=cancel)
+        return await ws.shell(cmd, cwd=cwd, env=env, cancel=cancel)
 
     results = await asyncio.gather(
         tool_call("ls", "/data", {"DEBUG": "1"}, 5.0),
@@ -358,7 +358,7 @@ Agent harnesses commonly fan out tool calls in parallel, each with its own `cwd`
       env: Record<string, string>,
       timeoutMs: number,
     ) {
-      return ws.execute(cmd, { cwd, env, signal: AbortSignal.timeout(timeoutMs) })
+      return ws.shell(cmd, { cwd, env, signal: AbortSignal.timeout(timeoutMs) })
     }
 
     const results = await Promise.all([

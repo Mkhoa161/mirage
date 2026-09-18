@@ -37,7 +37,7 @@ function check(label: string, cond: boolean): void {
 }
 
 async function run(ws: Workspace, cmd: string): Promise<[string, string, number]> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return [DEC.decode(io.stdout), DEC.decode(io.stderr), io.exitCode]
 }
 

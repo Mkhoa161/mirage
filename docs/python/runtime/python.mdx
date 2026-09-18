@@ -32,10 +32,10 @@ from mirage import MountMode, Workspace
 from mirage.vfs.ram import RAMVFS
 
 ws = Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC)
-await ws.execute("echo hello > /data/a.txt")
+await ws.shell("echo hello > /data/a.txt")
 
 # Reads a virtualized file; /etc/passwd would raise FileNotFoundError.
-io = await ws.execute(
+io = await ws.shell(
     "python3 -c \"print(open('/data/a.txt').read().strip())\"")
 ```
 

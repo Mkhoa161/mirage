@@ -75,23 +75,23 @@ async def main():
     ws = Workspace({"/github": vfs}, mode=MountMode.READ)
 
     # List repository root
-    r = await ws.execute("ls /github/")
+    r = await ws.shell("ls /github/")
     print(await r.stdout_str())
 
     # Read a file
-    r = await ws.execute("cat /github/README.md")
+    r = await ws.shell("cat /github/README.md")
     print(await r.stdout_str())
 
     # Search for a pattern
-    r = await ws.execute('rg "def main" /github/')
+    r = await ws.shell('rg "def main" /github/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 2 /github/")
+    r = await ws.shell("tree -L 2 /github/")
     print(await r.stdout_str())
 
     # File metadata with SHA
-    r = await ws.execute("stat /github/README.md")
+    r = await ws.shell("stat /github/README.md")
     print(await r.stdout_str())
 
 

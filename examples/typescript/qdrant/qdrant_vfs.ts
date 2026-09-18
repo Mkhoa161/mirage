@@ -142,7 +142,7 @@ const DEC = new TextDecoder()
 
 async function show(ws: Workspace, cmd: string): Promise<void> {
   console.log(`\n=== ${cmd} ===`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   console.log(DEC.decode(r.stdout).trimEnd())
 }
 
@@ -198,7 +198,7 @@ async function main(): Promise<void> {
   await show(ws, 'cat /fashion/Men/Shoes/White/3.json')
 
   console.log('\n=== stat /fashion/Men/Shoes/White/3.jpg (raw image bytes) ===')
-  const s = await ws.execute("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
+  const s = await ws.shell("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
   console.log(`  image size: ${DEC.decode(s.stdout).trim()} bytes`)
 
   await show(ws, 'search "white running sneakers" /fashion')
@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   await show(ws, 'rg -li running /fashion/Men')
 
   console.log("\n=== find /fashion -name '*.txt' | wc -l ===")
-  const f = await ws.execute("find /fashion -name '*.txt' | wc -l")
+  const f = await ws.shell("find /fashion -name '*.txt' | wc -l")
   console.log(`  products: ${DEC.decode(f.stdout).trim()}`)
 
   console.log("\n=== mounted Qdrant collection 'company_docs' at /docs/ ===")

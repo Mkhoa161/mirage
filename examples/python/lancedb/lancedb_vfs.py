@@ -24,7 +24,7 @@ from mirage.vfs.lancedb import LanceDBConfig, LanceDBVFS
 
 async def show(ws: Workspace, cmd: str) -> None:
     print(f"\n=== {cmd} ===")
-    result = await ws.execute(cmd)
+    result = await ws.shell(cmd)
     print((await result.stdout_str()).rstrip())
 
 
@@ -56,14 +56,14 @@ async def main() -> None:
     await show(ws, "tail -n 2 /fashion/Men/Shoes/White/3.md")
 
     print("\n=== stat /fashion/Men/Shoes/White/3.jpg (raw image bytes) ===")
-    r = await ws.execute("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
+    r = await ws.shell("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
     print(f"  image size: {(await r.stdout_str()).strip()} bytes")
 
     # chmod/chown/touch never hit the LanceDB API: attrs land in the
     # workspace namespace (durable, snapshot-captured) and merge into
     # dispatch-level stat.
     print("=== metadata overlay on /fashion/Men/Shoes/White/3.md ===")
-    meta_res = await ws.execute(
+    meta_res = await ws.shell(
         'chmod 640 "/fashion/Men/Shoes/White/3.md"'
         ' && chown 500:dev "/fashion/Men/Shoes/White/3.md"'
         ' && touch -t 202601021530 "/fashion/Men/Shoes/White/3.md"')
@@ -79,7 +79,7 @@ async def main() -> None:
     await show(ws, "rg -li running /fashion/Men")
 
     print("\n=== find /fashion -name '*.md' | wc -l ===")
-    r = await ws.execute("find /fashion -name '*.md' | wc -l")
+    r = await ws.shell("find /fashion -name '*.md' | wc -l")
     print(f"  product cards: {(await r.stdout_str()).strip()}")
 
 

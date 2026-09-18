@@ -196,7 +196,7 @@ sync spawn.
 
 ```mermaid
 flowchart TD
-    App["application · agent adapter · mirage CLI · server"] --> WS["Workspace.execute(line, session)"]
+    App["application · agent adapter · mirage CLI · server"] --> WS["Workspace.shell(line, session)"]
     WS --> Parse["shell parser<br/>shell/parse (tree-sitter-bash)"]
     Parse --> Expand["expansion + classification<br/>workspace/expand"]
     Expand --> Lookup["lookup<br/>builtin › namespace command › function › CLI › mount"]

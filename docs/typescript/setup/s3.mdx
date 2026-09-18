@@ -34,7 +34,7 @@ const s3 = new S3VFS({
 })
 
 const ws = new Workspace({ '/bucket/': s3 }, { mode: MountMode.READ })
-const res = await ws.execute('ls /bucket/')
+const res = await ws.shell('ls /bucket/')
 console.log(res.stdoutText)
 ```
 
@@ -121,7 +121,7 @@ const s3 = new S3VFS({
 })
 
 const ws = new Workspace({ '/bucket/': s3 }, { mode: MountMode.READ })
-const res = await ws.execute('cat /bucket/hello.txt')
+const res = await ws.shell('cat /bucket/hello.txt')
 console.log(res.stdoutText)
 ```
 

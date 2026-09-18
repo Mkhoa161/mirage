@@ -76,7 +76,7 @@ async def test_state_env_template_holds_the_pointer_never_a_value():
     try:
         # Fetched into the session, so the template writer has to keep
         # writing the declaration rather than the live var.
-        assert (await ws.execute("echo $TOKEN")).exit_code == 0
+        assert (await ws.shell("echo $TOKEN")).exit_code == 0
         state = await to_state_dict(ws)
         env = state[StateKey.ENV]
         assert env["env"] == {"MODE": "m"}
@@ -178,7 +178,7 @@ async def test_registered_content_vfs_rebuilds_without_override():
     assert mount[MountKey.VFS_REF] is None
     restored = await Workspace.from_state(state)
     try:
-        result = await restored.execute("cat /n/a.md")
+        result = await restored.shell("cat /n/a.md")
         assert await result.stdout_str() == "one\n"
         notes = [m for m in restored.mounts() if m.prefix == "/n/"]
         assert isinstance(notes[0].vfs, Notes)
@@ -320,7 +320,7 @@ async def test_an_alias_over_a_builtin_rebuilds_through_its_ref_not_its_type():
     register_vfs("seeded", SeededRAM)
     ws = Workspace({"/s/": build_vfs("seeded")}, mode=MountMode.WRITE)
     try:
-        await ws.execute("echo one > /s/a.txt")
+        await ws.shell("echo one > /s/a.txt")
         state = await to_state_dict(ws)
     finally:
         await ws.close()
@@ -334,7 +334,7 @@ async def test_an_alias_over_a_builtin_rebuilds_through_its_ref_not_its_type():
         seeded = [m for m in restored.mounts() if m.prefix == "/s/"][0]
         assert type(seeded.vfs) is SeededRAM
         assert seeded.vfs.vfs_ref == "seeded"
-        result = await restored.execute("cat /s/a.txt")
+        result = await restored.shell("cat /s/a.txt")
         assert await result.stdout_str() == "one\n"
     finally:
         await restored.close()
@@ -392,7 +392,7 @@ class DenyGate(Policy):
 async def test_a_restored_variable_clears_the_session_gate():
     source = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        assert (await source.execute("export GATE_X=1")).exit_code == 0
+        assert (await source.shell("export GATE_X=1")).exit_code == 0
         state = await to_state_dict(source)
     finally:
         await source.close()
@@ -411,7 +411,7 @@ async def test_a_restored_variable_clears_the_session_gate():
 async def test_a_restore_the_gate_allows_lands_every_variable():
     source = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        assert (await source.execute("export PUBLIC_X=1")).exit_code == 0
+        assert (await source.shell("export PUBLIC_X=1")).exit_code == 0
         state = await to_state_dict(source)
     finally:
         await source.close()
@@ -434,11 +434,11 @@ async def test_a_restore_the_gate_allows_lands_every_variable():
 async def test_a_refused_session_table_leaves_the_workspace_untouched():
     source = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE, session_id="src")
     try:
-        assert (await source.execute("echo restored > /f.txt")).exit_code == 0
-        assert (await source.execute("export PUBLIC_A=1")).exit_code == 0
+        assert (await source.shell("echo restored > /f.txt")).exit_code == 0
+        assert (await source.shell("export PUBLIC_A=1")).exit_code == 0
         source.create_session("s2")
-        assert (await source.execute("export GATE_X=1",
-                                     session_id="s2")).exit_code == 0
+        assert (await source.shell("export GATE_X=1",
+                                   session_id="s2")).exit_code == 0
         state = await to_state_dict(source)
     finally:
         await source.close()
@@ -447,13 +447,13 @@ async def test_a_refused_session_table_leaves_the_workspace_untouched():
                        session_id="tgt",
                        policies=[DenyGate()])
     try:
-        assert (await target.execute("export KEEP=1")).exit_code == 0
+        assert (await target.shell("export KEEP=1")).exit_code == 0
         with pytest.raises(PolicyDenied):
             await apply_state_dict(target, state)
         assert "PUBLIC_A" not in target.env
         assert target.env.get("KEEP") == "1"
         assert [s.session_id for s in target.list_sessions()] == ["tgt"]
-        assert (await target.execute("test -e /f.txt")).exit_code == 1
+        assert (await target.shell("test -e /f.txt")).exit_code == 1
     finally:
         await target.close()
 
@@ -466,9 +466,8 @@ async def test_a_refused_env_template_lands_no_session():
                        mode=MountMode.WRITE,
                        env={"GATE_X": "1"})
     try:
-        assert (
-            await
-            source.execute("unset GATE_X; export PUBLIC_A=1")).exit_code == 0
+        assert (await
+                source.shell("unset GATE_X; export PUBLIC_A=1")).exit_code == 0
         state = await to_state_dict(source)
     finally:
         await source.close()
@@ -493,10 +492,10 @@ async def test_a_refused_env_template_lands_no_session():
 async def test_a_session_the_restore_creates_runs_under_the_default_profile():
     source = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        assert (await source.execute("echo kept > /f.txt")).exit_code == 0
+        assert (await source.shell("echo kept > /f.txt")).exit_code == 0
         source.create_session("s2")
-        assert (await source.execute("export PUBLIC_A=1",
-                                     session_id="s2")).exit_code == 0
+        assert (await source.shell("export PUBLIC_A=1",
+                                   session_id="s2")).exit_code == 0
         state = await to_state_dict(source)
     finally:
         await source.close()
@@ -517,10 +516,10 @@ async def test_a_session_the_restore_creates_runs_under_the_default_profile():
         assert restored.script is compiled.script
         assert target._session_mgr.script_of("s2") is compiled.script
         assert restored.env.get("PUBLIC_A") == "1"
-        refused = await target.execute("rm /f.txt", session_id="s2")
+        refused = await target.shell("rm /f.txt", session_id="s2")
         assert refused.exit_code == 126
         assert refused.stderr == b"rm: Permission denied\n"
-        assert (await target.execute("test -e /f.txt")).exit_code == 0
+        assert (await target.shell("test -e /f.txt")).exit_code == 0
     finally:
         await target.close()
 

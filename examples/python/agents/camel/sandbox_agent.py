@@ -55,7 +55,7 @@ task = ("Write a CSV at /data/numbers.csv with columns name,value and 3 rows. "
 async def main():
     response = await asyncio.to_thread(agent.step, task)
     print(response.msgs[-1].content)
-    listing = await ws.execute("find / -type f")
+    listing = await ws.shell("find / -type f")
     print((listing.stdout or b"").decode())
 
 

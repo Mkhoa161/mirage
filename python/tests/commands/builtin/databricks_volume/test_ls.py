@@ -41,7 +41,7 @@ def ws(dbx_files: FakeFiles) -> Workspace:
 
 @pytest.mark.asyncio
 async def test_ls_lists_entries(ws):
-    io = await ws.execute("ls /dbx/")
+    io = await ws.shell("ls /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -52,7 +52,7 @@ async def test_ls_lists_entries(ws):
 
 @pytest.mark.asyncio
 async def test_ls_a_includes_hidden(ws):
-    io = await ws.execute("ls -a /dbx/")
+    io = await ws.shell("ls -a /dbx/")
 
     assert io.exit_code == 0
     assert ".hidden" in io.stdout.decode()
@@ -60,7 +60,7 @@ async def test_ls_a_includes_hidden(ws):
 
 @pytest.mark.asyncio
 async def test_ls_long_includes_size(ws):
-    io = await ws.execute("ls -l /dbx/")
+    io = await ws.shell("ls -l /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -70,7 +70,7 @@ async def test_ls_long_includes_size(ws):
 
 @pytest.mark.asyncio
 async def test_ls_recursive_descends_subdirs(ws):
-    io = await ws.execute("ls -R /dbx/")
+    io = await ws.shell("ls -R /dbx/")
 
     assert io.exit_code == 0
     assert "inner.txt" in io.stdout.decode()
@@ -78,6 +78,6 @@ async def test_ls_recursive_descends_subdirs(ws):
 
 @pytest.mark.asyncio
 async def test_ls_missing_path_warns(ws):
-    io = await ws.execute("ls /dbx/missing")
+    io = await ws.shell("ls /dbx/missing")
 
     assert io.exit_code != 0

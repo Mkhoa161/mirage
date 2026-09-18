@@ -30,7 +30,7 @@ function configFromEnv(): GCSConfig {
 }
 
 async function run(ws: Workspace, command: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const r = await ws.execute(command)
+  const r = await ws.shell(command)
   return {
     stdout: r.stdoutText,
     stderr: r.stderrText,
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on /gcs/data/example.jsonl ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "/gcs/data/example.jsonl" && chown 500:dev "/gcs/data/example.jsonl" && touch -t 202601021530 "/gcs/data/example.jsonl"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

@@ -61,10 +61,10 @@ vfs = CephVFS(config)
 async def main() -> None:
     ws = Workspace({"/ceph/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /ceph/")
+    r = await ws.shell("ls /ceph/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /ceph/ -name '*.json'")
+    r = await ws.shell("find /ceph/ -name '*.json'")
     print(await r.stdout_str())
 
 

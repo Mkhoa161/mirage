@@ -154,7 +154,7 @@ async function exchangeCode(code: string, state: string): Promise<StoredTokens> 
 
 async function run(ws: Workspace, cmd: string): Promise<void> {
   line(`$ ${cmd}`, 'prompt')
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   const out = res.stdoutText.replace(/\s+$/, '')
   if (out !== '') line(out)
   const err = res.stderrText.replace(/\s+$/, '')

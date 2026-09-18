@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-// SeaweedFS in VFS mode — agent-style workflow using only `ws.execute()`. No FUSE.
+// SeaweedFS in VFS mode — agent-style workflow using only `ws.shell()`. No FUSE.
 //
 // Self-contained: seeds a few objects, drives them through the virtual
 // executor, then cleans up. Point it at a SeaweedFS S3 gateway (default
@@ -42,7 +42,7 @@ async function main(): Promise<void> {
   )
 
   const run = async (cmd: string): Promise<void> => {
-    const r = await ws.execute(cmd)
+    const r = await ws.shell(cmd)
     const out = r.stdoutText.trimEnd()
     const lines = out ? out.split('\n') : []
     const head = lines[0] ?? ''
@@ -55,17 +55,17 @@ async function main(): Promise<void> {
     console.log(`=== VFS MODE — SeaweedFS at ${cfg.endpoint} (bucket ${cfg.bucket}) ===\n`)
 
     // Seed a few objects so the demo is self-contained.
-    await ws.execute(
+    await ws.shell(
       `echo '{"event":"queue-operation","tool":"mirage"}' > /seaweedfs/data/example.jsonl`,
     )
-    await ws.execute(`echo '{"event":"read","tool":"mirage"}' >> /seaweedfs/data/example.jsonl`)
-    await ws.execute(
+    await ws.shell(`echo '{"event":"read","tool":"mirage"}' >> /seaweedfs/data/example.jsonl`)
+    await ws.shell(
       `echo '{"event":"queue-operation","tool":"other"}' >> /seaweedfs/data/example.jsonl`,
     )
-    await ws.execute(
+    await ws.shell(
       `echo '{"name":"mirage","version":1,"tags":["s3","seaweedfs"]}' > /seaweedfs/data/config.json`,
     )
-    await ws.execute('echo "hello from seaweedfs" > /seaweedfs/notes.txt')
+    await ws.shell('echo "hello from seaweedfs" > /seaweedfs/notes.txt')
 
     console.log('[listings]')
     await run('ls /seaweedfs')
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
       '/seaweedfs/data/config.json',
       '/seaweedfs/notes.txt',
     ]) {
-      await ws.execute(`rm ${key}`)
+      await ws.shell(`rm ${key}`)
     }
     console.log('  cleaned')
   } finally {

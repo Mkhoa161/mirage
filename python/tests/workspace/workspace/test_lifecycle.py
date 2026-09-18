@@ -88,9 +88,9 @@ async def test_first_mount_access_prepares_expansion_and_provision(action):
     ws.add_mount("/data", replacement, MountMode.WRITE)
     try:
         if action == "provision":
-            result = await ws.execute("cat /data/file", provision=True)
+            result = await ws.shell("cat /data/file", provision=True)
             assert result.cache_hits == 0
-            assert (await ws.execute("cat /data/file")).stdout == b"new"
+            assert (await ws.shell("cat /data/file")).stdout == b"new"
         elif action == "metadata":
             expanded = await expand_operands(ws._namespace, [
                 PathSpec(virtual="/data/*.txt",
@@ -107,14 +107,14 @@ async def test_first_mount_access_prepares_expansion_and_provision(action):
                 "chown": "chown 123",
                 "chgrp": "chgrp 456"
             }[action]
-            result = await ws.execute(command + " /data/*.txt")
+            result = await ws.shell(command + " /data/*.txt")
             assert result.exit_code == 0, result.stderr
             assert (
                 await
-                ws.execute("echo /data/*.txt")).stdout == b"/data/fresh.txt\n"
+                ws.shell("echo /data/*.txt")).stdout == b"/data/fresh.txt\n"
         else:
             pattern = "/data/*/*.txt" if action == "midpath" else "/data/*.txt"
-            result = await ws.execute("echo " + pattern)
+            result = await ws.shell("echo " + pattern)
             assert result.stdout == f"{directory}/fresh.txt\n".encode()
     finally:
         await ws.close()
@@ -139,7 +139,7 @@ async def test_unmount_waits_for_an_inflight_cache_write(monkeypatch):
         await write_cache(*args, **kwargs)
 
     monkeypatch.setattr(ws.cache, "set", blocked_set)
-    reading = asyncio.create_task(ws.execute("cat /data/file"))
+    reading = asyncio.create_task(ws.shell("cat /data/file"))
     removing = None
     try:
         await asyncio.wait_for(entered.wait(), timeout=5)
@@ -154,7 +154,7 @@ async def test_unmount_waits_for_an_inflight_cache_write(monkeypatch):
         replacement = CachedRAM()
         replacement.load_state({"files": {"/file": b"new"}})
         ws.add_mount("/data", replacement)
-        assert (await ws.execute("cat /data/file")).stdout == b"new"
+        assert (await ws.shell("cat /data/file")).stdout == b"new"
     finally:
         release.set()
         await asyncio.gather(reading,
@@ -238,7 +238,7 @@ async def test_retired_command_cannot_cache_bytes_for_replacement_mount(
     ws = Workspace(mounts)
     ws.register_cli("gate", CLISpec(name="gate", fn=gate))
     retired = ws.mount(prefix).cache_manager
-    running = asyncio.create_task(ws.execute("cat /data/file; gate"))
+    running = asyncio.create_task(ws.shell("cat /data/file; gate"))
     try:
         await asyncio.wait_for(entered.wait(), timeout=5)
         if not shadow:
@@ -249,7 +249,7 @@ async def test_retired_command_cannot_cache_bytes_for_replacement_mount(
         result = await asyncio.wait_for(running, timeout=5)
         assert result.stdout == b"old"
         assert await ws.cache.get("/data/file") is None
-        assert (await ws.execute("cat /data/file")).stdout == b"new"
+        assert (await ws.shell("cat /data/file")).stdout == b"new"
         assert await ws.cache.get("/data/file") == b"new"
         assert retired is not None
         assert await retired.cached_bytes(
@@ -302,7 +302,7 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
             await ws.fs.write("/data/file", b"changed")
         assert writing.value.errno == errno.EBUSY
         for line in ("cat /data/file", "echo changed > /data/file"):
-            assert (await ws.execute(line)).exit_code != 0
+            assert (await ws.shell(line)).exit_code != 0
         assert vfs.get_state()["files"]["/file"] == b"old"
         release.set()
         if fail_eviction:
@@ -700,11 +700,11 @@ async def test_unmount_waits_for_admitted_vfs_use(monkeypatch, surface,
 
     async def consume():
         if surface == "df":
-            result = await ws.execute("df /data")
+            result = await ws.shell("df /data")
             assert result.exit_code == 0
             return b"value"
         if surface == "command":
-            return (await ws.execute("readvalue /data/file")).stdout
+            return (await ws.shell("readvalue /data/file")).stdout
         value, _ = await ws.dispatch("read",
                                      PathSpec.from_str_path("/data/file"))
         if isinstance(value, bytes):
@@ -893,7 +893,7 @@ async def test_unmount_leaves_borrowed_mounts_open(used):
     replica = await Workspace.from_state(state, mounts={"/data": vfs})
     try:
         if used:
-            assert (await replica.execute("cat /data/file")).stdout == b"seed"
+            assert (await replica.shell("cat /data/file")).stdout == b"seed"
         await replica.unmount("/data")
         assert not vfs.is_closed
         await replica.close()

@@ -136,7 +136,7 @@ async def _sh(ws: Workspace,
         session_id (str | None): session to run under, None for default.
     """
     kwargs = {"session_id": session_id} if session_id is not None else {}
-    io = await ws.execute(line, **kwargs)
+    io = await ws.shell(line, **kwargs)
     out = (await materialize(io.stdout)).decode() if io.stdout else ""
     err = (await materialize(io.stderr)).decode() if io.stderr else ""
     return io.exit_code, out, err

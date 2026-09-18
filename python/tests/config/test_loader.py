@@ -307,7 +307,7 @@ async def test_workspace_built_from_config_executes_command():
     cfg = load_config(FIXTURES / "minimal.yaml")
     kwargs = cfg.to_workspace_kwargs()
     ws = Workspace(**kwargs)
-    result = await ws.execute("echo hello")
+    result = await ws.shell("echo hello")
     assert result.exit_code == 0
     assert (result.stdout or b"").startswith(b"hello")
 
@@ -480,12 +480,12 @@ profiles:
     ws = Workspace(**load_config(cfg_file).to_workspace_kwargs())
 
     async def run():
-        await ws.execute("printf S=1 > /repo/.env; printf x > /repo/f")
-        hidden = await ws.execute("cat /repo/.env")
-        refused = await ws.execute("rm /repo/f")
+        await ws.shell("printf S=1 > /repo/.env; printf x > /repo/f")
+        hidden = await ws.shell("cat /repo/.env")
+        refused = await ws.shell("rm /repo/f")
         ws.create_session("r", profile="reviewer")
-        where = await ws.execute("pwd", session_id="r")
-        readonly = await ws.execute("printf y > /repo/g", session_id="r")
+        where = await ws.shell("pwd", session_id="r")
+        readonly = await ws.shell("printf y > /repo/g", session_id="r")
         return hidden, refused, await where.stdout_str(), readonly
 
     hidden, refused, where, readonly = asyncio.run(run())

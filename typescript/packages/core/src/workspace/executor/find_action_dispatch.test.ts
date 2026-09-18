@@ -46,7 +46,7 @@ describe('find actions', () => {
     // `-exec {} \;` runs each match itself rather than looking up `{}`.
     const ws = await shellWs()
     try {
-      const r = await ws.execute(
+      const r = await ws.shell(
         "mkdir -p /data/fh/s; printf 'echo ran\\n' > /data/fh/s/x; chmod 700 /data/fh/s/x; cd /data/fh; find s -type f -exec {} \\; ; echo rc=$?",
         { sessionId: 's' },
       )
@@ -63,11 +63,11 @@ describe('find actions', () => {
     // inherit the removed one's mode.
     const ws = await shellWs()
     try {
-      await ws.execute('mkdir -p /data/m; touch /data/m/f /data/m/d', { sessionId: 's' })
+      await ws.shell('mkdir -p /data/m; touch /data/m/f /data/m/d', { sessionId: 's' })
       await ws.namespace.setAttrs('/data/m/f', { mode: 0o600 })
       await ws.namespace.setAttrs('/data/m/d', { mode: 0o700 })
       expect(ws.namespace.metaFor('/data/m/f')).not.toBeNull()
-      const r = await ws.execute('find /data/m -name f -delete; echo rc=$?', { sessionId: 's' })
+      const r = await ws.shell('find /data/m -name f -delete; echo rc=$?', { sessionId: 's' })
       expect(r.stdoutText).toBe('rc=0\n')
       expect(ws.namespace.metaFor('/data/m/f')).toBeNull()
       expect(ws.namespace.metaFor('/data/m/d')).not.toBeNull()
@@ -81,7 +81,7 @@ describe('find actions', () => {
     // hides the program from find nor runs in its place.
     const ws = await shellWs()
     try {
-      const r = await ws.execute(
+      const r = await ws.shell(
         "mkdir -p /data/sh; printf 'content\\n' > /data/sh/f; cd /data/sh; cat() { echo BAD; }; find . -type f -exec cat {} \\; ; echo rc=$?",
         { sessionId: 's' },
       )
@@ -97,7 +97,7 @@ describe('find actions', () => {
     // -delete` as it judges `rmdir emptydir`.
     const ws = await shellWs([new NoRmdir()])
     try {
-      const r = await ws.execute(
+      const r = await ws.shell(
         'mkdir -p /data/rd/e; touch /data/rd/f; find /data/rd/f -delete; echo rc=$?; find /data/rd/e -delete; echo rc=$?; test -d /data/rd/e; echo $?',
         { sessionId: 's' },
       )
@@ -113,7 +113,7 @@ describe('find actions', () => {
     // the first child takes it and the next reads EOF.
     const ws = await shellWs()
     try {
-      const r = await ws.execute(
+      const r = await ws.shell(
         'mkdir -p /data/fi/d; touch /data/fi/d/a /data/fi/d/b; cd /data/fi; printf x | find d -maxdepth 0 -exec cat \\; ; echo rc=$?; printf y | find d -type f -exec cat \\; ; echo rc=$?; printf z | find d -maxdepth 0 -exec true \\; -exec cat \\; ; echo rc=$?; printf abc | find d -maxdepth 0 -exec head -c 1 \\; -exec cat \\; ; echo rc=$?',
         { sessionId: 's' },
       )
@@ -130,8 +130,8 @@ describe('find actions', () => {
     // An alias is as invisible to execvp as a function: the program runs.
     const ws = await shellWs()
     try {
-      await ws.execute("shopt -s expand_aliases; alias cat='echo BAD'", { sessionId: 's' })
-      const r = await ws.execute(
+      await ws.shell("shopt -s expand_aliases; alias cat='echo BAD'", { sessionId: 's' })
+      const r = await ws.shell(
         "mkdir -p /data/al; printf 'content\\n' > /data/al/f; cd /data/al; find . -type f -exec cat {} \\; ; echo rc=$?; command cat f",
         { sessionId: 's' },
       )
@@ -149,7 +149,7 @@ describe('find actions', () => {
     // they removed (exit 0) while `-type f -delete -ls` reports it gone.
     const ws = await shellWs()
     try {
-      const r = await ws.execute(
+      const r = await ws.shell(
         'mkdir -p /data/dl; touch /data/dl/f /data/dl/g; cd /data; find dl/f -delete -ls; echo rc=$?; find dl -name g -size -1k -delete -ls; echo rc=$?; find dl -type d -delete -ls; echo rc=$?; test -e dl; echo e=$?',
         { sessionId: 's' },
       )
@@ -187,7 +187,7 @@ describe('find actions', () => {
     // starts is a shell again, so its printf assigns.
     const ws = await shellWs()
     try {
-      const r = await ws.execute(
+      const r = await ws.shell(
         'mkdir -p /data/fp; touch /data/fp/f; cd /data/fp; find . -type f -exec printf -v x hi \\; ; echo "[$x]"; find . -type f -exec sh -c \'printf -v y hi; echo "[$y]"\' \\; ; printf -v z hi; echo "[$z]"',
         { sessionId: 's' },
       )

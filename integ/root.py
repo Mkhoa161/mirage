@@ -35,7 +35,7 @@ def check(label: str, cond: bool) -> None:
 
 
 async def _out(ws: Workspace, cmd: str, stdin: bytes | None = None) -> str:
-    res = await ws.execute(cmd, stdin=stdin)
+    res = await ws.shell(cmd, stdin=stdin)
     return await res.stdout_str()
 
 
@@ -50,7 +50,7 @@ async def default_root_is_ram() -> None:
     ls = await _out(ws, "ls /")
     check("default: ls / lists child mounts", "data" in ls and "dev" in ls)
     check("default: ls / hides dotfile mounts", ".bash_history" not in ls)
-    await ws.execute("echo scratch > /note.txt")
+    await ws.shell("echo scratch > /note.txt")
     check("default: write to unmounted / lands on root scratch",
           (await _out(ws, "cat /note.txt")).strip() == "scratch")
     wc = await _out(ws, "wc -c", stdin=b"abcd")
@@ -65,8 +65,8 @@ async def ram_root_override() -> None:
         "ram-root: / is the user mount (not duplicated)", root is not None
         and root.prefix == "/"
         and len([m for m in ws._registry.mounts() if m.prefix == "/"]) == 1)
-    await ws.execute("echo hi > /top.txt")
-    await ws.execute("echo deep > /sub/inner.txt")
+    await ws.shell("echo hi > /top.txt")
+    await ws.shell("echo deep > /sub/inner.txt")
     check("ram-root: read file written at root",
           (await _out(ws, "cat /top.txt")).strip() == "hi")
     ls = await _out(ws, "ls /")
@@ -83,7 +83,7 @@ async def disk_root_override() -> None:
         root = ws._registry.root_mount
         check("disk-root: root backed by disk",
               type(root.vfs).__name__ == "DiskVFS")
-        await ws.execute("echo persisted > /file.txt")
+        await ws.shell("echo persisted > /file.txt")
         check("disk-root: read file back through root",
               (await _out(ws, "cat /file.txt")).strip() == "persisted")
         on_disk = os.path.join(tmp, "file.txt")
@@ -113,7 +113,7 @@ async def yaml_controls_root() -> None:
         root = ws._registry.root_mount
         check("yaml: root overridden to disk via config",
               type(root.vfs).__name__ == "DiskVFS")
-        await ws.execute("echo fromyaml > /y.txt")
+        await ws.shell("echo fromyaml > /y.txt")
         check("yaml: write at / persisted to disk",
               os.path.exists(os.path.join(tmp, "y.txt")))
         await ws.close()

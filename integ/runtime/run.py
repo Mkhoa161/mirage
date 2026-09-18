@@ -620,7 +620,7 @@ async def _run_step(ws: Workspace, case_id: str, index: int,
         kwargs["stdin"] = step["stdin"].encode()
     if "throws_contains" in expect:
         try:
-            await ws.execute(command, **kwargs)
+            await ws.shell(command, **kwargs)
         except Exception as exc:
             if expect["throws_contains"] in str(exc):
                 return []
@@ -629,7 +629,7 @@ async def _run_step(ws: Workspace, case_id: str, index: int,
                 f"{expect['throws_contains']!r} in the message"
             ]
         return [f"{case_id} {label}: expected an error, none raised"]
-    result = await ws.execute(command, **kwargs)
+    result = await ws.shell(command, **kwargs)
     stdout = await result.stdout_str()
     stderr = await result.stderr_str()
     problems = _check(case_id, label, expect, result.exit_code, stdout, stderr)

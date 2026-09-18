@@ -42,7 +42,7 @@ def _client() -> QdrantClient:
 
 async def show(ws: Workspace, cmd: str) -> None:
     print(f"\n=== {cmd} ===")
-    result = await ws.execute(cmd)
+    result = await ws.shell(cmd)
     print((await result.stdout_str()).rstrip())
 
 
@@ -92,14 +92,14 @@ async def main() -> None:
     await show(ws, "cat /fashion/Men/Shoes/White/3.json")
 
     print("\n=== stat /fashion/Men/Shoes/White/3.jpg (raw image bytes) ===")
-    r = await ws.execute("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
+    r = await ws.shell("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
     print(f"  image size: {(await r.stdout_str()).strip()} bytes")
 
     # chmod/chown/touch never hit the Qdrant API: attrs land in the
     # workspace namespace (durable, snapshot-captured) and merge into
     # dispatch-level stat.
     print("=== metadata overlay on /fashion/Men/Shoes/White/3.json ===")
-    meta_res = await ws.execute(
+    meta_res = await ws.shell(
         'chmod 640 "/fashion/Men/Shoes/White/3.json"'
         ' && chown 500:dev "/fashion/Men/Shoes/White/3.json"'
         ' && touch -t 202601021530 "/fashion/Men/Shoes/White/3.json"')
@@ -115,7 +115,7 @@ async def main() -> None:
     await show(ws, "rg -li running /fashion/Men")
 
     print("\n=== find /fashion -name '*.txt' | wc -l ===")
-    r = await ws.execute("find /fashion -name '*.txt' | wc -l")
+    r = await ws.shell("find /fashion -name '*.txt' | wc -l")
     print(f"  products: {(await r.stdout_str()).strip()}")
 
     print("\n=== mounted Qdrant collection 'company_docs' at /docs/ ===")

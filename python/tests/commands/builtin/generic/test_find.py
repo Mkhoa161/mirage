@@ -473,7 +473,7 @@ def test_find_invalid_numeric_arg_exits_one_with_clean_stderr(expr):
     async def _go() -> tuple[int, str]:
         ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
         ws.create_session("s")
-        r = await ws.execute(f"find / {expr}", session_id="s")
+        r = await ws.shell(f"find / {expr}", session_id="s")
         return r.exit_code, await r.stderr_str()
 
     code, stderr = asyncio.run(_go())

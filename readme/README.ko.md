@@ -50,15 +50,15 @@ ws = Workspace(
 )
 
 # grep 한 번으로 모든 소스를 훑는다
-await ws.execute("grep -rln session /redis /tmp")
+await ws.shell("grep -rln session /redis /tmp")
 
 # Slack에 있는 스크립트를 실행하고 리포트를 Redis에 기록한다
-await ws.execute("python3 /slack/channels/general_.../files/example__F....py > /redis/report.txt")
+await ws.shell("python3 /slack/channels/general_.../files/example__F....py > /redis/report.txt")
 
 # 헤드 워드로 타입이 있는 CLI를 설치한다: 경로가 아니라 이름으로 디스패치되고,
 # 다른 프로그램처럼 `man`, `type`, `which`로 찾을 수 있다
 ws.register_cli("slack", SLACK, {"token": slack_bot_token})
-await ws.execute('slack send-message --channel general --text "report is up"')
+await ws.shell('slack send-message --channel general --text "report is up"')
 ```
 
 ## 소개
@@ -129,8 +129,8 @@ ws = Workspace({
     "/s3":   S3VFS(S3Config(bucket="my-bucket")),
 })
 
-await ws.execute("cp /s3/report.csv /data/report.csv")
-await ws.execute("grep alert /s3/data/log.jsonl | wc -l")
+await ws.shell("cp /s3/report.csv /data/report.csv")
+await ws.shell("grep alert /s3/data/log.jsonl | wc -l")
 
 await ws.snapshot("demo.tar")
 ```
@@ -145,8 +145,8 @@ const ws = new Workspace({
   '/s3':   new S3VFS({ bucket: 'my-bucket' }),
 })
 
-await ws.execute('cp /s3/report.csv /data/report.csv')
-await ws.execute('grep alert /s3/data/log.jsonl | wc -l')
+await ws.shell('cp /s3/report.csv /data/report.csv')
+await ws.shell('grep alert /s3/data/log.jsonl | wc -l')
 
 await ws.snapshot('demo.tar')
 ```
