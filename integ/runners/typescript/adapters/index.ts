@@ -1249,17 +1249,17 @@ async function openMongodb(target: Target): Promise<Open> {
   const uri = process.env.MONGODB_URI
   if (uri === undefined) throw new Error('mongodb target requires MONGODB_URI')
   await seedMongodb(uri)
-  const mounts: MongoDBVFS[] = []
+  const created: MongoDBVFS[] = []
   const mounts: Record<string, MongoDBVFS | [MongoDBVFS, MountMode]> = {}
   for (const mount of target.mounts) {
     const vfs = new MongoDBVFS({ uri, databases: [MONGODB_DB] })
-    mounts.push(vfs)
+    created.push(vfs)
     mounts[mount.path] = mount.mode === 'read' ? [vfs, MountMode.READ] : vfs
   }
   const ws = new Workspace(mounts, { mode: MountMode.WRITE })
   const cleanup = async (): Promise<void> => {
     await ws.close()
-    for (const vfs of mounts) await vfs.close()
+    for (const vfs of created) await vfs.close()
   }
   return { ws: ws as unknown as ExecWorkspace, cleanup }
 }
@@ -1319,17 +1319,17 @@ async function openPostgres(target: Target): Promise<Open> {
   const dsn = process.env.POSTGRES_DSN
   if (dsn === undefined) throw new Error('postgres target requires POSTGRES_DSN')
   await seedPostgres(dsn)
-  const mounts: PostgresVFS[] = []
+  const created: PostgresVFS[] = []
   const mounts: Record<string, PostgresVFS | [PostgresVFS, MountMode]> = {}
   for (const mount of target.mounts) {
     const vfs = new PostgresVFS({ dsn, maxReadRows: 200 })
-    mounts.push(vfs)
+    created.push(vfs)
     mounts[mount.path] = mount.mode === 'read' ? [vfs, MountMode.READ] : vfs
   }
   const ws = new Workspace(mounts, { mode: MountMode.WRITE })
   const cleanup = async (): Promise<void> => {
     await ws.close()
-    for (const vfs of mounts) await vfs.close()
+    for (const vfs of created) await vfs.close()
   }
   return { ws: ws as unknown as ExecWorkspace, cleanup }
 }
