@@ -79,7 +79,7 @@ async function write(prefix: string): Promise<void> {
   const fileEntry = new IndexEntry({
     id: FILE,
     name: FILE_NAME,
-    vfsType: 'file',
+    resourceType: 'file',
     remoteTime: REMOTE_TIME,
     size: 6,
     extra: { ...EXTRA },
@@ -87,7 +87,7 @@ async function write(prefix: string): Promise<void> {
   const folderEntry = new IndexEntry({
     id: `${DIR}/${FOLDER_NAME}`,
     name: FOLDER_NAME,
-    vfsType: 'folder',
+    resourceType: 'folder',
     remoteTime: REMOTE_TIME,
   })
   await store.setDir(DIR, [
@@ -115,7 +115,7 @@ async function read(prefix: string): Promise<void> {
       (got.status ?? null) === null &&
       entry.id === FILE &&
       entry.name === FILE_NAME &&
-      entry.vfsType === 'file' &&
+      entry.resourceType === 'file' &&
       entry.remoteTime === REMOTE_TIME &&
       entry.size === 6 &&
       JSON.stringify(entry.extra) === JSON.stringify(EXTRA) &&

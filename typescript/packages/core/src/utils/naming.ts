@@ -42,11 +42,11 @@ export const SEPARATOR = '__'
  * directory joins two sanitized parts with the separator itself --
  * re-sanitizing that would collapse `__` to `_` and change the name's shape.
  */
-export function fitIdName(label: string, vfsId: string, suffix = ''): string {
-  const budget = NAME_MAX_BYTES - (SEPARATOR.length + byteLength(vfsId) + byteLength(suffix))
+export function fitIdName(label: string, resourceId: string, suffix = ''): string {
+  const budget = NAME_MAX_BYTES - (SEPARATOR.length + byteLength(resourceId) + byteLength(suffix))
   const fitted =
     byteLength(label) > budget ? stripTrailingUnderscores(truncateBytes(label, budget)) : label
-  return `${fitted}${SEPARATOR}${vfsId}${suffix}`
+  return `${fitted}${SEPARATOR}${resourceId}${suffix}`
 }
 
 /**
@@ -63,16 +63,16 @@ export function fitIdName(label: string, vfsId: string, suffix = ''): string {
  */
 export function makeIdName(
   displayName: string,
-  vfsId: string,
+  resourceId: string,
   pathSafe = false,
   suffix = '',
 ): string {
   const transform = pathSafe ? pathSafeName : sanitizeName
-  return fitIdName(transform(displayName), vfsId, suffix)
+  return fitIdName(transform(displayName), resourceId, suffix)
 }
 
 /**
- * Extract `[displayName, vfsId]` from `makeIdName` output, optionally
+ * Extract `[displayName, resourceId]` from `makeIdName` output, optionally
  * stripping a file extension first. Throws when `name` doesn't end with
  * `suffix` or doesn't contain `__`.
  */

@@ -48,7 +48,7 @@ describe('fileReadProvision', () => {
       new IndexEntry({
         id: 'U1',
         name: 'alice',
-        vfsType: 'slack/user',
+        resourceType: 'slack/user',
         vfsName: 'alice__U1.json',
       }),
     )

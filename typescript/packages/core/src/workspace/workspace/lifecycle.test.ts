@@ -389,7 +389,10 @@ it.each(['service', 'clear'])('unmount drains index invalidation (%s)', async (k
   const index = vfs.index
   const method = kind === 'service' ? 'invalidate' : 'clear'
   const invalidate = index[method].bind(index)
-  await index.put('/outside-scope', new IndexEntry({ id: 'stale', name: 'stale', vfsType: 'ram' }))
+  await index.put(
+    '/outside-scope',
+    new IndexEntry({ id: 'stale', name: 'stale', resourceType: 'ram' }),
+  )
   vi.spyOn(index, method).mockImplementation(async () => {
     enter()
     await release

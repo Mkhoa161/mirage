@@ -69,7 +69,7 @@ describe('trello readdir /workspaces', () => {
     expect(out).toEqual(['/mnt/trello/workspaces/Acme__w1', '/mnt/trello/workspaces/beta__w2'])
     const lookup = await idx.get('/mnt/trello/workspaces/Acme__w1')
     expect(lookup.entry?.id).toBe('w1')
-    expect(lookup.entry?.vfsType).toBe('trello/workspace')
+    expect(lookup.entry?.resourceType).toBe('trello/workspace')
   })
 
   it('lists a workspace dir with a sized workspace.json', async () => {

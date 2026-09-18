@@ -62,7 +62,7 @@ const listRooms: Lister<FakeAccessor> = (accessor, _match) => {
   return Promise.resolve(
     (TREE.rooms ?? []).map((room): [string, IndexEntry] => [
       room,
-      new IndexEntry({ id: room, name: room, vfsType: 'fake/room', vfsName: room }),
+      new IndexEntry({ id: room, name: room, resourceType: 'fake/room', vfsName: room }),
     ]),
   )
 }
@@ -73,7 +73,7 @@ const listNotes: Lister<FakeAccessor> = (accessor, match) => {
   return Promise.resolve(
     (TREE[room] ?? []).map((note): [string, IndexEntry] => [
       note,
-      new IndexEntry({ id: note, name: note, vfsType: 'fake/note', vfsName: note, size: 7 }),
+      new IndexEntry({ id: note, name: note, resourceType: 'fake/note', vfsName: note, size: 7 }),
     ]),
   )
 }
@@ -172,7 +172,7 @@ const entryNotes: EntryLister<FakeAccessor> = (accessor, _match, entry) => {
       new IndexEntry({
         id: entry.id,
         name: 'note.json',
-        vfsType: 'fake/note',
+        resourceType: 'fake/note',
         vfsName: 'note.json',
       }),
     ],
@@ -230,13 +230,13 @@ const seedingNotes: EntryLister<FakeAccessor> = (accessor, match, own) => {
   const atts = new IndexEntry({
     id: `${own.id}:atts`,
     name: 'atts',
-    vfsType: 'fake/atts',
+    resourceType: 'fake/atts',
     vfsName: 'atts',
   })
   const blob = new IndexEntry({
     id: 'x',
     name: 'x.bin',
-    vfsType: 'fake/blob',
+    resourceType: 'fake/blob',
     vfsName: 'x.bin',
     size: 3,
   })
@@ -291,7 +291,7 @@ const daysByRoom: EntryLister<FakeAccessor> = (accessor, match, roomEntry) => {
       new IndexEntry({
         id: `${roomEntry.id}:${day}`,
         name: `${day}.txt`,
-        vfsType: 'fake/day_note',
+        resourceType: 'fake/day_note',
         vfsName: `${day}.txt`,
       }),
     ],
@@ -342,7 +342,7 @@ const listWindowed: Lister<FakeAccessor> = (accessor, match) => {
   const names = match.pattern === null ? ['c.json'] : [match.pattern]
   const entries = names.map((n): [string, IndexEntry] => [
     n,
-    new IndexEntry({ id: n, name: n, vfsType: 'fake/note', vfsName: n }),
+    new IndexEntry({ id: n, name: n, resourceType: 'fake/note', vfsName: n }),
   ])
   return Promise.resolve({ entries, seeds: {}, partial: match.pattern !== null })
 }

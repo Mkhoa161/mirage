@@ -44,7 +44,7 @@ async function warm(index: RAMIndexCacheStore): Promise<void> {
       new IndexEntry({
         id: 'INBOX',
         name: 'INBOX',
-        vfsType: 'gmail/label',
+        resourceType: 'gmail/label',
         vfsName: 'INBOX',
       }),
     ],
@@ -55,7 +55,7 @@ async function warm(index: RAMIndexCacheStore): Promise<void> {
       new IndexEntry({
         id: '2026-04-12',
         name: '2026-04-12',
-        vfsType: 'gmail/date',
+        resourceType: 'gmail/date',
         vfsName: '2026-04-12',
       }),
     ],

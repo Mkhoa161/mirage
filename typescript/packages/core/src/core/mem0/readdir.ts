@@ -33,7 +33,7 @@ async function listMemories(
       new IndexEntry({
         id: memoryId,
         name: filename,
-        vfsType: 'mem0/memory',
+        resourceType: 'mem0/memory',
         vfsName: filename,
         size: jsonBytes(memory).length,
         remoteTime:

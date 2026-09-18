@@ -264,7 +264,7 @@ describe('Workspace snapshot: capture and replay drift detection', () => {
       if (index === undefined) throw new Error('missing index')
       await index.put(
         '/remote/a.txt',
-        new IndexEntry({ id: 'a', name: 'a.txt', vfsType: 'file', size: 2 }),
+        new IndexEntry({ id: 'a', name: 'a.txt', resourceType: 'file', size: 2 }),
       )
       const read =
         surface === 'shell'

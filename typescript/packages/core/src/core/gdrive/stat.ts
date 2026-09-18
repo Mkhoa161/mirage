@@ -97,7 +97,7 @@ export async function stat(
     ),
   )
   if (entry === null) return statFromApi(accessor, key, path.virtual)
-  if (DIRECTORY_RESOURCE_TYPES.has(entry.vfsType)) {
+  if (DIRECTORY_RESOURCE_TYPES.has(entry.resourceType)) {
     return new FileStat({
       name: entry.vfsName !== '' ? entry.vfsName : entry.name,
       type: FileType.DIRECTORY,
@@ -114,7 +114,7 @@ export async function stat(
     fingerprint: entry.remoteTime !== '' ? entry.remoteTime : null,
     extra: {
       file_id: entry.id,
-      resource_type: entry.vfsType,
+      resource_type: entry.resourceType,
     },
   })
 }

@@ -104,7 +104,7 @@ function containerEntry(name: string, guildId: string): IndexEntry {
   return new IndexEntry({
     id: guildId,
     name,
-    vfsType: CONTAINER_TYPE,
+    resourceType: CONTAINER_TYPE,
     vfsName: name,
   })
 }
@@ -200,14 +200,14 @@ async function dayListing(
   const chatEntry = new IndexEntry({
     id: `${channelId}:${dateStr}:chat`,
     name: 'chat.jsonl',
-    vfsType: DiscordResourceType.CHAT_JSONL,
+    resourceType: DiscordResourceType.CHAT_JSONL,
     vfsName: 'chat.jsonl',
     size: historyJsonlBytes(messages).byteLength,
   })
   const filesEntry = new IndexEntry({
     id: `${channelId}:${dateStr}:files`,
     name: 'files',
-    vfsType: DiscordResourceType.FILES_DIR,
+    resourceType: DiscordResourceType.FILES_DIR,
     vfsName: 'files',
     extra: { channel_id: channelId, date: dateStr },
   })
@@ -233,7 +233,7 @@ async function dayListing(
         new IndexEntry({
           id: att.id,
           name: att.filename ?? '',
-          vfsType: DiscordResourceType.FILE,
+          resourceType: DiscordResourceType.FILE,
           vfsName: blobName,
           size: att.size,
           extra: {

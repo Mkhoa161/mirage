@@ -107,7 +107,7 @@ describe('dirStatEntry', () => {
   it('names the last segment', () => {
     const entry = dirStatEntry('/m/deep/dir')
     expect(entry.name).toBe('dir')
-    expect(entry.vfsType).toBe('folder')
+    expect(entry.resourceType).toBe('folder')
   })
 })
 
@@ -245,7 +245,7 @@ for (const backend of ['ram', 'redis']) {
               try {
                 await seedIndex(accessor, index, '/m')
                 await index.setDir('/other', [
-                  ['keep', new IndexEntry({ id: 'keep', name: 'keep', vfsType: 'file' })],
+                  ['keep', new IndexEntry({ id: 'keep', name: 'keep', resourceType: 'file' })],
                 ])
                 await index.invalidate()
                 expect((await index.get(`/m/${changed}`)).entry).toBeDefined()
@@ -293,7 +293,7 @@ for (const backend of ['ram', 'redis']) {
           await seedIndex(accessor, index, '')
           await index.setDir(
             '/d',
-            [['b.txt', new IndexEntry({ id: 'old', name: 'b.txt', vfsType: 'file' })]],
+            [['b.txt', new IndexEntry({ id: 'old', name: 'b.txt', resourceType: 'file' })]],
             new Date(0),
           )
           await expect(stat(accessor, ps('d/b.txt'), index)).rejects.toMatchObject({

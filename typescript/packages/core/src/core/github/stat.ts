@@ -67,7 +67,7 @@ export async function stat(
     if (!children.includes(ikey)) throw enoent(path)
     const result = await index.get(ikey)
     if (result.entry === undefined || result.entry === null) throw enoent(path)
-    if (result.entry.vfsType === 'folder') {
+    if (result.entry.resourceType === 'folder') {
       return new FileStat({ name: result.entry.name, type: FileType.DIRECTORY })
     }
     return new FileStat({

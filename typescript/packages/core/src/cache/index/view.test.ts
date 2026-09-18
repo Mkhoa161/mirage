@@ -72,7 +72,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
             await release
             await index.put(
               '/data/stale',
-              new IndexEntry({ id: 'old', name: 'stale', vfsType: 'file' }),
+              new IndexEntry({ id: 'old', name: 'stale', resourceType: 'file' }),
             )
             return new FileStat({
               name: 'source',
@@ -102,7 +102,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
           await ws.fs.readdir('/data')
           await replacement.index.put(
             '/data/fresh',
-            new IndexEntry({ id: 'new', name: 'fresh', vfsType: 'file' }),
+            new IndexEntry({ id: 'new', name: 'fresh', resourceType: 'file' }),
           )
           resume()
           expect(await reading).toBe(op === 'rename' ? 'EACCES' : 'EINVAL')
@@ -136,7 +136,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
         const ws = new Workspace({ [prefix]: vfs }, { index: config })
         ws.addMount('/alias', vfs)
         const index = vfs.index
-        const entry = new IndexEntry({ id: 'old', name: 'stale', vfsType: 'file' })
+        const entry = new IndexEntry({ id: 'old', name: 'stale', resourceType: 'file' })
         let enter = (): void => undefined
         let resume = (): void => undefined
         const entered = new Promise<void>((resolve) => {
@@ -205,7 +205,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
           }
           await replacement.index.put(
             '/data/fresh',
-            new IndexEntry({ id: 'new', name: 'fresh', vfsType: 'file' }),
+            new IndexEntry({ id: 'new', name: 'fresh', resourceType: 'file' }),
           )
           resume()
           await reading
@@ -235,7 +235,7 @@ it('filters seeded snapshots and entries through mount ownership', async () => {
     '/data',
     (path) => active && (path === '/data' || path === '/data/a'),
   )
-  const entry = new IndexEntry({ id: 'a', name: 'a', vfsType: 'file' })
+  const entry = new IndexEntry({ id: 'a', name: 'a', resourceType: 'file' })
   try {
     view.seed(
       new Map([

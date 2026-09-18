@@ -36,7 +36,7 @@ import { dirStatEntry, keyOf, lookup } from './lookup.ts'
  */
 function statOf(entry: IndexEntry): FileStat {
   const modified = entry.remoteTime === '' ? null : entry.remoteTime
-  if (entry.vfsType === 'folder') {
+  if (entry.resourceType === 'folder') {
     return new FileStat({ name: entry.name, type: FileType.DIRECTORY, modified })
   }
   return new FileStat({

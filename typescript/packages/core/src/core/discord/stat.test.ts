@@ -56,7 +56,7 @@ describe('stat guild dir', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          vfsType: 'discord/guild',
+          resourceType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -129,7 +129,7 @@ describe('stat channel dir', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'discord/channel',
+          resourceType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '794354201395200000',
         }),
@@ -179,7 +179,7 @@ describe('stat member file', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          vfsType: 'discord/member',
+          resourceType: 'discord/member',
           vfsName: 'alice__U1.json',
         }),
       ],

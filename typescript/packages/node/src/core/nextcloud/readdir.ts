@@ -115,7 +115,7 @@ export async function readdir(
           new IndexEntry({
             id: key,
             name,
-            vfsType: directories.has(key) ? ResourceType.FOLDER : ResourceType.FILE,
+            resourceType: directories.has(key) ? ResourceType.FOLDER : ResourceType.FILE,
             size: directories.has(key) ? null : (info?.size ?? null),
             remoteTime: info?.modified ?? '',
           }),

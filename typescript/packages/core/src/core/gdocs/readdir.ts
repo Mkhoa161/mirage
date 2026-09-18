@@ -79,7 +79,7 @@ export async function readdir(
     const entry = new IndexEntry({
       id: f.id,
       name: f.name,
-      vfsType: 'gdocs/file',
+      resourceType: 'gdocs/file',
       remoteTime: f.modifiedTime ?? '',
       vfsName: filename,
       extra: Number.isFinite(sourceSize) && sourceSize > 0 ? { source_size: sourceSize } : {},

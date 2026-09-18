@@ -55,7 +55,7 @@ def test_index_entry_json_is_the_shared_wire_format():
 def test_index_entry_json_refuses_a_camel_case_row():
     with pytest.raises(ValidationError):
         IndexEntry.model_validate_json(
-            '{"id":"/c","name":"c","vfsType":"file"}')
+            '{"id":"/c","name":"c","resourceType":"file"}')
 
 
 def test_lookup_result_not_found():

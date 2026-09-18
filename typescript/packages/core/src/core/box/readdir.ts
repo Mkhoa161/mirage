@@ -21,7 +21,7 @@ import { absentOn404, listFolderItems, type BoxItem } from './api.ts'
 import { enotdir } from '../../utils/errors.ts'
 import { rstripSlash } from '../../utils/slash.ts'
 
-export function vfsTypeFor(item: BoxItem): string {
+export function resourceTypeFor(item: BoxItem): string {
   if (item.type === 'folder') return 'box/folder'
   if (item.type === 'web_link') return 'box/weblink'
   return 'box/file'
@@ -64,7 +64,7 @@ export async function readdir(
         throw e
       }
     }
-    if (result.entry.vfsType !== 'box/folder') {
+    if (result.entry.resourceType !== 'box/folder') {
       // Listing a file id would 404 on /folders/{id}/items; surface the
       // POSIX error so generic ls falls back to the file entry.
       throw enotdir(path.virtual)
@@ -88,7 +88,7 @@ export async function readdir(
     const entry = new IndexEntry({
       id: it.id,
       name: filename,
-      vfsType: vfsTypeFor(it),
+      resourceType: resourceTypeFor(it),
       remoteTime: it.modified_at ?? '',
       vfsName: filename,
       size: isDir ? null : typeof it.size === 'number' ? it.size : null,

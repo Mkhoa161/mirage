@@ -127,7 +127,7 @@ describe('gdrive read auto-bootstrap', () => {
         new IndexEntry({
           id: 'drive1',
           name: 'Team Drive',
-          vfsType: 'gdrive/shared_drive',
+          resourceType: 'gdrive/shared_drive',
           vfsName: 'Team Drive',
           extra: { drive_id: 'drive1' },
         }),

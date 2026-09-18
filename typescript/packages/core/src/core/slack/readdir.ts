@@ -111,7 +111,7 @@ async function listChannelsRoot(
       new IndexEntry({
         id: ch.id,
         name: ch.name ?? '',
-        vfsType: 'slack/channel',
+        resourceType: 'slack/channel',
         vfsName: dirname,
         remoteTime: String(ch.created ?? 0),
       }),
@@ -132,7 +132,7 @@ async function listDmsRoot(accessor: SlackAccessor, _match: ScopeMatch): Promise
       new IndexEntry({
         id: dm.id,
         name: userMap[uid] ?? uid,
-        vfsType: 'slack/dm',
+        resourceType: 'slack/dm',
         vfsName: dirname,
         remoteTime: String(dm.created ?? 0),
       }),
@@ -149,7 +149,7 @@ async function listUsersRoot(accessor: SlackAccessor, _match: ScopeMatch): Promi
       new IndexEntry({
         id: u.id,
         name: u.name ?? '',
-        vfsType: 'slack/user',
+        resourceType: 'slack/user',
         vfsName: filename,
         size: userJsonBytes(u).byteLength,
       }),
@@ -180,7 +180,7 @@ async function listChannelDays(
         new IndexEntry({
           id: `${own.id}:${d}`,
           name: d,
-          vfsType: 'slack/date_dir',
+          resourceType: 'slack/date_dir',
           vfsName: d,
           extra: { channel_id: own.id },
         }),
@@ -210,14 +210,14 @@ async function dayListing(
   const chatEntry = new IndexEntry({
     id: `${channelId}:${dateStr}:chat`,
     name: 'chat.jsonl',
-    vfsType: 'slack/chat_jsonl',
+    resourceType: 'slack/chat_jsonl',
     vfsName: 'chat.jsonl',
     size: messagesToJsonl(messages).byteLength,
   })
   const filesEntry = new IndexEntry({
     id: `${channelId}:${dateStr}:files`,
     name: 'files',
-    vfsType: 'slack/files_dir',
+    resourceType: 'slack/files_dir',
     vfsName: 'files',
     extra: { channel_id: channelId, date: dateStr },
   })
@@ -247,7 +247,7 @@ async function dayListing(
         new IndexEntry({
           id: meta.id,
           name: meta.title ?? meta.name ?? '',
-          vfsType: 'slack/file',
+          resourceType: 'slack/file',
           vfsName: blob,
           size: meta.size,
           remoteTime: String(meta.timestamp ?? ''),

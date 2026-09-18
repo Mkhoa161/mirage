@@ -33,7 +33,7 @@ async function run(kind: string, flags: Record<string, boolean> = {}) {
     resolved: true,
   })
   await index.setDir('/drive', [
-    [name, new IndexEntry({ id: 'file1', name, vfsType: `gdrive/${kind}`, vfsName: name })],
+    [name, new IndexEntry({ id: 'file1', name, resourceType: `gdrive/${kind}`, vfsName: name })],
   ])
   const cmd = GDRIVE_COMMANDS.find((c) => c.name === 'grep')
   if (cmd === undefined) throw new Error('grep not registered')

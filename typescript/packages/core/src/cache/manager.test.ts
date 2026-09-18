@@ -26,7 +26,7 @@ async function seeded(): Promise<[RAMFileCacheStore, RAMIndexCacheStore]> {
   const index = new RAMIndexCacheStore({ ttl: 600 })
   await cache.set('/data/arch/h.txt', new TextEncoder().encode('two\n'))
   await index.setDir('/data/arch', [
-    ['h.txt', new IndexEntry({ id: 'h', name: 'h.txt', vfsType: 'file' })],
+    ['h.txt', new IndexEntry({ id: 'h', name: 'h.txt', resourceType: 'file' })],
   ])
   return [cache, index]
 }
@@ -122,7 +122,7 @@ describe('CacheManager', () => {
   it('invalidateSubtree drops nested bodies and listings', async () => {
     const cache = new RAMFileCacheStore()
     const index = new RAMIndexCacheStore({ ttl: 600 })
-    const entry = new IndexEntry({ id: '1', name: 'f', vfsType: 'file' })
+    const entry = new IndexEntry({ id: '1', name: 'f', resourceType: 'file' })
     await cache.set('/data/chan/day/chat.jsonl', new TextEncoder().encode('one\n'))
     await cache.set('/data/chan/day/files/a.png', new TextEncoder().encode('png'))
     await index.setDir('/data/chan/day', [['chat.jsonl', entry]])
@@ -139,7 +139,7 @@ describe('CacheManager', () => {
   it('a write does not reach into the subtree', async () => {
     const cache = new RAMFileCacheStore()
     const index = new RAMIndexCacheStore({ ttl: 600 })
-    const entry = new IndexEntry({ id: '1', name: 'f', vfsType: 'file' })
+    const entry = new IndexEntry({ id: '1', name: 'f', resourceType: 'file' })
     await index.setDir('/data/chan/day/files', [['a.png', entry]])
     const manager = new CacheManager(cache, index, '/data/', true)
     await manager.invalidateAfterWrite(PathSpec.fromStrPath('/chan/day'))
@@ -154,7 +154,7 @@ describe('CacheManager', () => {
     // which is an eviction that hits no key.
     const cache = new RAMFileCacheStore()
     const index = new RAMIndexCacheStore({ ttl: 600 })
-    const entry = new IndexEntry({ id: '1', name: 'f', vfsType: 'file' })
+    const entry = new IndexEntry({ id: '1', name: 'f', resourceType: 'file' })
     await index.setDir('/d/day', [['chat.jsonl', entry]])
     const manager = new CacheManager(cache, index, '/d/', true)
     await manager.invalidateAfterUnlink(PathSpec.fromStrPath('/day'))

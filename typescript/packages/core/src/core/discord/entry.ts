@@ -45,7 +45,7 @@ export const DiscordIndexEntry = {
     return new IndexEntry({
       id: g.id,
       name: g.name ?? '',
-      vfsType: DiscordResourceType.GUILD,
+      resourceType: DiscordResourceType.GUILD,
       vfsName: guildDirname(g),
     })
   },
@@ -53,7 +53,7 @@ export const DiscordIndexEntry = {
     return new IndexEntry({
       id: c.id,
       name: c.name ?? '',
-      vfsType: DiscordResourceType.CHANNEL,
+      resourceType: DiscordResourceType.CHANNEL,
       vfsName: channelDirname(c),
     })
   },
@@ -61,7 +61,7 @@ export const DiscordIndexEntry = {
     return new IndexEntry({
       id: m.id,
       name: m.name ?? '',
-      vfsType: DiscordResourceType.MEMBER,
+      resourceType: DiscordResourceType.MEMBER,
       vfsName: memberFilename(m),
       ...(size !== undefined ? { size } : {}),
     })
@@ -72,7 +72,7 @@ export const DiscordIndexEntry = {
     return new IndexEntry({
       id: `${channelId}:${date}`,
       name: date,
-      vfsType: DiscordResourceType.HISTORY,
+      resourceType: DiscordResourceType.HISTORY,
       vfsName: date,
       extra: { channel_id: channelId },
     })

@@ -60,7 +60,7 @@ async def create_repo(config: HfConfig,
             the repository url derived from the id rather than the one
             the create call would have returned.
         resource_group_id (str | None): the Enterprise resource group to
-            create the repository in. Spelled ``vfsGroupId`` on the
+            create the repository in. Spelled ``resourceGroupId`` on the
             wire, which is huggingface_hub's own spelling for it.
 
     Returns:
@@ -77,7 +77,7 @@ async def create_repo(config: HfConfig,
     if space_sdk:
         body["sdk"] = space_sdk
     if resource_group_id:
-        body["vfsGroupId"] = resource_group_id
+        body["resourceGroupId"] = resource_group_id
     url = f"{config.endpoint.rstrip('/')}/api/repos/create"
     try:
         data = await hub_post(config.token, url, body)

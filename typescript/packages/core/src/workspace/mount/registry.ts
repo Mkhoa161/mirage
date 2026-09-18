@@ -59,7 +59,7 @@ export class MountCommandUnsupported extends Error {
 
 export interface OpsMountInfo {
   prefix: string
-  vfsType: string
+  resourceType: string
   mode: MountMode
 }
 
@@ -307,7 +307,7 @@ export class MountRegistry {
   opsMounts(): OpsMountInfo[] {
     return this.mountList.map((m) => ({
       prefix: m.prefix,
-      vfsType: m.vfs.kind,
+      resourceType: m.vfs.kind,
       mode: m.mode,
     }))
   }

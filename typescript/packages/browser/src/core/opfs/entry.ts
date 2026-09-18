@@ -27,7 +27,7 @@ export class OPFSIndexEntry extends IndexEntry {
     return new OPFSIndexEntry({
       id: path,
       name,
-      vfsType: OPFSResourceType.FILE,
+      resourceType: OPFSResourceType.FILE,
       vfsName: name,
       size,
       remoteTime: modified,
@@ -39,7 +39,7 @@ export class OPFSIndexEntry extends IndexEntry {
     return new OPFSIndexEntry({
       id: path,
       name,
-      vfsType: OPFSResourceType.FOLDER,
+      resourceType: OPFSResourceType.FOLDER,
       vfsName: name,
       remoteTime: modified,
     })

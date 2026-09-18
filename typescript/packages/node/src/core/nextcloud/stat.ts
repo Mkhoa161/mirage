@@ -24,7 +24,7 @@ export async function stat(
     const lookup = await index.get(virtualKey)
     if (lookup.entry !== undefined && lookup.entry !== null) {
       const entry = lookup.entry
-      if (entry.vfsType === ResourceType.FOLDER) {
+      if (entry.resourceType === ResourceType.FOLDER) {
         return new FileStat({
           name: entry.name,
           type: FileType.DIRECTORY,

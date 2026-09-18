@@ -91,7 +91,7 @@ describe('Workspace lifecycle', () => {
       })
       const directory = action === 'midpath' ? '/data/dir' : '/data'
       await ancestor.index.setDir(directory, [
-        ['stale.txt', new IndexEntry({ id: 'old', name: 'stale.txt', vfsType: 'file' })],
+        ['stale.txt', new IndexEntry({ id: 'old', name: 'stale.txt', resourceType: 'file' })],
       ])
       await ws.cache.set('/data/file', bytes.encode('old'))
       ws.addMount('/data', replacement, MountMode.WRITE)
@@ -367,7 +367,7 @@ describe('Workspace dynamic mount index', () => {
           const ws = new Workspace({ [shadow ? '/' : '/data']: vfs }, { index: config })
           ws.addMount('/alias', vfs)
           const index = vfs.index
-          const entry = new IndexEntry({ id: 'old', name: 'private.txt', vfsType: 'file' })
+          const entry = new IndexEntry({ id: 'old', name: 'private.txt', resourceType: 'file' })
           try {
             await index.put('/data', entry)
             for (const path of ['/data', '/data/nested', '/database', '/alias']) {
@@ -1137,7 +1137,7 @@ it('unmount drains metadata globs and their index writes', async () => {
     await release
     expect(closed).toBe(false)
     await index.setDir('/data', [
-      ['late', new IndexEntry({ id: 'late', name: 'late', vfsType: 'file' })],
+      ['late', new IndexEntry({ id: 'late', name: 'late', resourceType: 'file' })],
     ])
     return []
   })

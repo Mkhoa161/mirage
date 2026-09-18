@@ -53,7 +53,7 @@ export function makeStat<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>)
       if (entry !== null) {
         // Store "folders" are synthetic prefixes with no object, so
         // readdir() records no time or size for them.
-        if (entry.vfsType === ResourceType.FOLDER) {
+        if (entry.resourceType === ResourceType.FOLDER) {
           return new FileStat({ name: entry.name, type: FileType.DIRECTORY })
         }
         return new FileStat({

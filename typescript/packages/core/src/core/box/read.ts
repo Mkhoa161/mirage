@@ -56,7 +56,7 @@ export async function read(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.vfsType === 'box/folder') throw eisdir(path.virtual)
+  if (entry.resourceType === 'box/folder') throw eisdir(path.virtual)
   return downloadFile(accessor.tokenManager, entry.id, window)
 }
 
@@ -82,7 +82,7 @@ export async function* stream(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.vfsType === 'box/folder') throw eisdir(path.virtual)
+  if (entry.resourceType === 'box/folder') throw eisdir(path.virtual)
   for await (const chunk of downloadFileStream(accessor.tokenManager, entry.id)) {
     yield chunk
   }

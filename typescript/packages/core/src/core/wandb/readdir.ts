@@ -14,7 +14,7 @@ function entry(name: string, directory: boolean, size: number | null = null): In
     id: name,
     name,
     vfsName: name,
-    vfsType: directory ? 'wandb/directory' : 'wandb/file',
+    resourceType: directory ? 'wandb/directory' : 'wandb/file',
     size: directory ? 0 : size,
   })
 }
@@ -28,7 +28,7 @@ export function fileTree(files: FileMetadata[]): Map<string, [string, IndexEntry
       const node = entry(child, depth < segments.length - 1, file.sizeBytes)
       const children = directories.get(parent) ?? new Map<string, IndexEntry>()
       const previous = children.get(child)
-      if (previous && previous.vfsType !== node.vfsType)
+      if (previous && previous.resourceType !== node.resourceType)
         throw new WandbAPIError('W&B file and directory name collision')
       children.set(child, node)
       directories.set(parent, children)

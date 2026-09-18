@@ -69,7 +69,7 @@ export async function readdir(
       new IndexEntry({
         id: `${dirPrefix}${name}`,
         name,
-        vfsType: ResourceType.FILE,
+        resourceType: ResourceType.FILE,
       }),
     ])
     await index.setDir(virtualKey, indexEntries)

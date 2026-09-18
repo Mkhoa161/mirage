@@ -93,7 +93,7 @@ export async function read(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  const rt = entry.vfsType
+  const rt = entry.resourceType
   if (DIRECTORY_RESOURCE_TYPES.has(rt)) throw eisdir(path.virtual)
   if (rt === 'gdrive/gdoc')
     return sliceWindow(await readDoc(accessor.tokenManager, entry.id), offset, size)

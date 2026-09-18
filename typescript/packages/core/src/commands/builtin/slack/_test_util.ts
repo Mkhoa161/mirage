@@ -68,7 +68,7 @@ export async function seedChannel(
       new IndexEntry({
         id: channelId,
         name: channelDirname.split('__')[0] ?? channelDirname,
-        vfsType: 'slack/channel',
+        resourceType: 'slack/channel',
         vfsName: channelDirname,
         remoteTime: options.remoteTime ?? '0',
       }),
@@ -82,7 +82,7 @@ export async function seedChannel(
       new IndexEntry({
         id: `${channelId}:${d}`,
         name: d,
-        vfsType: 'slack/date_dir',
+        resourceType: 'slack/date_dir',
         vfsName: d,
       }),
     ])
@@ -95,7 +95,7 @@ export async function seedChannel(
           new IndexEntry({
             id: `${channelId}:${d}:chat`,
             name: 'chat.jsonl',
-            vfsType: 'slack/chat_jsonl',
+            resourceType: 'slack/chat_jsonl',
             vfsName: 'chat.jsonl',
           }),
         ],
@@ -104,7 +104,7 @@ export async function seedChannel(
           new IndexEntry({
             id: `${channelId}:${d}:files`,
             name: 'files',
-            vfsType: 'slack/files_dir',
+            resourceType: 'slack/files_dir',
             vfsName: 'files',
           }),
         ],
@@ -127,7 +127,7 @@ export async function seedUser(
       new IndexEntry({
         id: userId,
         name: filename.split('__')[0] ?? filename,
-        vfsType: 'slack/user',
+        resourceType: 'slack/user',
         vfsName: filename,
       }),
     ],

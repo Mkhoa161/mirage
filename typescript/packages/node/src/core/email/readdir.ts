@@ -129,7 +129,7 @@ function dateChildren(headers: readonly FetchedMessage[]): {
       new IndexEntry({
         id: uid,
         name: subject,
-        vfsType: 'email/message',
+        resourceType: 'email/message',
         vfsName: filename,
         size: messageJsonBytes(hdr).byteLength,
       }),
@@ -142,7 +142,7 @@ function dateChildren(headers: readonly FetchedMessage[]): {
         new IndexEntry({
           id: uid,
           name: attDirName,
-          vfsType: 'email/attachment_dir',
+          resourceType: 'email/attachment_dir',
           vfsName: attDirName,
         }),
       ])
@@ -153,7 +153,7 @@ function dateChildren(headers: readonly FetchedMessage[]): {
             new IndexEntry({
               id: att.filename,
               name: att.filename,
-              vfsType: 'email/attachment',
+              resourceType: 'email/attachment',
               vfsName: att.filename,
               size: att.size,
             }),
@@ -181,7 +181,7 @@ async function listRoot(accessor: EmailAccessor, _match: ScopeMatch): Promise<Li
         new IndexEntry({
           id: name,
           name,
-          vfsType: 'email/folder',
+          resourceType: 'email/folder',
           vfsName: name,
         }),
       ] as [string, IndexEntry],
@@ -213,7 +213,7 @@ async function listFolder(
       new IndexEntry({
         id: dateStr,
         name: dateStr,
-        vfsType: 'email/date',
+        resourceType: 'email/date',
         vfsName: dateStr,
       }),
     ])

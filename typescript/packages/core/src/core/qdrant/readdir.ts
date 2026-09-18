@@ -31,7 +31,7 @@ import { fieldValue } from './payload.ts'
 const GROUP_TYPE = 'qdrant/group'
 
 function dirEntry(name: string): IndexEntry {
-  return new IndexEntry({ id: name, name, vfsType: GROUP_TYPE, vfsName: name })
+  return new IndexEntry({ id: name, name, resourceType: GROUP_TYPE, vfsName: name })
 }
 
 function blobSize(value: unknown): number | null {
@@ -58,7 +58,7 @@ function rowEntries(rows: QdrantRow[], config: QdrantConfigResolved): [string, I
       new IndexEntry({
         id,
         name: `${stem}.json`,
-        vfsType: 'qdrant/row_json',
+        resourceType: 'qdrant/row_json',
         vfsName: `${stem}.json`,
         size: renderJson(row, config).byteLength,
       }),
@@ -73,7 +73,7 @@ function rowEntries(rows: QdrantRow[], config: QdrantConfigResolved): [string, I
         new IndexEntry({
           id,
           name: `${stem}.txt`,
-          vfsType: 'qdrant/row_text',
+          resourceType: 'qdrant/row_text',
           vfsName: `${stem}.txt`,
           size: renderText(row, config).byteLength,
         }),
@@ -90,7 +90,7 @@ function rowEntries(rows: QdrantRow[], config: QdrantConfigResolved): [string, I
         new IndexEntry({
           id,
           name: blobName,
-          vfsType: 'qdrant/row_blob',
+          resourceType: 'qdrant/row_blob',
           vfsName: blobName,
           size: blobSize(fieldValue(row, config.blobField)),
         }),

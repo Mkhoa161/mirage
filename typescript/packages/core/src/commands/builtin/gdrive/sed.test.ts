@@ -66,7 +66,7 @@ async function putFile(index: RAMIndexCacheStore, key: string, name: string): Pr
       new IndexEntry({
         id: 'file123',
         name,
-        vfsType: 'gdrive/file',
+        resourceType: 'gdrive/file',
         remoteTime: '2026-01-01T00:00:00Z',
         vfsName: name,
         size: 100,

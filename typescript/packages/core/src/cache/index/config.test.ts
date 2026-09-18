@@ -25,7 +25,7 @@ describe('IndexEntry JSON', () => {
     const entry = new IndexEntry({
       id: '/a.txt',
       name: 'a.txt',
-      vfsType: 'file',
+      resourceType: 'file',
       remoteTime: '2026-01-01T00:00:00Z',
       indexTime: '2026-01-01T00:00:00Z',
       size: 6,
@@ -41,7 +41,7 @@ describe('IndexEntry JSON', () => {
       new IndexEntry({
         id: '/b.txt',
         name: 'b.txt',
-        vfsType: 'file',
+        resourceType: 'file',
         extra: { size_bytes: 9 },
       }),
     )
@@ -61,7 +61,7 @@ describe('IndexEntry JSON', () => {
   })
 
   it('refuses a camelCase row', () => {
-    expect(() => IndexEntry.fromJSON('{"id":"/c","name":"c","vfsType":"file"}')).toThrow()
+    expect(() => IndexEntry.fromJSON('{"id":"/c","name":"c","resourceType":"file"}')).toThrow()
   })
 })
 

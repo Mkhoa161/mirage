@@ -45,7 +45,7 @@ function stores(): [RAMFileCacheStore, RAMIndexCacheStore] {
 }
 
 function entry(): IndexEntry {
-  return new IndexEntry({ id: '1', name: 'f', vfsType: 'file' })
+  return new IndexEntry({ id: '1', name: 'f', resourceType: 'file' })
 }
 
 describe.each(CASES)('mount %s holding %s', (mount, child) => {

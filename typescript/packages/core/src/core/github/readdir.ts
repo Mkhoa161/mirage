@@ -114,7 +114,7 @@ async function cacheDir(
         id: e.sha,
         name: e.path,
         vfsName: e.path,
-        vfsType: e.type === 'tree' ? 'folder' : 'file',
+        resourceType: e.type === 'tree' ? 'folder' : 'file',
         size: e.size ?? null,
       }),
     ])

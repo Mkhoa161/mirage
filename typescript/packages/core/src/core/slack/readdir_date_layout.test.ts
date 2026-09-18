@@ -47,7 +47,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),
@@ -59,7 +59,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'C1:2024-01-01',
           name: '2024-01-01',
-          vfsType: 'slack/date_dir',
+          resourceType: 'slack/date_dir',
           vfsName: '2024-01-01',
         }),
       ],
@@ -112,7 +112,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),
@@ -124,7 +124,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'C1:2024-01-01',
           name: '2024-01-01',
-          vfsType: 'slack/date_dir',
+          resourceType: 'slack/date_dir',
           vfsName: '2024-01-01',
         }),
       ],
@@ -135,7 +135,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'C1:2024-01-01:chat',
           name: 'chat.jsonl',
-          vfsType: 'slack/chat_jsonl',
+          resourceType: 'slack/chat_jsonl',
           vfsName: 'chat.jsonl',
         }),
       ],
@@ -144,7 +144,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'C1:2024-01-01:files',
           name: 'files',
-          vfsType: 'slack/files_dir',
+          resourceType: 'slack/files_dir',
           vfsName: 'files',
         }),
       ],
@@ -155,7 +155,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'F1',
           name: 'spec.pdf',
-          vfsType: 'slack/file',
+          resourceType: 'slack/file',
           vfsName: 'spec__F1.pdf',
           extra: { mimetype: 'application/pdf' },
         }),
@@ -181,7 +181,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'CX',
           name: 'priv',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'priv__CX',
           remoteTime: '0',
         }),
@@ -193,7 +193,7 @@ describe('readdir: date directory layout', () => {
         new IndexEntry({
           id: 'CX:2024-01-01',
           name: '2024-01-01',
-          vfsType: 'slack/date_dir',
+          resourceType: 'slack/date_dir',
           vfsName: '2024-01-01',
         }),
       ],

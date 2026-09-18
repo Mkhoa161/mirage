@@ -66,12 +66,12 @@ describe('memberFilename', () => {
 })
 
 describe('DiscordIndexEntry', () => {
-  it('guild() returns IndexEntry with discord/guild vfsType', () => {
+  it('guild() returns IndexEntry with discord/guild resourceType', () => {
     const entry = DiscordIndexEntry.guild({ id: 'G1', name: 'My Server' })
     expect(entry.id).toBe('G1')
     expect(entry.name).toBe('My Server')
-    expect(entry.vfsType).toBe(DiscordResourceType.GUILD)
-    expect(entry.vfsType).toBe('discord/guild')
+    expect(entry.resourceType).toBe(DiscordResourceType.GUILD)
+    expect(entry.resourceType).toBe('discord/guild')
     expect(entry.vfsName).toBe('My Server__G1')
   })
 
@@ -81,12 +81,12 @@ describe('DiscordIndexEntry', () => {
     expect(entry.vfsName).toBe('unknown__G2')
   })
 
-  it('channel() returns IndexEntry with discord/channel vfsType', () => {
+  it('channel() returns IndexEntry with discord/channel resourceType', () => {
     const entry = DiscordIndexEntry.channel({ id: 'C1', name: 'general' })
     expect(entry.id).toBe('C1')
     expect(entry.name).toBe('general')
-    expect(entry.vfsType).toBe(DiscordResourceType.CHANNEL)
-    expect(entry.vfsType).toBe('discord/channel')
+    expect(entry.resourceType).toBe(DiscordResourceType.CHANNEL)
+    expect(entry.resourceType).toBe('discord/channel')
     expect(entry.vfsName).toBe('general__C1')
   })
 
@@ -96,12 +96,12 @@ describe('DiscordIndexEntry', () => {
     expect(entry.vfsName).toBe('unknown__C2')
   })
 
-  it('member() returns IndexEntry with discord/member vfsType', () => {
+  it('member() returns IndexEntry with discord/member resourceType', () => {
     const entry = DiscordIndexEntry.member({ id: 'M1', name: 'alice' })
     expect(entry.id).toBe('M1')
     expect(entry.name).toBe('alice')
-    expect(entry.vfsType).toBe(DiscordResourceType.MEMBER)
-    expect(entry.vfsType).toBe('discord/member')
+    expect(entry.resourceType).toBe(DiscordResourceType.MEMBER)
+    expect(entry.resourceType).toBe('discord/member')
     expect(entry.vfsName).toBe('alice__M1.json')
   })
 
@@ -111,12 +111,12 @@ describe('DiscordIndexEntry', () => {
     expect(entry.vfsName).toBe('unknown__M2.json')
   })
 
-  it('history() returns IndexEntry with discord/history vfsType', () => {
+  it('history() returns IndexEntry with discord/history resourceType', () => {
     const entry = DiscordIndexEntry.history('C1', '2026-04-25')
     expect(entry.id).toBe('C1:2026-04-25')
     expect(entry.name).toBe('2026-04-25')
-    expect(entry.vfsType).toBe(DiscordResourceType.HISTORY)
-    expect(entry.vfsType).toBe('discord/history')
+    expect(entry.resourceType).toBe(DiscordResourceType.HISTORY)
+    expect(entry.resourceType).toBe('discord/history')
     expect(entry.vfsName).toBe('2026-04-25')
     expect(entry.extra).toEqual({ channel_id: 'C1' })
   })

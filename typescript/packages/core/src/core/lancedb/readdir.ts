@@ -31,7 +31,7 @@ import { compareCodePoints } from '../../utils/sort.ts'
 const GROUP_TYPE = 'lancedb/group'
 
 function dirEntry(name: string): IndexEntry {
-  return new IndexEntry({ id: name, name, vfsType: GROUP_TYPE, vfsName: name })
+  return new IndexEntry({ id: name, name, resourceType: GROUP_TYPE, vfsName: name })
 }
 
 function rowEntries(rows: LanceRow[], config: LanceDBConfigResolved): [string, IndexEntry][] {
@@ -46,7 +46,7 @@ function rowEntries(rows: LanceRow[], config: LanceDBConfigResolved): [string, I
       new IndexEntry({
         id,
         name: `${id}.md`,
-        vfsType: 'lancedb/row_card',
+        resourceType: 'lancedb/row_card',
         vfsName: `${id}.md`,
         size: renderCard(row, config).byteLength,
       }),
@@ -58,7 +58,7 @@ function rowEntries(rows: LanceRow[], config: LanceDBConfigResolved): [string, I
         new IndexEntry({
           id,
           name: blobName,
-          vfsType: 'lancedb/row_blob',
+          resourceType: 'lancedb/row_blob',
           vfsName: blobName,
         }),
       ])

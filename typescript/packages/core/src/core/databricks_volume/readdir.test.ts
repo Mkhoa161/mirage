@@ -113,11 +113,11 @@ describe('readdir', () => {
     const index = new RAMIndexCacheStore()
     await readdir(makeAccessor(), spec('/volume/'), index)
     const file = await index.get('/volume/a.txt')
-    expect(file.entry?.vfsType).toBe('file')
+    expect(file.entry?.resourceType).toBe('file')
     expect(file.entry?.size).toBe(6)
     expect(file.entry?.remoteTime).toBe('2023-11-14T22:13:20Z')
     const dir = await index.get('/volume/d')
-    expect(dir.entry?.vfsType).toBe('folder')
+    expect(dir.entry?.resourceType).toBe('folder')
   })
 
   it('backfills a lister-omitted size with one HEAD', async () => {

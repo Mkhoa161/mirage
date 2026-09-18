@@ -22,7 +22,7 @@ import { DropboxApiError } from './client.ts'
 import { getMetadata, listFolder, type DropboxEntry } from './api.ts'
 import { stripSlash } from '../../utils/slash.ts'
 
-function vfsTypeFor(entry: DropboxEntry): string {
+function resourceTypeFor(entry: DropboxEntry): string {
   if (entry['.tag'] === 'folder') return 'dropbox/folder'
   return 'dropbox/file'
 }
@@ -102,7 +102,7 @@ export async function readdir(
     const entry = new IndexEntry({
       id: f.id ?? f.path_display ?? filename,
       name: filename,
-      vfsType: vfsTypeFor(f),
+      resourceType: resourceTypeFor(f),
       remoteTime: modified,
       vfsName: filename,
       size: !isDir ? size : null,

@@ -28,11 +28,11 @@ describe('OPFSIndexEntry', () => {
     expect(e.id).toBe('/a/b.txt')
     expect(e.name).toBe('b.txt')
     expect(e.size).toBe(7)
-    expect(e.vfsType).toBe(OPFSResourceType.FILE)
+    expect(e.resourceType).toBe(OPFSResourceType.FILE)
   })
   it('builds a folder entry', () => {
     const e = OPFSIndexEntry.folder('/d')
     expect(e.name).toBe('d')
-    expect(e.vfsType).toBe(OPFSResourceType.FOLDER)
+    expect(e.resourceType).toBe(OPFSResourceType.FOLDER)
   })
 })

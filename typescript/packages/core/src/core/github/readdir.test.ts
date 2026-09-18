@@ -128,10 +128,13 @@ for (const backend of ['ram', 'redis']) {
         accessor.truncated = true
         try {
           await index.setDir('/repo', [
-            ['src', new IndexEntry({ id: 'old-src', name: 'src', vfsType: 'folder' })],
+            ['src', new IndexEntry({ id: 'old-src', name: 'src', resourceType: 'folder' })],
           ])
           await index.setDir('/repo/src', [
-            ['nested', new IndexEntry({ id: 'old-nested', name: 'nested', vfsType: 'folder' })],
+            [
+              'nested',
+              new IndexEntry({ id: 'old-nested', name: 'nested', resourceType: 'folder' }),
+            ],
           ])
           await index.setDir('/repo/src/nested', [], new Date(Date.now() - 1000))
           const path = new PathSpec({
@@ -208,13 +211,13 @@ for (const backend of ['ram', 'redis']) {
         })
         try {
           await index.setDir('/other', [
-            ['keep', new IndexEntry({ id: 'keep', name: 'keep', vfsType: 'file' })],
+            ['keep', new IndexEntry({ id: 'keep', name: 'keep', resourceType: 'file' })],
           ])
           await index.setDir('/repo', [
-            ['src', new IndexEntry({ id: 'old', name: 'src', vfsType: 'folder' })],
+            ['src', new IndexEntry({ id: 'old', name: 'src', resourceType: 'folder' })],
           ])
           await index.setDir('/repo/src', [
-            ['old.py', new IndexEntry({ id: 'old-file', name: 'old.py', vfsType: 'file' })],
+            ['old.py', new IndexEntry({ id: 'old-file', name: 'old.py', resourceType: 'file' })],
           ])
           await index.invalidate()
           for (let i = 0; i < 2; i++)

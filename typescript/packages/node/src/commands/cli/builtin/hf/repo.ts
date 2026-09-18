@@ -42,7 +42,7 @@ export async function createCmd(inv: CLIInvocation): Promise<CommandFnResult> {
     private: fl.asBool('private'),
     spaceSdk: sdk,
     existOk: fl.asBool('exist_ok'),
-    vfsGroupId: fl.asStr('resource_group_id'),
+    resourceGroupId: fl.asStr('resource_group_id'),
   })
   const url = result.url
   return textOut(

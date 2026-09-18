@@ -46,9 +46,9 @@ export interface CreateRepoOptions {
   existOk?: boolean
   /**
    * The Enterprise resource group to create the repository in. Spelled
-   * `vfsGroupId` on the wire, which is huggingface_hub's own spelling.
+   * `resourceGroupId` on the wire, which is huggingface_hub's own spelling.
    */
-  vfsGroupId?: string | undefined
+  resourceGroupId?: string | undefined
 }
 
 /** Create a repository on the Hub. */
@@ -65,8 +65,8 @@ export async function createRepo(
   }
   if (options.private === true) body.visibility = 'private'
   if (options.spaceSdk !== undefined && options.spaceSdk !== '') body.sdk = options.spaceSdk
-  if (options.vfsGroupId !== undefined && options.vfsGroupId !== '') {
-    body.vfsGroupId = options.vfsGroupId
+  if (options.resourceGroupId !== undefined && options.resourceGroupId !== '') {
+    body.resourceGroupId = options.resourceGroupId
   }
   const url = `${hfEndpoint(config).replace(/\/+$/, '')}/api/repos/create`
   let data: unknown

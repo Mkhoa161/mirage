@@ -145,7 +145,7 @@ async function cacheNamespace(
         new IndexEntry({
           id: `${base}/${name}`,
           name,
-          vfsType: ResourceType.FOLDER,
+          resourceType: ResourceType.FOLDER,
         }),
       ]),
     )

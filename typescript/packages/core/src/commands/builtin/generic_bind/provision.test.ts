@@ -332,7 +332,10 @@ describe('chat/KB provision helpers', () => {
 
   it('indexHitReadProvision counts cached operands', async () => {
     const index = new RAMIndexCacheStore()
-    await index.put('/chat/a.jsonl', new IndexEntry({ id: 'a', name: 'a.jsonl', vfsType: 'file' }))
+    await index.put(
+      '/chat/a.jsonl',
+      new IndexEntry({ id: 'a', name: 'a.jsonl', resourceType: 'file' }),
+    )
     const paths = [
       PathSpec.fromStrPath('/chat/a.jsonl'),
       PathSpec.fromStrPath('/chat/missing.jsonl'),

@@ -52,7 +52,7 @@ async function seedChannelDir(
       new IndexEntry({
         id: channelId,
         name: channelDirname,
-        vfsType: 'slack/channel',
+        resourceType: 'slack/channel',
         vfsName: channelDirname,
         remoteTime: '0',
       }),
@@ -64,7 +64,7 @@ async function seedChannelDir(
     new IndexEntry({
       id: `${channelId}:${name}`,
       name,
-      vfsType: 'slack/history',
+      resourceType: 'slack/history',
       vfsName: name,
     }),
   ])

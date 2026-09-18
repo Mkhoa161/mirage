@@ -93,7 +93,7 @@ export function buildDirEntries(
     const entry = new IndexEntry({
       id: stripSlash(directory),
       name: gnuBasename(directory),
-      vfsType: 'folder',
+      resourceType: 'folder',
     })
     dirEntries.get(virtualPath(parent(directory), prefix))?.push([entry.name, entry])
   }
@@ -108,7 +108,7 @@ export function buildDirEntries(
     const entry = new IndexEntry({
       id: slug,
       name: gnuBasename(path),
-      vfsType: 'file',
+      resourceType: 'file',
       remoteTime: updatedAt ?? '',
       extra: {
         slug,

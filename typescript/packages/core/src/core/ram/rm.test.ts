@@ -35,7 +35,7 @@ async function seeded(): Promise<[RAMAccessor, RAMFileCacheStore, RAMIndexCacheS
   const cache = new RAMFileCacheStore()
   const index = new RAMIndexCacheStore({ ttl: 600 })
   await cache.set('/data/a/b/f.txt', ENC.encode('hi\n'))
-  const entry = new IndexEntry({ id: '1', name: 'f.txt', vfsType: 'file' })
+  const entry = new IndexEntry({ id: '1', name: 'f.txt', resourceType: 'file' })
   await index.setDir('/data/a', [['b', entry]])
   await index.setDir('/data/a/b', [['f.txt', entry]])
   return [new RAMAccessor(store), cache, index]

@@ -53,7 +53,7 @@ describe('gdrive stat shared drives', () => {
         new IndexEntry({
           id: 'drive1',
           name: 'Team Drive',
-          vfsType: 'gdrive/shared_drive',
+          resourceType: 'gdrive/shared_drive',
           vfsName: 'Team Drive',
           extra: { drive_id: 'drive1' },
         }),

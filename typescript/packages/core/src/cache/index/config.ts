@@ -59,7 +59,7 @@ export type IndexEntryWire = z.output<typeof IndexEntryWireSchema>
 export interface IndexEntryInit {
   id: string
   name: string
-  vfsType: string
+  resourceType: string
   remoteTime?: string
   indexTime?: string
   vfsName?: string
@@ -70,7 +70,7 @@ export interface IndexEntryInit {
 export class IndexEntry {
   id: string
   name: string
-  vfsType: string
+  resourceType: string
   remoteTime: string
   indexTime: string
   vfsName: string
@@ -80,7 +80,7 @@ export class IndexEntry {
   constructor(init: IndexEntryInit) {
     this.id = init.id
     this.name = init.name
-    this.vfsType = init.vfsType
+    this.resourceType = init.resourceType
     this.remoteTime = init.remoteTime ?? ''
     this.indexTime = init.indexTime ?? ''
     this.vfsName = init.vfsName ?? ''
@@ -92,7 +92,7 @@ export class IndexEntry {
     return new IndexEntry({
       id: updates.id ?? this.id,
       name: updates.name ?? this.name,
-      vfsType: updates.vfsType ?? this.vfsType,
+      resourceType: updates.resourceType ?? this.resourceType,
       remoteTime: updates.remoteTime ?? this.remoteTime,
       indexTime: updates.indexTime ?? this.indexTime,
       vfsName: updates.vfsName ?? this.vfsName,
@@ -106,7 +106,7 @@ export class IndexEntry {
     return {
       id: this.id,
       name: this.name,
-      resource_type: this.vfsType,
+      resource_type: this.resourceType,
       remote_time: this.remoteTime,
       index_time: this.indexTime,
       vfs_name: this.vfsName,
@@ -121,7 +121,7 @@ export class IndexEntry {
     return new IndexEntry({
       id: w.id,
       name: w.name,
-      vfsType: w.resource_type,
+      resourceType: w.resource_type,
       remoteTime: w.remote_time,
       indexTime: w.index_time,
       vfsName: w.vfs_name,

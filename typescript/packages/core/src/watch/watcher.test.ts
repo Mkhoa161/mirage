@@ -83,7 +83,7 @@ describe('Watcher', () => {
     const levels = ['/nc', '/nc/data', '/nc/data/sub']
     for (const level of levels) {
       await index.setDir(level, [
-        ['child', new IndexEntry({ id: '1', name: 'child', vfsType: 'file' })],
+        ['child', new IndexEntry({ id: '1', name: 'child', resourceType: 'file' })],
       ])
     }
     const manager = new CacheManager(null, index, '/nc/', false)

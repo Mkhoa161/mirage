@@ -73,7 +73,7 @@ export async function readdir(
         new IndexEntry({
           id: full,
           name,
-          vfsType: isFile ? ResourceType.FILE : ResourceType.FOLDER,
+          resourceType: isFile ? ResourceType.FILE : ResourceType.FOLDER,
         }),
       ]
     })

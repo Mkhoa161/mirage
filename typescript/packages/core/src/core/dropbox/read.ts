@@ -73,7 +73,7 @@ export async function read(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.vfsType === 'dropbox/folder') throw eisdir(path.virtual)
+  if (entry.resourceType === 'dropbox/folder') throw eisdir(path.virtual)
   return dropboxDownload(accessor.tokenManager, dropboxPath, window)
 }
 
@@ -106,7 +106,7 @@ export async function* stream(
             : null,
         )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.vfsType === 'dropbox/folder') throw eisdir(path.virtual)
+  if (entry.resourceType === 'dropbox/folder') throw eisdir(path.virtual)
   const dropboxPath = dropboxPathFromVirtual(accessor.rootPath, virtualKey, prefix)
   for await (const chunk of dropboxDownloadStream(accessor.tokenManager, dropboxPath)) {
     yield chunk

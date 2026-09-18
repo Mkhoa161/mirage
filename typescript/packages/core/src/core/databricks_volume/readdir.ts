@@ -128,7 +128,7 @@ export async function readdir(
       new IndexEntry({
         id: fullPath,
         name,
-        vfsType: isDir ? 'folder' : 'file',
+        resourceType: isDir ? 'folder' : 'file',
         size,
         remoteTime,
       }),

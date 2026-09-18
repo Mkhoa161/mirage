@@ -23,7 +23,7 @@ import {
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379/0'
 
 function file(name: string): IndexEntry {
-  return new IndexEntry({ id: name, name, vfsType: 'file' })
+  return new IndexEntry({ id: name, name, resourceType: 'file' })
 }
 
 async function main(): Promise<void> {

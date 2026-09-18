@@ -81,7 +81,7 @@ export async function seedGuild(
       new IndexEntry({
         id: guildId,
         name: guildDirname.split('__')[0] ?? guildDirname,
-        vfsType: 'discord/guild',
+        resourceType: 'discord/guild',
         vfsName: guildDirname,
       }),
     ],
@@ -103,7 +103,7 @@ export async function seedChannel(
       new IndexEntry({
         id: channelId,
         name: channelDirname.split('__')[0] ?? channelDirname,
-        vfsType: 'discord/channel',
+        resourceType: 'discord/channel',
         vfsName: channelDirname,
         remoteTime: options.remoteTime ?? '',
       }),
@@ -117,7 +117,7 @@ export async function seedChannel(
       new IndexEntry({
         id: `${channelId}:${d}`,
         name: d,
-        vfsType: 'discord/history',
+        resourceType: 'discord/history',
         vfsName: d,
       }),
     ])
@@ -131,7 +131,7 @@ export async function seedChannel(
           new IndexEntry({
             id: `${channelId}:${d}:chat`,
             name: 'chat.jsonl',
-            vfsType: 'discord/chat_jsonl',
+            resourceType: 'discord/chat_jsonl',
             vfsName: 'chat.jsonl',
           }),
         ],
@@ -140,7 +140,7 @@ export async function seedChannel(
           new IndexEntry({
             id: `${channelId}:${d}:files`,
             name: 'files',
-            vfsType: 'discord/files_dir',
+            resourceType: 'discord/files_dir',
             vfsName: 'files',
             extra: { channel_id: channelId, date: d },
           }),

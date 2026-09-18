@@ -50,7 +50,7 @@ async function seedChannelHistory(
     new IndexEntry({
       id: `${channelDir}:${name}`,
       name,
-      vfsType: 'discord/history',
+      resourceType: 'discord/history',
       vfsName: name,
     }),
   ])

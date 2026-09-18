@@ -65,7 +65,7 @@ describe('read history jsonl branch', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'discord/channel',
+          resourceType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '',
         }),
@@ -132,7 +132,7 @@ describe('read members branch', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          vfsType: 'discord/guild',
+          resourceType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -143,7 +143,7 @@ describe('read members branch', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          vfsType: 'discord/member',
+          resourceType: 'discord/member',
           vfsName: 'alice__U1.json',
         }),
       ],
@@ -201,7 +201,7 @@ describe('read members branch', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          vfsType: 'discord/member',
+          resourceType: 'discord/member',
           vfsName: 'alice__U1.json',
         }),
       ],
@@ -224,7 +224,7 @@ describe('read members branch', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          vfsType: 'discord/guild',
+          resourceType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -235,7 +235,7 @@ describe('read members branch', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          vfsType: 'discord/member',
+          resourceType: 'discord/member',
           vfsName: 'alice__U1.json',
         }),
       ],

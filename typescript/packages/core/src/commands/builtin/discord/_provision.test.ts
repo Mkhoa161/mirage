@@ -48,7 +48,7 @@ describe('fileReadProvision', () => {
       new IndexEntry({
         id: 'U1',
         name: 'alice',
-        vfsType: 'discord/member',
+        resourceType: 'discord/member',
         vfsName: 'alice__U1.json',
       }),
     )

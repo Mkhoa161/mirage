@@ -60,7 +60,7 @@ describe('read jsonl branch', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),
@@ -100,7 +100,7 @@ describe('read jsonl branch', () => {
         new IndexEntry({
           id: 'D1',
           name: 'alice',
-          vfsType: 'slack/dm',
+          resourceType: 'slack/dm',
           vfsName: 'alice__D1',
           remoteTime: '0',
         }),
@@ -155,7 +155,7 @@ describe('read users branch', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          vfsType: 'slack/user',
+          resourceType: 'slack/user',
           vfsName: 'alice__U1.json',
         }),
       ],

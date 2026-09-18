@@ -154,7 +154,7 @@ describe('readdir /channels', () => {
     ])
     const lookup = await idx.get('/mnt/slack/channels/general__C1')
     expect(lookup.entry?.id).toBe('C1')
-    expect(lookup.entry?.vfsType).toBe('slack/channel')
+    expect(lookup.entry?.resourceType).toBe('slack/channel')
     expect(lookup.entry?.remoteTime).toBe('1000')
   })
 
@@ -166,7 +166,7 @@ describe('readdir /channels', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '1000',
         }),
@@ -208,7 +208,7 @@ describe('readdir /dms', () => {
     const listed = t.calls.find((c) => c.endpoint === 'conversations.list')
     expect(listed?.params?.types).toBe('im,mpim')
     const lookup = await idx.get('/mnt/slack/dms/alice__D1')
-    expect(lookup.entry?.vfsType).toBe('slack/dm')
+    expect(lookup.entry?.resourceType).toBe('slack/dm')
     expect(lookup.entry?.name).toBe('alice')
   })
 })
@@ -229,7 +229,7 @@ describe('readdir /users', () => {
     const out = await readdir(new SlackAccessor(t), spec('/mnt/slack/users', '/mnt/slack'), idx)
     expect(out).toEqual(['/mnt/slack/users/alice__U1.json', '/mnt/slack/users/bob__U4.json'])
     const lookup = await idx.get('/mnt/slack/users/alice__U1.json')
-    expect(lookup.entry?.vfsType).toBe('slack/user')
+    expect(lookup.entry?.resourceType).toBe('slack/user')
   })
 })
 
@@ -251,7 +251,7 @@ describe('readdir channel/<id> (history dates)', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: String(created),
         }),
@@ -275,7 +275,7 @@ describe('readdir channel/<id> (history dates)', () => {
     ])
     const lookup = await idx.get('/mnt/slack/channels/general__C1/2024-01-02')
     expect(lookup.entry?.id).toBe('C1:2024-01-02')
-    expect(lookup.entry?.vfsType).toBe('slack/date_dir')
+    expect(lookup.entry?.resourceType).toBe('slack/date_dir')
   })
 
   it('auto-bootstraps parent listing when not in cache', async () => {
@@ -330,7 +330,7 @@ describe('readdir channel/<id> (history dates)', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),
@@ -355,7 +355,7 @@ describe('readdir channel/<id> (history dates)', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '1700000000',
         }),
@@ -367,7 +367,7 @@ describe('readdir channel/<id> (history dates)', () => {
         new IndexEntry({
           id: 'C1:2026-04-10',
           name: '2026-04-10',
-          vfsType: 'slack/date_dir',
+          resourceType: 'slack/date_dir',
           vfsName: '2026-04-10',
         }),
       ],

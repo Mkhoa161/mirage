@@ -101,7 +101,7 @@ export async function stat(
       throw enoent(path.virtual)
     }
   }
-  if (result.entry.vfsType === 'dropbox/folder') {
+  if (result.entry.resourceType === 'dropbox/folder') {
     return new FileStat({
       name: result.entry.vfsName !== '' ? result.entry.vfsName : result.entry.name,
       type: FileType.DIRECTORY,
@@ -118,7 +118,7 @@ export async function stat(
     fingerprint: result.entry.remoteTime !== '' ? result.entry.remoteTime : null,
     extra: {
       dropbox_id: result.entry.id,
-      resource_type: result.entry.vfsType,
+      resource_type: result.entry.resourceType,
     },
   })
 }

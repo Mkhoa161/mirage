@@ -29,7 +29,7 @@ describe('DiskIndexEntry.file', () => {
     expect(e.name).toBe('b.txt')
     expect(e.vfsName).toBe('b.txt')
     expect(e.size).toBe(42)
-    expect(e.vfsType).toBe(DiskResourceType.FILE)
+    expect(e.resourceType).toBe(DiskResourceType.FILE)
   })
 
   it('defaults size to 0 and modified to empty string', () => {
@@ -42,6 +42,6 @@ describe('DiskIndexEntry.folder', () => {
   it('builds a folder entry', () => {
     const e = DiskIndexEntry.folder('/dir', '2026-01-01')
     expect(e.name).toBe('dir')
-    expect(e.vfsType).toBe(DiskResourceType.FOLDER)
+    expect(e.resourceType).toBe(DiskResourceType.FOLDER)
   })
 })

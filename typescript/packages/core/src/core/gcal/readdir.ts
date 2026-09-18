@@ -161,7 +161,7 @@ function eventEntries(
       new IndexEntry({
         id: eventId,
         name: title,
-        vfsType: EVENT,
+        resourceType: EVENT,
         remoteTime: typeof updated === 'string' ? updated : '',
         vfsName: name,
         size: compactJsonBytes(event).length,
@@ -196,7 +196,7 @@ export async function readdir(
         new IndexEntry({
           id: typeof entry.id === 'string' && entry.id !== '' ? entry.id : name,
           name,
-          vfsType: CALENDAR_DIR,
+          resourceType: CALENDAR_DIR,
           vfsName: name,
         }),
       ])
@@ -227,7 +227,7 @@ export async function readdir(
         new IndexEntry({
           id: `${calId}:calendar`,
           name: CALENDAR_FILE,
-          vfsType: CALENDAR_JSON,
+          resourceType: CALENDAR_JSON,
           vfsName: CALENDAR_FILE,
           size: calendarPayload(entry, tz).length,
         }),
@@ -239,7 +239,7 @@ export async function readdir(
         new IndexEntry({
           id: `${calId}:${day}`,
           name: day,
-          vfsType: DAY_DIR,
+          resourceType: DAY_DIR,
           vfsName: day,
         }),
       ])

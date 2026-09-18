@@ -49,7 +49,7 @@ describe('ops/discord/stat', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'discord/channel',
+          resourceType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),

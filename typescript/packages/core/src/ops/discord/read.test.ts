@@ -52,7 +52,7 @@ describe('ops/discord/read', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          vfsType: 'discord/guild',
+          resourceType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -63,7 +63,7 @@ describe('ops/discord/read', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          vfsType: 'discord/member',
+          resourceType: 'discord/member',
           vfsName: 'alice__U1.json',
         }),
       ],

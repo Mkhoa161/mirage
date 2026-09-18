@@ -45,7 +45,7 @@ export async function resolvePath(
     return {
       virtualKey,
       mountPrefix,
-      isDir: result.entry.vfsType === 'folder',
+      isDir: result.entry.resourceType === 'folder',
       entry: result.entry,
     }
   }

@@ -79,7 +79,7 @@ export async function readdir(
       new IndexEntry({
         id: f.id,
         name: f.name,
-        vfsType: 'gslides/file',
+        resourceType: 'gslides/file',
         remoteTime: f.modifiedTime ?? '',
         vfsName: filename,
         extra: Number.isFinite(sourceSize) && sourceSize > 0 ? { source_size: sourceSize } : {},

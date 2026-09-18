@@ -91,7 +91,7 @@ describe('notion stat', () => {
         new IndexEntry({
           id: DB_ID,
           name: segment,
-          vfsType: 'notion/database',
+          resourceType: 'notion/database',
           remoteTime: '2024-02-03T00:00:00Z',
           vfsName: segment,
         }),
@@ -156,7 +156,7 @@ describe('notion stat', () => {
         new IndexEntry({
           id: `${DB_ID}:database`,
           name: 'database.json',
-          vfsType: 'file',
+          resourceType: 'file',
           vfsName: 'database.json',
           size: 42,
         }),
@@ -203,7 +203,7 @@ describe('notion stat', () => {
         new IndexEntry({
           id: PAGE_ID,
           name: segment,
-          vfsType: 'notion/page',
+          resourceType: 'notion/page',
           remoteTime: '2024-01-02T00:00:00Z',
           vfsName: segment,
         }),
@@ -227,7 +227,7 @@ describe('notion stat', () => {
         new IndexEntry({
           id: `${PAGE_ID}:page`,
           name: 'page.json',
-          vfsType: 'file',
+          resourceType: 'file',
           vfsName: 'page.json',
         }),
       ],
@@ -276,7 +276,7 @@ describe('notion stat', () => {
         new IndexEntry({
           id: PAGE_ID,
           name: segment,
-          vfsType: 'notion/page',
+          resourceType: 'notion/page',
           remoteTime: '',
           vfsName: segment,
         }),

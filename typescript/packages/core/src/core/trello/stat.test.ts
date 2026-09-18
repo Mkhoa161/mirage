@@ -59,7 +59,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'Acme',
-          vfsType: 'trello/workspace',
+          resourceType: 'trello/workspace',
           remoteTime: '2026-04-05T00:00:00.000Z',
           vfsName: 'Acme__w1',
         }),
@@ -84,7 +84,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'workspace.json',
-          vfsType: 'trello/workspace_json',
+          resourceType: 'trello/workspace_json',
           vfsName: 'workspace.json',
           size: 42,
         }),
@@ -109,7 +109,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'workspace.json',
-          vfsType: 'trello/workspace_json',
+          resourceType: 'trello/workspace_json',
           vfsName: 'workspace.json',
         }),
       ],
@@ -118,7 +118,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'boards',
-          vfsType: 'trello/boards_dir',
+          resourceType: 'trello/boards_dir',
           vfsName: 'boards',
         }),
       ],
@@ -142,7 +142,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'b1',
           name,
-          vfsType: name === 'board.json' ? 'trello/board_json' : `trello/${name}_dir`,
+          resourceType: name === 'board.json' ? 'trello/board_json' : `trello/${name}_dir`,
           vfsName: name,
         }),
       ]),
@@ -171,7 +171,7 @@ describe('trello stat card leaves', () => {
         new IndexEntry({
           id: 'c1',
           name: 'card.json',
-          vfsType: 'trello/card_json',
+          resourceType: 'trello/card_json',
           vfsName: 'card.json',
           size: 99,
         }),
@@ -181,7 +181,7 @@ describe('trello stat card leaves', () => {
         new IndexEntry({
           id: 'c1',
           name: 'comments.jsonl',
-          vfsType: 'trello/comments_jsonl',
+          resourceType: 'trello/comments_jsonl',
           vfsName: 'comments.jsonl',
         }),
       ],

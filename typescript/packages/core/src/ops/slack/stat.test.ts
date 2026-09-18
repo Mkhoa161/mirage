@@ -49,7 +49,7 @@ describe('ops/slack/stat', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          vfsType: 'slack/channel',
+          resourceType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),

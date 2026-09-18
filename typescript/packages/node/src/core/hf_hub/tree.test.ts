@@ -206,7 +206,7 @@ describe('indexRows', () => {
     const tree = new Map([['d', parseEntry(dirRow('d'))]])
     const { entries } = indexRows(tree, '')
     expect(entries.get('/d')?.size).toBeNull()
-    expect(entries.get('/d')?.vfsType).toBe('folder')
+    expect(entries.get('/d')?.resourceType).toBe('folder')
   })
 })
 

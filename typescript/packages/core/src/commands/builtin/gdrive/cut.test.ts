@@ -67,7 +67,7 @@ describe('gdrive cut', () => {
         new IndexEntry({
           id: 'file123',
           name: 'file.csv',
-          vfsType: 'gdrive/file',
+          resourceType: 'gdrive/file',
           remoteTime: '2026-01-01T00:00:00Z',
           vfsName: 'file.csv',
           size: 100,
@@ -100,7 +100,7 @@ describe('gdrive cut', () => {
         new IndexEntry({
           id: 'file456',
           name: 'file.txt',
-          vfsType: 'gdrive/file',
+          resourceType: 'gdrive/file',
           remoteTime: '2026-01-01T00:00:00Z',
           vfsName: 'file.txt',
           size: 100,

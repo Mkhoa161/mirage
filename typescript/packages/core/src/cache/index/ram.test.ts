@@ -17,7 +17,7 @@ import { IndexEntry, LookupStatus, ResourceType } from './config.ts'
 import { RAMIndexCacheStore } from './ram.ts'
 
 function mkEntry(id: string, name: string, type: string = ResourceType.FILE): IndexEntry {
-  return new IndexEntry({ id, name, vfsType: type })
+  return new IndexEntry({ id, name, resourceType: type })
 }
 
 describe('RAMIndexCacheStore', () => {
@@ -42,7 +42,7 @@ describe('RAMIndexCacheStore', () => {
     const entry = new IndexEntry({
       id: '1',
       name: 'a',
-      vfsType: ResourceType.FILE,
+      resourceType: ResourceType.FILE,
       indexTime: '2024-01-01T00:00:00Z',
     })
     await store.put('/a', entry)

@@ -49,7 +49,7 @@ function entryFor(
     string,
     [
       string,
-      { name: string; vfsType: string; size: number | null; extra: Record<string, unknown> },
+      { name: string; resourceType: string; size: number | null; extra: Record<string, unknown> },
     ][]
   >,
   dir: string,
@@ -123,14 +123,14 @@ describe('buildDirEntries', () => {
     expect([...entries.keys()].sort()).toEqual(['/', '/guides'])
 
     const guides = entryFor(entries, '/', 'guides')
-    expect(guides?.vfsType).toBe('folder')
+    expect(guides?.resourceType).toBe('folder')
 
     const changelog = entryFor(entries, '/', 'CHANGELOG.md')
-    expect(changelog?.vfsType).toBe('file')
+    expect(changelog?.resourceType).toBe('file')
     expect(changelog?.extra.has_slug).toBe(false)
 
     const quickstart = entryFor(entries, '/guides', 'quickstart')
-    expect(quickstart?.vfsType).toBe('file')
+    expect(quickstart?.resourceType).toBe('file')
     expect(quickstart?.extra.slug).toBe('guides/quickstart')
     expect(quickstart?.extra.has_slug).toBe(true)
   })
@@ -141,7 +141,7 @@ describe('buildDirEntries', () => {
     const entries = buildDirEntries([QUICKSTART, leaf], '', 'slug')
     // 'guides' is a file, so 'guides/quickstart' is dropped and no '/guides'
     // directory is created (mirrors python skip_path_collisions).
-    expect(entryFor(entries, '/', 'guides')?.vfsType).toBe('file')
+    expect(entryFor(entries, '/', 'guides')?.resourceType).toBe('file')
     expect(entries.has('/guides')).toBe(false)
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
