@@ -18,7 +18,7 @@ const ws = new Workspace({ "/nc": vfs });
 
 for await (const event of ws.watch("/nc/Documents")) {
   console.log(event.kind, event.path.virtual);
-  const result = await ws.execute(`cat ${event.path.virtual}`); // guaranteed fresh
+  const result = await ws.shell(`cat ${event.path.virtual}`); // guaranteed fresh
   console.log(result.stdoutText);
 }
 ```

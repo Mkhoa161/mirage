@@ -37,7 +37,7 @@ TASK = "List all files under /data and show the contents of each one."
 
 
 async def main() -> None:
-    await ws.execute('echo "hello from mirage" | tee /data/hello.txt')
+    await ws.shell('echo "hello from mirage" | tee /data/hello.txt')
     await agent.aprint_response(TASK)
 
     records = ws.fs.records

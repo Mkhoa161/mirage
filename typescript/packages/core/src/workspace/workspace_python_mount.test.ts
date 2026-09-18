@@ -28,7 +28,7 @@ describe('Workspace + Python mount', () => {
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     await ws.fs.writeFile('/ram/hello.txt', 'world')
-    const io = await ws.execute(`python3 -c "with open('/ram/hello.txt') as f: print(f.read())"`)
+    const io = await ws.shell(`python3 -c "with open('/ram/hello.txt') as f: print(f.read())"`)
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toContain('world')
     await ws.close()
@@ -41,9 +41,7 @@ describe('Workspace + Python mount', () => {
     ops.registerVfs(ram)
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
-    const io = await ws.execute(
-      `python3 -c "with open('/ram/out.txt', 'wb') as f: f.write(b'data')"`,
-    )
+    const io = await ws.shell(`python3 -c "with open('/ram/out.txt', 'wb') as f: f.write(b'data')"`)
     expect(io.exitCode).toBe(0)
     const back = await ws.fs.readFile('/ram/out.txt')
     expect(new TextDecoder().decode(back)).toBe('data')
@@ -58,7 +56,7 @@ describe('Workspace + Python mount', () => {
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     await ws.fs.writeFile('/ram/never.txt', 'unused')
-    const io = await ws.execute('echo hello')
+    const io = await ws.shell('echo hello')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe('hello\n')
     await ws.close()
@@ -72,7 +70,7 @@ describe('Workspace + Python mount', () => {
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     await ws.fs.writeFile('/ram/seed.txt', 'seed')
-    const io = await ws.execute(`python3 -c "pass"`)
+    const io = await ws.shell(`python3 -c "pass"`)
     expect(io.exitCode).toBe(0)
     await ws.unmount('/ram/')
     const ram2 = new RAMVFS()
@@ -96,7 +94,7 @@ describe('Workspace + Python mount', () => {
       '    for _ in range(50):\n' +
       '        f.write(data)\n'
     await ws.fs.writeFile('/ram/chunked.py', code)
-    const io = await ws.execute('python3 /ram/chunked.py')
+    const io = await ws.shell('python3 /ram/chunked.py')
     expect(io.exitCode).toBe(0)
     const back = await ws.fs.readFile('/ram/big.bin')
     expect(back.length).toBe(50 * 1024)
@@ -128,7 +126,7 @@ describe('Workspace + Python mount', () => {
       'loaded.load()\n' +
       'print(loaded.size)\n'
     await ws.fs.writeFile('/ram/pil_demo.py', code)
-    const io = await ws.execute('python3 /ram/pil_demo.py')
+    const io = await ws.shell('python3 /ram/pil_demo.py')
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toContain('(4, 4)')
     const bytes = await ws.fs.readFile('/ram/icon.png')

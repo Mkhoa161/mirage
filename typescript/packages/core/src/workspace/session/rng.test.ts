@@ -147,7 +147,7 @@ describe('child RANDOM isolation', () => {
       const { ws } = await makeIntegrationWS()
       try {
         const prefix = 'RANDOM=42; ' + (drawFirst ? ': $RANDOM; ' : '')
-        const io = await ws.execute(prefix + child + '; echo $RANDOM')
+        const io = await ws.shell(prefix + child + '; echo $RANDOM')
         expect(io.exitCode).toBe(0)
         expect(io.stdoutText).toBe(drawFirst ? '26794\n' : '17772\n')
         expect(io.stderrText).toBe('')
@@ -175,7 +175,7 @@ it.each([
 ])('reports seed assignment diagnostics: %s', async (command, stdout, prefix) => {
   const { ws } = await makeIntegrationWS()
   try {
-    const io = await ws.execute(command)
+    const io = await ws.shell(command)
     expect(io.exitCode).toBe(0)
     expect(io.stdoutText).toBe(stdout)
     if (prefix) {
@@ -206,7 +206,7 @@ it.each([
 ])('draws RANDOM lazily in arithmetic: %s', async (command, stdout) => {
   const { ws } = await makeIntegrationWS()
   try {
-    const io = await ws.execute(command)
+    const io = await ws.shell(command)
     expect(io.exitCode).toBe(0)
     expect(io.stdoutText).toBe(stdout)
     expect(io.stderrText).toBe('')
@@ -265,7 +265,7 @@ it.each([
 ])('seeds RANDOM within the expression that assigns it: %s', async (command, stdout) => {
   const { ws } = await makeIntegrationWS()
   try {
-    const io = await ws.execute(command)
+    const io = await ws.shell(command)
     expect(io.exitCode).toBe(0)
     expect(io.stdoutText).toBe(stdout)
     expect(io.stderrText).toBe('')
@@ -319,7 +319,7 @@ it.each([
 ])('lands the assignments a subscript or offset makes: %s', async (command, stdout) => {
   const { ws } = await makeIntegrationWS()
   try {
-    const io = await ws.execute(command)
+    const io = await ws.shell(command)
     expect(io.exitCode).toBe(0)
     expect(io.stdoutText).toBe(stdout)
     expect(io.stderrText).toBe('')
@@ -361,12 +361,12 @@ it.each([
 ])('a subscript or operand that fails ends the line: %s', async (command, stderr) => {
   const { ws } = await makeIntegrationWS()
   try {
-    const io = await ws.execute(command)
+    const io = await ws.shell(command)
     expect(io.exitCode).toBe(1)
     expect(io.stdoutText).toBe('')
     expect(io.stderrText).toBe(stderr)
     if (command.includes('x=3')) {
-      const landed = await ws.execute('echo $x')
+      const landed = await ws.shell('echo $x')
       expect(landed.stdoutText).toBe('3\n')
     }
   } finally {
@@ -381,7 +381,7 @@ it('lays the pending writes over the visible env as a view', async () => {
   // write.
   const { ws } = await makeIntegrationWS()
   try {
-    const io = await ws.execute(
+    const io = await ws.shell(
       'declare -a nrb=(1); declare -n nrc=nrb; v=abcdef; echo "${v:(x=1):2}" $x',
     )
     expect(io.stdoutText).toBe('bc 1\n')
@@ -406,7 +406,7 @@ it.each([
   async (command, stdout, stderr) => {
     const { ws } = await makeIntegrationWS()
     try {
-      const io = await ws.execute(command)
+      const io = await ws.shell(command)
       expect(io.exitCode).toBe(0)
       expect(io.stdoutText).toBe(stdout)
       expect(io.stderrText).toBe(stderr)
@@ -473,7 +473,7 @@ describe('RANDOM as an array', () => {
   ])('ends the special meaning: %s', async (command, stdout) => {
     const { ws } = await makeIntegrationWS()
     try {
-      const io = await ws.execute(command)
+      const io = await ws.shell(command)
       expect(io.stderrText).toBe('')
       expect(io.exitCode).toBe(0)
       expect(io.stdoutText).toBe(stdout)

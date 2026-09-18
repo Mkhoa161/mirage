@@ -164,7 +164,7 @@ async def test_conformance(backend: str, case: dict, tmp_path: Path) -> None:
         stdin = None
         if "stdin_text" in case or "stdin_base64" in case:
             stdin = _decode_bytes(case, "stdin_text", "stdin_base64")
-        result = await ws.execute(case["cmd"], stdin=stdin)
+        result = await ws.shell(case["cmd"], stdin=stdin)
         stdout = await result.materialize_stdout()
         stderr = await result.materialize_stderr()
         expect = case["expect"]

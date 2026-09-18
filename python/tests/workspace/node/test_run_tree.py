@@ -91,10 +91,10 @@ async def test_run_command_tree_propagates_exit_code(registry):
 
 async def _cross_node(cmd: str):
     # A real two-mount workspace wires dispatch/cache; run_command_tree is the
-    # seam returning the recorded ExecutionNode (Workspace.execute drops it).
+    # seam returning the recorded ExecutionNode (Workspace.shell drops it).
     ws = Workspace({"/a": RAMVFS(), "/b": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /a/dir")
-    await ws.execute("printf 'x\\n' > /a/f.txt")
+    await ws.shell("mkdir -p /a/dir")
+    await ws.shell("printf 'x\\n' > /a/f.txt")
     io, exec_node = await run_command_tree(ws.dispatch, ws._registry,
                                            ws.job_table, _noop_execute,
                                            "agent", parse(cmd),

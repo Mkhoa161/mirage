@@ -28,8 +28,8 @@ const redis = new RedisVFS({
 })
 
 const ws = new Workspace({ '/r': redis }, { mode: MountMode.WRITE })
-await ws.execute('echo "hello" | tee /r/greet')
-await ws.execute('cat /r/greet')
+await ws.shell('echo "hello" | tee /r/greet')
+await ws.shell('cat /r/greet')
 ```
 
 | Field | Default | Notes |
@@ -59,8 +59,8 @@ const redis = new RedisVFS({
   keyPrefix: 'mirage/',
 })
 const ws = new Workspace({ '/r': redis }, { mode: MountMode.WRITE })
-await ws.execute('echo "hello" | tee /r/greet')
-await ws.execute('cat /r/greet')
+await ws.shell('echo "hello" | tee /r/greet')
+await ws.shell('cat /r/greet')
 ```
 
 | Field | Default | Notes |

@@ -127,7 +127,12 @@ export class Workspace {
   private readonly ownsStateStore: boolean
   private readonly sharedMounts = new Set<VFS>()
   private readonly meta: WorkspaceMeta
-  private readonly opsRegistry: OpsRegistry
+  /**
+   * The op table every mount's ops are registered on. Not the op
+   * facade: `fs` is the door a caller reads and writes through, this
+   * is the registry it dispatches into.
+   */
+  readonly opsRegistry: OpsRegistry
   private readonly indexConfig: IndexConfig | undefined
   private shellParser: ShellParser | null
   private readonly shellParserFactory: (() => Promise<ShellParser>) | null
@@ -388,7 +393,7 @@ export class Workspace {
     // programmatic ws.fs walk the same pipeline as a shell command and
     // the policy gates fire exactly once, at that door. It keeps the
     // ledger, which is its own; the sink is only the observer's copy.
-    // It runs as the default session, as a bare `execute` does, so the
+    // It runs as the default session, as a bare `shell` does, so the
     // default profile confines it too.
     this.fs = new Ops(
       (op, path, args, kwargs, report) => {
@@ -648,10 +653,6 @@ export class Workspace {
     return this.registry.decisions
   }
 
-  get ops(): OpsRegistry {
-    return this.opsRegistry
-  }
-
   get cwd(): string {
     return this.sessionManager.cwd
   }
@@ -739,7 +740,7 @@ export class Workspace {
    * registered on the workspace after it is built.
    */
   /**
-   * One session's two doors: `execute` and `fs` bound to it.
+   * One session's two doors: `shell` and `fs` bound to it.
    *
    * Creates the session under the given profile when the id is new (the
    * same call as `createSession`), and adopts it as is when it exists.
@@ -1052,7 +1053,7 @@ export class Workspace {
    * exception: its hides and grants describe that workspace, so an
    * embedder callback reaching this door from inside the other's line
    * runs as the session it asked for, judged by this workspace's own
-   * profile. Otherwise the named session is bound the way `execute`
+   * profile. Otherwise the named session is bound the way `shell`
    * binds it.
    *
    * On the fallback storage (no task isolation) the newest live frame
@@ -1287,16 +1288,16 @@ export class Workspace {
     }
   }
 
-  async execute(
+  async shell(
     command: string,
     options?: ExecuteOptions & { provision?: false | undefined },
   ): Promise<ExecuteResult>
-  async execute(
+  async shell(
     command: string,
     options: ExecuteOptions & { provision: true },
   ): Promise<ProvisionResult>
-  async execute(command: string, options: ExecuteOptions): Promise<ExecuteResult | ProvisionResult>
-  async execute(
+  async shell(command: string, options: ExecuteOptions): Promise<ExecuteResult | ProvisionResult>
+  async shell(
     command: string,
     options: ExecuteOptions = {},
   ): Promise<ExecuteResult | ProvisionResult> {

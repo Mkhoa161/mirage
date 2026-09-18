@@ -41,7 +41,7 @@ async def test_readonly_invalid_option_exit_2():
 @pytest.mark.asyncio
 async def test_readonly_p_via_workspace():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute('readonly ZRP1=7; readonly -p | grep ZRP1')
+    io = await ws.shell('readonly ZRP1=7; readonly -p | grep ZRP1')
     assert io.exit_code == 0
     assert (io.stdout or b"") == b'declare -r ZRP1="7"\n'
 
@@ -72,6 +72,6 @@ async def test_readonly_f_and_A_list_nothing():
 @pytest.mark.asyncio
 async def test_readonly_a_via_workspace():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("readonly ZRS1=1; readonly -a ZRA1=(x); readonly -a")
+    io = await ws.shell("readonly ZRS1=1; readonly -a ZRA1=(x); readonly -a")
     assert io.exit_code == 0
     assert (io.stdout or b"") == b'declare -ar ZRA1=([0]="x")\n'

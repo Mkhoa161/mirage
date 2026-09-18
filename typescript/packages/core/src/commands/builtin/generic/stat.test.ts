@@ -131,7 +131,7 @@ class NoSetattrRegistry extends OpsRegistry {
 }
 
 async function run(ws: Workspace, cmd: string): Promise<[number, string, string]> {
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   return [r.exitCode, r.stdoutText, r.stderrText]
 }
 

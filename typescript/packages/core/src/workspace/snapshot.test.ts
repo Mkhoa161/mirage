@@ -74,11 +74,11 @@ function buildWorkspace(): Workspace {
 describe('toStateDict / applyStateDict', () => {
   it('roundtrips file content via snapshot + restore', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo "hello" | tee /data/x.txt')
+    await ws.shell('echo "hello" | tee /data/x.txt')
     const state = await toStateDict(ws)
     const ws2 = buildWorkspace()
     await applyStateDict(ws2, state)
-    const r = await ws2.execute('cat /data/x.txt')
+    const r = await ws2.shell('cat /data/x.txt')
     expect(new TextDecoder().decode(r.stdout)).toBe('hello\n')
     await ws.close()
     await ws2.close()
@@ -86,8 +86,8 @@ describe('toStateDict / applyStateDict', () => {
 
   it('restores history entries through snapshot + load', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo "one"')
-    await ws.execute('echo "two"')
+    await ws.shell('echo "one"')
+    await ws.shell('echo "two"')
     expect((await ws.history()).length).toBe(2)
     const path = join(tempDir, 'history.json')
     await ws.snapshot(path)
@@ -110,8 +110,8 @@ describe('toStateDict / applyStateDict', () => {
     const ops = new OpsRegistry()
     ops.registerVfs(ram)
     const ws = new Workspace({ '/data': ram }, { mode: MountMode.WRITE, ops, shellParser: parser })
-    await ws.execute('echo "cached" | tee /data/x.txt > /dev/null')
-    await ws.execute('cat /data/x.txt > /dev/null')
+    await ws.shell('echo "cached" | tee /data/x.txt > /dev/null')
+    await ws.shell('cat /data/x.txt > /dev/null')
     const state = await toStateDict(ws)
     expect(state.cache.entries.length).toBeGreaterThan(0)
     for (const m of state.mounts) {
@@ -137,7 +137,7 @@ describe('toStateDict / applyStateDict', () => {
 
   it('skips the .bash_history/ view mount from the snapshot', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo "hi" | tee /data/x.txt')
+    await ws.shell('echo "hi" | tee /data/x.txt')
     const state = await toStateDict(ws)
     for (const m of state.mounts) {
       expect(m.prefix).not.toBe('/.bash_history/')
@@ -149,7 +149,7 @@ describe('toStateDict / applyStateDict', () => {
 describe('Workspace.snapshot / Workspace.load', () => {
   it('writes a snapshot file and loads it back', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo "persistent" | tee /data/x.txt')
+    await ws.shell('echo "persistent" | tee /data/x.txt')
     const path = join(tempDir, 'snap.json')
     const size = await ws.snapshot(path)
     expect(size).toBeGreaterThan(0)
@@ -159,7 +159,7 @@ describe('Workspace.snapshot / Workspace.load', () => {
       ops: new OpsRegistry(),
       shellParser: parser,
     })
-    const r = await loaded.execute('cat /data/x.txt')
+    const r = await loaded.shell('cat /data/x.txt')
     expect(new TextDecoder().decode(r.stdout)).toBe('persistent\n')
     await ws.close()
     await loaded.close()
@@ -183,11 +183,11 @@ describe('Workspace.snapshot / Workspace.load', () => {
 describe('Workspace.copy', () => {
   it('creates an independent workspace with the same content', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo "original" | tee /data/x.txt')
+    await ws.shell('echo "original" | tee /data/x.txt')
     const cp = await ws.copy()
-    await cp.execute('echo "mutated" | tee /data/x.txt')
-    const rOrig = await ws.execute('cat /data/x.txt')
-    const rCopy = await cp.execute('cat /data/x.txt')
+    await cp.shell('echo "mutated" | tee /data/x.txt')
+    const rOrig = await ws.shell('cat /data/x.txt')
+    const rCopy = await cp.shell('cat /data/x.txt')
     expect(new TextDecoder().decode(rOrig.stdout)).toBe('original\n')
     expect(new TextDecoder().decode(rCopy.stdout)).toBe('mutated\n')
     await ws.close()
@@ -257,8 +257,8 @@ describe('Workspace.snapshot / load — per-mount mode preservation', () => {
 describe('Workspace.fromState — sessions and finished jobs', () => {
   it('restores default + non-default session cwd/env and a completed job', async () => {
     const ws = buildWorkspace()
-    await ws.execute('cd /data')
-    await ws.execute('export FOO=bar')
+    await ws.shell('cd /data')
+    await ws.shell('export FOO=bar')
     const worker = ws.sessionManager.create('worker')
     // Through setCwd, so $PWD tracks the move: assigning `cwd` directly
     // leaves PWD stale, which the old wholesale env replacement hid.
@@ -311,8 +311,8 @@ describe('Workspace.fromState — sessions and finished jobs', () => {
       { '/data': ram },
       { mode: MountMode.WRITE, ops, shellParser: parser, sessionId: 'main', agentId: 'agent-7' },
     )
-    await ws.execute('cd /data')
-    await ws.execute('export FOO=bar')
+    await ws.shell('cd /data')
+    await ws.shell('export FOO=bar')
 
     const state = await toStateDict(ws)
     expect(state.default_session_id).toBe('main')
@@ -414,7 +414,7 @@ describe('cli registry snapshot', () => {
         {},
         { snapcli: { token: 'sek2', channel: 'eng' } },
       )
-      const r = await ws2.execute('snapcli run')
+      const r = await ws2.shell('snapcli run')
       expect(r.exitCode).toBe(0)
       expect(r.stdoutText).toBe('tok=sek2\n')
       await ws.close()
@@ -431,7 +431,7 @@ describe('cli registry snapshot', () => {
     const ws = buildWorkspace()
     ws.registerCli('snapcli', spec, { token: 'sek' })
     const clone = await ws.copy()
-    const r = await clone.execute('snapcli run')
+    const r = await clone.shell('snapcli run')
     expect(r.exitCode).toBe(0)
     expect(r.stdoutText).toBe('tok=sek\n')
     await ws.close()
@@ -618,7 +618,7 @@ describe('applyStateDict and the deployment', () => {
   // deployment did not author, so this is the door where the rule matters.
   it('a restored variable clears the session gate', async () => {
     const source = buildWorkspace()
-    await source.execute('export GATE_X=1')
+    await source.shell('export GATE_X=1')
     const state = await toStateDict(source)
     await source.close()
     const target = gatedWorkspace()
@@ -629,7 +629,7 @@ describe('applyStateDict and the deployment', () => {
 
   it('a restore the gate allows lands every variable', async () => {
     const source = buildWorkspace()
-    await source.execute('export PUBLIC_X=1')
+    await source.shell('export PUBLIC_X=1')
     const state = await toStateDict(source)
     await source.close()
     const target = gatedWorkspace()
@@ -651,19 +651,19 @@ describe('applyStateDict and the deployment', () => {
       { '/data': ram },
       { mode: MountMode.WRITE, ops, shellParser: parser, sessionId: 'src' },
     )
-    expect((await source.execute('echo restored > /data/f.txt')).exitCode).toBe(0)
-    expect((await source.execute('export PUBLIC_A=1')).exitCode).toBe(0)
+    expect((await source.shell('echo restored > /data/f.txt')).exitCode).toBe(0)
+    expect((await source.shell('export PUBLIC_A=1')).exitCode).toBe(0)
     source.createSession('s2')
-    expect((await source.execute('export GATE_X=1', { sessionId: 's2' })).exitCode).toBe(0)
+    expect((await source.shell('export GATE_X=1', { sessionId: 's2' })).exitCode).toBe(0)
     const state = await toStateDict(source)
     await source.close()
     const target = gatedWorkspace('/data', 'tgt')
-    expect((await target.execute('export KEEP=1')).exitCode).toBe(0)
+    expect((await target.shell('export KEEP=1')).exitCode).toBe(0)
     await expect(applyStateDict(target, state)).rejects.toBeInstanceOf(PolicyDenied)
     expect(Object.hasOwn(target.env, 'PUBLIC_A')).toBe(false)
     expect(target.env.KEEP).toBe('1')
     expect(target.listSessions().map((s) => s.sessionId)).toEqual(['tgt'])
-    expect((await target.execute('test -e /data/f.txt')).exitCode).toBe(1)
+    expect((await target.shell('test -e /data/f.txt')).exitCode).toBe(1)
     await target.close()
   })
 
@@ -677,7 +677,7 @@ describe('applyStateDict and the deployment', () => {
       { '/data': ram },
       { mode: MountMode.WRITE, ops, shellParser: parser, env: { GATE_X: '1' } },
     )
-    expect((await source.execute('unset GATE_X; export PUBLIC_A=1')).exitCode).toBe(0)
+    expect((await source.shell('unset GATE_X; export PUBLIC_A=1')).exitCode).toBe(0)
     const state = await toStateDict(source)
     await source.close()
     const target = gatedWorkspace()
@@ -695,9 +695,9 @@ describe('applyStateDict and the deployment', () => {
   // unrestricted.
   it('a session the restore creates runs under the default profile', async () => {
     const source = buildWorkspace()
-    expect((await source.execute('echo kept > /data/f.txt')).exitCode).toBe(0)
+    expect((await source.shell('echo kept > /data/f.txt')).exitCode).toBe(0)
     source.createSession('s2')
-    expect((await source.execute('export PUBLIC_A=1', { sessionId: 's2' })).exitCode).toBe(0)
+    expect((await source.shell('export PUBLIC_A=1', { sessionId: 's2' })).exitCode).toBe(0)
     const state = await toStateDict(source)
     await source.close()
     const ram = new RAMVFS()
@@ -723,10 +723,10 @@ describe('applyStateDict and the deployment', () => {
     expect(restored.script).toBe(compiled?.script)
     expect(target.sessionManager.scriptOf('s2')).toBe(compiled?.script)
     expect(restored.env.PUBLIC_A).toBe('1')
-    const refused = await target.execute('rm /data/f.txt', { sessionId: 's2' })
+    const refused = await target.shell('rm /data/f.txt', { sessionId: 's2' })
     expect(refused.exitCode).toBe(126)
     expect(new TextDecoder().decode(refused.stderr)).toContain('rm: Permission denied')
-    expect((await target.execute('test -e /data/f.txt')).exitCode).toBe(0)
+    expect((await target.shell('test -e /data/f.txt')).exitCode).toBe(0)
     await target.close()
   })
 

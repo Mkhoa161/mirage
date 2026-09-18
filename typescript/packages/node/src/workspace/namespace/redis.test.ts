@@ -81,14 +81,14 @@ describe.skipIf(skip)('RedisNamespaceStore', () => {
       { '/data': new RAMVFS() },
       { agentId: 'alice', namespaceStore: makeStore(prefix) },
     )
-    const io = await ws.execute('whoami')
+    const io = await ws.shell('whoami')
     expect(io.stdoutText).toBe('alice\n')
     await ws.close()
 
     // A fresh runtime attached to the same store, launched without an
     // agentId, adopts the workspace's identity.
     const reborn = new Workspace({ '/data': new RAMVFS() }, { namespaceStore: makeStore(prefix) })
-    const io2 = await reborn.execute('whoami')
+    const io2 = await reborn.shell('whoami')
     expect(io2.stdoutText).toBe('alice\n')
     const cleaner = makeStore(prefix)
     await cleaner.clear()
@@ -102,21 +102,21 @@ describe.skipIf(skip)('RedisNamespaceStore', () => {
       { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, ops: new NoSetattrRegistry(), namespaceStore: makeStore(prefix) },
     )
-    await ws.execute('echo alpha > /data/f.txt')
-    await ws.execute('chmod 601 /data/f.txt && chown 500:dev /data/f.txt')
-    await ws.execute('ln -s /data/f.txt /data/link')
+    await ws.shell('echo alpha > /data/f.txt')
+    await ws.shell('chmod 601 /data/f.txt && chown 500:dev /data/f.txt')
+    await ws.shell('ln -s /data/f.txt /data/link')
     await ws.close()
 
     const reborn = new Workspace(
       { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, ops: new NoSetattrRegistry(), namespaceStore: makeStore(prefix) },
     )
-    await reborn.execute('echo alpha > /data/f.txt')
+    await reborn.shell('echo alpha > /data/f.txt')
     const st = (await reborn.dispatch('stat', '/data/f.txt')) as FileStat
     expect(st.mode).toBe(0o601)
     expect(st.uid).toBe(500)
     expect(st.gid).toBe('dev')
-    const r = await reborn.execute('readlink /data/link')
+    const r = await reborn.shell('readlink /data/link')
     expect(r.stdoutText).toBe('/data/f.txt\n')
     const cleaner = makeStore(prefix)
     await cleaner.clear()

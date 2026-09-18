@@ -52,7 +52,7 @@ describe('DiscordVFS integration', () => {
     const discord = new DiscordVFS({ token: 'bot-test' })
     const ws = new Workspace({ '/discord': discord }, { mode: MountMode.READ })
     try {
-      const result = await ws.execute('ls /discord/')
+      const result = await ws.shell('ls /discord/')
       if (result.exitCode !== 0) {
         throw new Error(`ls failed: ${result.stderrText} | stdout: ${result.stdoutText}`)
       }

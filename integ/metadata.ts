@@ -72,8 +72,8 @@ async function runOverlaySnapshotRoundtrip(
   // Overlay attrs live in namespace NODES, so they must survive a
   // snapshot even though the s3 VFS is rebuilt fresh at load
   // (s3 snapshots redact creds and require a VFS override).
-  await ws.execute('echo alpha > /data/f.txt')
-  await ws.execute(
+  await ws.shell('echo alpha > /data/f.txt')
+  await ws.shell(
     'chmod 601 /data/f.txt && chown 500:dev /data/f.txt && touch -t 202601021530 /data/f.txt',
   )
   const dir = mkdtempSync(join(tmpdir(), 'mirage-meta-osnap-'))
@@ -81,7 +81,7 @@ async function runOverlaySnapshotRoundtrip(
   await ws.snapshot(snap)
   const restored = await Workspace.load(snap, {}, { '/data': fresh })
   const st = (await restored.dispatch('stat', '/data/f.txt')) as FileStat
-  await restored.execute('rm /data/f.txt')
+  await restored.shell('rm /data/f.txt')
   await restored.close()
   rmSync(dir, { recursive: true, force: true })
   return overlayStatFields(st)
@@ -97,12 +97,12 @@ async function runOverlayOrphanGc(keyPrefix: string): Promise<Record<string, boo
     { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
   )
   try {
-    await ws.execute('echo alpha > /data/g.txt && chmod 601 /data/g.txt')
+    await ws.shell('echo alpha > /data/g.txt && chmod 601 /data/g.txt')
     const before = ws.namespace.metaFor('/data/g.txt') !== null
     // Out-of-band delete: dispatch the raw unlink op (not the rm command, which
     // would drop the namespace node itself), leaving the overlay orphaned.
     await ws.dispatch('unlink', '/data/g.txt')
-    await ws.execute('stat /data/g.txt')
+    await ws.shell('stat /data/g.txt')
     const after = ws.namespace.metaFor('/data/g.txt') !== null
     return { overlay_orphan_before: before, overlay_orphan_after: after }
   } finally {
@@ -112,15 +112,15 @@ async function runOverlayOrphanGc(keyPrefix: string): Promise<Record<string, boo
 
 async function runSnapshotRoundtrip(): Promise<Record<string, string>> {
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-  await ws.execute('echo alpha > /data/f.txt')
-  await ws.execute(
+  await ws.shell('echo alpha > /data/f.txt')
+  await ws.shell(
     'chmod 601 /data/f.txt && chown 500:dev /data/f.txt && touch -t 202601021530 /data/f.txt',
   )
   const dir = mkdtempSync(join(tmpdir(), 'mirage-meta-snap-'))
   const snap = join(dir, 'ws.tar')
   await ws.snapshot(snap)
   const restored = await Workspace.load(snap)
-  const result = await restored.execute('ls -l /data')
+  const result = await restored.shell('ls -l /data')
   const line = new TextDecoder().decode(result.stdout).trimEnd()
   await ws.close()
   await restored.close()

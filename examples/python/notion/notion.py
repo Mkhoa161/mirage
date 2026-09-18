@@ -30,7 +30,7 @@ vfs = NotionVFS(config=config)
 
 async def run(ws: Workspace, cmd: str, limit: int = 1500) -> str:
     print(f"=== {cmd} ===")
-    result = await ws.execute(cmd)
+    result = await ws.shell(cmd)
     out = await result.stdout_str()
     err = (await result.stderr_str()).strip()
     print(out[:limit] if out.strip() else "(empty)")
@@ -41,7 +41,7 @@ async def run(ws: Workspace, cmd: str, limit: int = 1500) -> str:
 
 
 async def first_entry(ws: Workspace, path: str) -> str:
-    result = await ws.execute(f"ls {path}")
+    result = await ws.shell(f"ls {path}")
     out = (await result.stdout_str()).strip()
     if not out:
         return ""
@@ -49,7 +49,7 @@ async def first_entry(ws: Workspace, path: str) -> str:
 
 
 async def pick_child(ws: Workspace, path: str, skip: str) -> str:
-    result = await ws.execute(f"ls {path}/")
+    result = await ws.shell(f"ls {path}/")
     for line in (await result.stdout_str()).strip().splitlines():
         name = os.path.basename(line.rstrip("/"))
         if name != skip:
@@ -77,10 +77,9 @@ async def explore_pages(ws: Workspace) -> None:
     # workspace namespace (durable, snapshot-captured) and merge into
     # dispatch-level stat.
     print(f"=== metadata overlay on {base}/page.json ===")
-    meta_res = await ws.execute(f'chmod 640 "{base}/page.json"'
-                                f' && chown 500:dev "{base}/page.json"'
-                                f' && touch -t 202601021530 "{base}/page.json"'
-                                )
+    meta_res = await ws.shell(f'chmod 640 "{base}/page.json"'
+                              f' && chown 500:dev "{base}/page.json"'
+                              f' && touch -t 202601021530 "{base}/page.json"')
     print(f"  chmod/chown/touch exit={meta_res.exit_code}")
     meta_st, _ = await ws.dispatch("stat",
                                    PathSpec.from_str_path(f"{base}/page.json"))

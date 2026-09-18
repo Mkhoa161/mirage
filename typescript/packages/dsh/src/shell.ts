@@ -739,7 +739,7 @@ export class MirageShellExecutor extends ShellExecutor {
       const bound = this.sessionId !== undefined
       if (bound && sessionId !== undefined) await this.applyManagedEnv(ws, sessionId, spec)
       const workdir = await this.worldWorkdir(spec)
-      const result = await ws.execute(
+      const result = await ws.shell(
         spec.command,
         executeOptions(spec, workdir, controller.signal, sessionId, bound, this.workdir, console_),
       )
@@ -812,7 +812,7 @@ export class MirageShellExecutor extends ShellExecutor {
         return { ws, sessionId, bound, workdir: await this.worldWorkdir(spec) }
       })
       .then(({ ws, sessionId, bound, workdir }) =>
-        ws.execute(
+        ws.shell(
           spec.command,
           executeOptions(
             spec,

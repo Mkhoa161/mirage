@@ -72,7 +72,7 @@ const ws = new Workspace(
   { '/home/deploy/proj': proj },
   { mode: MountMode.EXEC, runtimes: [runtime, 'workspace'] },
 )
-await ws.execute('python3 train.py', { cwd: '/home/deploy/proj' })
+await ws.shell('python3 train.py', { cwd: '/home/deploy/proj' })
 ```
 
 The config carries the ssh VFS's fields minus `root`: `host` (required,

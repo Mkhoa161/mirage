@@ -22,7 +22,7 @@ function print(bytes: Uint8Array): void {
 
 async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<void> {
   console.log(`=== ${label} ===`)
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   print(res.stdout)
   if (res.stderr.length > 0) {
     console.error('STDERR:', res.stderrText)
@@ -52,16 +52,16 @@ async function main(): Promise<void> {
   )
 
   console.log('=== echo "print(1+1)" | python3 (stdin-code mode) ===')
-  const stdinRes = await ws.execute('echo "print(1+1)" | python3')
+  const stdinRes = await ws.shell('echo "print(1+1)" | python3')
   print(stdinRes.stdout)
   console.log(`exit: ${String(stdinRes.exitCode)}\n`)
 
   console.log('=== SystemExit honored ===')
-  const exitRes = await ws.execute('python3 -c "import sys; sys.exit(3)"')
+  const exitRes = await ws.shell('python3 -c "import sys; sys.exit(3)"')
   console.log(`exit: ${String(exitRes.exitCode)} (expect 3)\n`)
 
   console.log('=== uncaught exception → traceback on stderr, exit 1 ===')
-  const errRes = await ws.execute('python3 -c "raise RuntimeError(\'boom\')"')
+  const errRes = await ws.shell('python3 -c "raise RuntimeError(\'boom\')"')
   console.log(`exit: ${String(errRes.exitCode)} (expect 1)`)
   console.log(`stderr tail: ${errRes.stderrText.trim().split('\n').slice(-1)[0]}\n`)
 

@@ -76,15 +76,15 @@ async def main() -> None:
     ws = Workspace({"/m": vfs}, mode=MountMode.READ)
 
     # ls is cheap: one HTTP list call
-    r = await ws.execute("ls -lh /m/")
+    r = await ws.shell("ls -lh /m/")
     print(await r.stdout_str())
 
     # Read the config (small, fast)
-    r = await ws.execute("cat /m/config.json")
+    r = await ws.shell("cat /m/config.json")
     print(await r.stdout_str())
 
     # Stat the weights without downloading them
-    r = await ws.execute("stat /m/model.safetensors")
+    r = await ws.shell("stat /m/model.safetensors")
     print(await r.stdout_str())
 
 

@@ -94,18 +94,18 @@ try {
     { mode: MountMode.EXEC, runtimes: [ssh, 'workspace'] },
   )
   try {
-    let result = await ws.execute('cat > /home/user/work/ts-output.txt', {
+    let result = await ws.shell('cat > /home/user/work/ts-output.txt', {
       stdin: new TextEncoder().encode('old'),
     })
     assert.equal(result.exitCode, 0)
-    result = await ws.execute('cat /home/user/work/ts-output.txt')
+    result = await ws.shell('cat /home/user/work/ts-output.txt')
     assert.equal(result.stdoutText, 'old')
-    result = await ws.execute(
+    result = await ws.shell(
       'python3 -c \'from pathlib import Path; Path("/home/user/work/ts-output.txt").write_text("from typescript ssh")\'',
       { cwd: '/home/user/work' },
     )
     assert.equal(result.exitCode, 0, result.stderrText)
-    result = await ws.execute('cat /home/user/work/ts-output.txt')
+    result = await ws.shell('cat /home/user/work/ts-output.txt')
     assert.equal(result.stdoutText, 'from typescript ssh')
     console.log(JSON.stringify({ check: 'typescript_router_shared_sftp_cache_invalidation' }))
   } finally {

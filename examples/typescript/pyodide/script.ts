@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   console.log('python3 script file (read from mount) + piped stdin\n')
 
   // Seed a JSONL corpus into the disk mount
-  await ws.execute(
+  await ws.shell(
     `cat > /disk/data.jsonl <<'EOF'
 {"type":"login","user":"alice","ts":1}
 {"type":"click","user":"alice","ts":2}
@@ -48,15 +48,15 @@ EOF`,
   )
 
   // Write the script to the disk mount
-  await ws.execute('mkdir -p /disk/scripts')
-  const write = await ws.execute(`cat > /disk/scripts/summarize.py <<'PYEOF'\n${SCRIPT}\nPYEOF`)
+  await ws.shell('mkdir -p /disk/scripts')
+  const write = await ws.shell(`cat > /disk/scripts/summarize.py <<'PYEOF'\n${SCRIPT}\nPYEOF`)
   if (write.exitCode !== 0) {
     console.error('failed to seed script:', write.stderrText)
     process.exit(1)
   }
 
   console.log('=== python3 /disk/scripts/summarize.py < stdin (from pipe) ===')
-  const res = await ws.execute('cat /disk/data.jsonl | python3 /disk/scripts/summarize.py')
+  const res = await ws.shell('cat /disk/data.jsonl | python3 /disk/scripts/summarize.py')
   process.stdout.write(res.stdoutText)
   if (res.stderr.length > 0) {
     console.error('STDERR:', res.stderrText)
@@ -64,7 +64,7 @@ EOF`,
   console.log(`exit: ${String(res.exitCode)}\n`)
 
   console.log('=== same pipeline with inline -c (one-line style) ===')
-  const pipeline = await ws.execute(
+  const pipeline = await ws.shell(
     `head -n 2 /disk/data.jsonl | python3 -c "import sys, json; [print(json.loads(l)['user'], '->', json.loads(l)['type']) for l in sys.stdin]"`,
   )
   process.stdout.write(pipeline.stdoutText)

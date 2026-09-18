@@ -29,11 +29,11 @@ async def run():
         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
     )
     with Workspace({"/s3/": S3VFS(cfg)}, mode=MountMode.READ) as ws:
-        r = await ws.execute("ls /s3/")
+        r = await ws.shell("ls /s3/")
         print("--- ls /s3/ ---")
         print((await r.stdout_str()).rstrip())
 
-        r = await ws.execute("grep -c mirage /s3/data/example.jsonl")
+        r = await ws.shell("grep -c mirage /s3/data/example.jsonl")
         print("\n--- grep -c mirage /s3/data/example.jsonl ---")
         print((await r.stdout_str()).rstrip())
 

@@ -77,16 +77,16 @@ async def main():
         print(f"  notes.txt: {os.path.getsize('/seaweedfs/notes.txt')} bytes")
 
         print("\n--- VFS commands ---")
-        result = await ws.execute("grep -c queue-operation "
-                                  "/seaweedfs/data/example.jsonl")
+        result = await ws.shell("grep -c queue-operation "
+                                "/seaweedfs/data/example.jsonl")
         print(f"  grep matches: {(await result.stdout_str()).strip()}")
-        result = await ws.execute("jq .tags /seaweedfs/data/config.json")
+        result = await ws.shell("jq .tags /seaweedfs/data/config.json")
         print(f"  jq .tags    : {(await result.stdout_str()).strip()}")
 
         print("\n--- cleanup ---")
         for key in ("/seaweedfs/data/example.jsonl",
                     "/seaweedfs/data/config.json", "/seaweedfs/notes.txt"):
-            await ws.execute(f"rm {key}")
+            await ws.shell(f"rm {key}")
         print("  cleaned")
 
         records = ws.fs.records

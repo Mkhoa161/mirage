@@ -52,56 +52,56 @@ describe('RedisVFS over the Upstash REST api', () => {
   })
 
   it('tee writes through the api and cat reads it back', async () => {
-    await ws.execute('echo "hello world" | tee /data/hello.txt')
-    const result = await ws.execute('cat /data/hello.txt')
+    await ws.shell('echo "hello world" | tee /data/hello.txt')
+    const result = await ws.shell('cat /data/hello.txt')
     expect(result.exitCode).toBe(0)
     expect(DEC.decode(result.stdout)).toBe('hello world\n')
     expect(fake.keys()).toContain('mirage:fs:file:/hello.txt')
   })
 
   it('mkdir and ls list a directory', async () => {
-    await ws.execute('mkdir /data/sub')
-    await ws.execute('echo a | tee /data/sub/a.txt')
-    await ws.execute('echo b | tee /data/sub/b.txt')
-    const r = await ws.execute('ls /data/sub/')
+    await ws.shell('mkdir /data/sub')
+    await ws.shell('echo a | tee /data/sub/a.txt')
+    await ws.shell('echo b | tee /data/sub/b.txt')
+    const r = await ws.shell('ls /data/sub/')
     expect(DEC.decode(r.stdout).trim().split('\n').sort()).toEqual(['a.txt', 'b.txt'])
   })
 
   it('find walks the keyspace', async () => {
-    await ws.execute('mkdir -p /data/d/e')
-    await ws.execute('echo x | tee /data/d/e/x.txt')
-    await ws.execute('echo y | tee /data/y.md')
-    const r = await ws.execute("find /data -name '*.txt'")
+    await ws.shell('mkdir -p /data/d/e')
+    await ws.shell('echo x | tee /data/d/e/x.txt')
+    await ws.shell('echo y | tee /data/y.md')
+    const r = await ws.shell("find /data -name '*.txt'")
     expect(DEC.decode(r.stdout).trim()).toBe('/data/d/e/x.txt')
   })
 
   it('stat sizes a file in bytes', async () => {
-    await ws.execute('printf é | tee /data/u.txt > /dev/null')
-    const r = await ws.execute('stat -c %s /data/u.txt')
+    await ws.shell('printf é | tee /data/u.txt > /dev/null')
+    const r = await ws.shell('stat -c %s /data/u.txt')
     expect(DEC.decode(r.stdout).trim()).toBe('2')
   })
 
   it('rm removes the file key and its side keys', async () => {
-    await ws.execute('echo gone | tee /data/gone.txt')
-    await ws.execute('rm /data/gone.txt')
+    await ws.shell('echo gone | tee /data/gone.txt')
+    await ws.shell('rm /data/gone.txt')
     expect(fake.keys().filter((k) => k.endsWith('/gone.txt'))).toEqual([])
-    const r = await ws.execute('cat /data/gone.txt')
+    const r = await ws.shell('cat /data/gone.txt')
     expect(r.exitCode).toBe(1)
   })
 
   it('round-trips binary content', async () => {
     await vfs.writeFile(spec('/a.bin'), ALL_BYTES)
     expect(await vfs.readFile(spec('/a.bin'))).toEqual(ALL_BYTES)
-    const r = await ws.execute('wc -c < /data/a.bin')
+    const r = await ws.shell('wc -c < /data/a.bin')
     expect(DEC.decode(r.stdout).trim()).toBe('256')
   })
 
   it('persists across mounts sharing the url and prefix', async () => {
-    await ws.execute('echo persisted | tee /data/p.txt')
+    await ws.shell('echo persisted | tee /data/p.txt')
     const second = new RedisVFS({ url: fake.url, token: fake.token, fetchImpl: fake.fetch })
     const ws2 = new Workspace({ '/again': second }, { mode: MountMode.READ })
     try {
-      const r = await ws2.execute('cat /again/p.txt')
+      const r = await ws2.shell('cat /again/p.txt')
       expect(DEC.decode(r.stdout)).toBe('persisted\n')
     } finally {
       await ws2.close()
@@ -109,14 +109,14 @@ describe('RedisVFS over the Upstash REST api', () => {
   })
 
   it('takes the redis url the node mount takes, with the password as the token', async () => {
-    await ws.execute('echo shared | tee /data/shared.txt')
+    await ws.shell('echo shared | tee /data/shared.txt')
     const same = new RedisVFS({
       url: `rediss://default:${fake.token}@${new URL(fake.url).host}:6379`,
       fetchImpl: fake.fetch,
     })
     const ws2 = new Workspace({ '/again': same }, { mode: MountMode.READ })
     try {
-      const r = await ws2.execute('cat /again/shared.txt')
+      const r = await ws2.shell('cat /again/shared.txt')
       expect(DEC.decode(r.stdout)).toBe('shared\n')
     } finally {
       await ws2.close()
@@ -124,8 +124,8 @@ describe('RedisVFS over the Upstash REST api', () => {
   })
 
   it('getState captures the keyspace and loadState restores it elsewhere', async () => {
-    await ws.execute('mkdir /data/kept')
-    await ws.execute('echo state | tee /data/kept/s.txt')
+    await ws.shell('mkdir /data/kept')
+    await ws.shell('echo state | tee /data/kept/s.txt')
     await vfs.store.setAttrs('/kept/s.txt', { mode: '384' })
     const state = await vfs.getState()
     expect(state.config).toEqual({ url: '<REDACTED>', keyPrefix: 'mirage:fs:' })
@@ -143,7 +143,7 @@ describe('RedisVFS over the Upstash REST api', () => {
     await restored.loadState(state)
     const ws2 = new Workspace({ '/r': restored }, { mode: MountMode.READ })
     try {
-      const r = await ws2.execute('cat /r/kept/s.txt && stat -c %a /r/kept/s.txt')
+      const r = await ws2.shell('cat /r/kept/s.txt && stat -c %a /r/kept/s.txt')
       expect(DEC.decode(r.stdout)).toBe('state\n600\n')
     } finally {
       await ws2.close()

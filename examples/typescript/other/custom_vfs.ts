@@ -206,7 +206,7 @@ class FeedVFS extends GenericVFS<WikiAccessor> {
 }
 
 async function show(ws: Workspace, line: string, prompt = '$'): Promise<void> {
-  const io = await ws.execute(line)
+  const io = await ws.shell(line)
   const out = io.exitCode === 0 ? io.stdoutText : `${io.stderrText}exit ${String(io.exitCode)}\n`
   console.log(`${prompt} ${line}\n${out}`)
 }

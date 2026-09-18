@@ -24,8 +24,8 @@ import { DiskVFS, MountMode, Workspace } from '@struktoai/mirage-node'
 const disk = new DiskVFS({ root: '/Users/me/data' })
 const ws = new Workspace({ '/disk': disk }, { mode: MountMode.WRITE })
 
-await ws.execute('echo hello | tee /disk/note.txt')
-await ws.execute('cat /disk/note.txt')
+await ws.shell('echo hello | tee /disk/note.txt')
+await ws.shell('cat /disk/note.txt')
 ```
 
 | Field | Default | Notes |

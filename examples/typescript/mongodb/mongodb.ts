@@ -45,7 +45,7 @@ const DEC = new TextDecoder()
 
 async function run(cmd: string): Promise<void> {
   console.log(`\n>>> ${cmd}`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   const out = DEC.decode(r.stdout).trimEnd()
   const err = DEC.decode(r.stderr).trimEnd()
   if (out !== '') {
@@ -96,7 +96,7 @@ try {
   // workspace namespace (durable, snapshot-captured) and merge into
   // dispatch-level stat.
   console.log(`=== metadata overlay on ${collDoc} ===`)
-  const metaRes = await ws.execute(
+  const metaRes = await ws.shell(
     `chmod 640 "${collDoc}" && chown 500:dev "${collDoc}" && touch -t 202601021530 "${collDoc}"`,
   )
   console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)
@@ -145,7 +145,7 @@ try {
   console.log('\n' + '='.repeat(60))
   console.log('CD + pwd + ls + relative path read')
   console.log('='.repeat(60))
-  await ws.execute(`cd "/mongodb/${DB}/collections/${COLL_HET}"`)
+  await ws.shell(`cd "/mongodb/${DB}/collections/${COLL_HET}"`)
   await run('pwd')
   await run('ls')
   await run('head -n 1 documents.jsonl')

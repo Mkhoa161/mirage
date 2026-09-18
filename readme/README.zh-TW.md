@@ -50,15 +50,15 @@ ws = Workspace(
 )
 
 # 一次 grep 掃遍所有資料來源
-await ws.execute("grep -rln session /redis /tmp")
+await ws.shell("grep -rln session /redis /tmp")
 
 # 執行放在 Slack 裡的腳本，把報告寫入 Redis
-await ws.execute("python3 /slack/channels/general_.../files/example__F....py > /redis/report.txt")
+await ws.shell("python3 /slack/channels/general_.../files/example__F....py > /redis/report.txt")
 
 # 以頭部命令名安裝一個型別化 CLI：依名稱分派，而不是依路徑，
 # 並且像其他程式一樣可以透過 `man`、`type`、`which` 發現
 ws.register_cli("slack", SLACK, {"token": slack_bot_token})
-await ws.execute('slack send-message --channel general --text "report is up"')
+await ws.shell('slack send-message --channel general --text "report is up"')
 ```
 
 ## 關於
@@ -129,8 +129,8 @@ ws = Workspace({
     "/s3":   S3VFS(S3Config(bucket="my-bucket")),
 })
 
-await ws.execute("cp /s3/report.csv /data/report.csv")
-await ws.execute("grep alert /s3/data/log.jsonl | wc -l")
+await ws.shell("cp /s3/report.csv /data/report.csv")
+await ws.shell("grep alert /s3/data/log.jsonl | wc -l")
 
 await ws.snapshot("demo.tar")
 ```
@@ -145,8 +145,8 @@ const ws = new Workspace({
   '/s3':   new S3VFS({ bucket: 'my-bucket' }),
 })
 
-await ws.execute('cp /s3/report.csv /data/report.csv')
-await ws.execute('grep alert /s3/data/log.jsonl | wc -l')
+await ws.shell('cp /s3/report.csv /data/report.csv')
+await ws.shell('grep alert /s3/data/log.jsonl | wc -l')
 
 await ws.snapshot('demo.tar')
 ```

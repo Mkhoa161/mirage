@@ -42,7 +42,7 @@ def ws(dbx_files: FakeFiles) -> Workspace:
 
 @pytest.mark.asyncio
 async def test_tree_lists_nested_entries(ws):
-    io = await ws.execute("tree /dbx/")
+    io = await ws.shell("tree /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -52,7 +52,7 @@ async def test_tree_lists_nested_entries(ws):
 
 @pytest.mark.asyncio
 async def test_tree_max_depth(ws):
-    io = await ws.execute("tree -L 1 /dbx/")
+    io = await ws.shell("tree -L 1 /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -63,7 +63,7 @@ async def test_tree_max_depth(ws):
 
 @pytest.mark.asyncio
 async def test_tree_dirs_only(ws):
-    io = await ws.execute("tree -d /dbx/")
+    io = await ws.shell("tree -d /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()

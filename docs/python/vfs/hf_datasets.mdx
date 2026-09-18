@@ -94,13 +94,13 @@ vfs = HfDatasetsVFS(config)
 async def main() -> None:
     ws = Workspace({"/ds": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /ds/")
+    r = await ws.shell("ls /ds/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /ds/README.md | head -n 20")
+    r = await ws.shell("cat /ds/README.md | head -n 20")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /ds/ -name '*.parquet' | head -n 5")
+    r = await ws.shell("find /ds/ -name '*.parquet' | head -n 5")
     print(await r.stdout_str())
 
 

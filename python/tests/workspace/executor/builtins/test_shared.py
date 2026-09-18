@@ -123,7 +123,7 @@ def test_split_value_flags_reports_unknown():
 @pytest.mark.asyncio
 async def test_expand_operands_globs():
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("echo a > /data/a.txt && echo b > /data/b.txt")
+    await ws.shell("echo a > /data/a.txt && echo b > /data/b.txt")
     namespace = ws._namespace
     glob_spec = replace(PathSpec.from_str_path("/data/*.txt"),
                         pattern="*.txt",

@@ -220,7 +220,7 @@ async function runCase(c: ConformanceCase, backend: string): Promise<void> {
     await seedWorkspace(ws)
     const hasStdin = 'stdin_text' in c || 'stdin_base64' in c
     const stdin = hasStdin ? decodeBytes(c, 'stdin_text', 'stdin_base64') : undefined
-    const result = await ws.execute(c.cmd, stdin === undefined ? undefined : { stdin })
+    const result = await ws.shell(c.cmd, stdin === undefined ? undefined : { stdin })
     expect(result.exitCode).toBe(c.expect.exit)
     expect(comparable(result.stdout)).toBe(
       comparable(decodeBytes(c.expect, 'stdout_text', 'stdout_base64')),

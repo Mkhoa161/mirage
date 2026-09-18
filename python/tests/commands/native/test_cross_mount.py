@@ -33,14 +33,14 @@ from tests.commands.native.conftest import (_CORE_MODULES, BUCKET, REGION,
 def _run(ws, cmd):
 
     async def _inner():
-        io = await ws.execute(cmd)
+        io = await ws.shell(cmd)
         return await io.stdout_str()
 
     return asyncio.run(_inner())
 
 
 def _exit(ws, cmd):
-    io = asyncio.run(ws.execute(cmd))
+    io = asyncio.run(ws.shell(cmd))
     return io.exit_code
 
 
@@ -255,6 +255,6 @@ def test_plan_cross_vfs_aggregate_sums(cross):
     cross.create_file(1, "a.txt", b"hello\n")
     cross.create_file(2, "b.txt", b"world\n")
     result = asyncio.run(
-        cross.ws.execute("md5 /m1/a.txt /m2/b.txt", provision=True))
+        cross.ws.shell("md5 /m1/a.txt /m2/b.txt", provision=True))
     assert result.precision == Precision.EXACT
     assert result.network_read == "12"

@@ -38,8 +38,8 @@ async def test_registered_commands_used_for_dispatch():
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/a.txt", b"hello world\n")
-    result = await ws.execute("cat /tmp/a.txt")
+    result = await ws.shell("cat /tmp/a.txt")
     assert (await result.stdout_str()) == "hello world\n"
 
-    result = await ws.execute("wc -l /tmp/a.txt")
+    result = await ws.shell("wc -l /tmp/a.txt")
     assert "1" in (await result.stdout_str())

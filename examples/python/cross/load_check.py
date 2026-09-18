@@ -64,7 +64,7 @@ def _fresh_mounts():
 
 
 async def _capture(ws, cmd):
-    r = await ws.execute(cmd)
+    r = await ws.shell(cmd)
     return {
         "command": cmd,
         "exit_code": r.exit_code,
@@ -110,7 +110,7 @@ async def main():
     # gdrive index belongs to the freshly-supplied VFS (override
     # drops the saved index). Repopulate it the same way the original
     # script did, so the loader's commands resolve the same paths.
-    await ws.execute("ls /gdrive/")
+    await ws.shell("ls /gdrive/")
 
     # ── re-execute fingerprint commands and compare ─────────────────
     print(f"\n=== re-running {len(expected_doc['fingerprints'])} commands "

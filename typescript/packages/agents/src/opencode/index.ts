@@ -204,7 +204,7 @@ export function mirageTools(
     },
     execute: async ({ command }, ctx) => {
       const w = await resolveWs(ws, ctx)
-      const io = await w.execute(command)
+      const io = await w.shell(command)
       const parts: string[] = []
       if (io.stdoutText.length > 0) parts.push(io.stdoutText)
       if (io.stderrText.length > 0) parts.push(io.stderrText)
@@ -221,7 +221,7 @@ export function mirageTools(
     execute: async ({ pattern, path }, ctx) => {
       const w = await resolveWs(ws, ctx)
       const root = path ?? '/'
-      const io = await w.execute(`find ${root} -name '${pattern.replace(/'/g, "'\\''")}'`)
+      const io = await w.shell(`find ${root} -name '${pattern.replace(/'/g, "'\\''")}'`)
       return io.stdoutText.trim()
     },
   })
@@ -236,7 +236,7 @@ export function mirageTools(
       const w = await resolveWs(ws, ctx)
       const root = path ?? '/'
       const escaped = pattern.replace(/'/g, "'\\''")
-      const io = await w.execute(`grep -rn '${escaped}' ${root}`)
+      const io = await w.shell(`grep -rn '${escaped}' ${root}`)
       return io.stdoutText.trim()
     },
   })

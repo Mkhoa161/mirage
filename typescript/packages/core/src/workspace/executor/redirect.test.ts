@@ -257,7 +257,7 @@ describe('fd-table routing end-to-end', () => {
   it('multiple stdout redirects truncate all, write last', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute('echo body > /data/m1 > /data/m2')
+      await ws.shell('echo body > /data/m1 > /data/m2')
       expect(await run(ws, 'cat /data/m1')).toBe('')
       expect(await run(ws, 'cat /data/m2')).toBe('body\n')
     } finally {
@@ -268,7 +268,7 @@ describe('fd-table routing end-to-end', () => {
   it('2> file creates the file even when stderr is empty', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute('echo fine 2> /data/errs')
+      await ws.shell('echo fine 2> /data/errs')
       expect(await runExit(ws, 'test -f /data/errs')).toBe(0)
     } finally {
       await ws.close()
@@ -303,8 +303,8 @@ describe('fd-table routing end-to-end', () => {
   it('&>> appends both streams', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute('echo one &> /data/acc')
-      await ws.execute('echo three &>> /data/acc')
+      await ws.shell('echo one &> /data/acc')
+      await ws.shell('echo three &>> /data/acc')
       expect(await run(ws, 'cat /data/acc')).toBe('one\nthree\n')
     } finally {
       await ws.close()
@@ -688,16 +688,16 @@ it('opens a standard descriptor in the other direction', async () => {
   // 5.2; the file itself stays what the redirect made it.
   const { ws } = await makeIntegrationWS({ input: 'original\n', source: 'readable\n' })
   try {
-    const zero = await ws.execute(
+    const zero = await ws.shell(
       '( exec 0>/data/input; echo rc=$?; cat; echo rc=$?; read v; echo rc=$? )',
     )
     expect(zero.stdoutText).toBe('rc=0\nrc=1\nrc=1\n')
     expect(zero.stderrText).toContain('cat: -: Bad file descriptor')
-    expect((await ws.execute('cat /data/input')).stdoutText).toBe('')
-    const one = await ws.execute('( exec 1</data/source; echo hi; echo rc=$? >&2 )')
+    expect((await ws.shell('cat /data/input')).stdoutText).toBe('')
+    const one = await ws.shell('( exec 1</data/source; echo hi; echo rc=$? >&2 )')
     expect(one.stdoutText).toBe('')
     expect(one.stderrText).toBe('echo: write error: Bad file descriptor\nrc=1\n')
-    const two = await ws.execute('( exec 2</data/source; echo hi >&2; echo rc=$? )')
+    const two = await ws.shell('( exec 2</data/source; echo hi >&2; echo rc=$? )')
     expect(two.stdoutText).toBe('rc=1\n')
   } finally {
     await ws.close()
@@ -707,8 +707,8 @@ it('opens a standard descriptor in the other direction', async () => {
 it('persists an explicit stdin file redirect', async () => {
   const { ws } = await makeIntegrationWS({ input: 'readable\n' })
   try {
-    await ws.execute('exec 0</data/input')
-    expect((await ws.execute('read value; echo $value')).stdoutText).toBe('readable\n')
+    await ws.shell('exec 0</data/input')
+    expect((await ws.shell('read value; echo $value')).stdoutText).toBe('readable\n')
   } finally {
     await ws.close()
   }

@@ -85,7 +85,7 @@ function makeRamEnv(): NativeEnv {
     },
     async mirage(cmd, stdin = null) {
       ws.cwd = '/data'
-      const io = await ws.execute(cmd, stdin === null ? {} : { stdin })
+      const io = await ws.shell(cmd, stdin === null ? {} : { stdin })
       return DEC.decode(io.stdout)
     },
     async cleanup() {
@@ -116,7 +116,7 @@ function makeDiskEnv(): NativeEnv {
     },
     async mirage(cmd, stdin = null) {
       ws.cwd = '/data'
-      const io = await ws.execute(cmd, stdin === null ? {} : { stdin })
+      const io = await ws.shell(cmd, stdin === null ? {} : { stdin })
       return DEC.decode(io.stdout)
     },
     async cleanup() {
@@ -196,19 +196,19 @@ export function makeCrossEnv(kinds: readonly [BackendKind, BackendKind]): CrossE
       writeToMount(mount, relative, content)
     },
     async run(cmd) {
-      const io = await ws.execute(cmd)
+      const io = await ws.shell(cmd)
       return DEC.decode(io.stdout)
     },
     async exit(cmd) {
-      const io = await ws.execute(cmd)
+      const io = await ws.shell(cmd)
       return io.exitCode
     },
     async stderr(cmd) {
-      const io = await ws.execute(cmd)
+      const io = await ws.shell(cmd)
       return DEC.decode(io.stderr)
     },
     async provision(cmd) {
-      return ws.execute(cmd, { provision: true })
+      return ws.shell(cmd, { provision: true })
     },
     async cleanup() {
       await ws.close()

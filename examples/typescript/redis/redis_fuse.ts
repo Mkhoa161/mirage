@@ -33,10 +33,10 @@ async function seed(): Promise<void> {
 
   const ws = new Workspace({ "/data/": vfs }, { mode: MountMode.WRITE });
   try {
-    await ws.execute('echo "hello world" | tee /data/hello.txt');
-    await ws.execute("mkdir /data/sub");
-    await ws.execute('echo "nested content" | tee /data/sub/nested.txt');
-    await ws.execute(`echo '{"key": "value"}' | tee /data/example.json`);
+    await ws.shell('echo "hello world" | tee /data/hello.txt');
+    await ws.shell("mkdir /data/sub");
+    await ws.shell('echo "nested content" | tee /data/sub/nested.txt');
+    await ws.shell(`echo '{"key": "value"}' | tee /data/example.json`);
   } finally {
     await ws.close();
   }

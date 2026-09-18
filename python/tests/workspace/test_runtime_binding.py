@@ -38,7 +38,7 @@ async def ws():
 
 @pytest.mark.asyncio
 async def test_default_world_binds_python3(ws):
-    io = await ws.execute("python3 -c 'print(40 + 2)'")
+    io = await ws.shell("python3 -c 'print(40 + 2)'")
     assert io.exit_code == 0
     assert await materialize(io.stdout) == b"42\n"
 
@@ -49,7 +49,7 @@ async def test_explicit_name_entry_binds():
                    mode=MountMode.EXEC,
                    runtimes=["monty", "workspace"])
     try:
-        io = await ws.execute("python3 -c 'print(6 * 7)'")
+        io = await ws.shell("python3 -c 'print(6 * 7)'")
         assert io.exit_code == 0
         assert await materialize(io.stdout) == b"42\n"
     finally:
@@ -62,9 +62,8 @@ async def test_instance_entry_gets_dispatch_attached():
                    mode=MountMode.EXEC,
                    runtimes=[MontyRuntime()])
     try:
-        await ws.execute("echo -n hello > /greet.txt")
-        io = await ws.execute("python3 -c \"print(open('/greet.txt').read())\""
-                              )
+        await ws.shell("echo -n hello > /greet.txt")
+        io = await ws.shell("python3 -c \"print(open('/greet.txt').read())\"")
         assert io.exit_code == 0
         assert await materialize(io.stdout) == b"hello\n"
     finally:
@@ -77,7 +76,7 @@ async def test_instance_entry_runs_on_that_runtime():
                    mode=MountMode.EXEC,
                    runtimes=[LocalRuntime()])
     try:
-        io = await ws.execute("python3 -c 'import sys; print(sys.platform)'")
+        io = await ws.shell("python3 -c 'import sys; print(sys.platform)'")
         assert io.exit_code == 0
         assert (await materialize(io.stdout)).strip() != b""
     finally:
@@ -137,39 +136,39 @@ async def runtime_arg_ws():
 
 @pytest.mark.asyncio
 async def test_runtime_arg_rebinds_captured_stage(runtime_arg_ws):
-    io = await runtime_arg_ws.execute("python3 -c 'x'", runtime="beta")
+    io = await runtime_arg_ws.shell("python3 -c 'x'", runtime="beta")
     assert await materialize(io.stdout) == b"ran-beta\n"
 
 
 @pytest.mark.asyncio
 async def test_runtime_arg_only_lasts_the_line(runtime_arg_ws):
-    await runtime_arg_ws.execute("python3 -c 'x'", runtime="beta")
-    io = await runtime_arg_ws.execute("python3 -c 'x'")
+    await runtime_arg_ws.shell("python3 -c 'x'", runtime="beta")
+    io = await runtime_arg_ws.shell("python3 -c 'x'")
     assert await materialize(io.stdout) == b"ran-alpha\n"
 
 
 @pytest.mark.asyncio
 async def test_runtime_arg_inherited_by_nested_eval(runtime_arg_ws):
-    io = await runtime_arg_ws.execute("echo $(python3 -c 'x')", runtime="beta")
+    io = await runtime_arg_ws.shell("echo $(python3 -c 'x')", runtime="beta")
     assert await materialize(io.stdout) == b"ran-beta\n"
 
 
 @pytest.mark.asyncio
 async def test_runtime_arg_never_touches_uncaptured_stages(runtime_arg_ws):
-    io = await runtime_arg_ws.execute("echo plain-workspace", runtime="beta")
+    io = await runtime_arg_ws.shell("echo plain-workspace", runtime="beta")
     assert await materialize(io.stdout) == b"plain-workspace\n"
 
 
 @pytest.mark.asyncio
 async def test_runtime_arg_unknown_name_fails_loud(runtime_arg_ws):
     with pytest.raises(ValueError, match="unknown runtime:"):
-        await runtime_arg_ws.execute("python3 -c 'x'", runtime="nope")
+        await runtime_arg_ws.shell("python3 -c 'x'", runtime="nope")
 
 
 @pytest.mark.asyncio
 async def test_runtime_arg_vfs_fails_loud(runtime_arg_ws):
     with pytest.raises(ValueError, match="not a runtime you can select"):
-        await runtime_arg_ws.execute("python3 -c 'x'", runtime="workspace")
+        await runtime_arg_ws.shell("python3 -c 'x'", runtime="workspace")
 
 
 @pytest_asyncio.fixture
@@ -185,15 +184,15 @@ async def routed_ws():
 
 @pytest.mark.asyncio
 async def test_scripts_route_between_capturers(routed_ws):
-    io = await routed_ws.execute("python3 -c 'small'")
+    io = await routed_ws.shell("python3 -c 'small'")
     assert await materialize(io.stdout) == b"ran-alpha\n"
-    io = await routed_ws.execute("python3 -c 'big job'")
+    io = await routed_ws.shell("python3 -c 'big job'")
     assert await materialize(io.stdout) == b"ran-beta\n"
 
 
 @pytest.mark.asyncio
 async def test_runtime_arg_beats_scripts(routed_ws):
-    io = await routed_ws.execute("python3 -c 'big job'", runtime="alpha")
+    io = await routed_ws.shell("python3 -c 'big job'", runtime="alpha")
     assert await materialize(io.stdout) == b"ran-alpha\n"
 
 
@@ -205,11 +204,11 @@ async def test_all_capturers_refuse_is_admission_failure():
                    mode=MountMode.EXEC,
                    runtimes=[alpha, "workspace"])
     try:
-        io = await ws.execute("python3 -c 'x'")
+        io = await ws.shell("python3 -c 'x'")
         assert io.exit_code == 126
         err = await materialize(io.stderr)
         assert err == b"python3: no runtime accepted this line\n"
-        io = await ws.execute("echo workspace-still-open")
+        io = await ws.shell("echo workspace-still-open")
         assert await materialize(io.stdout) == b"workspace-still-open\n"
     finally:
         await ws.close()
@@ -224,9 +223,9 @@ async def test_vfs_entry_script_locks_down_lines():
             WorkspaceRuntime(script=lambda ctx: "/secret" not in ctx.line)
         ])
     try:
-        io = await ws.execute("echo ok > /notes.txt && cat /notes.txt")
+        io = await ws.shell("echo ok > /notes.txt && cat /notes.txt")
         assert await materialize(io.stdout) == b"ok\n"
-        io = await ws.execute("cat /secret/creds")
+        io = await ws.shell("cat /secret/creds")
         assert io.exit_code == 126
     finally:
         await ws.close()
@@ -240,13 +239,13 @@ async def test_vfs_explicit_captures_restrict_the_workspace():
         runtimes=[AlphaRuntime(),
                   WorkspaceRuntime(captures=("echo", ))])
     try:
-        io = await ws.execute("echo listed")
+        io = await ws.shell("echo listed")
         assert await materialize(io.stdout) == b"listed\n"
-        io = await ws.execute("ls /")
+        io = await ws.shell("ls /")
         assert io.exit_code == 126
         err = await materialize(io.stderr)
         assert err == b"ls: no runtime accepted this line\n"
-        io = await ws.execute("python3 -c 'x'")
+        io = await ws.shell("python3 -c 'x'")
         assert await materialize(io.stdout) == b"ran-alpha\n"
     finally:
         await ws.close()
@@ -268,9 +267,9 @@ async def test_empty_captures_serve_nothing():
                    runtimes=[AlphaRuntime(),
                              WorkspaceRuntime(captures=())])
     try:
-        io = await ws.execute("ls /")
+        io = await ws.shell("ls /")
         assert io.exit_code == 126
-        io = await ws.execute("python3 -c 'x'")
+        io = await ws.shell("python3 -c 'x'")
         assert await materialize(io.stdout) == b"ran-alpha\n"
     finally:
         await ws.close()
@@ -284,7 +283,7 @@ async def test_script_sees_its_own_stage_on_pipelines():
                    mode=MountMode.EXEC,
                    runtimes=[alpha, "workspace"])
     try:
-        io = await ws.execute("echo lead | python3 -c 'x'")
+        io = await ws.shell("echo lead | python3 -c 'x'")
         assert io.exit_code == 0
         assert await materialize(io.stdout) == b"ran-alpha\n"
     finally:
@@ -300,9 +299,9 @@ async def test_vfs_explicit_captures_restrict_under_routing():
                    runtimes=[alpha,
                              WorkspaceRuntime(captures=("echo", ))])
     try:
-        io = await ws.execute("echo routed-ok")
+        io = await ws.shell("echo routed-ok")
         assert await materialize(io.stdout) == b"routed-ok\n"
-        io = await ws.execute("ls /")
+        io = await ws.shell("ls /")
         assert io.exit_code == 126
     finally:
         await ws.close()
@@ -317,9 +316,9 @@ async def test_global_route_names_the_runtime():
                    route_policy=lambda ctx: "beta"
                    if "heavy" in ctx.line else None)
     try:
-        io = await ws.execute("python3 -c 'heavy'")
+        io = await ws.shell("python3 -c 'heavy'")
         assert await materialize(io.stdout) == b"ran-beta\n"
-        io = await ws.execute("python3 -c 'light'")
+        io = await ws.shell("python3 -c 'light'")
         assert await materialize(io.stdout) == b"ran-alpha\n"
     finally:
         await ws.close()
@@ -333,12 +332,12 @@ async def test_policy_deny_folds_into_the_line_result():
                    route_policy=lambda ctx: {"deny": "python3 is blocked"}
                    if ctx.command == "python3" else None)
     try:
-        io = await ws.execute("python3 -c 'x'")
+        io = await ws.shell("python3 -c 'x'")
         assert io.exit_code == 126
         assert io.stderr == b"python3: Permission denied\n"
         assert io.refusal is not None
         assert io.refusal.reason == "python3 is blocked"
-        io = await ws.execute("echo ok")
+        io = await ws.shell("echo ok")
         assert await materialize(io.stdout) == b"ok\n"
         assert io.exit_code == 0
         # The denied line is still a typed line: it records like any
@@ -363,7 +362,7 @@ async def test_syntax_error_gates_before_policy():
                    runtimes=[AlphaRuntime(), "workspace"],
                    route_policy=deny_all)
     try:
-        io = await ws.execute("echo (")
+        io = await ws.shell("echo (")
         assert io.exit_code == 2
         assert b"syntax error" in io.stderr
         assert calls == []
@@ -380,9 +379,9 @@ async def test_policy_result_arms_route_and_deny():
                    route_policy=lambda ctx: DenyResult("secrets stay put")
                    if "secret" in ctx.line else RouteResult("beta"))
     try:
-        io = await ws.execute("python3 -c 'x'")
+        io = await ws.shell("python3 -c 'x'")
         assert await materialize(io.stdout) == b"ran-beta\n"
-        io = await ws.execute("python3 -c 'secret'")
+        io = await ws.shell("python3 -c 'secret'")
         assert io.exit_code == 126
         assert io.stderr == b"python3: Permission denied\n"
         assert io.refusal is not None
@@ -401,7 +400,7 @@ async def test_nested_eval_inherits_routing():
     try:
         # The typed line routes to beta; the inner eval must not
         # re-route even though the inner line alone would pick alpha.
-        io = await ws.execute("echo big $(python3 -c 'x')")
+        io = await ws.shell("echo big $(python3 -c 'x')")
         assert await materialize(io.stdout) == b"big ran-beta\n"
     finally:
         await ws.close()
@@ -414,9 +413,9 @@ async def test_add_runtime_appends_and_rebinds():
                    runtimes=[AlphaRuntime(), "workspace"])
     try:
         ws.add_runtime(BetaRuntime())
-        io = await ws.execute("python3 -c 'x'")
+        io = await ws.shell("python3 -c 'x'")
         assert await materialize(io.stdout) == b"ran-alpha\n"
-        io = await ws.execute("python3 -c 'x'", runtime="beta")
+        io = await ws.shell("python3 -c 'x'", runtime="beta")
         assert await materialize(io.stdout) == b"ran-beta\n"
         with pytest.raises(ValueError, match="duplicate runtime entry"):
             ws.add_runtime(BetaRuntime())
@@ -490,11 +489,11 @@ async def test_named_capture_keeps_pipeline_and_redirects_in_mirage():
                    mode=MountMode.EXEC,
                    runtimes=[box, "workspace"])
     try:
-        io = await ws.execute("nvidia-smi -L | grep box > /ram/out.txt")
+        io = await ws.shell("nvidia-smi -L | grep box > /ram/out.txt")
         assert io.exit_code == 0
         assert await materialize(io.stdout) == b""
         assert box.lines[0][0] == "nvidia-smi -L"
-        saved = await ws.execute("cat /ram/out.txt")
+        saved = await ws.shell("cat /ram/out.txt")
         assert await materialize(saved.stdout) == b"box:nvidia-smi -L\n"
     finally:
         await ws.close()
@@ -507,7 +506,7 @@ async def test_star_captures_any_line_and_stdin_arrives():
     ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[box, "workspace"])
-    io = await ws.execute("ls /ram && echo done", stdin=b"fed")
+    io = await ws.shell("ls /ram && echo done", stdin=b"fed")
     assert (await materialize(io.stdout)).startswith(b"box:")
     assert box.lines[0][1] == b"fed"
     await ws.close()
@@ -521,8 +520,8 @@ async def test_refused_line_runtime_falls_to_the_workspace():
     ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[box, "workspace"])
-    taken = await ws.execute("echo captured")
-    kept = await ws.execute("echo keep-out")
+    taken = await ws.shell("echo captured")
+    kept = await ws.shell("echo keep-out")
     assert (await materialize(taken.stdout)).startswith(b"box:")
     assert await materialize(kept.stdout) == b"keep-out\n"
     assert kept.exit_code == 0
@@ -537,8 +536,8 @@ async def test_runtime_argument_places_the_whole_line():
     ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[box, "workspace"])
-    refused = await ws.execute("echo hi")
-    forced = await ws.execute("echo hi", runtime="sandbox")
+    refused = await ws.shell("echo hi")
+    forced = await ws.shell("echo hi", runtime="sandbox")
     assert await materialize(refused.stdout) == b"hi\n"
     assert (await materialize(forced.stdout)).startswith(b"box:")
     await ws.close()
@@ -552,7 +551,7 @@ async def test_vfs_entry_is_a_pure_routing_marker():
     fallback = ws._registry.workspace_runtime
     assert fallback is not None
     assert not isinstance(fallback, LineExecutorMixin)
-    result = await ws.execute("echo through-workspace")
+    result = await ws.shell("echo through-workspace")
     assert await materialize(result.stdout) == b"through-workspace\n"
     await ws.close()
 

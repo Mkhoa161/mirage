@@ -46,7 +46,7 @@ def _multi_ws():
 
 
 def _exec(ws, cmd):
-    return _run(ws.execute(cmd))
+    return _run(ws.shell(cmd))
 
 
 def _out(io):
@@ -179,14 +179,14 @@ def test_man_lists_only_the_cli_verbs_the_profile_can_reach():
         profile={"commands": {
             "allow": ["man", "linear issue", "which"]
         }})
-    page = _out(_run(ws.execute("man linear", session_id="narrow")))
+    page = _out(_run(ws.shell("man linear", session_id="narrow")))
     assert "issue" in page
     assert "team" not in page
     # The head word still routes, because one line of the tree runs.
-    assert _out(_run(ws.execute("which linear",
-                                session_id="narrow"))) == "linear\n"
+    assert _out(_run(ws.shell("which linear",
+                              session_id="narrow"))) == "linear\n"
     # A verb the list does not reach has no page.
-    io = _run(ws.execute("man linear team", session_id="narrow"))
+    io = _run(ws.shell("man linear team", session_id="narrow"))
     assert io.exit_code == 1
     assert _err(io) == "man: no entry for linear team\n"
     # The host's own view is unnarrowed.

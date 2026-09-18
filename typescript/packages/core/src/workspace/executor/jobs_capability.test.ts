@@ -26,14 +26,14 @@ describe("background jobs respect the session's hides (regression)", () => {
   it('cmd & in a restricted session cannot escape the hides', async () => {
     const { ws } = await makeWorkspace()
     ws.createSession('restricted', { profile: { paths: { hide: ['/ram'] } } })
-    await ws.execute('echo hello > /ram/leaked.txt &', {
+    await ws.shell('echo hello > /ram/leaked.txt &', {
       sessionId: 'restricted',
     })
-    await ws.execute('wait', { sessionId: 'restricted' })
+    await ws.shell('wait', { sessionId: 'restricted' })
     // Read back from the DEFAULT (unrestricted) session so we measure
     // whether the bg write actually landed, not whether the read is
     // also blocked.
-    const probe = await ws.execute('cat /ram/leaked.txt')
+    const probe = await ws.shell('cat /ram/leaked.txt')
     expect(stdoutStr(probe).includes('hello')).toBe(false)
     await ws.close()
   }, 30_000)

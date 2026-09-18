@@ -177,42 +177,42 @@ async def main():
     ws.register_cli("gws", GWS, config.model_dump())
 
     # List root
-    r = await ws.execute("ls /gdrive/ | head -n 10")
+    r = await ws.shell("ls /gdrive/ | head -n 10")
     print(await r.stdout_str())
 
     # Browse a subfolder
-    r = await ws.execute("ls /gdrive/Projects/")
+    r = await ws.shell("ls /gdrive/Projects/")
     print(await r.stdout_str())
 
     # Read a regular file
-    r = await ws.execute("cat /gdrive/Projects/spec.pdf | head -c 200")
+    r = await ws.shell("cat /gdrive/Projects/spec.pdf | head -c 200")
     print(await r.stdout_str())
 
     # Read a Google Doc title
-    r = await ws.execute('jq ".title" /gdrive/Notes/meeting.gdoc.json')
+    r = await ws.shell('jq ".title" /gdrive/Notes/meeting.gdoc.json')
     print(await r.stdout_str())
 
     # Read a Google Sheet title
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".properties.title" /gdrive/Projects/roadmap.gsheet.json')
     print(await r.stdout_str())
 
     # Read a Google Slides deck length
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".slides | length"'
         " /gdrive/Presentations/quarterly_review.gslide.json")
     print(await r.stdout_str())
 
     # Search across all files
-    r = await ws.execute('rg "quarterly" /gdrive/Projects/')
+    r = await ws.shell('rg "quarterly" /gdrive/Projects/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 2 /gdrive/")
+    r = await ws.shell("tree -L 2 /gdrive/")
     print(await r.stdout_str())
 
     # Create a new Google Doc
-    r = await ws.execute(
+    r = await ws.shell(
         "gws docs documents create"
         ' --json \'{"title": "New Doc from MIRAGE"}\'')
     print(await r.stdout_str())

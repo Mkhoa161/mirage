@@ -49,7 +49,7 @@ const dec = new TextDecoder()
 
 /** Run one line and print what the agent would see. */
 async function show(ws: Workspace, line: string): Promise<void> {
-  const result = await ws.execute(line)
+  const result = await ws.shell(line)
   console.log(`$ ${line}`)
   console.log(`  exit ${result.exitCode}`)
   const out = result.stdout === null ? '' : dec.decode(result.stdout).trim()

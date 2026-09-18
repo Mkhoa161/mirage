@@ -83,7 +83,7 @@ describe('FileVersionTracker', () => {
     // '/a.txt' and clobber a change the agent never saw.
     const tracker = new FileVersionTracker(ws)
     await ws.fs.writeFile('/a.txt', 'one')
-    expect((await ws.execute('ln -s /a.txt /alias.txt')).exitCode).toBe(0)
+    expect((await ws.shell('ln -s /a.txt /alias.txt')).exitCode).toBe(0)
     await tracker.read('/alias.txt')
     await ws.fs.writeFile('/a.txt', 'moved underneath')
     await expect(tracker.write('/a.txt', 'two')).rejects.toThrow(StaleMirageFileError)
@@ -93,7 +93,7 @@ describe('FileVersionTracker', () => {
   it('sees the target read when the edit arrives through the alias', async () => {
     const tracker = new FileVersionTracker(ws)
     await ws.fs.writeFile('/a.txt', 'one')
-    expect((await ws.execute('ln -s /a.txt /alias.txt')).exitCode).toBe(0)
+    expect((await ws.shell('ln -s /a.txt /alias.txt')).exitCode).toBe(0)
     await tracker.read('/a.txt')
     await ws.fs.writeFile('/a.txt', 'moved underneath')
     await expect(tracker.readForEdit('/alias.txt')).rejects.toThrow(StaleMirageFileError)

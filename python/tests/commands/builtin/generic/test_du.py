@@ -744,11 +744,11 @@ async def test_fully_shadowed_operand_reports_zero():
 async def test_du_separate_dirs_off_the_command_line(tmp_path, flag):
     res = DiskVFS(root=str(tmp_path))
     ws = Workspace({"/d": res}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /d/sub/deep")
-    await ws.execute("printf abc > /d/a.txt")
-    await ws.execute("printf de > /d/sub/b.txt")
-    await ws.execute("printf f > /d/sub/deep/c.txt")
-    result = await ws.execute(f"du {flag} -c /d")
+    await ws.shell("mkdir -p /d/sub/deep")
+    await ws.shell("printf abc > /d/a.txt")
+    await ws.shell("printf de > /d/sub/b.txt")
+    await ws.shell("printf f > /d/sub/deep/c.txt")
+    result = await ws.shell(f"du {flag} -c /d")
     assert result.exit_code == 0
     assert await result.stdout_str() == ("1\t/d/sub/deep\n"
                                          "2\t/d/sub\n"
@@ -763,7 +763,7 @@ async def test_du_missing_operand_reports_and_exits_1(tmp_path):
     # a missing operand used to report it as size 0 with exit 0.
     res = DiskVFS(root=str(tmp_path))
     ws = Workspace({"/d": res}, mode=MountMode.WRITE)
-    result = await ws.execute("du /d/__nf_missing__")
+    result = await ws.shell("du /d/__nf_missing__")
     assert result.exit_code == 1
     assert await result.stdout_str() == ""
     assert (await result.stderr_str()) == (
@@ -775,8 +775,8 @@ async def test_du_missing_operand_reports_and_exits_1(tmp_path):
 async def test_du_partial_operands_keeps_present_output(tmp_path):
     res = DiskVFS(root=str(tmp_path))
     ws = Workspace({"/d": res}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /d/sub")
-    result = await ws.execute("du /d/sub /d/__nf_missing__")
+    await ws.shell("mkdir -p /d/sub")
+    result = await ws.shell("du /d/sub /d/__nf_missing__")
     assert result.exit_code == 1
     assert "/d/sub" in await result.stdout_str()
     assert "__nf_missing__" in await result.stderr_str()
@@ -794,7 +794,7 @@ async def test_du_on_the_implied_parent_of_a_nested_mount():
     },
                    mode=MountMode.WRITE)
     ws.create_session("s")
-    result = await ws.execute("du /empty", session_id="s")
+    result = await ws.shell("du /empty", session_id="s")
     assert await result.stdout_str() == "0\t/empty/hole\n0\t/empty\n"
     assert await result.stderr_str() == ""
     assert result.exit_code == 0
@@ -809,7 +809,7 @@ async def test_du_on_the_implied_parent_of_a_nested_mount_under_s():
     },
                    mode=MountMode.WRITE)
     ws.create_session("s")
-    result = await ws.execute("du -s /empty", session_id="s")
+    result = await ws.shell("du -s /empty", session_id="s")
     assert await result.stdout_str() == "0\t/empty\n"
     assert await result.stderr_str() == ""
     assert result.exit_code == 0
@@ -826,10 +826,10 @@ async def test_du_on_a_directory_implied_only_by_a_link_below_it():
     """
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
-    await ws.execute("mkdir -p /real", session_id="s")
-    await ws.execute("echo hi > /real/f.txt", session_id="s")
-    await ws.execute("ln -s /real/f.txt /ghost/deep/lnk", session_id="s")
-    result = await ws.execute("du /ghost", session_id="s")
+    await ws.shell("mkdir -p /real", session_id="s")
+    await ws.shell("echo hi > /real/f.txt", session_id="s")
+    await ws.shell("ln -s /real/f.txt /ghost/deep/lnk", session_id="s")
+    result = await ws.shell("du /ghost", session_id="s")
     assert await result.stderr_str() == ""
     assert result.exit_code == 0
     assert "/ghost" in await result.stdout_str()
@@ -851,7 +851,7 @@ async def test_du_still_reports_absence_when_the_descendant_is_hidden():
     },
                    mode=MountMode.WRITE)
     ws.create_session("scoped", profile={"paths": {"hide": ["/empty/hole"]}})
-    result = await ws.execute("du /empty", session_id="scoped")
+    result = await ws.shell("du /empty", session_id="scoped")
     assert await result.stdout_str() == ""
     assert (await result.stderr_str()) == (
         "du: cannot access '/empty': No such file or directory\n")

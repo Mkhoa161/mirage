@@ -40,7 +40,7 @@ def ws(dbx_files: FakeFiles) -> Workspace:
 
 @pytest.mark.asyncio
 async def test_rg_searches_path_recursively(ws):
-    io = await ws.execute("rg alpha /dbx/")
+    io = await ws.shell("rg alpha /dbx/")
 
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -50,7 +50,7 @@ async def test_rg_searches_path_recursively(ws):
 
 @pytest.mark.asyncio
 async def test_rg_count_only(ws):
-    io = await ws.execute("rg -c alpha /dbx/words.txt")
+    io = await ws.shell("rg -c alpha /dbx/words.txt")
 
     assert io.exit_code == 0
     assert b"2" in io.stdout
@@ -58,6 +58,6 @@ async def test_rg_count_only(ws):
 
 @pytest.mark.asyncio
 async def test_rg_no_match_exits_nonzero(ws):
-    io = await ws.execute("rg zeta /dbx/words.txt")
+    io = await ws.shell("rg zeta /dbx/words.txt")
 
     assert io.exit_code != 0

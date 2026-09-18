@@ -94,7 +94,7 @@ const DEC = new TextDecoder()
 
 async function show(ws: Workspace, cmd: string): Promise<void> {
   console.log(`\n=== ${cmd} ===`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   console.log(DEC.decode(r.stdout).trimEnd())
 }
 
@@ -128,7 +128,7 @@ async function main(): Promise<void> {
   await show(ws, 'tail -n 2 /fashion/Men/Shoes/White/3.md')
 
   console.log('\n=== stat /fashion/Men/Shoes/White/3.jpg (raw image bytes) ===')
-  const s = await ws.execute("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
+  const s = await ws.shell("stat -c '%s' /fashion/Men/Shoes/White/3.jpg")
   console.log(`  image size: ${DEC.decode(s.stdout).trim()} bytes`)
 
 
@@ -136,7 +136,7 @@ async function main(): Promise<void> {
   // workspace namespace (durable, snapshot-captured) and merge into
   // dispatch-level stat.
   console.log(`=== metadata overlay on /fashion/Men/Shoes/White/3.md ===`)
-  const metaRes = await ws.execute(
+  const metaRes = await ws.shell(
     `chmod 640 "/fashion/Men/Shoes/White/3.md" && chown 500:dev "/fashion/Men/Shoes/White/3.md" && touch -t 202601021530 "/fashion/Men/Shoes/White/3.md"`,
   )
   console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)
@@ -152,7 +152,7 @@ async function main(): Promise<void> {
   await show(ws, 'rg -li running /fashion/Men')
 
   console.log("\n=== find /fashion -name '*.md' | wc -l ===")
-  const f = await ws.execute("find /fashion -name '*.md' | wc -l")
+  const f = await ws.shell("find /fashion -name '*.md' | wc -l")
   console.log(`  product cards: ${DEC.decode(f.stdout).trim()}`)
 
   await vfs.close()

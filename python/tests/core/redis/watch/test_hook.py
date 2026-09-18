@@ -84,13 +84,13 @@ async def test_a_real_keyspace_notification_refreshes_the_listing():
         {"/r": (RedisVFS(url=REDIS_URL, key_prefix=prefix), MountMode.WRITE)},
         mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /r/day")
-        await ws.execute("sh -c 'echo one > /r/day/a.txt'")
-        assert "a.txt" in await (await ws.execute("ls /r/day")).stdout_str()
+        await ws.shell("mkdir -p /r/day")
+        await ws.shell("sh -c 'echo one > /r/day/a.txt'")
+        assert "a.txt" in await (await ws.shell("ls /r/day")).stdout_str()
 
         # The external writer is a second workspace over the same redis,
         # so the watched workspace's caches never see the write.
-        await other.execute("sh -c 'echo two > /r/day/b.txt'")
+        await other.shell("sh -c 'echo two > /r/day/b.txt'")
 
         # Exactly what a `__keyevent@N__:set` subscriber would forward.
         hook = RedisEventHook(watched.accessor)
@@ -98,8 +98,8 @@ async def test_a_real_keyspace_notification_refreshes_the_listing():
                                            f"{prefix}file:/day/b.txt"):
             await ws.notify(change)
 
-        assert "b.txt" in await (await ws.execute("ls /r/day")).stdout_str()
+        assert "b.txt" in await (await ws.shell("ls /r/day")).stdout_str()
     finally:
-        await ws.execute("rm -rf /r/day")
+        await ws.shell("rm -rf /r/day")
         await ws.close()
         await other.close()

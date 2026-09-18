@@ -37,44 +37,43 @@ async def main():
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 
-    r = await ws.execute("ls /gslides/owned/ | head -n 3")
+    r = await ws.shell("ls /gslides/owned/ | head -n 3")
     print("=== ls (first 3) ===")
     print(await r.stdout_str())
 
     first = (await r.stdout_str()).strip().split("\n")[0]
 
     print("=== plan: cat ===")
-    dr = await ws.execute(f"cat /gslides/owned/{first}", provision=True)
+    dr = await ws.shell(f"cat /gslides/owned/{first}", provision=True)
     print(f"  network_read={dr.network_read}, precision={dr.precision}")
 
     print("=== plan: grep ===")
-    dr = await ws.execute(f"grep textRun /gslides/owned/{first}",
-                          provision=True)
+    dr = await ws.shell(f"grep textRun /gslides/owned/{first}", provision=True)
     print(f"  network_read={dr.network_read}, precision={dr.precision}")
 
     print("=== jq .title ===")
-    r = await ws.execute(f'jq ".title" /gslides/owned/{first}')
+    r = await ws.shell(f'jq ".title" /gslides/owned/{first}')
     print(await r.stdout_str())
 
     print('=== jq ".slides | length" ===')
-    r = await ws.execute(f'jq ".slides | length" /gslides/owned/{first}')
+    r = await ws.shell(f'jq ".slides | length" /gslides/owned/{first}')
     print(await r.stdout_str())
 
     print("=== head -c 200 ===")
-    r = await ws.execute(f"head -c 200 /gslides/owned/{first}")
+    r = await ws.shell(f"head -c 200 /gslides/owned/{first}")
     print(await r.stdout_str())
 
     print("=== grep textRun ===")
-    r = await ws.execute(f"grep textRun /gslides/owned/{first} | head -c 200")
+    r = await ws.shell(f"grep textRun /gslides/owned/{first} | head -c 200")
     print(await r.stdout_str())
 
     print("=== tail -c 200 ===")
-    r = await ws.execute(f"tail -c 200 /gslides/owned/{first}")
+    r = await ws.shell(f"tail -c 200 /gslides/owned/{first}")
     print(await r.stdout_str())
 
     print("=== gws slides presentations create ===")
-    r = await ws.execute('gws slides presentations create'
-                         ' --json \'{"title": "MIRAGE Slides Test"}\'')
+    r = await ws.shell('gws slides presentations create'
+                       ' --json \'{"title": "MIRAGE Slides Test"}\'')
     pres = json.loads(await r.stdout_str())
     pres_id = pres["presentationId"]
     print(f"Created: {pres_id}")
@@ -91,8 +90,8 @@ async def main():
         }]
     })
     params = json.dumps({"presentationId": pres_id})
-    r = await ws.execute("gws slides presentations batchUpdate"
-                         f" --params '{params}' --json '{body}'")
+    r = await ws.shell("gws slides presentations batchUpdate"
+                       f" --params '{params}' --json '{body}'")
     update = json.loads(await r.stdout_str())
     slide_id = update["replies"][0]["createSlide"]["objectId"]
     print(f"Added slide: {slide_id}")

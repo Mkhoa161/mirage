@@ -19,8 +19,8 @@ const memories = new Mem0VFS({
 })
 
 const ws = new Workspace({ '/memories': memories }, { mode: MountMode.READ })
-await ws.execute('ls /memories/')
-await ws.execute('search --top-k 5 "quarterly planning" /memories/')
+await ws.shell('ls /memories/')
+await ws.shell('search --top-k 5 "quarterly planning" /memories/')
 ```
 
 Exactly one of `userId`, `agentId`, or `runId` is required.

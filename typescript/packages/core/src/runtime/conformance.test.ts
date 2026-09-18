@@ -448,14 +448,14 @@ async function world(runtime: string): Promise<Workspace> {
 
 async function runRow(ws: Workspace, row: Row): Promise<void> {
   for (const s of row.setup ?? []) {
-    const io = await ws.execute(s)
+    const io = await ws.shell(s)
     expect(io.exitCode, `setup failed: ${s} -> ${stderrStr(io)}`).toBe(0)
   }
-  const io = await ws.execute(row.line)
+  const io = await ws.shell(row.line)
   expect(io.exitCode, `${row.line} -> ${stderrStr(io)}`).toBe(row.exitCode ?? 0)
   if (row.lineOut !== undefined) expect(stdoutStr(io)).toContain(row.lineOut)
   for (const [cmd, want] of row.checks ?? []) {
-    const check = await ws.execute(cmd)
+    const check = await ws.shell(cmd)
     // An absence assertion over the stdout of a command that failed is
     // vacuous: a mount the mutation damaged answers nothing, and "x is
     // gone" then holds for every x.
@@ -478,7 +478,7 @@ function conformance(label: string, runtime: string, boot: string, rows: Row[]):
     let ws: Workspace
     beforeAll(async () => {
       ws = await world(runtime)
-      const io = await ws.execute(boot)
+      const io = await ws.shell(boot)
       expect(io.exitCode, `boot failed: ${stderrStr(io)}`).toBe(0)
     }, 240_000)
     afterAll(async () => {
@@ -521,9 +521,9 @@ describe('a root mount', () => {
   ] as const) {
     it(`is served like any other by ${runtime}`, async () => {
       const ws = await rootWorld(runtime)
-      const io = await ws.execute(line)
+      const io = await ws.shell(line)
       expect(io.exitCode, `${line} -> ${stderrStr(io)}`).toBe(0)
-      const check = await ws.execute('cat /mine.txt')
+      const check = await ws.shell('cat /mine.txt')
       expect(check.exitCode, `cat failed: ${stderrStr(check)}`).toBe(0)
       expect(stdoutStr(check)).toContain('R')
       await ws.close()
@@ -540,8 +540,8 @@ describe('a root mount', () => {
       seen.push(args.join(' '))
     })
     const ws = await rootWorld('pyodide')
-    await ws.execute(`python3 -c "from pathlib import Path; Path('/mine.txt').write_text('R')"`)
-    const check = await ws.execute('cat /mine.txt')
+    await ws.shell(`python3 -c "from pathlib import Path; Path('/mine.txt').write_text('R')"`)
+    const check = await ws.shell('cat /mine.txt')
     expect(check.exitCode, 'the mount should not have the file').not.toBe(0)
     expect(seen.join(' ')).toContain("cannot serve a mount at '/'")
     warn.mockRestore()

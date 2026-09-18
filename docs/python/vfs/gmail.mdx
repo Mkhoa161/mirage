@@ -126,46 +126,46 @@ async def main():
     ws.register_cli("gws", GWS, config.model_dump())
 
     # List labels
-    r = await ws.execute("ls /gmail/")
+    r = await ws.shell("ls /gmail/")
     print(await r.stdout_str())
 
     # List date directories in INBOX
-    r = await ws.execute("ls /gmail/INBOX/")
+    r = await ws.shell("ls /gmail/INBOX/")
     print(await r.stdout_str())
 
     # List messages for a specific date
-    r = await ws.execute("ls /gmail/INBOX/2026-04-12/")
+    r = await ws.shell("ls /gmail/INBOX/2026-04-12/")
     print(await r.stdout_str())
 
     # Read a message
-    r = await ws.execute(
+    r = await ws.shell(
         "cat /gmail/INBOX/2026-04-12/Meeting_Notes__msg123.gmail.json")
     print(await r.stdout_str())
 
     # Extract subject with jq
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".subject"'
         " /gmail/INBOX/2026-04-12/Meeting_Notes__msg123.gmail.json")
     print(await r.stdout_str())
 
     # List attachments
-    r = await ws.execute("ls /gmail/INBOX/2026-04-12/Meeting_Notes__msg123/")
+    r = await ws.shell("ls /gmail/INBOX/2026-04-12/Meeting_Notes__msg123/")
     print(await r.stdout_str())
 
     # Search across all messages
-    r = await ws.execute('rg "quarterly" /gmail/INBOX/')
+    r = await ws.shell('rg "quarterly" /gmail/INBOX/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 2 /gmail/INBOX/")
+    r = await ws.shell("tree -L 2 /gmail/INBOX/")
     print(await r.stdout_str())
 
     # Triage unread messages
-    r = await ws.execute('gws gmail triage --query "is:unread" --max 5')
+    r = await ws.shell('gws gmail triage --query "is:unread" --max 5')
     print(await r.stdout_str())
 
     # Send an email
-    r = await ws.execute(
+    r = await ws.shell(
         'gws gmail send --to "user@example.com"'
         ' --subject "Hello from MIRAGE"'
         ' --body "This email was sent via the MIRAGE Gmail VFS."')

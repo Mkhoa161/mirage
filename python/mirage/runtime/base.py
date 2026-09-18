@@ -117,7 +117,7 @@ class Runtime(ABC):
                       context: RuntimeContext | None = None) -> RunResult:
         """Execute directly, or under the bound workspace's captured context.
 
-        This is the engine door. Workspace.execute remains the shell admission
+        This is the engine door. Workspace.shell remains the shell admission
         and routing door, as it was for callers of run and run_line.
         """
         if context is None and self._binding is not None:

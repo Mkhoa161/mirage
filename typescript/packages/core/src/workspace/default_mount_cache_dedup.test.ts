@@ -38,14 +38,14 @@ describe('default mount cache dedup', () => {
     )
     const cache = ws.cache as RAMFileCacheStore
     try {
-      await ws.execute('cat /r/big.bin > /dev/null')
+      await ws.shell('cat /r/big.bin > /dev/null')
       const sizeFirst = cache.cacheSize
       const keysFirst = cache
         .snapshotEntries()
         .map((e) => e.key)
         .sort()
 
-      await ws.execute('cat /r/big.bin > /dev/null')
+      await ws.shell('cat /r/big.bin > /dev/null')
       const sizeSecond = cache.cacheSize
       const keysSecond = cache
         .snapshotEntries()

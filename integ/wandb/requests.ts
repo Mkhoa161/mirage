@@ -109,7 +109,7 @@ export async function requestChecks(server: Awaited<ReturnType<typeof startWandb
       for (const step of scenario.steps) {
         if (step.invalidate) await vfs.index.invalidate()
         const start = server.requests.length
-        const result = await ws.execute(step.command)
+        const result = await ws.shell(step.command)
         results.push({ exit_code: result.exitCode, requests: server.requests.slice(start) })
       }
     } finally {

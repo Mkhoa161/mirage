@@ -33,7 +33,7 @@ const box = new BoxVFS({
   accessToken: process.env.BOX_DEVELOPER_TOKEN!,
 })
 const ws = new Workspace({ '/box': box }, { mode: MountMode.READ })
-await ws.execute('ls /box/')
+await ws.shell('ls /box/')
 ```
 
 When the token expires (Box 401s with `invalid_token`), regenerate it in the console and
@@ -82,7 +82,7 @@ const box = new BoxVFS({
 })
 
 const ws = new Workspace({ '/box': box }, { mode: MountMode.READ })
-const res = await ws.execute('ls /box/')
+const res = await ws.shell('ls /box/')
 console.log(res.stdoutText)
 ```
 
@@ -107,7 +107,7 @@ const box = new BoxVFS({
 })
 
 const ws = new Workspace({ '/box': box }, { mode: MountMode.READ })
-await ws.execute('ls /box/')
+await ws.shell('ls /box/')
 ```
 
 Box requires the origin to be allowlisted on the app's **Allowed Origins** config (see
@@ -194,6 +194,6 @@ commands operate on Google file IDs and do not apply to Box.
 End-to-end runnable scripts are in
 [`examples/typescript/box/`](https://github.com/strukto-ai/mirage/tree/main/examples/typescript/box):
 
-- [`box.ts`](https://github.com/strukto-ai/mirage/blob/main/examples/typescript/box/box.ts), `Workspace.execute('ls/stat/cat/tree …')` shell demo
+- [`box.ts`](https://github.com/strukto-ai/mirage/blob/main/examples/typescript/box/box.ts), `Workspace.shell('ls/stat/cat/tree …')` shell demo
 - [`box_vfs.ts`](https://github.com/strukto-ai/mirage/blob/main/examples/typescript/box/box_vfs.ts), `patchNodeFs` + native `fs.promises.*` calls
 - [`box_fuse.ts`](https://github.com/strukto-ai/mirage/blob/main/examples/typescript/box/box_fuse.ts), FUSE mount with shell access in another terminal

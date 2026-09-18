@@ -24,7 +24,7 @@ const drive = new GDriveVFS({
 })
 
 const ws = new Workspace({ '/drive': drive }, { mode: MountMode.WRITE })
-await ws.execute('ls /drive/')
+await ws.shell('ls /drive/')
 ```
 
 ## Browser

@@ -72,7 +72,7 @@ await session.prompt(task)
 console.log()
 
 console.log('\n--- Files in workspace ---')
-const findAll = await ws.execute("find / -type f | grep -v '^/dev/'")
+const findAll = await ws.shell("find / -type f | grep -v '^/dev/'")
 const findOut = findAll.stdoutText
 console.log(findOut)
 

@@ -123,14 +123,14 @@ describe('PostgresVFS mount integration', () => {
   })
 
   it('readdir /pg returns database.json + schemas', async () => {
-    const r = await ws.execute('ls /pg')
+    const r = await ws.shell('ls /pg')
     const stdout = new TextDecoder().decode(r.stdout)
     expect(stdout).toContain('database.json')
     expect(stdout).toContain('public')
   })
 
   it('cat /pg/database.json returns the synthetic JSON shape', async () => {
-    const r = await ws.execute('cat /pg/database.json')
+    const r = await ws.shell('cat /pg/database.json')
     const doc = JSON.parse(new TextDecoder().decode(r.stdout)) as {
       database: string
       schemas: string[]
@@ -155,7 +155,7 @@ describe('PostgresVFS mount integration', () => {
   })
 
   it('cat /pg/public/tables/users/schema.json returns column metadata', async () => {
-    const r = await ws.execute('cat /pg/public/tables/users/schema.json')
+    const r = await ws.shell('cat /pg/public/tables/users/schema.json')
     const doc = JSON.parse(new TextDecoder().decode(r.stdout)) as {
       kind: string
       name: string
@@ -171,7 +171,7 @@ describe('PostgresVFS mount integration', () => {
   })
 
   it('cat /pg/public/tables/users/rows.jsonl returns JSONL when small', async () => {
-    const r = await ws.execute('cat /pg/public/tables/users/rows.jsonl')
+    const r = await ws.shell('cat /pg/public/tables/users/rows.jsonl')
     const text = new TextDecoder().decode(r.stdout)
     const lines = text.trim().split('\n')
     expect(lines).toHaveLength(5)
@@ -181,7 +181,7 @@ describe('PostgresVFS mount integration', () => {
   it('cat surfaces size guard as exit_code=1 + stderr when table is large', async () => {
     largeRows = 50_000
     largeWidth = 100
-    const r = await ws.execute('cat /pg/public/tables/users/rows.jsonl')
+    const r = await ws.shell('cat /pg/public/tables/users/rows.jsonl')
     expect(r.exitCode).toBe(1)
     expect(new TextDecoder().decode(r.stderr)).toContain('too large to read entirely')
   })
@@ -189,14 +189,14 @@ describe('PostgresVFS mount integration', () => {
   it('head -n 2 pushes down to fetchRows and bypasses guard', async () => {
     largeRows = 50_000
     largeWidth = 100
-    const r = await ws.execute('head -n 2 /pg/public/tables/users/rows.jsonl')
+    const r = await ws.shell('head -n 2 /pg/public/tables/users/rows.jsonl')
     const lines = new TextDecoder().decode(r.stdout).trim().split('\n')
     expect(lines.length).toBeLessThanOrEqual(2)
     expect(JSON.parse(lines[0] ?? '')).toMatchObject({ id: '1' })
   })
 
   it('wc -l on rows.jsonl pushes down to COUNT(*)', async () => {
-    const r = await ws.execute('wc -l /pg/public/tables/users/rows.jsonl')
+    const r = await ws.shell('wc -l /pg/public/tables/users/rows.jsonl')
     expect(new TextDecoder().decode(r.stdout).trim()).toBe('5 /pg/public/tables/users/rows.jsonl')
   })
 })

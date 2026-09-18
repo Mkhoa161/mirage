@@ -19,7 +19,7 @@ import type { Session, StatusWriter } from './session/session.ts'
 /**
  * One running line: its signal and the sessions its statements stamp
  * on (the target session and the per-call fork, one object when the
- * call named no cwd or env). Bound by `execute` for the line's duration
+ * call named no cwd or env). Bound by `shell` for the line's duration
  * and read at the status door. It rides the async context rather than
  * the session, so two lines on one session each see their own, and a
  * statement that settles after its caller was released still reads the
@@ -37,7 +37,7 @@ const lineAbortContext = createAsyncContext<LineAbortFrame>()
  * Run `fn` as the body of the line `signal` belongs to. Everything the
  * body awaits, down to the status door, can then ask `abortedLine`
  * whether its caller is still waiting, without the signal being threaded
- * through every handler. `execute` is the only caller.
+ * through every handler. `shell` is the only caller.
  */
 export function runWithLineAbort<T>(
   signal: AbortSignal | undefined,

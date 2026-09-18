@@ -400,7 +400,7 @@ def _load_ssh_server() -> ModuleType:
 
 
 async def _admin_exec(ws: Workspace, command: str) -> None:
-    result = await ws.execute(command)
+    result = await ws.shell(command)
     if result.exit_code:
         raise RuntimeError(f"admin command failed: {command}: "
                            f"{await result.stderr_str()}")

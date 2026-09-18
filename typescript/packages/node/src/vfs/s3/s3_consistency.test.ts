@@ -79,19 +79,19 @@ describe('S3 cache consistency (mocked)', () => {
         },
       )
       try {
-        expect((await ws.execute('ls /s3/')).exitCode).toBe(0)
+        expect((await ws.shell('ls /s3/')).exitCode).toBe(0)
         expect((await vfs.index.get('/s3/c.txt')).entry).toBeDefined()
-        expect(DEC.decode((await ws.execute('cat /s3/c.txt')).stdout)).toBe('v1')
+        expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
         expect(await ws.cache.exists('/s3/c.txt')).toBe(true)
         mock.store.set(BUCKET, 'c.txt', ENC.encode('v2'))
         if (surface === 'shell') {
-          expect(DEC.decode((await ws.execute('cat /s3/c.txt')).stdout)).toBe('v2')
+          expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v2')
         } else {
           expect(DEC.decode(await ws.fs.readFile('/s3/c.txt'))).toBe('v2')
         }
         mock.store.objects(BUCKET).delete('c.txt')
         if (surface === 'shell') {
-          const result = await ws.execute('cat /s3/c.txt')
+          const result = await ws.shell('cat /s3/c.txt')
           expect(result.exitCode).toBe(1)
           expect(result.stdout.byteLength).toBe(0)
         } else {
@@ -109,17 +109,17 @@ describe('S3 cache consistency (mocked)', () => {
       { '/s3/': new S3VFS(makeConfig()) },
       { mode: MountMode.WRITE, consistency: ConsistencyPolicy.LAZY },
     )
-    const first = await ws.execute('cat /s3/c.txt')
+    const first = await ws.shell('cat /s3/c.txt')
     expect(DEC.decode(first.stdout)).toBe('v1')
     mock.store.set(BUCKET, 'c.txt', ENC.encode('v2'))
-    const second = await ws.execute('cat /s3/c.txt')
+    const second = await ws.shell('cat /s3/c.txt')
     expect(DEC.decode(second.stdout)).toBe('v1')
     await ws.close()
   })
   it('keeps stat type=text after tee and touch', async () => {
     const ws = new Workspace({ '/s3': new S3VFS(makeConfig()) }, { mode: MountMode.WRITE })
     try {
-      const result = await ws.execute('tee /s3/c.txt <<< x; touch /s3/c.txt; stat /s3/c.txt')
+      const result = await ws.shell('tee /s3/c.txt <<< x; touch /s3/c.txt; stat /s3/c.txt')
       expect(result.exitCode).toBe(0)
       expect(DEC.decode(result.stdout)).toContain('name=c.txt size=2')
       expect(DEC.decode(result.stdout)).toContain('type=text')

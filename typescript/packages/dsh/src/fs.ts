@@ -30,6 +30,7 @@ import { DiskVFS } from '@struktoai/mirage-node'
 import { sessionPathAllowed } from '@struktoai/mirage-core/context/session_context'
 import type { MountEntry } from '@struktoai/mirage-core/workspace/mount/mount'
 import type { Session } from '@struktoai/mirage-core/workspace/session/session'
+import { SessionHandle } from '@struktoai/mirage-core/workspace/workspace/handle'
 import type { Ops } from '@struktoai/mirage-core/ops/ops'
 import { FileType } from '@struktoai/mirage-core/types'
 import type { FileStat } from '@struktoai/mirage-core/types'
@@ -216,7 +217,8 @@ export class MirageFileSystem extends FileSystem {
       await host.ensureSessionsLoaded()
       await host.namespace.ensureLoaded()
       this.host = host
-      this.fsOps = this.sessionId === undefined ? host.fs : host.fs.forSession(this.sessionId)
+      this.fsOps =
+        this.sessionId === undefined ? host.fs : new SessionHandle(host, this.sessionId).fs
     }
     assertNotAborted(signal, operation)
     return this.fsOps
@@ -233,7 +235,7 @@ export class MirageFileSystem extends FileSystem {
    * The session the op door judges this adapter's ops as, asked of the
    * workspace so it is the one a dispatch from this context will bind:
    * the configured session, unless an ambient one of this workspace is
-   * kept (a callback reaching `ctx.fs` from inside its `execute`).
+   * kept (a callback reaching `ctx.fs` from inside its `shell`).
    */
   private session(): Session {
     if (this.host === null) {

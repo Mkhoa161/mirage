@@ -264,15 +264,15 @@ describe('GenericVFS wires a backend from one CommandIO table', () => {
       { mode: MountMode.READ, shellParser: parser },
     )
     try {
-      expect(stdoutStr(await ws.execute('ls /wiki/guides'))).toContain('quickstart.md')
-      expect(stdoutStr(await ws.execute('cat /wiki/notes.md'))).toBe('agents speak bash\n')
-      expect(stdoutStr(await ws.execute('grep -r Quickstart /wiki/'))).toContain(
+      expect(stdoutStr(await ws.shell('ls /wiki/guides'))).toContain('quickstart.md')
+      expect(stdoutStr(await ws.shell('cat /wiki/notes.md'))).toBe('agents speak bash\n')
+      expect(stdoutStr(await ws.shell('grep -r Quickstart /wiki/'))).toContain(
         '/wiki/guides/quickstart.md:# Quickstart',
       )
-      const found = stdoutStr(await ws.execute("find /wiki -name '*.md'"))
+      const found = stdoutStr(await ws.shell("find /wiki -name '*.md'"))
       expect(found).toContain('/wiki/guides/quickstart.md')
       expect(found).toContain('/wiki/notes.md')
-      expect(stdoutStr(await ws.execute('wiki_hello'))).toBe('hello custom verb\n')
+      expect(stdoutStr(await ws.shell('wiki_hello'))).toBe('hello custom verb\n')
       // The derived ops serve the VFS surface too, not just the commands.
       expect(await ws.readdir('/wiki/guides')).toContain('/wiki/guides/quickstart.md')
       expect(await ws.stat('/wiki/notes.md')).toMatchObject({ size: 18 })

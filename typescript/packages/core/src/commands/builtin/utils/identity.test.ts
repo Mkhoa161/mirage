@@ -39,7 +39,7 @@ describe('identity', () => {
 })
 
 async function run(ws: Workspace, line: string, sessionId?: string): Promise<[number, string]> {
-  const io = await ws.execute(line, sessionId === undefined ? {} : { sessionId })
+  const io = await ws.shell(line, sessionId === undefined ? {} : { sessionId })
   return [io.exitCode, io.stdoutText]
 }
 

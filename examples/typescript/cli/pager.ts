@@ -128,7 +128,7 @@ export const PAGER = new CLISpec({
 
 async function show(ws: Workspace, line: string): Promise<void> {
   console.log(`$ ${line}`)
-  const result = await ws.execute(line)
+  const result = await ws.shell(line)
   if (result.stdoutText !== '') process.stdout.write(result.stdoutText)
   if (result.stderrText !== '') process.stdout.write(result.stderrText)
   console.log()

@@ -23,7 +23,7 @@ const trello = new TrelloVFS({
 })
 
 const ws = new Workspace({ '/trello': trello }, { mode: MountMode.READ })
-await ws.execute('ls /trello/')
+await ws.shell('ls /trello/')
 ```
 
 ## Browser

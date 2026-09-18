@@ -46,7 +46,7 @@ async function runCmd(
   ws: Workspace,
   cmd: string,
 ): Promise<{ out: string; err: string; code: number }> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return { out: stdoutStr(io), err: stderrStr(io), code: io.exitCode }
 }
 

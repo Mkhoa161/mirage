@@ -187,7 +187,7 @@ async function drainToSink(sink: JobConsole, result: ExecuteResult): Promise<Exe
 }
 
 /**
- * The body of `Workspace.execute`; see its docstring for the argument
+ * The body of `Workspace.shell`; see its docstring for the argument
  * contract. Runs the line, then honors the sink contract for every path
  * `runLine` can answer on.
  */
@@ -201,7 +201,7 @@ export async function executeLine(
     let result = await runLine(env, command, options, frame)
     // A provision run answers with a plan, not output, so it has nothing
     // to stream. The drain is the last await of the line, and a stalled
-    // store would hold `execute` open past an abort; it joins under the
+    // store would hold `shell` open past an abort; it joins under the
     // same grace as the tree.
     const sink = options.sink
     if (sink !== undefined && result instanceof ExecuteResult) {

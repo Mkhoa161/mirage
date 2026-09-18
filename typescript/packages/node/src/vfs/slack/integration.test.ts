@@ -64,7 +64,7 @@ describe('SlackVFS integration', () => {
     const slack = new SlackVFS({ token: 'xoxb-test' })
     const ws = new Workspace({ '/slack': slack }, { mode: MountMode.READ })
     try {
-      const result = await ws.execute('ls /slack/channels/')
+      const result = await ws.shell('ls /slack/channels/')
       if (result.exitCode !== 0) {
         throw new Error(`ls failed: ${result.stderrText} | stdout: ${result.stdoutText}`)
       }
@@ -111,12 +111,12 @@ describe('SlackVFS integration', () => {
     const slack = new SlackVFS({ token: 'xoxb-test' })
     const ws = new Workspace({ '/slack': slack }, { mode: MountMode.READ })
     try {
-      const ls = await ws.execute('ls /slack/channels/general__C1/')
+      const ls = await ws.shell('ls /slack/channels/general__C1/')
       if (ls.exitCode !== 0) {
         throw new Error(`ls failed: ${ls.stderrText} | stdout: ${ls.stdoutText}`)
       }
       expect(ls.stdoutText).toContain('2024-01-01')
-      const cat = await ws.execute('cat /slack/channels/general__C1/2024-01-01/chat.jsonl')
+      const cat = await ws.shell('cat /slack/channels/general__C1/2024-01-01/chat.jsonl')
       expect(cat.exitCode).toBe(0)
       const lines = cat.stdoutText
         .trim()
@@ -154,7 +154,7 @@ describe('SlackVFS integration', () => {
     const ws = new Workspace({ '/slack': slack }, { mode: MountMode.READ })
     ws.registerCli('slack', SLACK, { token: 'xoxb-test' })
     try {
-      const result = await ws.execute('slack list-members --query alice')
+      const result = await ws.shell('slack list-members --query alice')
       expect(result.exitCode).toBe(0)
       const users = JSON.parse(result.stdoutText) as { id: string; name: string }[]
       expect(users).toHaveLength(1)

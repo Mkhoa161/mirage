@@ -99,7 +99,7 @@ describe('Workspace lifecycle', () => {
         if (action === 'provision') {
           const result = await ws.provision('cat /data/file')
           expect(result.cacheHits).toBe(0)
-          expect((await ws.execute('cat /data/file')).stdout).toEqual(bytes.encode('new'))
+          expect((await ws.shell('cat /data/file')).stdout).toEqual(bytes.encode('new'))
         } else if (action === 'metadata') {
           const expanded = await expandOperands(ws.namespace, [
             new PathSpec({
@@ -118,14 +118,14 @@ describe('Workspace lifecycle', () => {
             chown: 'chown 123',
             chgrp: 'chgrp 456',
           }[action as 'touch' | 'chmod' | 'chown' | 'chgrp']
-          const result = await ws.execute(command + ' /data/*.txt')
+          const result = await ws.shell(command + ' /data/*.txt')
           expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0)
-          expect((await ws.execute('echo /data/*.txt')).stdout).toEqual(
+          expect((await ws.shell('echo /data/*.txt')).stdout).toEqual(
             bytes.encode('/data/fresh.txt\n'),
           )
         } else {
           const pattern = action === 'midpath' ? '/data/*/*.txt' : '/data/*.txt'
-          expect((await ws.execute('echo ' + pattern)).stdout).toEqual(
+          expect((await ws.shell('echo ' + pattern)).stdout).toEqual(
             bytes.encode(`${directory}/fresh.txt\n`),
           )
         }
@@ -156,7 +156,7 @@ describe('Workspace lifecycle', () => {
       await release
       await writeCache(...args)
     })
-    const reading = ws.execute('cat /data/file')
+    const reading = ws.shell('cat /data/file')
     let removing: Promise<void> | undefined
     try {
       await entered
@@ -173,7 +173,7 @@ describe('Workspace lifecycle', () => {
       const replacement = new CachedRAM()
       replacement.loadState({ type: 'ram', files: { '/file': new TextEncoder().encode('new') } })
       ws.addMount('/data', replacement)
-      expect(new TextDecoder().decode((await ws.execute('cat /data/file')).stdout)).toBe('new')
+      expect(new TextDecoder().decode((await ws.shell('cat /data/file')).stdout)).toBe('new')
     } finally {
       resume()
       await Promise.allSettled([reading, removing])
@@ -258,7 +258,7 @@ describe('Workspace lifecycle', () => {
         }),
       )
       const retired = ws.mount(prefix).cacheManager
-      const running = ws.execute('cat /data/file; gate')
+      const running = ws.shell('cat /data/file; gate')
       try {
         await entered
         if (!shadow) await ws.unmount('/data')
@@ -266,7 +266,7 @@ describe('Workspace lifecycle', () => {
         resume()
         expect(new TextDecoder().decode((await running).stdout)).toBe('old')
         expect(await ws.cache.get('/data/file')).toBeNull()
-        expect(new TextDecoder().decode((await ws.execute('cat /data/file')).stdout)).toBe('new')
+        expect(new TextDecoder().decode((await ws.shell('cat /data/file')).stdout)).toBe('new')
         expect(await ws.cache.get('/data/file')).toEqual(new TextEncoder().encode('new'))
         expect(retired).not.toBeNull()
         expect(
@@ -515,12 +515,12 @@ describe('Workspace custom cache option', () => {
   })
 })
 
-describe('Workspace.execute AbortSignal', () => {
+describe('Workspace.shell AbortSignal', () => {
   it('execute with pre-aborted signal throws AbortError', async () => {
     const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const controller = new AbortController()
     controller.abort()
-    await expect(ws.execute('echo hi', { signal: controller.signal })).rejects.toThrow(/abort/i)
+    await expect(ws.shell('echo hi', { signal: controller.signal })).rejects.toThrow(/abort/i)
   })
 })
 
@@ -629,7 +629,7 @@ describe('Workspace.unmount', () => {
           code: 'EBUSY',
         })
         for (const line of ['cat /data/file', 'echo changed > /data/file']) {
-          expect((await ws.execute(line)).exitCode).not.toBe(0)
+          expect((await ws.shell(line)).exitCode).not.toBe(0)
         }
         expect(vfs.getState().files?.['/file']).toEqual(bytes.encode('old'))
         resume()
@@ -664,7 +664,7 @@ describe('Workspace.unmount', () => {
         await ws.unmount('/data')
         await expect(ws.fs.readdir('/')).resolves.toContain('/dev')
         await expect(ws.fs.stat('/')).resolves.toMatchObject({ type: FileType.DIRECTORY })
-        const result = await ws.execute('ls /')
+        const result = await ws.shell('ls /')
         expect(result.exitCode).toBe(0)
         expect(result.stdoutText).toBe('dev\n')
         expect(result.stderrText).toBe('')
@@ -806,7 +806,7 @@ describe('cd does not change cwd for nonexistent paths', () => {
   it('cd to nonexistent dir under a mount errors and keeps cwd', async () => {
     const ws = await makeWs()
     const before = ws.getSession(ws.sessionManager.defaultId).cwd
-    const result = await ws.execute('cd /missing')
+    const result = await ws.shell('cd /missing')
     expect(result.exitCode).not.toBe(0)
     expect(result.stderrText).toMatch(/No such file or directory/)
     expect(ws.getSession(ws.sessionManager.defaultId).cwd).toBe(before)
@@ -823,7 +823,7 @@ describe('cd does not change cwd for nonexistent paths', () => {
       { '/': root, '/data': data },
       { mode: MountMode.WRITE, ops, shellParser: parser },
     )
-    const result = await ws.execute('cd /data')
+    const result = await ws.shell('cd /data')
     expect(result.exitCode).toBe(0)
     expect(ws.getSession(ws.sessionManager.defaultId).cwd).toBe('/data')
     await ws.close()
@@ -840,7 +840,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
 
   it('ls / shows child mount /data as a subfolder', async () => {
     const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
-    const result = await ws.execute('ls /')
+    const result = await ws.shell('ls /')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText.split('\n')).toContain('data')
     await ws.close()
@@ -848,7 +848,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
 
   it('ls / classifies child mount with trailing slash under -F', async () => {
     const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
-    const result = await ws.execute('ls -F /')
+    const result = await ws.shell('ls -F /')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText.split('\n')).toContain('data/')
     await ws.close()
@@ -856,17 +856,17 @@ describe('ls injects child mounts as virtual subdirectories', () => {
 
   it('ls / hides .bash_history by default and shows it under -a', async () => {
     const ws = await makeWs({ '/': new RAMVFS() })
-    const plain = await ws.execute('ls /')
+    const plain = await ws.shell('ls /')
     expect(plain.stdoutText.split('\n')).not.toContain('.bash_history')
-    const all = await ws.execute('ls -a /')
+    const all = await ws.shell('ls -a /')
     expect(all.stdoutText.split('\n')).toContain('.bash_history')
     await ws.close()
   })
 
   it('ls /data does not duplicate when no child mounts exist below', async () => {
     const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
-    await ws.execute('mkdir -p /data/sub')
-    const result = await ws.execute('ls /data')
+    await ws.shell('mkdir -p /data/sub')
+    const result = await ws.shell('ls /data')
     const lines = result.stdoutText.split('\n').filter((l) => l !== '')
     expect(lines.filter((l) => l === 'sub' || l === 'sub/').length).toBe(1)
     await ws.close()
@@ -878,14 +878,14 @@ describe('ls injects child mounts as virtual subdirectories', () => {
       '/data': new RAMVFS(),
       '/data/inner': new RAMVFS(),
     })
-    const result = await ws.execute('ls /data')
+    const result = await ws.shell('ls /data')
     expect(result.stdoutText.split('\n')).toContain('inner')
     await ws.close()
   })
 
   it('ls -d does not inject child mounts', async () => {
     const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
-    const result = await ws.execute('ls -d /')
+    const result = await ws.shell('ls -d /')
     expect(result.stdoutText.split('\n')).not.toContain('data')
     await ws.close()
   })
@@ -896,7 +896,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   // entry for /empty, so only the dispatcher-backed probe knows it is there.
   it('du on the implied parent of a nested mount does not report absence', async () => {
     const ws = await makeWs({ '/': new RAMVFS(), '/empty/hole': new RAMVFS() })
-    const result = await ws.execute('du /empty')
+    const result = await ws.shell('du /empty')
     expect(result.stdoutText).toBe('0\t/empty/hole\n0\t/empty\n')
     expect(result.stderrText).toBe('')
     expect(result.exitCode).toBe(0)
@@ -905,7 +905,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
 
   it('du -s on the implied parent of a nested mount does not report absence', async () => {
     const ws = await makeWs({ '/': new RAMVFS(), '/empty/hole': new RAMVFS() })
-    const result = await ws.execute('du -s /empty')
+    const result = await ws.shell('du -s /empty')
     expect(result.stdoutText).toBe('0\t/empty\n')
     expect(result.stderrText).toBe('')
     expect(result.exitCode).toBe(0)
@@ -917,10 +917,10 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   // here at all.
   it('du on a directory implied only by a link below it does not report absence', async () => {
     const ws = await makeWs({ '/': new RAMVFS() })
-    await ws.execute('mkdir -p /real')
-    await ws.execute('echo hi > /real/f.txt')
-    await ws.execute('ln -s /real/f.txt /ghost/deep/lnk')
-    const result = await ws.execute('du /ghost')
+    await ws.shell('mkdir -p /real')
+    await ws.shell('echo hi > /real/f.txt')
+    await ws.shell('ln -s /real/f.txt /ghost/deep/lnk')
+    const result = await ws.shell('du /ghost')
     expect(result.stderrText).toBe('')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText).toContain('/ghost')
@@ -937,7 +937,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
     // probe is filtered, so absence stays the answer.
     const ws = await makeWs({ '/': new RAMVFS(), '/empty/hole': new RAMVFS() })
     ws.createSession('scoped', { profile: { paths: { hide: ['/empty/hole'] } } })
-    const result = await ws.execute('du /empty', { sessionId: 'scoped' })
+    const result = await ws.shell('du /empty', { sessionId: 'scoped' })
     expect(result.stdoutText).toBe('')
     expect(result.stderrText).toBe("du: cannot access '/empty': No such file or directory\n")
     expect(result.exitCode).toBe(1)
@@ -966,7 +966,7 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
 
   it('rm -r /data refuses with Device or resource busy and keeps the mount', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('rm -r /data')
+    const result = await ws.shell('rm -r /data')
     expect(result.exitCode).toBe(1)
     expect(new TextDecoder().decode(result.stderr)).toMatch(/Device or resource busy/)
     expect(ws.mounts().some((m) => m.prefix === '/data/')).toBe(true)
@@ -975,7 +975,7 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
 
   it('rmdir /data refuses with Device or resource busy and keeps the mount', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('rmdir /data')
+    const result = await ws.shell('rmdir /data')
     expect(result.exitCode).toBe(1)
     expect(new TextDecoder().decode(result.stderr)).toMatch(/Device or resource busy/)
     expect(ws.mounts().some((m) => m.prefix === '/data/')).toBe(true)
@@ -984,8 +984,8 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
 
   it('rm -r without a mount-prefix path falls through to normal rm', async () => {
     const ws = await makeWs()
-    await ws.execute('mkdir -p /data/sub')
-    const result = await ws.execute('rm -r /data/sub')
+    await ws.shell('mkdir -p /data/sub')
+    const result = await ws.shell('rm -r /data/sub')
     expect(result.exitCode).toBe(0)
     expect(ws.mounts().some((m) => m.prefix === '/data/')).toBe(true)
     await ws.close()
@@ -993,7 +993,7 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
 
   it('rm -r / refuses (cache root is a mount)', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('rm -r /')
+    const result = await ws.shell('rm -r /')
     expect(result.exitCode).not.toBe(0)
     expect(new TextDecoder().decode(result.stderr)).toMatch(/Device or resource busy/)
     await ws.close()
@@ -1002,7 +1002,7 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
   it('rm -r /dev refuses and keeps /dev mounted', async () => {
     const ws = await makeWs()
     expect(ws.mounts().some((m) => m.prefix === '/dev/')).toBe(true)
-    const result = await ws.execute('rm -r /dev')
+    const result = await ws.shell('rm -r /dev')
     expect(result.exitCode).not.toBe(0)
     expect(new TextDecoder().decode(result.stderr)).toMatch(/Device or resource busy/)
     expect(ws.mounts().some((m) => m.prefix === '/dev/')).toBe(true)
@@ -1011,7 +1011,7 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
 
   it('rmdir /dev refuses and keeps /dev mounted', async () => {
     const ws = await makeWs()
-    const result = await ws.execute('rmdir /dev')
+    const result = await ws.shell('rmdir /dev')
     expect(result.exitCode).not.toBe(0)
     expect(new TextDecoder().decode(result.stderr)).toMatch(/Device or resource busy/)
     expect(ws.mounts().some((m) => m.prefix === '/dev/')).toBe(true)
@@ -1020,7 +1020,7 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
 
   it('rm without -r on a mount prefix does NOT unmount', async () => {
     const ws = await makeWs()
-    await ws.execute('rm /data')
+    await ws.shell('rm /data')
     // The intercept only triggers for recursive forms; mount stays either way
     expect(ws.mounts().some((m) => m.prefix === '/data/')).toBe(true)
     await ws.close()

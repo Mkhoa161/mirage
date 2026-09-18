@@ -43,11 +43,11 @@ describe('fingerprint spike (ConsistencyPolicy port of test_fingerprint_spike.py
     const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
     ws.registry.setConsistency(ConsistencyPolicy.ALWAYS)
 
-    const io1 = await ws.execute('cat /data/file.txt')
+    const io1 = await ws.shell('cat /data/file.txt')
     const first = DEC.decode(io1.stdout)
     await sleep(1100)
     writeFileSync(join(root, 'file.txt'), 'v2')
-    const io2 = await ws.execute('cat /data/file.txt')
+    const io2 = await ws.shell('cat /data/file.txt')
     const second = DEC.decode(io2.stdout)
 
     expect(first).toBe('v1')
@@ -61,11 +61,11 @@ describe('fingerprint spike (ConsistencyPolicy port of test_fingerprint_spike.py
     const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
     ws.registry.setConsistency(ConsistencyPolicy.LAZY)
 
-    const io1 = await ws.execute('cat /data/file.txt')
+    const io1 = await ws.shell('cat /data/file.txt')
     const first = DEC.decode(io1.stdout)
     await sleep(1100)
     writeFileSync(join(root, 'file.txt'), 'v2')
-    const io2 = await ws.execute('cat /data/file.txt')
+    const io2 = await ws.shell('cat /data/file.txt')
     const second = DEC.decode(io2.stdout)
 
     expect(first).toBe('v1')
@@ -79,7 +79,7 @@ describe('fingerprint spike (ConsistencyPolicy port of test_fingerprint_spike.py
     const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
     ws.registry.setConsistency(ConsistencyPolicy.ALWAYS)
 
-    const io1 = await ws.execute('cat /data/file.txt')
+    const io1 = await ws.shell('cat /data/file.txt')
     expect(DEC.decode(io1.stdout)).toBe('v1')
     await ws.close()
   })

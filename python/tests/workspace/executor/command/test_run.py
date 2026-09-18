@@ -144,15 +144,15 @@ async def _cli_write_case(tmp_path) -> tuple[str, str, str]:
     one.caches_reads = True
     two.caches_reads = True
     ws = Workspace({"/one/": one, "/two/": two}, mode=MountMode.WRITE)
-    await (await ws.execute("cat /one/a.txt")).stdout_str()
-    await (await ws.execute("cat /two/b.txt")).stdout_str()
+    await (await ws.shell("cat /one/a.txt")).stdout_str()
+    await (await ws.shell("cat /two/b.txt")).stdout_str()
     (tmp_path / "one" / "a.txt").write_bytes(b"v2\n")
     (tmp_path / "one" / "new.txt").write_bytes(b"fresh\n")
     (tmp_path / "two" / "b.txt").write_bytes(b"v2\n")
     await drop_mount_caches(ws._registry)
-    body = await (await ws.execute("cat /one/a.txt")).stdout_str()
-    listing = await (await ws.execute("ls /one")).stdout_str()
-    other = await (await ws.execute("cat /two/b.txt")).stdout_str()
+    body = await (await ws.shell("cat /one/a.txt")).stdout_str()
+    listing = await (await ws.shell("ls /one")).stdout_str()
+    other = await (await ws.shell("cat /two/b.txt")).stdout_str()
     return body, listing, other
 
 

@@ -184,7 +184,7 @@ function build(accessor: FakeRemoteAccessor): Workspace {
 }
 
 // Wrap a dispatch call in runWithRecording so the captured OpRecord
-// reaches `ws.records`, mirroring what `Workspace.execute` does
+// reaches `ws.records`, mirroring what `Workspace.shell` does
 // implicitly via its `runWithRecording` setup.
 async function recordedDispatch(ws: Workspace, op: string, path: string): Promise<unknown> {
   const [result, records] = await runWithRecording(async () => ws.dispatch(op, path))
@@ -268,7 +268,7 @@ describe('Workspace snapshot: capture and replay drift detection', () => {
       )
       const read =
         surface === 'shell'
-          ? loaded.execute('cat /remote/a.txt')
+          ? loaded.shell('cat /remote/a.txt')
           : loaded.dispatch('read', '/remote/a.txt')
       await expect(read).rejects.toBeInstanceOf(ContentDriftError)
       await ws.close()

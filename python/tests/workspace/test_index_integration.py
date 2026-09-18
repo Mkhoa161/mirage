@@ -73,7 +73,7 @@ def _ram_ws():
 def test_ram_glob_populates_index():
     """RAM ttl=0 → index populated but expires immediately."""
     ws, prov = _ram_ws()
-    io = _run(ws.execute("cat /data/sub/*.txt"))
+    io = _run(ws.shell("cat /data/sub/*.txt"))
     assert io.exit_code == 0
     # ttl=0: entries were set but expired by the time we check
     # Index now stores virtual paths (with mount prefix)
@@ -92,8 +92,8 @@ def test_ram_cat_of_a_literal_path_stores_no_listing():
     pins what the pair of runs actually establishes.
     """
     ws, prov = _ram_ws()
-    first = _run(ws.execute("cat /data/sub/a.txt"))
-    second = _run(ws.execute("cat /data/sub/a.txt"))
+    first = _run(ws.shell("cat /data/sub/a.txt"))
+    second = _run(ws.shell("cat /data/sub/a.txt"))
     assert (first.exit_code, second.exit_code) == (0, 0)
     listing = _run(prov.index.list_dir("/data/sub"))
     assert listing.status == LookupStatus.NOT_FOUND
@@ -101,7 +101,7 @@ def test_ram_cat_of_a_literal_path_stores_no_listing():
 
 def test_ram_glob_pattern_works():
     ws, prov = _ram_ws()
-    io = _run(ws.execute("cat /data/sub/*.txt"))
+    io = _run(ws.shell("cat /data/sub/*.txt"))
     assert io.exit_code == 0
 
 
@@ -170,7 +170,7 @@ def test_index_expired_refetches():
     p._store.files["/sub/a.txt"] = b"aaa\n"
     ws = Workspace(mounts={"/data/": (p, MountMode.WRITE)}, )
     ws.get_session(ws.default_session_id).cwd = "/data"
-    _run(ws.execute("cat /data/sub/*.txt"))
+    _run(ws.shell("cat /data/sub/*.txt"))
     listing = _run(p.index.list_dir("/data/sub"))
     # RAM ttl=0 → expired immediately after set
     expired = listing.status == LookupStatus.EXPIRED

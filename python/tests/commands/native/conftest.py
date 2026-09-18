@@ -341,7 +341,7 @@ class NativeTestEnv:
 
     def mirage(self, cmd: str, stdin: bytes | None = None) -> str:
         self.ws._cwd = "/data"
-        io = asyncio.run(self.ws.execute(cmd, stdin=stdin))
+        io = asyncio.run(self.ws.shell(cmd, stdin=stdin))
         if io.exit_code:
             import sys
             err = _collect(io.stderr).decode(errors="replace")

@@ -72,11 +72,11 @@ async function main(): Promise<void> {
   ws.mount('/data')?.register(tally)
 
   // .tally routes to the renderer above; .txt falls back to the generic cat.
-  process.stdout.write(dec.decode((await ws.execute('cat /data/hits.tally')).stdout))
-  process.stdout.write(dec.decode((await ws.execute('cat /data/notes.txt')).stdout))
+  process.stdout.write(dec.decode((await ws.shell('cat /data/hits.tally')).stdout))
+  process.stdout.write(dec.decode((await ws.shell('cat /data/notes.txt')).stdout))
 
   // The renderer composes with the rest of the shell like any other command.
-  const out = await ws.execute('cat /data/hits.tally | sort -k2 -n | tail -1')
+  const out = await ws.shell('cat /data/hits.tally | sort -k2 -n | tail -1')
   console.log('largest:', dec.decode(out.stdout).trim())
 }
 

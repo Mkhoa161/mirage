@@ -153,7 +153,7 @@ def test_maxdepth_applies_to_child_mount_depth_end_to_end():
         "/": (parent, MountMode.EXEC),
         "/data/": (child, MountMode.EXEC),
     }, )
-    io = asyncio.run(ws.execute("find / -maxdepth 2"))
+    io = asyncio.run(ws.shell("find / -maxdepth 2"))
     out = (io.stdout if isinstance(io.stdout, bytes) else b"").decode()
     assert "/data/a" in out
     assert "/data/a/b.txt" not in out
@@ -173,7 +173,7 @@ def _nested_ghost_workspace() -> Workspace:
 
 def test_find_ls_renders_namespace_ancestor_rows():
     ws = _nested_ghost_workspace()
-    io = asyncio.run(ws.execute("find / -ls"))
+    io = asyncio.run(ws.shell("find / -ls"))
     assert io.exit_code == 0
     out = (io.stdout if isinstance(io.stdout, bytes) else b"").decode()
     rows = [
@@ -189,8 +189,8 @@ def test_find_delete_skips_namespace_ancestors():
     ws = _nested_ghost_workspace()
 
     async def scenario():
-        io = await ws.execute("find / -delete")
-        after = await ws.execute("find /")
+        io = await ws.shell("find / -delete")
+        after = await ws.shell("find /")
         return io, after
 
     io, after = asyncio.run(scenario())
@@ -272,13 +272,13 @@ def test_du_fanout_folds_the_child_mount_into_its_ancestors():
     under the mount point count nowhere, in GNU or here.
     """
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("du /base"))
+    io = asyncio.run(ws.shell("du /base"))
     assert _stdout(io) == "7\t/base/inner\n17\t/base\n"
 
 
 def test_du_a_fanout_hides_shadowed_leaves():
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("du -a /base"))
+    io = asyncio.run(ws.shell("du -a /base"))
     assert _stdout(io) == ("7\t/base/inner/real.txt\n"
                            "7\t/base/inner\n"
                            "10\t/base/top.txt\n"
@@ -289,7 +289,7 @@ def test_du_s_fanout_is_one_row_per_operand():
     """``-s`` is one total per argument, mount boundary or not (GNU 9.7
     prints the single row ``17 base``)."""
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("du -s /base"))
+    io = asyncio.run(ws.shell("du -s /base"))
     assert _stdout(io) == "17\t/base\n"
 
 
@@ -299,7 +299,7 @@ def test_du_c_fanout_prints_one_total_across_the_mounts():
     ``du -c --apparent-size -B1 base`` reports ``7 base/inner``,
     ``17 base``, ``17 total``."""
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("du -c /base"))
+    io = asyncio.run(ws.shell("du -c /base"))
     assert _stdout(io) == "7\t/base/inner\n17\t/base\n17\ttotal\n"
 
 
@@ -313,30 +313,30 @@ def test_du_separate_dirs_fanout_scopes_only_the_rows():
     """
     ws = _shadowed_workspace()
     assert _stdout(asyncio.run(
-        ws.execute("du -S /base"))) == "7\t/base/inner\n10\t/base\n"
-    assert _stdout(asyncio.run(ws.execute(
-        "du -Sc /base"))) == "7\t/base/inner\n10\t/base\n17\ttotal\n"
+        ws.shell("du -S /base"))) == "7\t/base/inner\n10\t/base\n"
+    assert _stdout(asyncio.run(
+        ws.shell("du -Sc /base"))) == "7\t/base/inner\n10\t/base\n17\ttotal\n"
 
 
 def test_du_separate_dirs_summarize_fanout():
     ws = _shadowed_workspace()
-    assert _stdout(asyncio.run(ws.execute("du -Ss /base"))) == "10\t/base\n"
+    assert _stdout(asyncio.run(ws.shell("du -Ss /base"))) == "10\t/base\n"
     assert _stdout(asyncio.run(
-        ws.execute("du -Ssc /base"))) == "10\t/base\n17\ttotal\n"
+        ws.shell("du -Ssc /base"))) == "10\t/base\n17\ttotal\n"
 
 
 def test_du_separate_dirs_all_fanout():
     ws = _shadowed_workspace()
     assert _stdout(asyncio.run(
-        ws.execute("du -Sa /base"))) == ("7\t/base/inner/real.txt\n"
-                                         "7\t/base/inner\n"
-                                         "10\t/base/top.txt\n"
-                                         "10\t/base\n")
+        ws.shell("du -Sa /base"))) == ("7\t/base/inner/real.txt\n"
+                                       "7\t/base/inner\n"
+                                       "10\t/base/top.txt\n"
+                                       "10\t/base\n")
 
 
 def test_du_sc_fanout_prints_one_total():
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("du -sc /base"))
+    io = asyncio.run(ws.shell("du -sc /base"))
     assert _stdout(io) == "17\t/base\n17\ttotal\n"
 
 
@@ -347,7 +347,7 @@ def test_du_ch_fanout_humanizes_the_total_once():
     # doubles to 3000, which single- and double-rounding both render
     # 3.0K, so those sizes could no longer tell the two apart.
     ws = _shadowed_workspace(top=1025, real=1025)
-    io = asyncio.run(ws.execute("du -ch /base"))
+    io = asyncio.run(ws.shell("du -ch /base"))
     assert _stdout(io) == "1.1K\t/base/inner\n2.1K\t/base\n2.1K\ttotal\n"
 
 
@@ -356,7 +356,7 @@ def test_du_max_depth_prunes_printing_not_accounting():
     still reach the operand row (GNU 9.7 prints ``10 base/sub`` and
     ``20 base`` for a mount two levels down)."""
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("du --max-depth=0 /base"))
+    io = asyncio.run(ws.shell("du --max-depth=0 /base"))
     assert _stdout(io) == "17\t/base\n"
 
 
@@ -387,7 +387,7 @@ def _linked_workspace(nested: bool) -> Workspace:
         child._store.files["/real.txt"] = b"R" * 7
         mounts["/base/inner/"] = (child, MountMode.EXEC)
     ws = Workspace(mounts=mounts)
-    asyncio.run(ws.execute("ln -s /base/top.txt /base/link.txt"))
+    asyncio.run(ws.shell("ln -s /base/top.txt /base/link.txt"))
     return ws
 
 
@@ -397,9 +397,9 @@ def test_fanout_sub_runs_still_see_symlinks():
     not something is mounted at ``/base/inner``; the fan-out used to run
     every sub-command link-blind, so both rows vanished."""
     ws = _linked_workspace(nested=True)
-    found = _stdout(asyncio.run(ws.execute("find /base")))
+    found = _stdout(asyncio.run(ws.shell("find /base")))
     assert "/base/link.txt" in found
-    sized = _stdout(asyncio.run(ws.execute("du -a /base")))
+    sized = _stdout(asyncio.run(ws.shell("du -a /base")))
     assert "13\t/base/link.txt\n" in sized
     # Post-order, siblings sorted: inner, link.txt, top.txt, then the
     # operand carrying all three (7 + 13 + 10).
@@ -412,7 +412,7 @@ def test_fanout_sub_runs_still_see_symlinks():
 
 def test_fanout_link_rows_match_the_unmounted_tree():
     plain = _stdout(
-        asyncio.run(_linked_workspace(nested=False).execute("du -a /base")))
+        asyncio.run(_linked_workspace(nested=False).shell("du -a /base")))
     assert "13\t/base/link.txt\n" in plain
 
 
@@ -439,7 +439,7 @@ def test_operands_spanning_mounts_still_fan_out_inside_each_operand():
     mount's own: `du /base` and `du /base /other` disagreed about the same
     tree. GNU counts a mounted filesystem in the same run either way."""
     ws = _spanning_workspace()
-    io = asyncio.run(ws.execute("du -c /base /other"))
+    io = asyncio.run(ws.shell("du -c /base /other"))
     assert _stdout(io) == ("9\t/base/inner\n"
                            "19\t/base\n"
                            "10\t/other\n"
@@ -469,7 +469,7 @@ def test_operands_spanning_mounts_separate_dirs():
     recursive, so `/base` reports only `top.txt` while the total still
     covers every byte."""
     ws = _spanning_workspace()
-    io = asyncio.run(ws.execute("du -Sc /base /other"))
+    io = asyncio.run(ws.shell("du -Sc /base /other"))
     assert _stdout(io) == ("9\t/base/inner\n"
                            "10\t/base\n"
                            "10\t/other\n"
@@ -478,10 +478,10 @@ def test_operands_spanning_mounts_separate_dirs():
 
 def test_operands_spanning_mounts_fan_out_for_find_and_grep():
     ws = _spanning_workspace()
-    found = _stdout(asyncio.run(ws.execute("find /base /other")))
+    found = _stdout(asyncio.run(ws.shell("find /base /other")))
     assert "/base/inner/real.txt" in found
     assert "/base/inner/leftover.txt" not in found
-    hits = _stdout(asyncio.run(ws.execute("grep -r hit /base /other")))
+    hits = _stdout(asyncio.run(ws.shell("grep -r hit /base /other")))
     assert hits == ("/base/inner/real.txt:hit here\n"
                     "/other/o.txt:hit there\n")
 
@@ -493,7 +493,7 @@ def test_ls_r_drops_the_shadowed_group_whole():
     over a tmpfs at the same spot) prints the mounted directory's entries
     under its own header, one blank line between groups."""
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("ls -R /base"))
+    io = asyncio.run(ws.shell("ls -R /base"))
     assert _stdout(io) == ("/base:\ninner\ntop.txt\n\n"
                            "/base/inner:\nreal.txt\n")
 
@@ -527,7 +527,7 @@ def test_ls_r_lists_a_mountpoint_the_parent_backend_cannot_name():
     that name.
     """
     ws = _unnamed_mountpoint_workspace()
-    io = asyncio.run(ws.execute("ls -R /base"))
+    io = asyncio.run(ws.shell("ls -R /base"))
     assert _stdout(io) == ("/base:\nnested\ntop.txt\n\n"
                            "/base/nested:\nreal.txt\n")
 
@@ -549,7 +549,7 @@ def test_ls_r_lists_a_mountpoint_below_the_operand():
             "/base/": (parent, MountMode.EXEC),
             "/base/sub/deep/": (child, MountMode.EXEC),
         })
-    io = asyncio.run(ws.execute("ls -R /base"))
+    io = asyncio.run(ws.shell("ls -R /base"))
     assert _stdout(io) == ("/base:\nsub\n\n"
                            "/base/sub:\ndeep\np.txt\n\n"
                            "/base/sub/deep:\nreal.txt\n")
@@ -562,7 +562,7 @@ def test_ls_r_lists_a_namespace_only_ancestor_under_a_served_root():
     fan-out; the namespace-only directories above one are this walk's,
     because no other run renders them."""
     ws = _nested_ghost_workspace()
-    io = asyncio.run(ws.execute("ls -R /"))
+    io = asyncio.run(ws.shell("ls -R /"))
     assert _stdout(io).startswith("/:\ndev\nghost\ntop.txt\n\n"
                                   "/ghost:\nvery\n\n"
                                   "/ghost/very:\ndeep\n")
@@ -578,7 +578,7 @@ def test_ls_r_relative_operand_never_descends_the_mount_root():
     prints the mounted directory once.
     """
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("ls -R base"))
+    io = asyncio.run(ws.shell("ls -R base"))
     assert _stdout(io) == ("base:\ninner\ntop.txt\n\n"
                            "base/inner:\nreal.txt\n")
 
@@ -596,7 +596,7 @@ def test_ls_r_renders_a_file_mount_as_one_row_and_no_group():
     root = RAMVFS()
     root._store.files["/top.txt"] = b"T\n"
     ws = Workspace(mounts={"/": (root, MountMode.EXEC)})
-    io = asyncio.run(ws.execute("ls -aRF /"))
+    io = asyncio.run(ws.shell("ls -aRF /"))
     assert _stdout(io) == ("/:\n.bash_history\ndev/\ntop.txt\n\n"
                            "/dev:\nnull\nzero\n")
 
@@ -607,7 +607,7 @@ def test_tree_renders_one_document_across_a_nested_mount():
     tree 2.2.1, which draws the mounted entries under the mount point and
     none of the ones it covers."""
     ws = _shadowed_workspace()
-    io = asyncio.run(ws.execute("tree /base"))
+    io = asyncio.run(ws.shell("tree /base"))
     assert _stdout(io) == ("/base\n"
                            "|-- inner\n"
                            "|   `-- real.txt\n"
@@ -618,7 +618,7 @@ def test_tree_renders_one_document_across_a_nested_mount():
 
 def test_ls_r_spanning_mounts_separates_every_group():
     ws = _spanning_workspace()
-    io = asyncio.run(ws.execute("ls -R /base /other"))
+    io = asyncio.run(ws.shell("ls -R /base /other"))
     assert _stdout(io) == ("/base:\ninner\ntop.txt\n\n"
                            "/base/inner:\nreal.txt\n\n"
                            "/other:\no.txt\n")

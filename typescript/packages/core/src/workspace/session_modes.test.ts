@@ -75,11 +75,11 @@ describe('per-session mount grants', () => {
     const { ws, a } = await makeGrantsWorkspace()
     ws.createSession('agent', { mounts: { '/a': MountMode.READ } })
 
-    const ok = await ws.execute('cat /a/x.txt', { sessionId: 'agent' })
+    const ok = await ws.shell('cat /a/x.txt', { sessionId: 'agent' })
     expect(ok.exitCode).toBe(0)
     expect(stdoutStr(ok)).toContain('hi')
 
-    const denied = await ws.execute('rm /a/x.txt', { sessionId: 'agent' })
+    const denied = await ws.shell('rm /a/x.txt', { sessionId: 'agent' })
     expect(denied.exitCode).not.toBe(0)
     expect(stderrStr(denied)).toContain('read-only mount at /a/')
     expect(a.store.files.has('/x.txt')).toBe(true)
@@ -89,7 +89,7 @@ describe('per-session mount grants', () => {
     const { ws, a } = await makeGrantsWorkspace()
     ws.createSession('agent', { mounts: { '/a': MountMode.READ } })
 
-    const denied = await ws.execute('echo leaked > /a/y.txt', { sessionId: 'agent' })
+    const denied = await ws.shell('echo leaked > /a/y.txt', { sessionId: 'agent' })
     expect(denied.exitCode).not.toBe(0)
     expect(stderrStr(denied)).toBe('/a/y.txt: Read-only file system\n')
     expect(a.store.files.has('/y.txt')).toBe(false)
@@ -106,7 +106,7 @@ describe('per-session mount grants', () => {
       const { ws, b } = await makeGrantsWorkspace()
       ws.createSession('agent', { profile: { paths: { hide: ['/b'] } } })
 
-      const denied = await ws.execute(line, { sessionId: 'agent' })
+      const denied = await ws.shell(line, { sessionId: 'agent' })
       expect(denied.exitCode).toBe(0)
       expect(stdoutStr(denied)).toBe('next\n')
       expect(stderrStr(denied)).toBe('/b/y.txt: No such file or directory\n')
@@ -118,7 +118,7 @@ describe('per-session mount grants', () => {
     const { ws, a } = await makeGrantsWorkspace()
     ws.createSession('agent', { mounts: { '/a': MountMode.WRITE } })
 
-    const io = await ws.execute('echo new > /a/y.txt', { sessionId: 'agent' })
+    const io = await ws.shell('echo new > /a/y.txt', { sessionId: 'agent' })
     expect(io.exitCode).toBe(0)
     expect(a.store.files.has('/y.txt')).toBe(true)
   })
@@ -127,7 +127,7 @@ describe('per-session mount grants', () => {
     const { ws } = await makeGrantsWorkspace({ modes: { '/a': MountMode.READ } })
     ws.createSession('agent', { mounts: { '/a': MountMode.WRITE } })
 
-    const denied = await ws.execute('echo up > /a/y.txt', { sessionId: 'agent' })
+    const denied = await ws.shell('echo up > /a/y.txt', { sessionId: 'agent' })
     expect(denied.exitCode).not.toBe(0)
     expect(stderrStr(denied)).toBe('/a/y.txt: Read-only file system\n')
   })
@@ -148,7 +148,7 @@ describe('per-session mount grants', () => {
     const { ws } = await makeGrantsWorkspace()
     ws.createSession('agent', { mounts: { '/a': MountMode.READ } })
 
-    const io = await ws.execute('cat /b/secret.txt', { sessionId: 'agent' })
+    const io = await ws.shell('cat /b/secret.txt', { sessionId: 'agent' })
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toContain('SECRET')
   })
@@ -161,12 +161,12 @@ describe('per-session mount grants', () => {
     const { ws } = await makeGrantsWorkspace()
     ws.createSession('agent', { profile: { paths: { hide: ['/b'] } } })
 
-    const denied = await ws.execute('cat /b/secret.txt', { sessionId: 'agent' })
+    const denied = await ws.shell('cat /b/secret.txt', { sessionId: 'agent' })
     expect(denied.exitCode).not.toBe(0)
     expect(stderrStr(denied)).toBe('cat: /b/secret.txt: No such file or directory\n')
     expect(stdoutStr(denied)).not.toContain('SECRET')
 
-    const listed = await ws.execute('ls /', { sessionId: 'agent' })
+    const listed = await ws.shell('ls /', { sessionId: 'agent' })
     expect(stdoutStr(listed).split(/\s+/)).not.toContain('b')
   })
 
@@ -180,15 +180,15 @@ describe('per-session mount grants', () => {
     })
     ws.createSession('root_ro', { mounts: { '/a': MountMode.WRITE, '/': MountMode.READ } })
 
-    const denied = await ws.execute('cat /root.txt', { sessionId: 'no_root' })
+    const denied = await ws.shell('cat /root.txt', { sessionId: 'no_root' })
     expect(denied.exitCode).not.toBe(0)
     expect(stderrStr(denied)).toContain('No such file or directory')
 
-    const readOk = await ws.execute('cat /root.txt', { sessionId: 'root_ro' })
+    const readOk = await ws.shell('cat /root.txt', { sessionId: 'root_ro' })
     expect(readOk.exitCode).toBe(0)
     expect(stdoutStr(readOk)).toContain('top')
 
-    const writeDenied = await ws.execute('echo x > /root.txt', { sessionId: 'root_ro' })
+    const writeDenied = await ws.shell('echo x > /root.txt', { sessionId: 'root_ro' })
     expect(writeDenied.exitCode).not.toBe(0)
     expect(stderrStr(writeDenied)).toBe('/root.txt: Read-only file system\n')
   })
@@ -197,7 +197,7 @@ describe('per-session mount grants', () => {
     const { ws } = await makeGrantsWorkspace()
     ws.createSession('agent', { mounts: { '/a': MountMode.READ } })
 
-    const io = await ws.execute('echo hi | wc -l', { sessionId: 'agent' })
+    const io = await ws.shell('echo hi | wc -l', { sessionId: 'agent' })
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io).trim()).toBe('1')
   })
@@ -257,7 +257,7 @@ describe('structure below a mount whose own content is hidden', () => {
 
   it('a link below a hidden mount stays out of a scoped listing', async () => {
     const { ws } = await makeGrantsWorkspace()
-    const ln = await ws.execute('ln -s /b/secret.txt /b/leak')
+    const ln = await ws.shell('ln -s /b/secret.txt /b/leak')
     expect(ln.exitCode).toBe(0)
     const sess = ws.createSession('agent', { profile: { paths: { hide: ['/b'] } } })
     await runWithSession(sess, async () => {
@@ -287,7 +287,7 @@ describe('sessions on a shared SessionStore', () => {
       { mode: MountMode.EXEC, shellParser: parser, sessionStore: store },
     )
     open.push(wsB)
-    const denied = await wsB.execute('echo blocked > /data/x.txt', { sessionId: 'narrow' })
+    const denied = await wsB.shell('echo blocked > /data/x.txt', { sessionId: 'narrow' })
     expect(denied.exitCode).not.toBe(0)
   })
 })
@@ -318,7 +318,7 @@ describe('nested mount disclosure', () => {
     const ws = await makeNested()
     ws.createSession('agent', { profile: { paths: { hide: ['/base/private'] } } })
 
-    const io = await ws.execute('tree /base', { sessionId: 'agent' })
+    const io = await ws.shell('tree /base', { sessionId: 'agent' })
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).not.toContain('private')
     expect(stdoutStr(io)).toBe('/base\n`-- top.txt\n\n1 directory, 1 file\n')
@@ -329,7 +329,7 @@ describe('nested mount disclosure', () => {
     const ws = await makeNested()
     ws.createSession('agent', { mounts: { '/base': MountMode.READ } })
 
-    const io = await ws.execute('tree /base', { sessionId: 'agent' })
+    const io = await ws.shell('tree /base', { sessionId: 'agent' })
     expect(io.exitCode).toBe(0)
     expect(stdoutStr(io)).toBe(
       '/base\n|-- private\n|   `-- secret.txt\n`-- top.txt\n\n2 directories, 2 files\n',

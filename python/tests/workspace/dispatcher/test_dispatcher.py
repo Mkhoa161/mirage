@@ -288,21 +288,21 @@ async def test_unlink_removes_a_namespace_link():
     # leaving the link in place. That is what left `git checkout` unable
     # to drop a link the other branch does not have.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo hi > /ram/a.txt")
-        await ws.execute("ln -s a.txt /ram/link")
+        await ws.shell("echo hi > /ram/a.txt")
+        await ws.shell("ln -s a.txt /ram/link")
         assert ws._namespace.is_link("/ram/link")
         await ws.dispatch("unlink", PathSpec.from_str_path("/ram/link"))
         assert not ws._namespace.is_link("/ram/link")
-        listing = await ws.execute("ls /ram")
+        listing = await ws.shell("ls /ram")
         assert b"link" not in (listing.stdout or b"")
 
 
 @pytest.mark.asyncio
 async def test_unlink_of_an_ordinary_file_still_reaches_the_backend():
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo hi > /ram/a.txt")
+        await ws.shell("echo hi > /ram/a.txt")
         await ws.dispatch("unlink", PathSpec.from_str_path("/ram/a.txt"))
-        listing = await ws.execute("ls /ram")
+        listing = await ws.shell("ls /ram")
         assert (listing.stdout or b"").strip() == b""
 
 
@@ -312,8 +312,8 @@ async def test_rename_moves_a_namespace_link():
     # of a link forwarded to a backend that had never heard of the name,
     # so it answered ENOENT with the link still under the old one.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo hi > /ram/a.txt")
-        await ws.execute("ln -s a.txt /ram/link")
+        await ws.shell("echo hi > /ram/a.txt")
+        await ws.shell("ln -s a.txt /ram/link")
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/ram/link"),
                           dst=PathSpec.from_str_path("/ram/moved"))
@@ -328,8 +328,8 @@ async def test_rename_carries_the_nodes_below_a_directory():
     # stay at a name the rename had emptied, so the moved directory was
     # missing it and the old name still answered readlink.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("mkdir -p /ram/d && echo hi > /ram/d/a.txt")
-        await ws.execute("ln -s a.txt /ram/d/link")
+        await ws.shell("mkdir -p /ram/d && echo hi > /ram/d/a.txt")
+        await ws.shell("ln -s a.txt /ram/d/link")
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/ram/d"),
                           dst=PathSpec.from_str_path("/ram/e"))
@@ -346,9 +346,9 @@ async def test_rename_refuses_a_destination_holding_a_link():
     # backend decide replaced the directory and deleted the link with
     # it, which loses namespace state where the kernel refuses.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("mkdir -p /ram/d /ram/e && echo hi > /ram/d/a.txt")
-        await ws.execute("ln -s a.txt /ram/d/link")
-        await ws.execute("ln -s gone /ram/e/stale")
+        await ws.shell("mkdir -p /ram/d /ram/e && echo hi > /ram/d/a.txt")
+        await ws.shell("ln -s a.txt /ram/d/link")
+        await ws.shell("ln -s gone /ram/e/stale")
         with pytest.raises(OSError) as caught:
             await ws.dispatch("rename",
                               PathSpec.from_str_path("/ram/d"),
@@ -364,8 +364,8 @@ async def test_rename_replaces_an_empty_destination():
     # The other half of rename(2): a destination with nothing in it is
     # replaced, and the subtree re-anchors onto the new name.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("mkdir -p /ram/d /ram/e && echo hi > /ram/d/a.txt")
-        await ws.execute("ln -s a.txt /ram/d/link")
+        await ws.shell("mkdir -p /ram/d /ram/e && echo hi > /ram/d/a.txt")
+        await ws.shell("ln -s a.txt /ram/d/link")
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/ram/d"),
                           dst=PathSpec.from_str_path("/ram/e"))
@@ -379,8 +379,8 @@ async def test_a_no_follow_stat_answers_a_links_own_row():
     # surface rebuilt the row from the target string and reported epoch
     # zero, so a no-follow utime persisted and stayed invisible.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo hi > /ram/a.txt")
-        await ws.execute("ln -s a.txt /ram/link")
+        await ws.shell("echo hi > /ram/a.txt")
+        await ws.shell("ln -s a.txt /ram/link")
         link = PathSpec.from_str_path("/ram/link")
         row, _ = await ws.dispatch("stat", link, nofollow=True)
         assert row.type == FileType.SYMLINK
@@ -409,14 +409,14 @@ async def test_a_rename_replaces_a_link_at_the_destination():
     # tier, so only the surfaces below it (a guest, a kernel mount) saw
     # the broken state.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo hi > /ram/a.txt")
-        await ws.execute("echo tgt > /ram/t.txt")
-        await ws.execute("ln -s t.txt /ram/link")
+        await ws.shell("echo hi > /ram/a.txt")
+        await ws.shell("echo tgt > /ram/t.txt")
+        await ws.shell("ln -s t.txt /ram/link")
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/ram/a.txt"),
                           dst=PathSpec.from_str_path("/ram/link"))
         assert not ws._namespace.is_link("/ram/link")
-        assert (await ws.execute("cat /ram/link")).stdout == b"hi\n"
+        assert (await ws.shell("cat /ram/link")).stdout == b"hi\n"
 
 
 @pytest.mark.asyncio
@@ -427,8 +427,8 @@ async def test_a_read_grant_refuses_link_writes_like_file_writes():
     # all, so `mounts: {"/extra": "read"}` protected everything on the
     # mount except its names.
     with Workspace({"/extra/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo b > /extra/plain.txt")
-        await ws.execute("ln -s plain.txt /extra/lk")
+        await ws.shell("echo b > /extra/plain.txt")
+        await ws.shell("ln -s plain.txt /extra/lk")
         sess = ws.create_session("agent", mounts={"/extra/": "read"})
         token = set_current_session(sess)
         try:
@@ -481,7 +481,7 @@ async def test_a_rename_destination_is_judged_on_its_own_turf():
             "/rw/": RAMVFS(),
             "/ro/": RAMVFS()
     }, mode=MountMode.WRITE) as ws:
-        await ws.execute("ln -s t /rw/lk")
+        await ws.shell("ln -s t /rw/lk")
         sess = ws.create_session("agent",
                                  mounts={
                                      "/rw/": "write",
@@ -508,13 +508,13 @@ async def test_symlink_refuses_an_occupied_name(occupied):
     # table's, and a mount root is the registry's. Unchecked, the node
     # went on top and buried whatever was there.
     with Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE) as ws:
-        await ws.execute("echo hi > /ram/a.txt; mkdir /ram/d")
-        await ws.execute("ln -s a.txt /ram/link")
+        await ws.shell("echo hi > /ram/a.txt; mkdir /ram/d")
+        await ws.shell("ln -s a.txt /ram/link")
         with pytest.raises(FileExistsError):
             await ws.dispatch("symlink",
                               PathSpec.from_str_path(occupied),
                               target="elsewhere")
-        assert (await ws.execute("cat /ram/a.txt")).stdout == b"hi\n"
+        assert (await ws.shell("cat /ram/a.txt")).stdout == b"hi\n"
 
 
 @pytest.mark.asyncio
@@ -563,7 +563,7 @@ async def test_ops_rmdir_cascade_invalidates_each_remnant(monkeypatch):
     # the cached listings and bodies below the directory survive its
     # deletion.
     ws = Workspace({"/a": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
+    io = await ws.shell("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
     assert io.exit_code == 0, io.stderr
     sess = ws.create_session("rev", profile={"paths": {"hide": ["/a/d/sec"]}})
     recorded: list[str] = []
@@ -582,7 +582,7 @@ async def test_ops_rmdir_cascade_invalidates_each_remnant(monkeypatch):
     assert "/a/d/sec/k" in recorded
     assert "/a/d/sec" in recorded
     assert "/a/d" in recorded
-    gone = await ws.execute("test -e /a/d")
+    gone = await ws.shell("test -e /a/d")
     assert gone.exit_code == 1
 
 
@@ -596,7 +596,7 @@ async def test_a_policy_denied_remnant_keeps_the_refusal():
     ws = Workspace({"/a": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[DenyRemnantUnlink()])
-    io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
+    io = await ws.shell("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
     assert io.exit_code == 0, io.stderr
     sess = ws.create_session("rev", profile={"paths": {"hide": ["/a/d/sec"]}})
     token = set_current_session(sess)
@@ -606,7 +606,7 @@ async def test_a_policy_denied_remnant_keeps_the_refusal():
     finally:
         reset_current_session(token)
     assert exc.value.errno in (errno.ENOTEMPTY, errno.EEXIST)
-    kept = await ws.execute("cat /a/d/sec/k")
+    kept = await ws.shell("cat /a/d/sec/k")
     assert (kept.stdout or b"") == b"k\n"
 
 
@@ -616,8 +616,8 @@ async def test_ops_rmdir_takes_hidden_namespace_links_with_it():
     # cannot take it; left in the node table it synthesizes /a/d right
     # back once the hide lifts, resurfacing the removed tree.
     ws = Workspace({"/a": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k"
-                          " && ln -s /a/t /a/d/lnk")
+    io = await ws.shell("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k"
+                        " && ln -s /a/t /a/d/lnk")
     assert io.exit_code == 0, io.stderr
     sess = ws.create_session(
         "rev", profile={"paths": {
@@ -629,9 +629,9 @@ async def test_ops_rmdir_takes_hidden_namespace_links_with_it():
     finally:
         reset_current_session(token)
     # No session, no hides: the tree must be gone, link included.
-    linkless = await ws.execute("readlink /a/d/lnk")
+    linkless = await ws.shell("readlink /a/d/lnk")
     assert linkless.exit_code != 0
-    gone = await ws.execute("test -e /a/d")
+    gone = await ws.shell("test -e /a/d")
     assert gone.exit_code == 1
 
 
@@ -641,8 +641,8 @@ async def test_a_visible_link_below_keeps_the_rmdir_refusal():
     # refusal stands and nothing (backend remnant or node table) is
     # destroyed.
     ws = Workspace({"/a": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k"
-                          " && ln -s /a/t /a/d/lnk")
+    io = await ws.shell("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k"
+                        " && ln -s /a/t /a/d/lnk")
     assert io.exit_code == 0, io.stderr
     sess = ws.create_session("rev", profile={"paths": {"hide": ["/a/d/sec"]}})
     token = set_current_session(sess)
@@ -652,9 +652,9 @@ async def test_a_visible_link_below_keeps_the_rmdir_refusal():
     finally:
         reset_current_session(token)
     assert exc.value.errno in (errno.ENOTEMPTY, errno.EEXIST)
-    kept = await ws.execute("cat /a/d/sec/k")
+    kept = await ws.shell("cat /a/d/sec/k")
     assert (kept.stdout or b"") == b"k\n"
-    link = await ws.execute("readlink /a/d/lnk")
+    link = await ws.shell("readlink /a/d/lnk")
     assert link.exit_code == 0
 
 
@@ -664,7 +664,7 @@ async def test_a_non_oserror_cascade_failure_keeps_the_refusal(monkeypatch):
     # own error type); a raw backend exception escaping the fold would
     # reveal exactly what the refusal exists to hide.
     ws = Workspace({"/a": RAMVFS()}, mode=MountMode.WRITE)
-    io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
+    io = await ws.shell("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k")
     assert io.exit_code == 0, io.stderr
     sess = ws.create_session("rev", profile={"paths": {"hide": ["/a/d/sec"]}})
     real = MountEntry.execute_op
@@ -682,7 +682,7 @@ async def test_a_non_oserror_cascade_failure_keeps_the_refusal(monkeypatch):
     finally:
         reset_current_session(token)
     assert exc.value.errno in (errno.ENOTEMPTY, errno.EEXIST)
-    kept = await ws.execute("cat /a/d/sec/k")
+    kept = await ws.shell("cat /a/d/sec/k")
     assert (kept.stdout or b"") == b"k\n"
 
 
@@ -695,16 +695,15 @@ async def test_a_directory_rename_drops_the_listing_cached_below_it(tmp_path):
     (tmp_path / "docs" / "readme.md").write_text("notes\n", encoding="utf-8")
     with Workspace({"/disk/": DiskVFS(root=str(tmp_path))},
                    mode=MountMode.WRITE) as ws:
-        listed = await ws.execute("ls /disk/docs")
+        listed = await ws.shell("ls /disk/docs")
         assert listed.stdout == b"readme.md\n"
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/disk/docs"),
                           dst=PathSpec.from_str_path("/disk/moved"))
-        gone = await ws.execute("test -d /disk/docs && echo stale || echo gone"
-                                )
+        gone = await ws.shell("test -d /disk/docs && echo stale || echo gone")
         assert gone.stdout == b"gone\n"
-        assert (await ws.execute("ls /disk/docs")).exit_code != 0
-        assert (await ws.execute("ls /disk/moved")).stdout == b"readme.md\n"
+        assert (await ws.shell("ls /disk/docs")).exit_code != 0
+        assert (await ws.shell("ls /disk/moved")).stdout == b"readme.md\n"
 
 
 @pytest.mark.asyncio
@@ -716,7 +715,7 @@ async def test_a_rename_carries_the_node_at_the_source(tmp_path):
     (tmp_path / "a.txt").write_text("one\n", encoding="utf-8")
     with Workspace({"/disk/": DiskVFS(root=str(tmp_path))},
                    mode=MountMode.WRITE) as ws:
-        assert (await ws.execute("chmod 400 /disk/a.txt")).exit_code == 0
+        assert (await ws.shell("chmod 400 /disk/a.txt")).exit_code == 0
         assert ws.namespace.meta_for("/disk/a.txt").mode == 0o400
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/disk/a.txt"),
@@ -733,7 +732,7 @@ async def test_a_rename_replaces_the_node_at_the_landing(tmp_path):
     (tmp_path / "b.txt").write_text("two\n", encoding="utf-8")
     with Workspace({"/disk/": DiskVFS(root=str(tmp_path))},
                    mode=MountMode.WRITE) as ws:
-        assert (await ws.execute("chmod 400 /disk/b.txt")).exit_code == 0
+        assert (await ws.shell("chmod 400 /disk/b.txt")).exit_code == 0
         await ws.dispatch("rename",
                           PathSpec.from_str_path("/disk/a.txt"),
                           dst=PathSpec.from_str_path("/disk/b.txt"))

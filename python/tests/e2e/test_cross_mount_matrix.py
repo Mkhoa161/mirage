@@ -173,7 +173,7 @@ async def _ls_for_index(ws: Workspace, state: "_MountState",
         # previously warmed (now stale) index entry must be dropped before the
         # ls re-lists it.
         await state.vfs.index.invalidate_dir(path)
-        await ws.execute(f"ls {path}")
+        await ws.shell(f"ls {path}")
 
 
 class CrossMountEnv:
@@ -202,13 +202,13 @@ class CrossMountEnv:
     def run(self, cmd: str) -> str:
 
         async def _inner():
-            io = await self.ws.execute(cmd)
+            io = await self.ws.shell(cmd)
             return await io.stdout_str()
 
         return asyncio.run(_inner())
 
     def exit(self, cmd: str) -> int:
-        io = asyncio.run(self.ws.execute(cmd))
+        io = asyncio.run(self.ws.shell(cmd))
         return io.exit_code
 
     def cleanup_redis(self) -> None:

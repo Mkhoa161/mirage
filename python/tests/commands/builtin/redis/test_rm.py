@@ -38,7 +38,7 @@ async def workspace():
 async def test_rm_v_terminates_verbose_output(workspace):
     await workspace.fs.write("/a.txt", b"a")
 
-    io = await workspace.execute("rm -v /a.txt")
+    io = await workspace.shell("rm -v /a.txt")
 
     assert io.exit_code == 0
     assert io.stdout == b"removed '/a.txt'\n"

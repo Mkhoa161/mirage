@@ -88,7 +88,7 @@ const task =
 const result = await run(agent, task)
 console.log(result.finalOutput)
 
-const findAll = await ws.execute('find / -type f')
+const findAll = await ws.shell('find / -type f')
 console.log('\n--- Files in workspace ---')
 console.log(findAll.stdoutText)
 

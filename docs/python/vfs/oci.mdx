@@ -100,19 +100,19 @@ vfs = OCIVFS(config=config)
 async def main() -> None:
     ws = Workspace({"/oci/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /oci/")
+    r = await ws.shell("ls /oci/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /oci/data/users.csv | head -n 5")
+    r = await ws.shell("cat /oci/data/users.csv | head -n 5")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /oci/")
+    r = await ws.shell("tree /oci/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /oci/ -name '*.jsonl'")
+    r = await ws.shell("find /oci/ -name '*.jsonl'")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /oci/config.json")
+    r = await ws.shell("stat /oci/config.json")
     print(await r.stdout_str())
 
 

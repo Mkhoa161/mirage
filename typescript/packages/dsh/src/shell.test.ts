@@ -443,7 +443,7 @@ describe('session binding', () => {
     expect(cross.stdout.text.trim()).toBe('[]')
     const back = await alpha.run(alpha.resolve({ command: 'echo "[$WHO]"' }))
     expect(back.stdout.text.trim()).toBe('[alpha]')
-    const direct = await ws.execute('echo "[$WHO]"')
+    const direct = await ws.shell('echo "[$WHO]"')
     expect(direct.stdoutText.trim()).toBe('[]')
   })
 
@@ -451,7 +451,7 @@ describe('session binding', () => {
     const ws = new Workspace({ '/data': [new RAMVFS(), MountMode.WRITE] })
     workspaces.push(ws)
     ws.createSession('pre')
-    await ws.execute('export SEED=planted', { sessionId: 'pre' })
+    await ws.shell('export SEED=planted', { sessionId: 'pre' })
     const shell = await attachShell(ws, { sessionId: 'pre' })
     const out = await shell.run(shell.resolve({ command: 'echo "$SEED"' }))
     expect(out.stdout.text.trim()).toBe('planted')

@@ -163,7 +163,7 @@ describe('execute router', () => {
   it('passes the runtime argument through to execution', async () => {
     const app = buildApp()
     await createWs(app, 'ert')
-    // An unknown entry name fails loud inside Workspace.execute,
+    // An unknown entry name fails loud inside Workspace.shell,
     // proving the field reaches the runtime argument.
     const res = await app.inject({
       method: 'POST',

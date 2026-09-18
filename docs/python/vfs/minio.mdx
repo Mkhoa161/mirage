@@ -61,13 +61,13 @@ vfs = MinIOVFS(config)
 async def main() -> None:
     ws = Workspace({"/minio/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /minio/")
+    r = await ws.shell("ls /minio/")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /minio/")
+    r = await ws.shell("tree /minio/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /minio/data/config.json")
+    r = await ws.shell("cat /minio/data/config.json")
     print(await r.stdout_str())
 
 

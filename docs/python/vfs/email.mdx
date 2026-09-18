@@ -139,46 +139,46 @@ async def main():
     ws = Workspace({"/email": vfs}, mode=MountMode.READ)
 
     # List folders
-    r = await ws.execute("ls /email/")
+    r = await ws.shell("ls /email/")
     print(await r.stdout_str())
 
     # List date directories in INBOX
-    r = await ws.execute("ls /email/INBOX/")
+    r = await ws.shell("ls /email/INBOX/")
     print(await r.stdout_str())
 
     # List messages for a specific date
-    r = await ws.execute("ls /email/INBOX/2026-04-14/")
+    r = await ws.shell("ls /email/INBOX/2026-04-14/")
     print(await r.stdout_str())
 
     # Read a message
-    r = await ws.execute(
+    r = await ws.shell(
         "cat /email/INBOX/2026-04-14/Meeting_Notes__12345.email.json")
     print(await r.stdout_str())
 
     # Extract subject with jq
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".subject"'
         " /email/INBOX/2026-04-14/Meeting_Notes__12345.email.json")
     print(await r.stdout_str())
 
     # List attachments
-    r = await ws.execute("ls /email/INBOX/2026-04-14/Meeting_Notes__12345/")
+    r = await ws.shell("ls /email/INBOX/2026-04-14/Meeting_Notes__12345/")
     print(await r.stdout_str())
 
     # Search across all messages
-    r = await ws.execute('rg "quarterly" /email/INBOX/')
+    r = await ws.shell('rg "quarterly" /email/INBOX/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 2 /email/INBOX/")
+    r = await ws.shell("tree -L 2 /email/INBOX/")
     print(await r.stdout_str())
 
     # Triage unread messages
-    r = await ws.execute("himalaya envelope list --folder INBOX --unseen --max 5")
+    r = await ws.shell("himalaya envelope list --folder INBOX --unseen --max 5")
     print(await r.stdout_str())
 
     # Send an email
-    r = await ws.execute(
+    r = await ws.shell(
         'himalaya message send --to "user@example.com"'
         ' --subject "Hello from MIRAGE"'
         ' --body "This email was sent via the MIRAGE email VFS."')

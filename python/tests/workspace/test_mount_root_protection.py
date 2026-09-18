@@ -53,7 +53,7 @@ def _ws_nested() -> Workspace:
 
 
 async def _exec(ws: Workspace, cmd: str):
-    return await ws.execute(cmd)
+    return await ws.shell(cmd)
 
 
 def _run(coro):

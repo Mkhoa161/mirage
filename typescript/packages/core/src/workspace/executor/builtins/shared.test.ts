@@ -148,7 +148,7 @@ describe('builtins/shared: expandOperands', () => {
       { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, shellParser: parser },
     )
-    await ws.execute('echo a > /data/a.txt && echo b > /data/b.txt')
+    await ws.shell('echo a > /data/a.txt && echo b > /data/b.txt')
     const globSpec = new PathSpec({
       virtual: '/data/*.txt',
       directory: '/data/',

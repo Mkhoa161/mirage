@@ -72,7 +72,7 @@ async def main():
     print(result.final_output)
 
     ws = client._ws
-    find_all = await ws.execute("find / -type f")
+    find_all = await ws.shell("find / -type f")
     print("\n--- Files in workspace ---")
     print((find_all.stdout or b"").decode())
 
@@ -110,7 +110,7 @@ async def main():
     fresh_session = await fresh_client.create()
     await fresh_session.hydrate_workspace(snapshot)
 
-    fresh_find = await fresh_ws.execute("find / -type f")
+    fresh_find = await fresh_ws.shell("find / -type f")
     print("--- Files in hydrated workspace ---")
     print((fresh_find.stdout or b"").decode())
 
@@ -127,8 +127,8 @@ async def main():
     for path in sorted(orig_files):
         if not path:
             continue
-        orig = await ws.execute(f"cat {path}")
-        fresh = await fresh_ws.execute(f"cat {path}")
+        orig = await ws.shell(f"cat {path}")
+        fresh = await fresh_ws.shell(f"cat {path}")
         orig_bytes = orig.stdout or b""
         fresh_bytes = fresh.stdout or b""
         if orig_bytes == fresh_bytes:
@@ -145,7 +145,7 @@ async def main():
 
     # Show /report.txt explicitly so the user can read what the agent wrote
     if "/report.txt" in orig_files:
-        report = await fresh_ws.execute("cat /report.txt")
+        report = await fresh_ws.shell("cat /report.txt")
         body = (report.stdout or b"").decode()
         print(f"\n--- /report.txt from hydrated workspace "
               f"({len(body)} chars) ---")

@@ -91,10 +91,10 @@ async def test_file_pair_operators_match_bash(line, expected):
     # a missing left side makes -ot true, -ef follows symlinks.
     from mirage import RAMVFS, MountMode, Workspace
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /w/d; printf a > /w/d/a.txt; "
-                     "touch -d '2020-01-01 00:00:00' /w/d/a.txt; "
-                     "printf bb > /w/d/b.txt; ln -s d/a.txt /w/l; cd /w")
-    io = await ws.execute(line)
+    await ws.shell("mkdir -p /w/d; printf a > /w/d/a.txt; "
+                   "touch -d '2020-01-01 00:00:00' /w/d/a.txt; "
+                   "printf bb > /w/d/b.txt; ln -s d/a.txt /w/l; cd /w")
+    io = await ws.shell(line)
     assert io.exit_code == expected
 
 
@@ -102,6 +102,6 @@ async def test_file_pair_operators_match_bash(line, expected):
 async def test_equal_mtimes_are_neither_newer_nor_older():
     from mirage import RAMVFS, MountMode, Workspace
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /w; touch -d '2020-01-01 00:00:00' /w/a /w/b")
-    assert (await ws.execute("[ /w/a -nt /w/b ]")).exit_code == 1
-    assert (await ws.execute("[ /w/a -ot /w/b ]")).exit_code == 1
+    await ws.shell("mkdir -p /w; touch -d '2020-01-01 00:00:00' /w/a /w/b")
+    assert (await ws.shell("[ /w/a -nt /w/b ]")).exit_code == 1
+    assert (await ws.shell("[ /w/a -ot /w/b ]")).exit_code == 1

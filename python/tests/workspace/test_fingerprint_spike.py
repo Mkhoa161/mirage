@@ -36,11 +36,11 @@ def test_disk_always_refetches_after_external_mutation(tmp_path):
     )
 
     async def run() -> tuple[bytes, bytes]:
-        io1 = await ws.execute("cat /data/file.txt")
+        io1 = await ws.shell("cat /data/file.txt")
         first = await io1.materialize_stdout()
         time.sleep(1.1)
         (root / "file.txt").write_bytes(b"v2")
-        io2 = await ws.execute("cat /data/file.txt")
+        io2 = await ws.shell("cat /data/file.txt")
         second = await io2.materialize_stdout()
         return first, second
 
@@ -63,11 +63,11 @@ def test_disk_lazy_keeps_stale_cache_after_external_mutation(tmp_path):
     )
 
     async def run() -> tuple[bytes, bytes]:
-        io1 = await ws.execute("cat /data/file.txt")
+        io1 = await ws.shell("cat /data/file.txt")
         first = await io1.materialize_stdout()
         time.sleep(1.1)
         (root / "file.txt").write_bytes(b"v2")
-        io2 = await ws.execute("cat /data/file.txt")
+        io2 = await ws.shell("cat /data/file.txt")
         second = await io2.materialize_stdout()
         return first, second
 
@@ -99,9 +99,9 @@ def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
         )
 
         async def run() -> tuple[bytes, bytes]:
-            io1 = await ws.execute("cat /s3/data.txt | wc -c")
+            io1 = await ws.shell("cat /s3/data.txt | wc -c")
             first = await io1.materialize_stdout()
-            io2 = await ws.execute("cat /s3/data.txt | wc -c")
+            io2 = await ws.shell("cat /s3/data.txt | wc -c")
             second = await io2.materialize_stdout()
             return first, second
 
@@ -124,7 +124,7 @@ def test_ram_falls_back_to_lazy_when_fingerprint_absent():
     )
 
     async def run() -> bytes:
-        io1 = await ws.execute("cat /data/file.txt")
+        io1 = await ws.shell("cat /data/file.txt")
         return await io1.materialize_stdout()
 
     data = asyncio.run(run())

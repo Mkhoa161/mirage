@@ -36,7 +36,7 @@ import type {
 // deny rule keeps it out of the secrets by name, so the same file is
 // "does not exist" for one role and "permission denied" for the other,
 // through the shell and through fs.read alike. The workspace names no
-// default profile, so its own doors (`ws.fs`, bare `ws.execute`) are
+// default profile, so its own doors (`ws.fs`, bare `ws.shell`) are
 // the host's view. A second `ws.session(id)` adopts the session as is;
 // naming a profile for a session that already exists is refused.
 
@@ -86,7 +86,7 @@ function codeOf(err: unknown): string {
 type PlainExecute = SessionExecuteOptions & { provision?: false };
 
 interface Doors {
-  execute(
+  shell(
     cmd: string,
     options?: PlainExecute,
   ): Promise<{
@@ -104,10 +104,10 @@ async function line(
   note: string,
   options: PlainExecute = {},
 ): Promise<void> {
-  const res = await handle.execute(cmd, options);
+  const res = await handle.shell(cmd, options);
   const out = res.stdout === null ? "" : dec.decode(res.stdout);
   const err = res.stderr === null ? "" : dec.decode(res.stderr);
-  show(role, "execute", cmd, shell(out, err, res.exitCode), note);
+  show(role, "shell", cmd, shell(out, err, res.exitCode), note);
 }
 
 async function read(
@@ -156,7 +156,7 @@ async function main(): Promise<void> {
       ),
     },
   );
-  for (const seed of SEED) await ws.execute(seed);
+  for (const seed of SEED) await ws.shell(seed);
 
   const reviewer: SessionHandle = await ws.session("reviewer", {
     profile: "reviewer",
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
   });
   const editor = await ws.session("editor", { profile: "editor" });
   const host: Doors = {
-    execute: (cmd, options) => ws.execute(cmd, options),
+    shell: (cmd, options) => ws.shell(cmd, options),
     fs: ws.fs,
   };
 

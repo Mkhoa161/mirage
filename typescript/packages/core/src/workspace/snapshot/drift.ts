@@ -69,7 +69,7 @@ export interface MountLookup {
  * `Workspace.load` records one entry per read whose snapshot manifest
  * carried a fingerprint but no stable revision (a pinned read needs no
  * check: the pin guarantees the bytes). The first `dispatch` or
- * `execute` drains them, so downstream code can rely on consistent
+ * `shell` drains them, so downstream code can rely on consistent
  * state. Mirrors the Python `DriftQueue` in `snapshot/drift.py`.
  */
 export class DriftQueue {

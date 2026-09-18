@@ -153,7 +153,7 @@ ws = Workspace({"/dbx/": vfs}, mode=MountMode.READ)
 ```
 
 This does not require FUSE. The agent can access the mounted workspace through
-Mirage's backend adapters or `Workspace.execute(...)`.
+Mirage's backend adapters or `Workspace.shell(...)`.
 
 ## Example
 
@@ -177,16 +177,16 @@ vfs = DatabricksVolumeVFS(DatabricksVolumeConfig(
 async def main() -> None:
     ws = Workspace({"/dbx/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /dbx/")
+    r = await ws.shell("ls /dbx/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /dbx/ -name '*.md'")
+    r = await ws.shell("find /dbx/ -name '*.md'")
     print(await r.stdout_str())
 
-    r = await ws.execute('head -n 20 "/dbx/q1/summary.md"')
+    r = await ws.shell('head -n 20 "/dbx/q1/summary.md"')
     print(await r.stdout_str())
 
-    r = await ws.execute('stat "/dbx/q1/summary.md"')
+    r = await ws.shell('stat "/dbx/q1/summary.md"')
     print(await r.stdout_str())
 
 

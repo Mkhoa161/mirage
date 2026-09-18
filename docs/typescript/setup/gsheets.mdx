@@ -24,7 +24,7 @@ const sheets = new GSheetsVFS({
 })
 
 const ws = new Workspace({ '/sheets': sheets }, { mode: MountMode.READ })
-await ws.execute('ls /sheets/owned/')
+await ws.shell('ls /sheets/owned/')
 ```
 
 ## Browser

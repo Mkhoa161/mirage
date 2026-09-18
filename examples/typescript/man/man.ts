@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   )
 
   const show = async (label: string, cmd: string): Promise<void> => {
-    const r = await ws.execute(cmd)
+    const r = await ws.shell(cmd)
     console.log(`\n========== ${label} (exit ${r.exitCode}) ==========`)
     if (r.stdoutText !== '') console.log(r.stdoutText)
     if (r.stderrText !== '') console.log(`[stderr] ${r.stderrText}`)

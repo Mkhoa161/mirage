@@ -25,7 +25,7 @@ def ws(lance_config) -> Workspace:
 
 
 async def _out(ws: Workspace, cmd: str) -> str:
-    result = await ws.execute(cmd)
+    result = await ws.shell(cmd)
     return await result.stdout_str()
 
 

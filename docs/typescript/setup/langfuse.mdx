@@ -24,7 +24,7 @@ const lf = new LangfuseVFS({
 })
 
 const ws = new Workspace({ '/lf': lf }, { mode: MountMode.READ })
-await ws.execute('ls /lf/traces/')
+await ws.shell('ls /lf/traces/')
 ```
 
 ## Browser

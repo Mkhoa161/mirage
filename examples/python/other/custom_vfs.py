@@ -184,7 +184,7 @@ class FeedVFS(GenericVFS):
 
 
 async def show(ws: Workspace, line: str, prompt: str = "$") -> None:
-    result = await ws.execute(line)
+    result = await ws.shell(line)
     out = await result.stdout_str()
     if result.exit_code != 0:
         out = f"{await result.stderr_str()}exit {result.exit_code}\n"

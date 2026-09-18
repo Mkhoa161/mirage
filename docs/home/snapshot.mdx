@@ -112,11 +112,11 @@ See the [CLI versioning reference](/home/cli#versioning) for `log`, `diff`, `bra
 
 ## Drift Detection
 
-On the first `dispatch` or `execute` after `load`, Mirage stats every fingerprinted path against the live source in parallel. If any path's live fingerprint differs from the recorded one, the workspace raises `ContentDriftError`:
+On the first `dispatch` or `shell` after `load`, Mirage stats every fingerprinted path against the live source in parallel. If any path's live fingerprint differs from the recorded one, the workspace raises `ContentDriftError`:
 
 ```python
 try:
-    await ws.execute("cat /s3/data.csv")
+    await ws.shell("cat /s3/data.csv")
 except ContentDriftError as exc:
     print(exc.path, exc.snapshot_fingerprint, exc.live_fingerprint)
 ```

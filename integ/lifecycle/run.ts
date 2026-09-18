@@ -235,7 +235,7 @@ async function action(
       return { type: row.type, size: row.size }
     }
     case 'exec': {
-      const result = await ws.execute(
+      const result = await ws.shell(
         step.command,
         step.session === undefined ? {} : { sessionId: step.session },
       )

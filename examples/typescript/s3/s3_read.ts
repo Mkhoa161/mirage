@@ -63,27 +63,27 @@ async function main(): Promise<void> {
 
   try {
     console.log('=== ls /s3/csv/by_year/ (first 10) ===')
-    const ls = await ws.execute('ls /s3/csv/by_year/ | head -n 10')
+    const ls = await ws.shell('ls /s3/csv/by_year/ | head -n 10')
     process.stdout.write(ls.stdoutText)
     console.log()
 
     console.log('=== stat /s3/readme.txt ===')
-    const stat = await ws.execute('stat /s3/readme.txt')
+    const stat = await ws.shell('stat /s3/readme.txt')
     process.stdout.write(stat.stdoutText)
     console.log()
 
     console.log('=== head -n 5 /s3/readme.txt ===')
-    const head = await ws.execute('head -n 5 /s3/readme.txt')
+    const head = await ws.shell('head -n 5 /s3/readme.txt')
     process.stdout.write(head.stdoutText)
     console.log()
 
     console.log("=== grep 'NOAA' /s3/readme.txt | head -n 3 ===")
-    const grep = await ws.execute("grep 'NOAA' /s3/readme.txt | head -n 3")
+    const grep = await ws.shell("grep 'NOAA' /s3/readme.txt | head -n 3")
     process.stdout.write(grep.stdoutText)
     console.log()
 
     console.log('=== wc -l /s3/readme.txt ===')
-    const wc = await ws.execute('wc -l /s3/readme.txt')
+    const wc = await ws.shell('wc -l /s3/readme.txt')
     process.stdout.write(wc.stdoutText)
     console.log()
   } finally {

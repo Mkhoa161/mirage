@@ -22,10 +22,10 @@ ws = Workspace(
 )
 
 print("=== curl (returns the raw page body) ===")
-result = asyncio.run(ws.execute("curl https://example.com"))
+result = asyncio.run(ws.shell("curl https://example.com"))
 print(result.stdout)
 
 print("\n=== curl a documentation page ===")
 result = asyncio.run(
-    ws.execute("curl https://docs.python.org/3/library/json.html"))
+    ws.shell("curl https://docs.python.org/3/library/json.html"))
 print(result.stdout)

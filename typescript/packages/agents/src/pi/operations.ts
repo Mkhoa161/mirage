@@ -123,8 +123,8 @@ export function mirageOperations(
       try {
         result =
           signal === undefined
-            ? await ws.execute(command, { cwd })
-            : await ws.execute(command, { cwd, signal })
+            ? await ws.shell(command, { cwd })
+            : await ws.shell(command, { cwd, signal })
       } catch (error) {
         if (options.signal?.aborted === true) {
           throw new Error('aborted')

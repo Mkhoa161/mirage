@@ -31,7 +31,7 @@ function configFromEnv(): HfRepoConfig {
 
 async function run(ws: Workspace, cmd: string): Promise<void> {
   console.log(`=== ${cmd} ===`)
-  process.stdout.write((await ws.execute(cmd)).stdoutText)
+  process.stdout.write((await ws.shell(cmd)).stdoutText)
   console.log()
 }
 
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on /ds/README.md ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "/ds/README.md" && chown 500:dev "/ds/README.md" && touch -t 202601021530 "/ds/README.md"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

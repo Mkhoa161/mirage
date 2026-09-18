@@ -24,7 +24,7 @@ const docs = new GDocsVFS({
 })
 
 const ws = new Workspace({ '/docs': docs }, { mode: MountMode.WRITE })
-await ws.execute('cat /docs/owned/MyDoc.gdoc.json')
+await ws.shell('cat /docs/owned/MyDoc.gdoc.json')
 ```
 
 ## Browser

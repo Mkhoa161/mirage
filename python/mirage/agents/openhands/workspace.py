@@ -46,7 +46,7 @@ async def _execute_with_timeout(
     command: str,
     timeout: float,
 ) -> Any:
-    return await asyncio.wait_for(ws.execute(command), timeout=timeout)
+    return await asyncio.wait_for(ws.shell(command), timeout=timeout)
 
 
 class _AsyncBridge:
@@ -240,7 +240,7 @@ class MirageWorkspace(LocalWorkspace):
 
     def _ensure_parent(self, parent: str) -> None:
         result = self._bridge.run(
-            self._ws.execute(f"mkdir -p {shlex.quote(parent)}"))
+            self._ws.shell(f"mkdir -p {shlex.quote(parent)}"))
         exit_code = int(getattr(result, "exit_code", 0) or 0)
         if exit_code != 0:
             stderr = self._coerce_text(getattr(result, "stderr", b""))

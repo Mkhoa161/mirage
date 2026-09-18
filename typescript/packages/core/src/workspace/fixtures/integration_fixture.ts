@@ -60,17 +60,17 @@ export async function makeIntegrationWS(
 }
 
 export async function run(ws: Workspace, cmd: string): Promise<string> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return DEC.decode(io.stdout)
 }
 
 export async function runExit(ws: Workspace, cmd: string): Promise<number> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return io.exitCode
 }
 
 export async function runResult(ws: Workspace, cmd: string): Promise<[number, string, string]> {
-  const io = await ws.execute(cmd)
+  const io = await ws.shell(cmd)
   return [io.exitCode, DEC.decode(io.stdout), DEC.decode(await materialize(io.stderr))]
 }
 

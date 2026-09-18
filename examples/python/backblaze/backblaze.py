@@ -41,14 +41,14 @@ def ops_summary() -> str:
 async def main():
     print(f"=== Backblaze B2 at {config.resolved_endpoint_url()} ===")
 
-    r = await ws.execute("ls /b2/")
+    r = await ws.shell("ls /b2/")
     print("ls /b2/:\n" + await r.stdout_str())
 
-    r = await ws.execute("find /b2/ -name '*.json' | head -n 5")
+    r = await ws.shell("find /b2/ -name '*.json' | head -n 5")
     print("find *.json:\n" + await r.stdout_str())
 
-    r = await ws.execute("grep -m 1 mirage /b2/data/example.jsonl",
-                         provision=True)
+    r = await ws.shell("grep -m 1 mirage /b2/data/example.jsonl",
+                       provision=True)
     print(f"plan grep -m 1: network_read={r.network_read} "
           f"precision={r.precision}")
 
@@ -58,7 +58,7 @@ async def main():
     # workspace namespace (durable, snapshot-captured) and merge into
     # dispatch-level stat.
     print("=== metadata overlay on /b2/data/example.jsonl ===")
-    meta_res = await ws.execute(
+    meta_res = await ws.shell(
         'chmod 640 "/b2/data/example.jsonl"'
         ' && chown 500:dev "/b2/data/example.jsonl"'
         ' && touch -t 202601021530 "/b2/data/example.jsonl"')

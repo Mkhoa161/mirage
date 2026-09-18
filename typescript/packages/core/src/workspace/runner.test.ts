@@ -40,7 +40,7 @@ describe('WorkspaceRunner', () => {
     const runner = new WorkspaceRunner(makeWs())
     try {
       expect(runner.ws).toBeDefined()
-      const r = await runner.call(runner.ws.execute('echo hello'))
+      const r = await runner.call(runner.ws.shell('echo hello'))
       expect(r.exitCode).toBe(0)
       const text = new TextDecoder().decode(r.stdout).trim()
       expect(text).toBe('hello')

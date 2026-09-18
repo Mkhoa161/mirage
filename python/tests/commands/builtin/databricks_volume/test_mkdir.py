@@ -41,7 +41,7 @@ def read_ws(dbx_files: FakeFiles) -> Workspace:
 
 @pytest.mark.asyncio
 async def test_mkdir_creates_directory(write_ws, dbx_files):
-    io = await write_ws.execute("mkdir /dbx/newdir")
+    io = await write_ws.shell("mkdir /dbx/newdir")
 
     assert io.exit_code == 0
     assert f"{ROOT}/newdir" in dbx_files.directory_metadata
@@ -49,14 +49,14 @@ async def test_mkdir_creates_directory(write_ws, dbx_files):
 
 @pytest.mark.asyncio
 async def test_mkdir_parent_missing_fails(write_ws):
-    io = await write_ws.execute("mkdir /dbx/a/b")
+    io = await write_ws.shell("mkdir /dbx/a/b")
 
     assert io.exit_code != 0
 
 
 @pytest.mark.asyncio
 async def test_mkdir_parents_creates_chain(write_ws, dbx_files):
-    io = await write_ws.execute("mkdir -p /dbx/a/b/c")
+    io = await write_ws.shell("mkdir -p /dbx/a/b/c")
 
     assert io.exit_code == 0
     assert f"{ROOT}/a/b/c" in dbx_files.directory_metadata
@@ -64,7 +64,7 @@ async def test_mkdir_parents_creates_chain(write_ws, dbx_files):
 
 @pytest.mark.asyncio
 async def test_mkdir_writes_are_mount_relative(write_ws):
-    io = await write_ws.execute("mkdir /dbx/newdir")
+    io = await write_ws.shell("mkdir /dbx/newdir")
 
     assert io.exit_code == 0
     for key in io.writes:
@@ -74,7 +74,7 @@ async def test_mkdir_writes_are_mount_relative(write_ws):
 
 @pytest.mark.asyncio
 async def test_mkdir_read_only_mount_rejected(read_ws, dbx_files):
-    io = await read_ws.execute("mkdir /dbx/newdir")
+    io = await read_ws.shell("mkdir /dbx/newdir")
 
     assert io.exit_code != 0
     assert b"read-only" in io.stderr

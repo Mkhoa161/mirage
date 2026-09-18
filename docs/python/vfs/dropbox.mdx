@@ -127,10 +127,10 @@ vfs = DropboxVFS(config)
 async def main() -> None:
     ws = Workspace({"/dropbox": vfs}, mode=MountMode.WRITE)
 
-    r = await ws.execute("ls /dropbox/")
+    r = await ws.shell("ls /dropbox/")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep -rl report /dropbox/docs/")
+    r = await ws.shell("grep -rl report /dropbox/docs/")
     print(await r.stdout_str())
 
     await ws.close()

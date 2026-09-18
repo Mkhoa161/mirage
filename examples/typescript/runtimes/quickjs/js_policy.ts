@@ -34,11 +34,11 @@ async function main(): Promise<void> {
     { mode: MountMode.EXEC, runtimes: ['quickjs', 'workspace'], routePolicy: JS_POLICY },
   )
   try {
-    const ok = await ws.execute('echo hello > /data/notes.txt')
+    const ok = await ws.shell('echo hello > /data/notes.txt')
     console.log('write /data ->', ok.exitCode)
-    const served = await ws.execute('node -e "console.log(6 * 7)"')
+    const served = await ws.shell('node -e "console.log(6 * 7)"')
     console.log('node -e ->', served.stdoutText.trim())
-    const denied = await ws.execute('cat /prod/secret.txt')
+    const denied = await ws.shell('cat /prod/secret.txt')
     console.log('touch /prod ->', denied.exitCode, denied.stderrText.trim())
   } finally {
     await ws.close()

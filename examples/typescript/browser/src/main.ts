@@ -46,7 +46,7 @@ function line(s: string, cls?: string): void {
 
 async function run(ws: Workspace, cmd: string): Promise<void> {
   line(`$ ${cmd}`, 'prompt')
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   const out = res.stdoutText.replace(/\s+$/, '')
   if (out !== '') line(out)
   const err = res.stderrText.replace(/\s+$/, '')
@@ -123,13 +123,13 @@ async function demoTrello(ws: Workspace): Promise<void> {
   line('')
   line('━━━ Trello (/trello/) — direct browser → api.trello.com ━━━', 'prompt')
   await run(ws, 'ls /trello/')
-  const wsRes = await ws.execute('ls /trello/workspaces/ | head -n 1')
+  const wsRes = await ws.shell('ls /trello/workspaces/ | head -n 1')
   const ws0 = wsRes.stdoutText.trim()
   if (ws0 === '') return
   const wsBase = `/trello/workspaces/${ws0}`
   await run(ws, `cat ${wsBase}/workspace.json`)
   await run(ws, `tree -L 3 ${wsBase}`)
-  const bRes = await ws.execute(`ls ${wsBase}/boards/ | head -n 1`)
+  const bRes = await ws.shell(`ls ${wsBase}/boards/ | head -n 1`)
   const b0 = bRes.stdoutText.trim()
   if (b0 === '') return
   const boardBase = `${wsBase}/boards/${b0}`
@@ -146,13 +146,13 @@ async function demoLinear(ws: Workspace): Promise<void> {
   line('')
   line('━━━ Linear (/linear/) — direct browser → api.linear.app/graphql ━━━', 'prompt')
   await run(ws, 'ls /linear/')
-  const tRes = await ws.execute('ls /linear/teams/ | head -n 1')
+  const tRes = await ws.shell('ls /linear/teams/ | head -n 1')
   const t0 = tRes.stdoutText.trim()
   if (t0 === '') return
   const teamBase = `/linear/teams/${t0}`
   await run(ws, `cat ${teamBase}/team.json`)
   await run(ws, `tree -L 2 ${teamBase}`)
-  const iRes = await ws.execute(`ls ${teamBase}/issues/ | head -n 1`)
+  const iRes = await ws.shell(`ls ${teamBase}/issues/ | head -n 1`)
   const i0 = iRes.stdoutText.trim()
   if (i0 === '') return
   await run(ws, `cat ${teamBase}/issues/${i0}/issue.json`)
@@ -165,7 +165,7 @@ async function demoLangfuse(ws: Workspace): Promise<void> {
   line('━━━ Langfuse (/langfuse/) — direct browser → cloud.langfuse.com ━━━', 'prompt')
   await run(ws, 'ls /langfuse/')
   await run(ws, 'ls /langfuse/datasets/')
-  const dRes = await ws.execute('ls /langfuse/datasets/ | head -n 1')
+  const dRes = await ws.shell('ls /langfuse/datasets/ | head -n 1')
   const d0 = dRes.stdoutText.trim()
   if (d0 === '') return
   const dPath = `/langfuse/datasets/${d0}`
@@ -173,7 +173,7 @@ async function demoLangfuse(ws: Workspace): Promise<void> {
   await run(ws, `wc -l ${dPath}/items.jsonl`)
   await run(ws, `head -n 2 ${dPath}/items.jsonl`)
   await run(ws, 'ls /langfuse/prompts/')
-  const pRes = await ws.execute('ls /langfuse/prompts/ | head -n 1')
+  const pRes = await ws.shell('ls /langfuse/prompts/ | head -n 1')
   const p0 = pRes.stdoutText.trim()
   if (p0 !== '') await run(ws, `tree /langfuse/prompts/${p0}`)
 }
@@ -190,7 +190,7 @@ async function demoGitHub(ws: Workspace): Promise<void> {
   await run(ws, 'ls /github/')
   await run(ws, 'tree -L 1 /github/')
   for (const name of ['README.md', 'package.json', 'pyproject.toml']) {
-    const res = await ws.execute(`head -n 8 /github/${name}`)
+    const res = await ws.shell(`head -n 8 /github/${name}`)
     if (res.exitCode === 0 && res.stdoutText.trim() !== '') {
       line(`$ head -n 8 /github/${name}`, 'prompt')
       line(res.stdoutText.replace(/\s+$/, ''))
@@ -210,7 +210,7 @@ async function demoGdocs(ws: Workspace): Promise<void> {
   line('')
   line('━━━ Google Docs (/gdocs/) — direct browser → docs.googleapis.com ━━━', 'prompt')
   await run(ws, 'ls /gdocs/')
-  const ownedRes = await ws.execute('ls /gdocs/owned/ | head -n 1')
+  const ownedRes = await ws.shell('ls /gdocs/owned/ | head -n 1')
   const first = ownedRes.stdoutText.trim().split('\n')[0]
   if (first === undefined || first === '') return
   const path = `/gdocs/owned/${first.split('/').pop() ?? first}`
@@ -223,7 +223,7 @@ async function demoGsheets(ws: Workspace): Promise<void> {
   line('')
   line('━━━ Google Sheets (/gsheets/) — direct browser → sheets.googleapis.com ━━━', 'prompt')
   await run(ws, 'ls /gsheets/')
-  const ownedRes = await ws.execute('ls /gsheets/owned/ | head -n 1')
+  const ownedRes = await ws.shell('ls /gsheets/owned/ | head -n 1')
   const first = ownedRes.stdoutText.trim().split('\n')[0]
   if (first === undefined || first === '') return
   const path = `/gsheets/owned/${first.split('/').pop() ?? first}`
@@ -235,7 +235,7 @@ async function demoGslides(ws: Workspace): Promise<void> {
   line('')
   line('━━━ Google Slides (/gslides/) — direct browser → slides.googleapis.com ━━━', 'prompt')
   await run(ws, 'ls /gslides/')
-  const ownedRes = await ws.execute('ls /gslides/owned/ | head -n 1')
+  const ownedRes = await ws.shell('ls /gslides/owned/ | head -n 1')
   const first = ownedRes.stdoutText.trim().split('\n')[0]
   if (first === undefined || first === '') return
   const path = `/gslides/owned/${first.split('/').pop() ?? first}`
@@ -252,7 +252,7 @@ async function demoGdrive(ws: Workspace): Promise<void> {
 }
 
 /**
- * Cloud-backend demo via real shell commands. `ws.execute('ls /s3/…')` now
+ * Cloud-backend demo via real shell commands. `ws.shell('ls /s3/…')` now
  * flows through core's S3_COMMANDS, which internally branches on
  * `config.presignedUrlProvider` and dispatches each AWS SDK command to a
  * presigned URL fetch — mirroring Python's `async_session(config)` seam.
@@ -260,7 +260,7 @@ async function demoGdrive(ws: Workspace): Promise<void> {
 async function demoCloud(ws: Workspace, backend: BackendName): Promise<void> {
   const mount = `/${backend}/`
   line('')
-  line(`━━━ ${backend.toUpperCase()} (${mount}) — ws.execute shell ━━━`, 'prompt')
+  line(`━━━ ${backend.toUpperCase()} (${mount}) — ws.shell shell ━━━`, 'prompt')
   const stamp = String(Date.now())
   const writeKey = `${mount}browser-demo/${stamp}.txt`
   await run(ws, `echo 'hello from browser ${backend}' > ${writeKey}`)

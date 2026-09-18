@@ -30,7 +30,7 @@ afterEach(() => {
 describe('@struktoai/mirage-browser Workspace', () => {
   it('lazy-decodes inlined WASM and runs `echo hi` end-to-end', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-    const res = await ws.execute('echo hi')
+    const res = await ws.shell('echo hi')
     expect(res.exitCode).toBe(0)
     expect(new TextDecoder().decode(res.stdout)).toBe('hi\n')
     await ws.close()
@@ -38,8 +38,8 @@ describe('@struktoai/mirage-browser Workspace', () => {
 
   it('reuses the cached parser across executes', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-    const r1 = await ws.execute('echo one')
-    const r2 = await ws.execute('echo two')
+    const r1 = await ws.shell('echo one')
+    const r2 = await ws.shell('echo two')
     expect(new TextDecoder().decode(r1.stdout)).toBe('one\n')
     expect(new TextDecoder().decode(r2.stdout)).toBe('two\n')
     await ws.close()
@@ -91,8 +91,8 @@ describe('@struktoai/mirage-browser Workspace', () => {
         },
       },
     )
-    await ws.execute('echo a')
-    await ws.execute('echo b')
+    await ws.shell('echo a')
+    await ws.shell('echo b')
     expect(calls).toBe(1)
     await ws.close()
   })
@@ -101,15 +101,15 @@ describe('@struktoai/mirage-browser Workspace', () => {
 it('handles binary grep through the browser workspace', async () => {
   const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
   try {
-    await ws.execute("printf 'needle\\000tail\\n' > /data/report.pdf")
-    const normal = await ws.execute('grep needle /data/report.pdf')
+    await ws.shell("printf 'needle\\000tail\\n' > /data/report.pdf")
+    const normal = await ws.shell('grep needle /data/report.pdf')
     expect(normal.exitCode).toBe(0)
     expect(normal.stdout.length).toBe(0)
     expect(new TextDecoder().decode(normal.stderr)).toContain('binary file matches')
-    const skipped = await ws.execute('grep -I needle /data/report.pdf')
+    const skipped = await ws.shell('grep -I needle /data/report.pdf')
     expect(skipped.exitCode).toBe(1)
     expect(skipped.stdout.length).toBe(0)
-    const text = await ws.execute('grep -a needle /data/report.pdf')
+    const text = await ws.shell('grep -a needle /data/report.pdf')
     expect(text.stdout).toEqual(new TextEncoder().encode('needle\0tail\n'))
   } finally {
     await ws.close()

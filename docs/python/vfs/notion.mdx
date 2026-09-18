@@ -206,23 +206,23 @@ async def main():
     ws = Workspace({"/notion": vfs}, mode=MountMode.WRITE)
 
     # List top-level pages
-    r = await ws.execute("ls /notion/pages/")
+    r = await ws.shell("ls /notion/pages/")
     print(await r.stdout_str())
 
     # List shared databases, then a database's data sources, then its rows
-    r = await ws.execute("ls /notion/databases/")
+    r = await ws.shell("ls /notion/databases/")
     print(await r.stdout_str())
-    r = await ws.execute("tree -L 3 /notion/databases/")
+    r = await ws.shell("tree -L 3 /notion/databases/")
     print(await r.stdout_str())
 
     # Read a page
-    r = await ws.execute(
+    r = await ws.shell(
         'cat "/notion/pages/Project_Roadmap__a1b2c3d4/page.json"'
     )
     print(await r.stdout_str())
 
     # Read one row's cells
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".properties.Priority.number" '
         '"/notion/databases/Tasks__4a3b21915e77'
         '/Tasks__d5000000-2222-3333-4444-555566667777'
@@ -231,25 +231,25 @@ async def main():
     print(await r.stdout_str())
 
     # Search across all pages
-    r = await ws.execute('grep "deadline" /notion/pages/')
+    r = await ws.shell('grep "deadline" /notion/pages/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 2 /notion/")
+    r = await ws.shell("tree -L 2 /notion/")
     print(await r.stdout_str())
 
     # Search pages with the Notion search API
-    r = await ws.execute('ntn api v1/search -d \'{"query":"Roadmap"}\'')
+    r = await ws.shell('ntn api v1/search -d \'{"query":"Roadmap"}\'')
     print(await r.stdout_str())
 
     # Create a new page from Markdown
-    r = await ws.execute(
+    r = await ws.shell(
         "ntn pages create --content '# New Page' --parent page:a1b2c3d4"
     )
     print(await r.stdout_str())
 
     # Replace an existing page's body
-    r = await ws.execute(
+    r = await ws.shell(
         "ntn pages edit a1b2c3d4 --content '# Replaced body'")
     print(await r.stdout_str())
 

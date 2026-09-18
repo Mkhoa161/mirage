@@ -33,7 +33,7 @@ repo = GitHubVFS(
 ws = Workspace({"/repo": repo})
 ws.register_cli("gh", GH, GhConfig(token=token, repo="acme/tools"))
 
-await ws.execute("gh repo view")
+await ws.shell("gh repo view")
 ```
 
 In YAML the same install rides the `clis:` section; see the

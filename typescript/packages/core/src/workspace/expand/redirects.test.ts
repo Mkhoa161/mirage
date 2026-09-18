@@ -180,8 +180,8 @@ describe('quoted redirect targets', () => {
   it('appends to a single-quoted target', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute("printf 'one\\n' > '/data/APP'")
-      await ws.execute("printf 'two\\n' >> '/data/APP'")
+      await ws.shell("printf 'one\\n' > '/data/APP'")
+      await ws.shell("printf 'two\\n' >> '/data/APP'")
       expect(await run(ws, 'cat /data/APP')).toBe('one\ntwo\n')
     } finally {
       await ws.close()
@@ -213,7 +213,7 @@ describe('quoted redirect targets', () => {
   it('routes both streams to a single-quoted target', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute("{ echo out; echo err >&2; } &> '/data/BOTH'")
+      await ws.shell("{ echo out; echo err >&2; } &> '/data/BOTH'")
       expect(await run(ws, 'cat /data/BOTH')).toBe('out\nerr\n')
     } finally {
       await ws.close()
@@ -228,7 +228,7 @@ describe('quoted redirect targets', () => {
     // still differs between the hosts and from GNU.
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute("printf 'first\\n' > '/data/A1'")
+      await ws.shell("printf 'first\\n' > '/data/A1'")
       const [exit, out] = await runResult(ws, "cat < '/data/A2'")
       expect(exit).not.toBe(0)
       expect(out).not.toContain('first')
@@ -240,7 +240,7 @@ describe('quoted redirect targets', () => {
   it('handles a single-quoted target containing a space', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute("printf 'S\\n' > '/data/sp ace.txt'")
+      await ws.shell("printf 'S\\n' > '/data/sp ace.txt'")
       expect(await run(ws, "cat '/data/sp ace.txt'")).toBe('S\n')
     } finally {
       await ws.close()
@@ -252,7 +252,7 @@ describe('quoted redirect targets', () => {
     // body (a bare newline) instead of the text.
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute("cat <<< 'hi' > /data/HS")
+      await ws.shell("cat <<< 'hi' > /data/HS")
       expect(await run(ws, 'cat /data/HS')).toBe('hi\n')
     } finally {
       await ws.close()
@@ -268,7 +268,7 @@ describe('later unbraced var in a redirect target', () => {
   it('writes the fully expanded path', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute('c=aa; id=1; mkdir -p /api/$c')
+      await ws.shell('c=aa; id=1; mkdir -p /api/$c')
       expect(await runExit(ws, 'echo hi > /api/$c/$id.json')).toBe(0)
       expect(await run(ws, 'cat /api/aa/1.json')).toBe('hi\n')
       expect(await run(ws, 'find /api -type f')).toBe('/api/aa/1.json\n')
@@ -280,8 +280,8 @@ describe('later unbraced var in a redirect target', () => {
   it('delivers a heredoc into the fully expanded path', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute('c=aa; id=1; mkdir -p /api/$c')
-      await ws.execute('cat > /api/$c/$id.json <<EOF\nbody\nEOF')
+      await ws.shell('c=aa; id=1; mkdir -p /api/$c')
+      await ws.shell('cat > /api/$c/$id.json <<EOF\nbody\nEOF')
       expect(await run(ws, 'cat /api/aa/1.json')).toBe('body\n')
     } finally {
       await ws.close()
@@ -291,8 +291,8 @@ describe('later unbraced var in a redirect target', () => {
   it('expands three suffixless vars in one target', async () => {
     const { ws } = await makeIntegrationWS()
     try {
-      await ws.execute('a=x; b=y; c=z; mkdir -p /w/$a/$b')
-      await ws.execute('echo hi > /w/$a/$b/$c')
+      await ws.shell('a=x; b=y; c=z; mkdir -p /w/$a/$b')
+      await ws.shell('echo hi > /w/$a/$b/$c')
       expect(await run(ws, 'cat /w/x/y/z')).toBe('hi\n')
     } finally {
       await ws.close()

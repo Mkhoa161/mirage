@@ -24,7 +24,7 @@ const slides = new GSlidesVFS({
 })
 
 const ws = new Workspace({ '/slides': slides }, { mode: MountMode.READ })
-await ws.execute('ls /slides/owned/')
+await ws.shell('ls /slides/owned/')
 ```
 
 ## Browser

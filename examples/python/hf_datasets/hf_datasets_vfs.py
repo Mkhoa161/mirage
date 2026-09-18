@@ -53,9 +53,9 @@ async def main():
                 print(f"  {e}")
 
         print("\n--- shell view ---")
-        r = await ws.execute("ls /ds/")
+        r = await ws.shell("ls /ds/")
         print(f"  ls /ds/: {(await r.stdout_str()).strip()}")
-        r = await ws.execute("find /ds/ -name '*.parquet' | head -n 3")
+        r = await ws.shell("find /ds/ -name '*.parquet' | head -n 3")
         print(f"  parquet shards (first 3): {(await r.stdout_str()).strip()}")
 
 

@@ -90,15 +90,15 @@ export async function exercise(config: { sandboxId: string; apiKey: string }): P
       },
     )
     try {
-      const result = await workspace.execute(
+      const result = await workspace.shell(
         `printf 'from browser' | python3 -c 'import os,sys; print(os.environ["BROWSER_CHECK"] + ":" + sys.stdin.read().upper())'`,
         { cwd: '/home/user', env: { BROWSER_CHECK: 'native' } },
       )
       check(result.exitCode === 0, result.stderrText)
       check(result.stdoutText === 'native:FROM BROWSER\n', 'VFS to E2B pipeline failed')
-      const local = await workspace.execute('echo still-vfs')
+      const local = await workspace.shell('echo still-vfs')
       check(local.exitCode === 0 && local.stdoutText === 'still-vfs\n', 'VFS fallback failed')
-      const node = await workspace.execute(`node -e 'console.log(process.cwd())'`, {
+      const node = await workspace.shell(`node -e 'console.log(process.cwd())'`, {
         cwd: '/home/user',
       })
       check(

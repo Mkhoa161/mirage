@@ -27,9 +27,9 @@ KEY_PREFIX = "mirage:fs:"
 async def _seed():
     vfs = RedisVFS(url=REDIS_URL, key_prefix=KEY_PREFIX)
     ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
-    await ws.execute('echo "hello world" | tee /data/hello.txt')
-    await ws.execute("mkdir /data/sub")
-    await ws.execute('echo "nested" | tee /data/sub/nested.txt')
+    await ws.shell('echo "hello world" | tee /data/hello.txt')
+    await ws.shell("mkdir /data/sub")
+    await ws.shell('echo "nested" | tee /data/sub/nested.txt')
 
 
 asyncio.run(_seed())

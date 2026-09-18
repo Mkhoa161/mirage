@@ -72,7 +72,7 @@ export class MirageToolOperations {
   }
 
   async execute(command: string): Promise<ToolResult> {
-    return ioResult(await this.ws.execute(command))
+    return ioResult(await this.ws.shell(command))
   }
 
   async read(path: string, offset = 0, limit = 2000): Promise<ToolResult> {
@@ -138,11 +138,11 @@ export class MirageToolOperations {
   }
 
   async ls(path: string): Promise<ToolResult> {
-    return ioResult(await this.ws.execute(`ls ${shQuote(path)}`))
+    return ioResult(await this.ws.shell(`ls ${shQuote(path)}`))
   }
 
   async grep(pattern: string, path: string): Promise<ToolResult> {
-    const io = await this.ws.execute(`grep -rn ${shQuote(pattern)} ${shQuote(path)}`)
+    const io = await this.ws.shell(`grep -rn ${shQuote(pattern)} ${shQuote(path)}`)
     // grep exits 1 for "no match", which is a normal empty answer, and
     // >1 for a real failure (bad regex, unreadable path). Only the
     // second is a tool error; reporting the first as one would tell the

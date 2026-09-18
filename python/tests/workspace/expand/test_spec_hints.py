@@ -121,10 +121,10 @@ def test_duplicate_word_text_and_path_slots():
 @pytest.mark.asyncio
 async def test_du_max_depth_equals_at_root_mount():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.execute("mkdir -p /data/sub")
-    await ws.execute("tee /data/sub/n.txt > /dev/null", stdin=b"x\n")
+    await ws.shell("mkdir -p /data/sub")
+    await ws.shell("tee /data/sub/n.txt > /dev/null", stdin=b"x\n")
 
-    io = await ws.execute("du --max-depth=1 /data/sub")
+    io = await ws.shell("du --max-depth=1 /data/sub")
     out = (io.stdout or b"").decode()
     assert "--max-depth" not in out
     assert "/data/sub" in out

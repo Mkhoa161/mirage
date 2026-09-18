@@ -90,22 +90,22 @@ vfs = S3VFS(config)
 async def main() -> None:
     ws = Workspace({"/s3/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /s3/")
+    r = await ws.shell("ls /s3/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /s3/data/file.txt")
+    r = await ws.shell("cat /s3/data/file.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /s3/")
+    r = await ws.shell("tree /s3/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /s3/ -name '*.json'")
+    r = await ws.shell("find /s3/ -name '*.json'")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep example /s3/data/config.json")
+    r = await ws.shell("grep example /s3/data/config.json")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /s3/data/file.txt")
+    r = await ws.shell("stat /s3/data/file.txt")
     print(await r.stdout_str())
 
 

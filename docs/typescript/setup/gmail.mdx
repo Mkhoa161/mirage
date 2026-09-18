@@ -24,7 +24,7 @@ const gmail = new GmailVFS({
 })
 
 const ws = new Workspace({ '/mail': gmail }, { mode: MountMode.READ })
-await ws.execute('ls /mail/INBOX/')
+await ws.shell('ls /mail/INBOX/')
 ```
 
 ## Browser

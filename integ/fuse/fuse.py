@@ -107,8 +107,8 @@ def run_link_probe(result: dict[str, ProbeValue]) -> None:
     # Seeded before the mount goes live: creating a link through the
     # mountpoint would depend on libfuse's symlink argument order, which
     # is the adapter's business, not this probe's.
-    asyncio.run(ws.execute("ln -s f.txt /data/lk.pinned"))
-    asyncio.run(ws.execute("ln -s f.txt /data/lk.plain"))
+    asyncio.run(ws.shell("ln -s f.txt /data/lk.pinned"))
+    asyncio.run(ws.shell("ln -s f.txt /data/lk.plain"))
     mountpoint = tempfile.mkdtemp(prefix="mirage-fuse-link-")
     mount_background(ws.fs, mountpoint)
     try:
@@ -238,12 +238,12 @@ def run_session_probe(result: dict[str, ProbeValue]) -> None:
     # The shell door first, before the mount goes live, on the same
     # loop discipline the link probe keeps.
     hidden = asyncio.run(
-        ws.execute("cat /data/vault/secret.txt", session_id="agent"))
+        ws.shell("cat /data/vault/secret.txt", session_id="agent"))
     result["session_shell_hidden_exit"] = hidden.exit_code
-    listing = asyncio.run(ws.execute("ls /data", session_id="agent"))
+    listing = asyncio.run(ws.shell("ls /data", session_id="agent"))
     result["session_shell_listing"] = (listing.stdout or b"").decode().strip()
-    capped = asyncio.run(
-        ws.execute("echo x > /data/pub.txt", session_id="agent"))
+    capped = asyncio.run(ws.shell("echo x > /data/pub.txt",
+                                  session_id="agent"))
     result["session_shell_write_refused"] = capped.exit_code != 0
     result["session_host_reads_hidden"] = asyncio.run(
         ws.fs.read("/data/vault/secret.txt")).decode().strip()

@@ -53,11 +53,11 @@ describe('io key prefix convention', () => {
     ['cat /data/seed.txt | tee /data/piped.txt > /dev/null', null],
   ])('records mount-relative keys for %s', async (cmd, stdin) => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-    await ws.execute('tee /data/seed.txt > /dev/null', {
+    await ws.shell('tee /data/seed.txt > /dev/null', {
       stdin: new TextEncoder().encode('x\ny\n'),
     })
     const captured = captureIo(ws)
-    const result = await ws.execute(
+    const result = await ws.shell(
       cmd,
       stdin !== null ? { stdin: new TextEncoder().encode(stdin) } : undefined,
     )
@@ -69,10 +69,10 @@ describe('io key prefix convention', () => {
   it('2> records a mount-relative key even when the command fails', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const captured = captureIo(ws)
-    const result = await ws.execute('cat /data/missing.txt 2> /data/err.txt')
+    const result = await ws.shell('cat /data/missing.txt 2> /data/err.txt')
     expect(result.exitCode).not.toBe(0)
     assertSinglePrefix(captured)
-    const back = await ws.execute('cat /data/err.txt')
+    const back = await ws.shell('cat /data/err.txt')
     expect(back.exitCode).toBe(0)
     expect(new TextDecoder().decode(back.stdout)).toContain('missing.txt')
     await ws.close()
@@ -80,12 +80,12 @@ describe('io key prefix convention', () => {
 
   it('csplit -f with a mount path writes parts inside the mount', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
-    await ws.execute('tee /data/seed.txt > /dev/null', {
+    await ws.shell('tee /data/seed.txt > /dev/null', {
       stdin: new TextEncoder().encode('x\ny\n'),
     })
-    const result = await ws.execute('csplit -f /data/cs_ /data/seed.txt 2')
+    const result = await ws.shell('csplit -f /data/cs_ /data/seed.txt 2')
     expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0)
-    const part = await ws.execute('cat /data/cs_00')
+    const part = await ws.shell('cat /data/cs_00')
     expect(part.exitCode).toBe(0)
     expect(new TextDecoder().decode(part.stdout)).toBe('x\n')
     await ws.close()

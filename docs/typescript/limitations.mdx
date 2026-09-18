@@ -51,10 +51,10 @@ readFileSync('/data/x.txt')  // hits the real filesystem, throws ENOENT
     ```
   </Tab>
   <Tab title="Use Mirage's VFS API directly">
-    The most reliable approach: call `ws.execute()` or the VFS methods. No magic, no monkey-patching, works from ESM or CJS.
+    The most reliable approach: call `ws.shell()` or the VFS methods. No magic, no monkey-patching, works from ESM or CJS.
 
     ```ts
-    const res = await ws.execute('cat /data/x.txt')
+    const res = await ws.shell('cat /data/x.txt')
     const bytes = res.stdout
     ```
   </Tab>
@@ -121,7 +121,7 @@ The browser SDK runs entirely in-page: no kernel, no subprocesses, no Node `fs`.
 
 ### 1. No FUSE
 
-Browsers can't mount filesystems. The browser `Workspace` takes plain mounts: there is no `Mount` backend option and no `addFuseMount`. Use `ws.execute(...)` (virtual executor) and `ws.fs.readFile/writeFile` instead. Every builtin (`cat`, `grep`, `jq`, `awk`, `python3`, etc.) is reimplemented in-process, so most agent code paths work unchanged from Node.
+Browsers can't mount filesystems. The browser `Workspace` takes plain mounts: there is no `Mount` backend option and no `addFuseMount`. Use `ws.shell(...)` (virtual executor) and `ws.fs.readFile/writeFile` instead. Every builtin (`cat`, `grep`, `jq`, `awk`, `python3`, etc.) is reimplemented in-process, so most agent code paths work unchanged from Node.
 
 ### 2. OPFS quotas and persistence
 
@@ -170,7 +170,7 @@ Those HTTP drivers still need a browser-reachable endpoint with the correct CORS
 | FUSE `cat`/`readFile` of API-backed size-unknown files | Node | ✅ works (stats 0 until opened, like `/proc`) |
 | `tar`/`rsync` of an unopened size-unknown file | Node | ❌ copies 0 bytes (stat-only tools; same in Python) — read the file first or use `cp` |
 | Synchronous access to your own mount from the mounting process | Node | ❌ deadlocks; use async APIs or a child process |
-| `ws.execute(...)` virtual builtins | Browser | ✅ works |
+| `ws.shell(...)` virtual builtins | Browser | ✅ works |
 | `Workspace` with a fuse `Mount` | Browser | ❌ not supported; the browser `Workspace` takes plain mounts |
 | OPFS reads/writes within quota | Browser | ✅ works |
 | OPFS over quota | Browser | ❌ `QuotaExceededError`; check `navigator.storage.estimate()` |
@@ -184,7 +184,7 @@ The Node limitations are runtime-level, not Mirage design decisions. Python's eq
 
 ## CPU-bound builtin processing
 
-Line readers, cache drains, and `wc` processing periodically yield to the event loop. Large RAM files and warm cache reads therefore allow host timers and I/O callbacks to run. `Workspace.execute(command, { signal })` forwards caller cancellation to builtin input processing; Python provides the corresponding `cancel=asyncio.Event()` path and task cancellation.
+Line readers, cache drains, and `wc` processing periodically yield to the event loop. Large RAM files and warm cache reads therefore allow host timers and I/O callbacks to run. `Workspace.shell(command, { signal })` forwards caller cancellation to builtin input processing; Python provides the corresponding `cancel=asyncio.Event()` path and task cancellation.
 
 File-cache fingerprints use incremental MD5: the Node package installs native hashing with 64 KiB updates, while browser/core uses JavaScript block batches. Both yield on a time budget; Python uses incremental `hashlib` updates.
 

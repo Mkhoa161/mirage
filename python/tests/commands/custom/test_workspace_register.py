@@ -41,7 +41,7 @@ def test_workspace_accepts_commands_param():
     _register(ws, my_echo)
 
     async def _run():
-        result = await ws.execute("myecho hello world")
+        result = await ws.shell("myecho hello world")
         return (await result.stdout_str()).strip()
 
     assert asyncio.run(_run()) == "hello world"
@@ -60,7 +60,7 @@ def test_workspace_register_method():
     _register(ws, my_echo)
 
     async def _run():
-        result = await ws.execute("myecho hello")
+        result = await ws.shell("myecho hello")
         return (await result.stdout_str()).strip()
 
     assert asyncio.run(_run()) == "hello"
@@ -80,7 +80,7 @@ def test_workspace_user_command_overrides_builtin():
     ws._cwd = "/tmp/"
 
     async def _run():
-        result = await ws.execute("stat /tmp/file.txt")
+        result = await ws.shell("stat /tmp/file.txt")
         return (await result.stdout_str()).strip()
 
     assert asyncio.run(_run()) == "custom-stat"

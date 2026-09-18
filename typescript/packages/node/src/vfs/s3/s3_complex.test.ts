@@ -115,7 +115,7 @@ describe('S3 complex scenarios (mocked)', () => {
   })
 
   it('find -maxdepth 2 -type f lists expected S3 files', async () => {
-    const io = await ws.execute('find /s3 -maxdepth 2 -type f | sort')
+    const io = await ws.shell('find /s3 -maxdepth 2 -type f | sort')
     const lines = decode(io.stdout).trim().split('\n')
     expect(lines).toEqual([
       '/s3/data/example.json',
@@ -125,7 +125,7 @@ describe('S3 complex scenarios (mocked)', () => {
   })
 
   it('file report through redirect chain', async () => {
-    const io = await ws.execute(
+    const io = await ws.shell(
       "echo '=== /s3/data/example.json ===' > /tmp/file_report.txt && " +
         'file /s3/data/example.json >> /tmp/file_report.txt && ' +
         'echo >> /tmp/file_report.txt && ' +
@@ -152,7 +152,7 @@ describe('S3 complex scenarios (mocked)', () => {
   })
 
   it('wc report through redirect chain', async () => {
-    const io = await ws.execute(
+    const io = await ws.shell(
       "echo -n '/s3/data/example.json ' > /tmp/size_report.txt && " +
         'wc -c /s3/data/example.json >> /tmp/size_report.txt && ' +
         'echo >> /tmp/size_report.txt && ' +
@@ -173,7 +173,7 @@ describe('S3 complex scenarios (mocked)', () => {
   })
 
   it('grep then jq with and/or list', async () => {
-    const io = await ws.execute(
+    const io = await ws.shell(
       'grep -l mirage /s3/data/example.jsonl ' +
         '> /tmp/search_report.txt && ' +
         'echo >> /tmp/search_report.txt && ' +

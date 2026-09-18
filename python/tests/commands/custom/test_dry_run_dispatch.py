@@ -58,7 +58,7 @@ async def test_dry_run_dispatch_with_provision_fn():
     )
     ws._registry.mount_for("/tmp/").register(rc)
 
-    result = await ws.execute("cat /tmp/a.txt", provision=True)
+    result = await ws.shell("cat /tmp/a.txt", provision=True)
     assert isinstance(result, ProvisionResult)
     assert result.network_read_low == 11
     assert result.read_ops == 1
@@ -83,7 +83,7 @@ def test_dry_run_dispatch_without_provision_fn():
     )
     ws._registry.mount_for("/tmp/").register(rc)
 
-    result = _run(ws.execute("mycmd /tmp/a.txt", provision=True))
+    result = _run(ws.shell("mycmd /tmp/a.txt", provision=True))
     assert isinstance(result, ProvisionResult)
     assert result.precision == Precision.UNKNOWN
 
@@ -93,7 +93,7 @@ def test_dry_run_command_not_found():
         {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
-    result = _run(ws.execute("nonexistent /tmp/a.txt", provision=True))
+    result = _run(ws.shell("nonexistent /tmp/a.txt", provision=True))
     assert isinstance(result, ProvisionResult)
     assert result.precision == Precision.UNKNOWN
 
@@ -138,5 +138,5 @@ async def test_dry_run_filetype_specific():
                           fn=cat_avro,
                           provision_fn=cat_avro_dry))
 
-    result = await ws.execute("cat /tmp/data.avro", provision=True)
+    result = await ws.shell("cat /tmp/data.avro", provision=True)
     assert result.network_read_low == 10

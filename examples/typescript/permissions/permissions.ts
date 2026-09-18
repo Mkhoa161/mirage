@@ -194,12 +194,12 @@ async function main(): Promise<void> {
 
   // A session that names no role is unrestricted, which is the host's
   // own view and the only place this seeding could run.
-  for (const line of SEED) await ws.execute(line)
+  for (const line of SEED) await ws.shell(line)
 
   for (const role of Object.keys(PROFILES)) ws.createSession(role, { profile: role })
 
   for (const [role, line, note] of LINES) {
-    const res = await ws.execute(line, { sessionId: role })
+    const res = await ws.shell(line, { sessionId: role })
     const out = res.stdout === null ? '' : dec.decode(res.stdout)
     const err = res.stderr === null ? '' : dec.decode(res.stderr)
     console.log(`${pad(role, 10)} ${pad(line, 42)} ${answer(out, err, res.exitCode)}`)

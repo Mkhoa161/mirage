@@ -32,7 +32,7 @@ function buildConfig(): GSlidesConfig {
 
 async function run(ws: Workspace, cmd: string): Promise<{ out: string; err: string; code: number }> {
   try {
-    const r = await ws.execute(cmd)
+    const r = await ws.shell(cmd)
     return { out: r.stdoutText, err: r.stderrText, code: r.exitCode }
   } catch (err) {
     return { out: '', err: err instanceof Error ? err.message : String(err), code: 1 }
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on /gslides/owned/${first} ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "/gslides/owned/${first}" && chown 500:dev "/gslides/owned/${first}" && touch -t 202601021530 "/gslides/owned/${first}"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

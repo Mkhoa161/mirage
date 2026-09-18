@@ -55,7 +55,7 @@ async def test_missing_reference_is_gnu_error():
 
 
 async def _out(ws: Workspace, line: str) -> tuple[str, str, int]:
-    r = await ws.execute(line, session_id="s")
+    r = await ws.shell(line, session_id="s")
     return await r.stdout_str(), await r.stderr_str(), r.exit_code
 
 
@@ -63,7 +63,7 @@ async def _out(ws: Workspace, line: str) -> tuple[str, str, int]:
 async def test_newer_and_newermt_in_the_shell():
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
-    await ws.execute(
+    await ws.shell(
         "mkdir -p /w/d/sub; printf a > /w/d/a.txt; printf bb > /w/d/b.txt; "
         "printf x > /w/d/sub/c.txt; touch -d '2020-01-01 00:00:00' "
         "/w/d/a.txt; cd /w",
@@ -96,7 +96,7 @@ async def test_a_link_reference_is_read_by_the_link_policy():
     # -P and a refusal when followed.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
-    await ws.execute(
+    await ws.shell(
         "mkdir -p /w/d; printf t > /w/target; printf c > /w/d/cand; cd /w; "
         "touch -d '2020-01-01 00:00:00' target; "
         "touch -d '2021-01-01 00:00:00' d/cand; "
@@ -123,7 +123,7 @@ async def test_repeated_newer_references_intersect():
     # than both references.
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
-    await ws.execute(
+    await ws.shell(
         "printf o > /w/old; printf c > /w/cand; printf n > /w/new; cd /w; "
         "touch -d '2020-01-01 00:00:00' old; "
         "touch -d '2021-01-01 00:00:00' cand; "

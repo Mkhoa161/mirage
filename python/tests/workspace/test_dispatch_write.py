@@ -35,8 +35,8 @@ def test_redirect_write_overrides_cached_read():
     ws, vfs = _make_ws()
 
     async def run() -> None:
-        await ws.execute("cat /data/file.txt")
-        await ws.execute('echo -n "NEW" > /data/file.txt')
+        await ws.shell("cat /data/file.txt")
+        await ws.shell('echo -n "NEW" > /data/file.txt')
 
     asyncio.run(run())
     assert vfs._store.files["/file.txt"] == b"NEW", (
@@ -48,8 +48,8 @@ def test_redirect_append_after_cached_read():
     ws, vfs = _make_ws()
 
     async def run() -> None:
-        await ws.execute("cat /data/file.txt")
-        await ws.execute('echo -n "MORE" >> /data/file.txt')
+        await ws.shell("cat /data/file.txt")
+        await ws.shell('echo -n "MORE" >> /data/file.txt')
 
     asyncio.run(run())
     assert vfs._store.files["/file.txt"] == b"OLDMORE", (
@@ -73,13 +73,13 @@ def test_dispatch_rename_addresses_dst_against_the_source_mount():
     )
 
     async def run() -> None:
-        await ws.execute("echo moved-bytes > /a/x.txt")
+        await ws.shell("echo moved-bytes > /a/x.txt")
         with pytest.raises(FileNotFoundError):
             await ws.dispatch("rename",
                               PathSpec.from_str_path("/a/x.txt"),
                               dst=PathSpec.from_str_path("/b/y.txt"))
-        assert (await ws.execute("cat /a/x.txt")).stdout == b"moved-bytes\n"
-        assert (await ws.execute("cat /a/b/y.txt")).exit_code != 0
-        assert (await ws.execute("cat /b/y.txt")).exit_code != 0
+        assert (await ws.shell("cat /a/x.txt")).stdout == b"moved-bytes\n"
+        assert (await ws.shell("cat /a/b/y.txt")).exit_code != 0
+        assert (await ws.shell("cat /b/y.txt")).exit_code != 0
 
     asyncio.run(run())

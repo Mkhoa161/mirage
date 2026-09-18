@@ -136,8 +136,8 @@ async def test_unregister_then_register_works(ws):
 
     m.register_fns([custom_cat])
     assert "cat" in m.commands()
-    await ws.execute('echo hello | tee /data/hello.txt')
-    result = await ws.execute("cat /data/hello.txt")
+    await ws.shell('echo hello | tee /data/hello.txt')
+    result = await ws.shell("cat /data/hello.txt")
     assert result.exit_code == 0
     assert b"custom cat output" in result.stdout
 

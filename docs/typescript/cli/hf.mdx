@@ -61,7 +61,7 @@ const ws = new Workspace({
 })
 ws.registerCli('hf', HF, { token })
 
-await ws.execute('hf auth whoami')
+await ws.shell('hf auth whoami')
 ```
 
 `/m` keeps the default read mode, which is all a Hub mount can offer. `/work`

@@ -113,7 +113,7 @@ async def test_version_commands_report_the_quickjs_engine():
     ws = Workspace({"/": RAMVFS()}, runtimes=[runtime, "workspace"])
     try:
         for line in ["js --version", "node --version", "js -v", "node -v"]:
-            io = await ws.execute(line)
+            io = await ws.shell(line)
             assert io.exit_code == 0
             assert await materialize(io.stdout
                                      ) == (b"JavaScript (quickjs-ng " +
@@ -190,11 +190,11 @@ async def test_quickjs_node_command_end_to_end():
         b"export const k = 6;\n"
         b"console.log(Number(scriptArgs[0]) * k)\n")
     ws = Workspace({"/ram": ram}, mode=MountMode.EXEC, runtimes=["quickjs"])
-    r = await ws.execute("node -e \"console.log('js says', 6 * 7)\"")
+    r = await ws.shell("node -e \"console.log('js says', 6 * 7)\"")
     assert r.exit_code == 0
     assert (await r.stdout_str()) == "js says 42\n"
     # A mounted .mjs resolves through the workspace and runs in module mode.
-    r2 = await ws.execute("node /ram/calc.mjs 7")
+    r2 = await ws.shell("node /ram/calc.mjs 7")
     assert r2.exit_code == 0
     assert (await r2.stdout_str()) == "42\n"
     await ws.close()
@@ -233,19 +233,19 @@ async def test_quickjs_mounts_read_write_readdir():
     ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=["quickjs"])
-    await ws.execute("echo hello-mount > /data/in.txt")
-    r = await ws.execute("js -e \"const f = std.open('/data/in.txt', 'r');"
-                         "console.log(f.readAsString().trim());"
-                         "f.close();"
-                         "const w = std.open('/data/out.txt', 'w');"
-                         "w.puts('from-qjs\\n');"
-                         "w.close();"
-                         "const [names] = os.readdir('/data');"
-                         "console.log(names.filter((n) => !n.startsWith('.'))"
-                         ".sort().join(','))\"")
+    await ws.shell("echo hello-mount > /data/in.txt")
+    r = await ws.shell("js -e \"const f = std.open('/data/in.txt', 'r');"
+                       "console.log(f.readAsString().trim());"
+                       "f.close();"
+                       "const w = std.open('/data/out.txt', 'w');"
+                       "w.puts('from-qjs\\n');"
+                       "w.close();"
+                       "const [names] = os.readdir('/data');"
+                       "console.log(names.filter((n) => !n.startsWith('.'))"
+                       ".sort().join(','))\"")
     assert r.exit_code == 0
     assert (await r.stdout_str()) == "hello-mount\nin.txt,out.txt\n"
-    r = await ws.execute("cat /data/out.txt")
+    r = await ws.shell("cat /data/out.txt")
     assert (await r.stdout_str()) == "from-qjs\n"
     await ws.close()
 
@@ -270,13 +270,13 @@ async def test_quickjs_session_narrowing_reaches_the_guest():
                    mode=MountMode.EXEC,
                    runtimes=["quickjs"])
     ws.create_session("narrow", {"/data": "read"})
-    r = await ws.execute(
+    r = await ws.shell(
         "js -e \"try { std.open('/data/g.txt', 'w').puts('x');"
         " console.log('WROTE') } catch (e) { console.log('denied') }\"",
         session_id="narrow")
     assert r.exit_code == 0
     assert (await r.stdout_str()) == "denied\n"
-    r = await ws.execute("cat /data/g.txt", session_id="narrow")
+    r = await ws.shell("cat /data/g.txt", session_id="narrow")
     assert r.exit_code == 1
     await ws.close()
 

@@ -324,7 +324,7 @@ describe('E2B cancellation and validation', () => {
       },
     )
     try {
-      const run = workspace.execute('native-sleep', { signal: abort.signal })
+      const run = workspace.shell('native-sleep', { signal: abort.signal })
       if (kind === 'caller') {
         const rejected = expect(run).rejects.toMatchObject({ name: 'AbortError' })
         await vi.waitFor(() => {

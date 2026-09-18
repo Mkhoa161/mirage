@@ -25,6 +25,7 @@ from mirage.policy.profile import ProfilePolicy, SessionProfile
 from mirage.runtime.types import ScriptSource
 from mirage.types import Limit, MountMode, OnExceed, Refusal
 from mirage.vfs.ram import RAMVFS
+from mirage.workspace import SessionHandle
 
 from mirage.policy.profile import (  # isort: skip
     CommandsBlock, PathsBlock)
@@ -59,16 +60,16 @@ async def test_workspace_guards_refuse_before_backend_io():
                               paths=("/data/prod/*", )), ))),
     )
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"keep\n")
-        result = await ws.execute("rm /data/prod/x.txt")
+        result = await ws.shell("rm /data/prod/x.txt")
         assert result.exit_code == 1
         assert result.stderr == (b"rm: /data/prod/x.txt: "
                                  b"production data is protected\n")
-        out = await ws.execute("cat /data/prod/x.txt")
+        out = await ws.shell("cat /data/prod/x.txt")
         assert out.stdout == b"keep\n"
-        ok = await ws.execute("rm -f /data/prod/../other.txt 2>/dev/null; "
-                              "echo done")
+        ok = await ws.shell("rm -f /data/prod/../other.txt 2>/dev/null; "
+                            "echo done")
         assert b"done" in ok.stdout
     finally:
         await ws.close()
@@ -81,7 +82,7 @@ async def test_policies_add_wins_over_runtime_placement():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(NoInterpreters())
-        result = await ws.execute("python3 -c 'print(1)'")
+        result = await ws.shell("python3 -c 'print(1)'")
         # A whole-command refusal is bash's "found but may not run".
         assert result.exit_code == 126
         assert result.stderr == b"python3: Permission denied\n"
@@ -99,7 +100,7 @@ async def test_policies_constructor_param_accepts_instances():
                    mode=MountMode.WRITE,
                    policies=[NoInterpreters()])
     try:
-        result = await ws.execute("python3 -c 'print(1)'")
+        result = await ws.shell("python3 -c 'print(1)'")
         assert result.exit_code == 126
         assert result.stderr == b"python3: Permission denied\n"
     finally:
@@ -122,16 +123,16 @@ async def test_guards_cover_shell_builtins_and_namespace_routes():
         ))),
     )
     try:
-        result = await ws.execute("source /data/setup.sh")
+        result = await ws.shell("source /data/setup.sh")
         assert result.exit_code == 126
         assert result.stderr == b"source: Permission denied\n"
         assert result.refusal == Refusal(kind="deny",
                                          reason="disabled",
                                          policy="PermissionsPolicy")
-        result = await ws.execute("touch /data/prod/x")
+        result = await ws.shell("touch /data/prod/x")
         assert result.exit_code == 1
         assert b"frozen" in result.stderr
-        ok = await ws.execute("touch /data/dev-x && echo done")
+        ok = await ws.shell("touch /data/dev-x && echo done")
         assert b"done" in ok.stdout
     finally:
         await ws.close()
@@ -150,11 +151,11 @@ async def test_guards_cover_path_valued_flags():
                               paths=("/data/prod/*", )), ))),
     )
     try:
-        await ws.execute("mkdir -p /data/prod")
-        result = await ws.execute("shuf -e a -o /data/prod/out")
+        await ws.shell("mkdir -p /data/prod")
+        result = await ws.shell("shuf -e a -o /data/prod/out")
         assert result.exit_code == 1
         assert b"prod is protected" in result.stderr
-        listing = await ws.execute("ls /data/prod")
+        listing = await ws.shell("ls /data/prod")
         assert b"out" not in listing.stdout
     finally:
         await ws.close()
@@ -180,7 +181,7 @@ async def test_path_guards_hold_at_the_programmatic_door():
                 "/data/prod/*", )), ))),
     )
     try:
-        await ws.execute("mkdir -p /data/other")
+        await ws.shell("mkdir -p /data/other")
         await ws.fs.write("/data/other/ok.txt", b"fine\n")
         with pytest.raises(PermissionError) as excinfo:
             await ws.fs.write("/data/prod/x.txt", b"nope\n")
@@ -206,10 +207,10 @@ async def test_touch_on_an_existing_file_is_a_write_at_the_op_door():
     # write classification must cover that op too.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"keep\n")
         ws.policies.add(ReadOnlyProd())
-        result = await ws.execute("touch /data/prod/x.txt")
+        result = await ws.shell("touch /data/prod/x.txt")
         assert result.exit_code != 0
         assert b"Permission denied" in result.stderr
     finally:
@@ -222,7 +223,7 @@ async def test_post_ops_deny_still_records_the_completed_write():
     # already mutated, so observation and caches must reflect the op.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         ws.policies.add(SuppressProdWrites())
         with pytest.raises(PermissionError):
             await ws.fs.write("/data/prod/x.txt", b"data\n")
@@ -247,7 +248,7 @@ async def test_post_ops_deny_records_the_bytes_a_denied_read_moved():
     # zero and network_bytes under-reports traffic that happened.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
         ws.fs.records.clear()
         ws.policies.add(SuppressProdReads())
@@ -280,7 +281,7 @@ async def test_a_capped_read_records_what_the_backend_moved():
     # network_bytes by whatever the cap removed.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
         ws.fs.records.clear()
         ws.policies.add(CapProdReads())
@@ -298,7 +299,7 @@ async def test_a_denied_warm_read_is_not_counted_as_network_traffic():
     # traffic that never happened.
     ws = Workspace({"/data/": CachingRAM()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
         await ws.apply_io(
             IOResult(reads={"/data/prod/x.txt": b"0123456789"},
@@ -335,7 +336,7 @@ async def test_a_hard_capped_read_records_what_the_backend_moved():
     # rather than just truncating it.
     ws = Workspace({"/data/": ColdRemote()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
         ws.fs.records.clear()
         ws.policies.add(HardCapProdReads())
@@ -354,7 +355,7 @@ async def test_a_hard_capped_warm_read_is_not_network_traffic():
     # it stands for never happened.
     ws = Workspace({"/data/": CachingRAM()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
         await ws.apply_io(
             IOResult(reads={"/data/prod/x.txt": b"0123456789"},
@@ -388,7 +389,7 @@ async def test_a_committed_write_is_recorded_when_bookkeeping_fails():
     # the record does not depend on what kind of exception followed.
     ws = Workspace({"/data/": ColdRemote()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         ws.fs.records.clear()
         ws.policies.add(BrokenPostOps())
         with pytest.raises(PolicyError):
@@ -408,11 +409,11 @@ async def test_pre_ops_policy_holds_on_the_dispatcher_door():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(ReadOnlyProd())
-        await ws.execute("mkdir -p /data/prod")
-        result = await ws.execute("touch /data/prod/x")
+        await ws.shell("mkdir -p /data/prod")
+        result = await ws.shell("touch /data/prod/x")
         assert result.exit_code != 0
         assert b"Permission denied" in result.stderr
-        ok = await ws.execute("touch /data/free && echo done")
+        ok = await ws.shell("touch /data/free && echo done")
         assert b"done" in ok.stdout
     finally:
         await ws.close()
@@ -440,7 +441,7 @@ async def test_pre_ops_binds_op_doors_and_command_tier_io():
     # the boundary is loud.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/secret.txt", b"sealed\n")
         await ws.fs.write("/data/prod/keep.txt", b"keep\n")
         ws.policies.add(SealedPaths())
@@ -449,19 +450,19 @@ async def test_pre_ops_binds_op_doors_and_command_tier_io():
         # redirect write.
         with pytest.raises(PermissionError):
             await ws.fs.read("/data/secret.txt")
-        redirect = await ws.execute("echo hi > /data/prod/new.txt")
+        redirect = await ws.shell("echo hi > /data/prod/new.txt")
         assert redirect.exit_code != 0
 
         # The command tier consults the same hooks: the read refuses
         # in the command's own voice and the deletion never lands.
-        leak = await ws.execute("cat /data/secret.txt")
+        leak = await ws.shell("cat /data/secret.txt")
         assert leak.exit_code != 0
         assert leak.stdout in (None, b"")
         assert b"cat: /data/secret.txt: Permission denied" in leak.stderr
-        removed = await ws.execute("rm /data/prod/keep.txt")
+        removed = await ws.shell("rm /data/prod/keep.txt")
         assert removed.exit_code != 0
         assert b"cannot remove" in removed.stderr
-        kept = await ws.execute("cat /data/prod/keep.txt")
+        kept = await ws.shell("cat /data/prod/keep.txt")
         assert kept.exit_code == 0
         assert kept.stdout == b"keep\n"
     finally:
@@ -480,17 +481,17 @@ async def test_pre_ops_holds_walks_and_lazy_readers():
         await ws.fs.write("/data/ok.txt", b"has sealed word\n")
         ws.policies.add(SealedPaths())
 
-        walked = await ws.execute("grep -r sealed /data")
+        walked = await ws.shell("grep -r sealed /data")
         assert walked.exit_code == 2
         assert b"/data/ok.txt:has sealed word" in walked.stdout
         assert b"sealed\n" not in walked.stdout.replace(
             b"has sealed word\n", b"")
         assert b"grep: /data/secret.txt: Permission denied" in walked.stderr
 
-        lazy = await ws.execute("head -c 3 /data/secret.txt")
+        lazy = await ws.shell("head -c 3 /data/secret.txt")
         assert lazy.exit_code != 0
         assert b"head: /data/secret.txt: Permission denied" in lazy.stderr
-        fine = await ws.execute("head -c 3 /data/ok.txt")
+        fine = await ws.shell("head -c 3 /data/ok.txt")
         assert fine.exit_code == 0
         assert fine.stdout == b"has"
     finally:
@@ -506,10 +507,10 @@ async def test_pre_ops_denied_entries_still_list_and_stat():
     try:
         await ws.fs.write("/data/secret.txt", b"sealed\n")
         ws.policies.add(SealedPaths())
-        listing = await ws.execute("ls -l /data")
+        listing = await ws.shell("ls -l /data")
         assert listing.exit_code == 0
         assert b"secret.txt" in listing.stdout
-        found = await ws.execute("find /data -type f")
+        found = await ws.shell("find /data -type f")
         assert found.exit_code == 0
         assert b"/data/secret.txt" in found.stdout
     finally:
@@ -534,12 +535,12 @@ async def test_shell_rm_r_admits_through_pre_ops():
     # native rm_r here), and a write-deny refuses it outright.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod/sub")
+        await ws.shell("mkdir -p /data/prod/sub")
         await ws.fs.write("/data/prod/a.txt", b"a\n")
         await ws.fs.write("/data/prod/sub/b.txt", b"b\n")
         rec = OpRecorder()
         ws.policies.add(rec)
-        removed = await ws.execute("rm -r /data/prod")
+        removed = await ws.shell("rm -r /data/prod")
         assert removed.exit_code == 0
         writes = [a for a in rec.asked if a[2]]
         assert ("rm_r", "/data/prod", True) in writes
@@ -548,12 +549,12 @@ async def test_shell_rm_r_admits_through_pre_ops():
 
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/prod")
+        await ws.shell("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/a.txt", b"a\n")
         ws.policies.add(SealedPaths())
-        refused = await ws.execute("rm -r /data/prod")
+        refused = await ws.shell("rm -r /data/prod")
         assert refused.exit_code != 0
-        survives = await ws.execute("cat /data/prod/a.txt")
+        survives = await ws.shell("cat /data/prod/a.txt")
         assert survives.exit_code == 0
     finally:
         await ws.close()
@@ -566,13 +567,13 @@ async def test_find_delete_admits_each_deletion_exactly_once():
     # budget policy sees one deletion once, not twice.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /data/d")
+        await ws.shell("mkdir -p /data/d")
         await ws.fs.write("/data/d/x.txt", b"x\n")
         rec = OpRecorder()
         ws.policies.add(rec)
-        removed = await ws.execute("find /data/d -name x.txt -delete")
+        removed = await ws.shell("find /data/d -name x.txt -delete")
         assert removed.exit_code == 0
-        gone = await ws.execute("cat /data/d/x.txt")
+        gone = await ws.shell("cat /data/d/x.txt")
         assert gone.exit_code != 0
         writes = [a for a in rec.asked if a[1] == "/data/d/x.txt" and a[2]]
         assert writes == [("unlink", "/data/d/x.txt", True)]
@@ -591,8 +592,8 @@ async def test_pre_ops_sees_the_session_on_the_command_tier():
         await ws.fs.write("/data/ok.txt", b"fine\n")
         rec = SessionRecorder()
         ws.policies.add(rec)
-        assert (await ws.execute("cat /data/ok.txt")).exit_code == 0
-        assert (await ws.execute("head -c 3 /data/ok.txt")).exit_code == 0
+        assert (await ws.shell("cat /data/ok.txt")).exit_code == 0
+        assert (await ws.shell("head -c 3 /data/ok.txt")).exit_code == 0
         reads = [(op, sid) for op, path, sid in rec.asked
                  if path == "/data/ok.txt"]
         assert reads
@@ -633,7 +634,7 @@ async def test_user_limit_policy_caps_line_output():
     try:
         ws.policies.add(CapLines())
         await ws.fs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
-        r = await ws.execute("cat /data/big.txt")
+        r = await ws.shell("cat /data/big.txt")
         assert (await r.stdout_str()).count("\n") == 2
         assert "output truncated" in (await r.stderr_str())
     finally:
@@ -690,7 +691,7 @@ async def test_two_limit_policies_merge_to_the_tightest_end_to_end():
         ws.policies.add(CapLines())
         ws.policies.add(SuppressNothingCapThree())
         await ws.fs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
-        r = await ws.execute("cat /data/big.txt")
+        r = await ws.shell("cat /data/big.txt")
         # CapLines says 2, SuppressNothingCapThree says 3: tightest wins.
         assert (await r.stdout_str()).count("\n") == 2
     finally:
@@ -711,11 +712,11 @@ async def test_error_mode_limit_fails_the_line():
     try:
         ws.policies.add(CapBytesHard())
         await ws.fs.write("/data/f.txt", b"hello world\n")
-        r = await ws.execute("cat /data/f.txt")
+        r = await ws.shell("cat /data/f.txt")
         assert r.exit_code == 1
         assert r.stdout is None or await r.stdout_str() == ""
         assert "output truncated" in (await r.stderr_str())
-        ok = await ws.execute("echo ok")
+        ok = await ws.shell("echo ok")
         assert ok.exit_code == 0  # within the bound: no refusal
         assert await ok.stdout_str() == "ok\n"
     finally:
@@ -742,7 +743,7 @@ async def test_a_raising_post_execute_policy_fails_the_line_closed():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(Boom())
-        r = await ws.execute("echo hi")
+        r = await ws.shell("echo hi")
         assert r.exit_code == 126
         err = await r.stderr_str()
         assert err == "echo: Permission denied\n"
@@ -763,12 +764,12 @@ async def test_post_execute_sees_the_rightmost_producer():
         spy = SeeProducer()
         ws.policies.add(spy)
         await ws.fs.write("/data/f.txt", b"a\nb\n")
-        await ws.execute("cat /data/f.txt | wc -l")
-        await ws.execute("cat /data/f.txt ; head -n 1 /data/f.txt")
-        await ws.execute("false || cat /data/f.txt")
+        await ws.shell("cat /data/f.txt | wc -l")
+        await ws.shell("cat /data/f.txt ; head -n 1 /data/f.txt")
+        await ws.shell("false || cat /data/f.txt")
         # Builtins carry provenance too: a policy keyed on echo sees it.
-        await ws.execute("echo hi")
-        await ws.execute("cat /data/f.txt ; echo done")
+        await ws.shell("echo hi")
+        await ws.shell("cat /data/f.txt ; echo done")
         assert spy.seen == ["wc", "head", "cat", "echo", "echo"]
     finally:
         await ws.close()
@@ -783,19 +784,20 @@ async def test_profile_hides_bind_every_session_including_the_default():
                                                             "*.key"))))
     # The facade runs as the default session too, so the seed goes
     # through a session with an explicit empty profile, the host's door.
-    host = ws.fs.for_session(ws.create_session("host", profile={}).session_id)
+    host = SessionHandle(ws,
+                         ws.create_session("host", profile={}).session_id).fs
     try:
-        await ws.execute("mkdir -p /data/finance /data/pub")
+        await ws.shell("mkdir -p /data/finance /data/pub")
         await host.write("/data/pub/a.txt", b"a\n")
         await host.write("/data/pub/b.key", b"k\n")
         # The default session cannot see the bound hides ...
-        listing = await ws.execute("ls /data /data/pub")
+        listing = await ws.shell("ls /data /data/pub")
         assert b"finance" not in listing.stdout
         assert b"b.key" not in listing.stdout
         assert b"a.txt" in listing.stdout
         # ... and neither can one created later from the same profile.
         ws.create_session("late")
-        gone = await ws.execute("cat /data/pub/b.key", session_id="late")
+        gone = await ws.shell("cat /data/pub/b.key", session_id="late")
         assert gone.exit_code != 0
     finally:
         await ws.close()
@@ -826,15 +828,16 @@ async def test_a_mount_sections_hides_are_written_in_full():
                 }
             }
         })
-    host = ws.fs.for_session(ws.create_session("host", profile={}).session_id)
+    host = SessionHandle(ws,
+                         ws.create_session("host", profile={}).session_id).fs
     try:
-        await ws.execute("mkdir -p /repo/certs /other")
+        await ws.shell("mkdir -p /repo/certs /other")
         await host.write("/repo/.env", b"S=1\n")
         await host.write("/repo/certs/k.pem", b"pem\n")
         await host.write("/repo/README", b"r\n")
         await host.write("/other/.env", b"visible\n")
         await host.write("/other/x.pem", b"visible\n")
-        listing = await ws.execute("ls -a /repo /repo/certs /other")
+        listing = await ws.shell("ls -a /repo /repo/certs /other")
         out = listing.stdout.decode()
         # The section reaches only under its own root, so the same two
         # names outside the mount are untouched.
@@ -844,9 +847,9 @@ async def test_a_mount_sections_hides_are_written_in_full():
         assert "README" in out
         repo_part = out.split("/other:")[0]
         assert ".env" not in repo_part.replace("/repo/certs:", "")
-        hidden = await ws.execute("cat /repo/.env")
+        hidden = await ws.shell("cat /repo/.env")
         assert hidden.exit_code != 0
-        shown = await ws.execute("cat /other/.env")
+        shown = await ws.shell("cat /other/.env")
         assert shown.stdout == b"visible\n"
     finally:
         await ws.close()
@@ -860,7 +863,7 @@ async def test_a_bare_name_under_deny_refuses_with_the_default_reason():
                    mode=MountMode.WRITE,
                    profiles=_profile(commands=CommandsBlock(deny=("shred", ))))
     try:
-        result = await ws.execute("shred /data/x")
+        result = await ws.shell("shred /data/x")
         assert result.exit_code == 126
         assert result.stderr == b"shred: Permission denied\n"
     finally:
@@ -921,10 +924,10 @@ async def test_a_profile_script_judges_each_command():
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
-        await ws.execute("mkdir -p /data/sealed && echo k > /data/sealed/k")
+        await ws.shell("mkdir -p /data/sealed && echo k > /data/sealed/k")
         ws.create_session("s", profile="release")
-        assert (await ws.execute("echo hi", session_id="s")).exit_code == 0
-        denied = await ws.execute("cat /data/sealed/k", session_id="s")
+        assert (await ws.shell("echo hi", session_id="s")).exit_code == 0
+        denied = await ws.shell("cat /data/sealed/k", session_id="s")
         assert denied.exit_code == 126
         assert denied.stderr == b"cat: Permission denied\n"
     finally:
@@ -940,7 +943,7 @@ async def test_the_script_reads_resolved_paths_not_typed_words():
                    profiles=_scripted())
     try:
         ws.create_session("s", profile="release")
-        denied = await ws.execute("cd /data && cat sealed/k", session_id="s")
+        denied = await ws.shell("cd /data && cat sealed/k", session_id="s")
         assert denied.exit_code == 126
         assert denied.stderr == b"cat: Permission denied\n"
     finally:
@@ -955,9 +958,9 @@ async def test_a_script_only_profile_installs_everything():
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
-        await ws.execute("echo x > /data/x")
+        await ws.shell("echo x > /data/x")
         ws.create_session("s", profile="release")
-        assert (await ws.execute("rm /data/x", session_id="s")).exit_code == 0
+        assert (await ws.shell("rm /data/x", session_id="s")).exit_code == 0
     finally:
         await ws.close()
 
@@ -973,9 +976,9 @@ async def test_a_document_may_ride_beside_the_script():
                    profiles=profiles)
     try:
         ws.create_session("s", profile="release")
-        hidden = await ws.execute("rm /data/x", session_id="s")
+        hidden = await ws.shell("rm /data/x", session_id="s")
         assert hidden.exit_code == 127
-        denied = await ws.execute("cat /data/sealed/k", session_id="s")
+        denied = await ws.shell("cat /data/sealed/k", session_id="s")
         assert denied.exit_code == 126
         assert denied.stderr == b"cat: Permission denied\n"
     finally:
@@ -989,7 +992,7 @@ async def test_an_ask_it_computed_takes_the_approval_door():
                    profiles=_scripted())
     try:
         ws.create_session("s", profile="release")
-        held = await ws.execute("shred /data/x", session_id="s")
+        held = await ws.shell("shred /data/x", session_id="s")
         assert held.exit_code == 126
         assert held.stderr is not None
         assert held.stderr == b"shred: Permission denied\n"
@@ -1011,19 +1014,19 @@ async def test_a_profile_script_reads_what_the_line_names():
                    mode=MountMode.WRITE,
                    profiles=_scripted(READER))
     try:
-        await ws.execute("mkdir -p /data/in && "
-                         "printf 'subject: invoice\\n\\na payload\\n' "
-                         "> /data/in/mail.txt && "
-                         "echo plain > /data/in/note.txt")
+        await ws.shell("mkdir -p /data/in && "
+                       "printf 'subject: invoice\\n\\na payload\\n' "
+                       "> /data/in/mail.txt && "
+                       "echo plain > /data/in/note.txt")
         ws.create_session("s", profile="release")
-        held = await ws.execute("cat /data/in/mail.txt", session_id="s")
+        held = await ws.shell("cat /data/in/mail.txt", session_id="s")
         assert held.exit_code == 126
         assert held.refusal is not None
         assert (held.refusal.kind,
                 held.refusal.reason) == ("pending", "sign-off on payload")
-        plain = await ws.execute("cat /data/in/note.txt", session_id="s")
+        plain = await ws.shell("cat /data/in/note.txt", session_id="s")
         assert plain.exit_code == 0
-        assert (await ws.execute("ls /data/in", session_id="s")).exit_code == 0
+        assert (await ws.shell("ls /data/in", session_id="s")).exit_code == 0
     finally:
         await ws.close()
 
@@ -1034,9 +1037,9 @@ async def test_a_scripted_profile_leaves_other_sessions_alone():
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
-        await ws.execute("mkdir -p /data/sealed && echo k > /data/sealed/k")
+        await ws.shell("mkdir -p /data/sealed && echo k > /data/sealed/k")
         ws.create_session("s", profile="release")
-        read = await ws.execute("cat /data/sealed/k")
+        read = await ws.shell("cat /data/sealed/k")
         assert read.exit_code == 0
         assert read.stdout == b"k\n"
     finally:
@@ -1050,8 +1053,8 @@ async def test_a_scripted_default_profile_shapes_the_default_session():
                    profiles=_scripted(),
                    profile="release")
     try:
-        assert (await ws.execute("echo hi")).exit_code == 0
-        denied = await ws.execute("cat /data/sealed/k")
+        assert (await ws.shell("echo hi")).exit_code == 0
+        denied = await ws.shell("cat /data/sealed/k")
         assert denied.exit_code == 126
         assert denied.stderr == b"cat: Permission denied\n"
     finally:
@@ -1072,7 +1075,7 @@ async def test_a_profile_script_runs_in_a_world_with_no_evaluator():
                    profiles=_scripted())
     try:
         ws.create_session("s", profile="release")
-        denied = await ws.execute("cat /data/sealed/k", session_id="s")
+        denied = await ws.shell("cat /data/sealed/k", session_id="s")
         assert denied.exit_code == 126
         assert denied.stderr == b"cat: Permission denied\n"
     finally:
@@ -1090,12 +1093,12 @@ async def test_a_broken_script_fails_closed_per_command():
             source="def pre_command(ctx):\n    raise ValueError('boom')"))
     try:
         ws.create_session("s", profile="release")
-        refused = await ws.execute("echo hi", session_id="s")
+        refused = await ws.shell("echo hi", session_id="s")
         assert refused.exit_code == 126
         assert refused.stderr == b"echo: Permission denied\n"
         assert refused.refusal is not None
         assert "profile 'release' policy failed" in refused.refusal.reason
-        assert (await ws.execute("echo hi")).exit_code == 0
+        assert (await ws.shell("echo hi")).exit_code == 0
     finally:
         await ws.close()
 
@@ -1107,7 +1110,7 @@ async def test_an_engine_that_cannot_evaluate_fails_closed():
                    profiles=_scripted(runtime="local"))
     try:
         ws.create_session("s", profile="release")
-        refused = await ws.execute("echo hi", session_id="s")
+        refused = await ws.shell("echo hi", session_id="s")
         assert refused.exit_code == 126
         assert refused.stderr == b"echo: Permission denied\n"
         assert refused.refusal is not None
@@ -1154,7 +1157,7 @@ async def test_a_policy_defining_no_hook_fails_closed():
                    profiles=_scripted(source="None"))
     try:
         ws.create_session("s", profile="release")
-        refused = await ws.execute("echo hi", session_id="s")
+        refused = await ws.shell("echo hi", session_id="s")
         assert refused.exit_code == 126
         assert refused.refusal is not None
         assert refused.refusal.reason == (
@@ -1210,22 +1213,22 @@ async def test_a_profile_policy_judges_the_op_door():
                    mode=MountMode.WRITE,
                    profiles=_scripted(GATES))
     try:
-        await ws.execute("mkdir -p /data/frozen && echo keep > /data/frozen/k")
+        await ws.shell("mkdir -p /data/frozen && echo keep > /data/frozen/k")
         ws.create_session("s", profile="release")
         # No command hook, so a command is silence; a read is not a write.
-        assert (await ws.execute("echo hi", session_id="s")).exit_code == 0
-        read = await ws.execute("cat /data/frozen/k", session_id="s")
+        assert (await ws.shell("echo hi", session_id="s")).exit_code == 0
+        read = await ws.shell("cat /data/frozen/k", session_id="s")
         assert read.exit_code == 0
         assert read.stdout == b"keep\n"
-        refused = await ws.execute("echo x > /data/frozen/f", session_id="s")
+        refused = await ws.shell("echo x > /data/frozen/f", session_id="s")
         assert refused.exit_code == 1
         assert b"Permission denied" in refused.stderr
-        removed = await ws.execute("rm /data/frozen/k", session_id="s")
+        removed = await ws.shell("rm /data/frozen/k", session_id="s")
         assert removed.exit_code == 1
         assert b"Permission denied" in removed.stderr
-        assert (await ws.execute("cat /data/frozen/k")).stdout == b"keep\n"
+        assert (await ws.shell("cat /data/frozen/k")).stdout == b"keep\n"
         # Another session is not judged by it.
-        assert (await ws.execute("echo x > /data/frozen/f")).exit_code == 0
+        assert (await ws.shell("echo x > /data/frozen/f")).exit_code == 0
     finally:
         await ws.close()
 
@@ -1237,11 +1240,10 @@ async def test_a_profile_policy_judges_the_session_door():
                    profiles=_scripted(GATES))
     try:
         ws.create_session("s", profile="release")
-        refused = await ws.execute("export AWS_SECRET=x", session_id="s")
+        refused = await ws.shell("export AWS_SECRET=x", session_id="s")
         assert refused.exit_code == 1
         assert refused.stderr == b"credentials are set by the operator\n"
-        landed = await ws.execute("export SAFE=1 && echo $SAFE",
-                                  session_id="s")
+        landed = await ws.shell("export SAFE=1 && echo $SAFE", session_id="s")
         assert landed.exit_code == 0
         assert landed.stdout == b"1\n"
     finally:
@@ -1258,18 +1260,18 @@ async def test_a_policys_own_read_passes_the_door_its_op_hook_guards():
                    mode=MountMode.WRITE,
                    profiles=_scripted(READER_AND_GATE))
     try:
-        await ws.execute("mkdir -p /data/in && printf 'subject: invoice\\n\\n"
-                         "a payload\\n' > /data/in/mail.txt && "
-                         "echo plain > /data/in/note.txt")
+        await ws.shell("mkdir -p /data/in && printf 'subject: invoice\\n\\n"
+                       "a payload\\n' > /data/in/mail.txt && "
+                       "echo plain > /data/in/note.txt")
         ws.create_session("s", profile="release")
-        held = await ws.execute("cat /data/in/mail.txt", session_id="s")
+        held = await ws.shell("cat /data/in/mail.txt", session_id="s")
         assert held.exit_code == 126
         assert held.refusal is not None
         assert held.refusal.kind == "pending"
         assert held.refusal.reason == "sign-off on payload"
-        assert (await ws.execute("cat /data/in/note.txt",
-                                 session_id="s")).exit_code == 0
-        refused = await ws.execute("echo x > /data/frozen/f", session_id="s")
+        assert (await ws.shell("cat /data/in/note.txt",
+                               session_id="s")).exit_code == 0
+        refused = await ws.shell("echo x > /data/frozen/f", session_id="s")
         assert refused.exit_code == 1
         assert b"Permission denied" in refused.stderr
     finally:

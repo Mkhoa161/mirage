@@ -203,13 +203,13 @@ vfs = DifyVFS(config=config)
 async def main() -> None:
     ws = Workspace({"/knowledge/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /knowledge/")
+    r = await ws.shell("ls /knowledge/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /knowledge/ -type f | head -n 10")
+    r = await ws.shell("find /knowledge/ -type f | head -n 10")
     print(await r.stdout_str())
 
-    r = await ws.execute('search --method hybrid --top-k 5 "getting started" /knowledge/')
+    r = await ws.shell('search --method hybrid --top-k 5 "getting started" /knowledge/')
     print(await r.stdout_str())
 
 

@@ -37,7 +37,7 @@ const vfs = await DatabricksVolumeVFS.create(
   }),
 )
 const ws = new Workspace({ '/dbx/': vfs }, { mode: MountMode.READ })
-const res = await ws.execute('ls /dbx/')
+const res = await ws.shell('ls /dbx/')
 console.log(res.stdoutText)
 ```
 

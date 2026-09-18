@@ -26,7 +26,7 @@ from mirage.workspace.session.state import seed_var
 
 
 async def _cat(ws: Workspace, path: str) -> str:
-    result = await ws.execute(f"cat {path}")
+    result = await ws.shell(f"cat {path}")
     return result.stdout.decode()
 
 
@@ -35,11 +35,11 @@ def _ws() -> Workspace:
 
 
 async def _two_file_history(ws, store):
-    await ws.execute("echo one > /m/a.txt")
-    await ws.execute("echo keep > /m/b.txt")
+    await ws.shell("echo one > /m/a.txt")
+    await ws.shell("echo keep > /m/b.txt")
     v1 = await commit(store, ws, "main", "v1")
-    await ws.execute("echo two > /m/a.txt")
-    await ws.execute("echo edited > /m/b.txt")
+    await ws.shell("echo two > /m/a.txt")
+    await ws.shell("echo edited > /m/b.txt")
     return v1
 
 
@@ -48,11 +48,11 @@ async def test_restore_whole_world_restores_grants(tmp_path):
     ws = _ws()
     store = await VersionStore.open(LocalBackend(str(tmp_path)), "ws")
     session = ws.create_session("narrow", mounts={"/m": "write"})
-    await ws.execute("echo one > /m/a.txt")
+    await ws.shell("echo one > /m/a.txt")
     await ws.flush_sessions()
     v1 = await commit(store, ws, "main", "v1")
     session.mount_modes = {**session.mount_modes, "/m": MountMode.READ}
-    await ws.execute("echo two > /m/a.txt")
+    await ws.shell("echo two > /m/a.txt")
     await ws.flush_sessions()
 
     report = await restore(store, ws, v1)
@@ -84,10 +84,10 @@ async def test_restore_files_category_keeps_live_sessions(tmp_path):
     store = await VersionStore.open(LocalBackend(str(tmp_path)), "ws")
     session = ws.create_session("narrow", mounts={"/m": "read"})
     seed_var(session, "API_KEY", "@aws:prod-key")
-    await ws.execute("echo one > /m/a.txt")
+    await ws.shell("echo one > /m/a.txt")
     await ws.flush_sessions()
     v1 = await commit(store, ws, "main", "v1")
-    await ws.execute("echo two > /m/a.txt")
+    await ws.shell("echo two > /m/a.txt")
     seed_var(session, "API_KEY", "@aws:new-key")
     await ws.flush_sessions()
 
@@ -104,10 +104,10 @@ async def test_restore_sessions_category_keeps_live_files(tmp_path):
     store = await VersionStore.open(LocalBackend(str(tmp_path)), "ws")
     session = ws.create_session("narrow", mounts={"/m": "read"})
     seed_var(session, "API_KEY", "@aws:prod-key")
-    await ws.execute("echo one > /m/a.txt")
+    await ws.shell("echo one > /m/a.txt")
     await ws.flush_sessions()
     v1 = await commit(store, ws, "main", "v1")
-    await ws.execute("echo two > /m/a.txt")
+    await ws.shell("echo two > /m/a.txt")
     seed_var(session, "API_KEY", "@aws:new-key")
     await ws.flush_sessions()
 
@@ -121,7 +121,7 @@ async def test_restore_sessions_category_keeps_live_files(tmp_path):
 async def test_restore_rejects_bad_scopes(tmp_path):
     ws = _ws()
     store = await VersionStore.open(LocalBackend(str(tmp_path)), "ws")
-    await ws.execute("echo one > /m/a.txt")
+    await ws.shell("echo one > /m/a.txt")
     v1 = await commit(store, ws, "main", "v1")
     with pytest.raises(ValueError):
         await restore(store, ws, v1, paths=["/m/a.txt"], categories=["files"])

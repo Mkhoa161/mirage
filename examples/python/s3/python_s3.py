@@ -56,11 +56,11 @@ for i, line in enumerate(lines[:5]):
 async def main():
     print("=== Python exec: read first 5 lines of JSONL from S3 ===\n")
 
-    await ws.execute("mkdir /work/scripts")
-    await ws.execute(f"echo '{SCRIPT}' > /work/scripts/read_jsonl.py")
+    await ws.shell("mkdir /work/scripts")
+    await ws.shell(f"echo '{SCRIPT}' > /work/scripts/read_jsonl.py")
 
     print("--- python3 /work/scripts/read_jsonl.py ---")
-    result = await ws.execute("python3 /work/scripts/read_jsonl.py")
+    result = await ws.shell("python3 /work/scripts/read_jsonl.py")
     print(await result.stdout_str())
     if result.stderr:
         print("STDERR:", await result.stderr_str())
@@ -70,7 +70,7 @@ async def main():
     print(f"Stats: {len(records)} ops, {total} bytes transferred")
 
     print("\n--- shell equivalent: head -n 5 ---")
-    result = await ws.execute("head -n 5 /s3/data/example.jsonl")
+    result = await ws.shell("head -n 5 /s3/data/example.jsonl")
     print(await result.stdout_str())
 
 

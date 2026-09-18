@@ -174,7 +174,7 @@ async function revoke(refresh: string): Promise<void> {
 
 async function run(ws: Workspace, cmd: string): Promise<void> {
   line(`$ ${cmd}`, 'prompt')
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   const out = res.stdoutText.replace(/\s+$/, '')
   if (out !== '') line(out)
   const err = res.stderrText.replace(/\s+$/, '')
@@ -196,7 +196,7 @@ async function runDemo(tokens: StoredTokens): Promise<void> {
   await run(ws, 'ls /gdocs/ | head -n 5')
 
   // Try cat-ing the first doc, if any.
-  const first = await ws.execute('ls /gdocs/ | head -n 1')
+  const first = await ws.shell('ls /gdocs/ | head -n 1')
   const docName = first.stdoutText.trim()
   if (docName !== '') {
     await run(ws, `cat "/gdocs/${docName}" | head -n 20`)

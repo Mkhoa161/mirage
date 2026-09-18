@@ -76,10 +76,10 @@ describe('warm read serves from the hidden store, command stays on its mount', (
     )
     try {
       await ram.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v1\n'))
-      const first = DEC.decode((await ws.execute('cat /r/a.txt')).stdout)
+      const first = DEC.decode((await ws.shell('cat /r/a.txt')).stdout)
       expect(first).toContain('v1')
       await ram.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v2\n'))
-      const second = DEC.decode((await ws.execute('cat /r/a.txt')).stdout)
+      const second = DEC.decode((await ws.shell('cat /r/a.txt')).stdout)
       expect(second).toContain('v1')
       expect(second).not.toContain('v2')
     } finally {
@@ -120,7 +120,7 @@ describe('namespace orphan GC on remote delete', () => {
       await ws.namespace.ensureLoaded()
       await ws.namespace.setAttrs('/r/gone.txt', { mode: 0o600 })
       expect(ws.namespace.metaFor('/r/gone.txt')).not.toBeNull()
-      await ws.execute('stat /r/gone.txt')
+      await ws.shell('stat /r/gone.txt')
       expect(ws.namespace.metaFor('/r/gone.txt')).toBeNull()
     } finally {
       await ws.close()

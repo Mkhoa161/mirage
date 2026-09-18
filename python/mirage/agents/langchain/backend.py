@@ -111,7 +111,7 @@ class LangchainWorkspace(SandboxBackendProtocol):
 
     File operations (read, write, edit, ls, upload, download) go through the
     Ops layer directly. Shell operations (execute, grep, glob) go through
-    Workspace.execute() for pipe and flag support.
+    Workspace.shell() for pipe and flag support.
     """
 
     def __init__(
@@ -132,7 +132,7 @@ class LangchainWorkspace(SandboxBackendProtocol):
         return self._id
 
     async def _exec(self, command: str) -> IOResult:
-        result = await self._ws.execute(command, session_id=self._session_id)
+        result = await self._ws.shell(command, session_id=self._session_id)
         assert isinstance(result, IOResult)
         return result
 

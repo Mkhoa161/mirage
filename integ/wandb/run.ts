@@ -77,7 +77,7 @@ try {
   const cases = JSON.parse(readFileSync(new URL('./cases.json', import.meta.url), 'utf8')) as Case[]
   const ts: Result[] = []
   for (const c of cases) {
-    const result = await ws.execute(c.command)
+    const result = await ws.shell(c.command)
     ts.push({
       name: c.name,
       stdout: decoder.decode(result.stdout),
@@ -176,7 +176,7 @@ try {
     'cat /wandb/lab/experiments/run-a/files/nope',
     'echo bad > /wandb/lab/experiments/run-a/summary.json',
   ]) {
-    assert.notEqual((await ws.execute(command)).exitCode, 0, command)
+    assert.notEqual((await ws.shell(command)).exitCode, 0, command)
   }
   console.log(
     `W&B integration: ${cases.length} shared cases passed in Python and TypeScript; request budgets, pagination, streaming and refusal checks passed`,

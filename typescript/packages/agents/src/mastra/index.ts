@@ -56,7 +56,7 @@ export function mirageTools(ws: Workspace) {
       }),
       execute: async (inputData) => {
         const { command } = inputData as { command: string }
-        const io = await ws.execute(command)
+        const io = await ws.shell(command)
         return {
           stdout: io.stdoutText,
           stderr: io.stderrText,

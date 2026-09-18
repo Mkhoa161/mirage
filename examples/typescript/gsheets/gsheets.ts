@@ -45,7 +45,7 @@ async function run(
   cmd: string,
 ): Promise<{ out: string; err: string; code: number }> {
   try {
-    const r = await ws.execute(cmd)
+    const r = await ws.shell(cmd)
     return { out: r.stdoutText, err: r.stderrText, code: r.exitCode }
   } catch (err) {
     return {
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on /gsheets/owned/${first} ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "/gsheets/owned/${first}" && chown 500:dev "/gsheets/owned/${first}" && touch -t 202601021530 "/gsheets/owned/${first}"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

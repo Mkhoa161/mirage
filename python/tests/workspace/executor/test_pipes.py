@@ -132,9 +132,9 @@ async def test_a_segment_expands_the_pre_pipeline_status():
         for line in ("false; { true; } | echo $?",
                      "f() { true; }; false; f | echo $?",
                      "false; true | echo $?"):
-            io = await ws.execute(line)
+            io = await ws.shell(line)
             assert (await io.stdout_str(), io.exit_code) == ("1\n", 0), line
-        io = await ws.execute("false; { false; } | true; echo $?")
+        io = await ws.shell("false; { false; } | true; echo $?")
         assert await io.stdout_str() == "0\n"
     finally:
         await ws.close()

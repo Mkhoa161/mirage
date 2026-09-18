@@ -38,7 +38,7 @@ def test_identity_reads_the_name_plane_and_the_session_plane():
 
 
 async def _run(ws: Workspace, line: str) -> tuple[int, str]:
-    io = await ws.execute(line)
+    io = await ws.shell(line)
     out = await materialize(io.stdout) if io.stdout else b""
     return io.exit_code, out.decode()
 
@@ -85,5 +85,5 @@ async def test_a_named_session_reports_its_own_profile():
     _, own = await _run(ws, 'stat -c "%G" /data/f.txt')
     assert own == "default\n"
     ws.create_session("r1", profile="reviewer")
-    io = await ws.execute('stat -c "%G" /data/f.txt', session_id="r1")
+    io = await ws.shell('stat -c "%G" /data/f.txt', session_id="r1")
     assert (await materialize(io.stdout)).decode() == "reviewer\n"

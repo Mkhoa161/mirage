@@ -31,45 +31,45 @@ def ws(tmp_path):
 
 @pytest.mark.asyncio
 async def test_create_and_cat(ws):
-    await ws.execute('echo "hello" | tee /data/hello.txt')
-    result = await ws.execute("cat /data/hello.txt")
+    await ws.shell('echo "hello" | tee /data/hello.txt')
+    result = await ws.shell("cat /data/hello.txt")
     assert b"hello" in result.stdout
 
 
 @pytest.mark.asyncio
 async def test_mkdir_and_ls(ws):
-    await ws.execute("mkdir /data/mydir")
-    result = await ws.execute("ls /data/")
+    await ws.shell("mkdir /data/mydir")
+    result = await ws.shell("ls /data/")
     assert b"mydir" in result.stdout
 
 
 @pytest.mark.asyncio
 async def test_rm(ws):
-    await ws.execute('echo "x" | tee /data/del.txt')
-    await ws.execute("rm /data/del.txt")
-    result = await ws.execute("stat /data/del.txt")
+    await ws.shell('echo "x" | tee /data/del.txt')
+    await ws.shell("rm /data/del.txt")
+    result = await ws.shell("stat /data/del.txt")
     assert result.exit_code != 0
 
 
 @pytest.mark.asyncio
 async def test_stat_file(ws):
-    await ws.execute('echo "hello" | tee /data/f.txt')
-    result = await ws.execute("stat /data/f.txt")
+    await ws.shell('echo "hello" | tee /data/f.txt')
+    result = await ws.shell("stat /data/f.txt")
     assert result.exit_code == 0
     assert b"name=f.txt" in result.stdout
 
 
 @pytest.mark.asyncio
 async def test_stat_directory(ws):
-    await ws.execute("mkdir /data/mydir")
-    result = await ws.execute("stat /data/mydir")
+    await ws.shell("mkdir /data/mydir")
+    result = await ws.shell("stat /data/mydir")
     assert result.exit_code == 0
     assert b"directory" in result.stdout
 
 
 @pytest.mark.asyncio
 async def test_stat_missing_raises(ws):
-    result = await ws.execute("stat /data/missing.txt")
+    result = await ws.shell("stat /data/missing.txt")
     assert result.exit_code != 0
 
 
@@ -89,7 +89,7 @@ async def test_path_traversal_raises(local_backend):
 async def test_get_state_preserves_file_mode(tmp_path):
     src = DiskVFS(str(tmp_path / "src"))
     ws = Workspace({"/data": src}, mode=MountMode.WRITE)
-    await ws.execute("echo hi > /data/f.txt && chmod 640 /data/f.txt")
+    await ws.shell("echo hi > /data/f.txt && chmod 640 /data/f.txt")
     state = src.get_state()
     assert state["modes"]["f.txt"] == 0o640
 

@@ -49,7 +49,7 @@ async def seed(ws: Workspace) -> None:
 
 async def cleanup(ws: Workspace) -> None:
     for key in SEED_KEYS:
-        await ws.execute(f"rm {key}")
+        await ws.shell(f"rm {key}")
 
 
 mounts = {

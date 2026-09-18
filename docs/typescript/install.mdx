@@ -92,7 +92,7 @@ const ws = new Workspace(
   { '/data': new RAMVFS() },
   { mode: MountMode.WRITE },
 )
-const res = await ws.execute('echo "hello" | tee /data/x.txt')
+const res = await ws.shell('echo "hello" | tee /data/x.txt')
 console.log(res.stdoutText) // hello
 await ws.close()
 ```

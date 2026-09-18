@@ -255,14 +255,14 @@ def memory_create_file(vfs: RAMVFS, path: str, content: bytes):
 def run(ws: Workspace, cmd: str) -> str:
 
     async def _run():
-        io = await ws.execute(cmd)
+        io = await ws.shell(cmd)
         return await io.stdout_str()
 
     return asyncio.run(_run())
 
 
 def run_exit(ws: Workspace, cmd: str) -> int:
-    io = asyncio.run(ws.execute(cmd))
+    io = asyncio.run(ws.shell(cmd))
     return io.exit_code
 
 

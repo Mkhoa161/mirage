@@ -18,7 +18,7 @@ import { MountMode, NotionVFS, Workspace } from '@struktoai/mirage-node'
 const notion = new NotionVFS({ apiKey: process.env.NOTION_API_KEY! })
 
 const ws = new Workspace({ '/notion': notion }, { mode: MountMode.READ })
-await ws.execute('ls /notion/pages/')
+await ws.shell('ls /notion/pages/')
 ```
 
 | Field | Default | Notes |
@@ -40,7 +40,7 @@ const notion = new NotionVFS({
 })
 
 const ws = new Workspace({ '/notion': notion }, { mode: MountMode.READ })
-await ws.execute('ls /notion/')
+await ws.shell('ls /notion/')
 ```
 
 | Field | Default | Notes |

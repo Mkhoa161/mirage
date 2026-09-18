@@ -134,41 +134,41 @@ async def main():
     ws = Workspace({"/slack": vfs}, mode=MountMode.READ)
 
     # List structure
-    r = await ws.execute("ls /slack/")
+    r = await ws.shell("ls /slack/")
     print(await r.stdout_str())
 
     # List channels
-    r = await ws.execute("ls /slack/channels/")
+    r = await ws.shell("ls /slack/channels/")
     print(await r.stdout_str())
 
     ch = r.stdout_str().strip().splitlines()[0].strip()
     base = f"/slack/channels/{ch}"
 
     # Read messages from a specific date
-    r = await ws.execute(f'cat "{base}/2026-04-04/chat.jsonl" | head -n 3')
+    r = await ws.shell(f'cat "{base}/2026-04-04/chat.jsonl" | head -n 3')
     print(await r.stdout_str())
 
     # Read user profile
-    r = await ws.execute("cat /slack/users/alice__U12345678.json")
+    r = await ws.shell("cat /slack/users/alice__U12345678.json")
     print(await r.stdout_str())
 
     # Extract message text with jq
-    r = await ws.execute(
+    r = await ws.shell(
         f'cat "{base}/2026-04-04/chat.jsonl"'
         ' | jq -r ".[] | .text" | head -n 5')
     print(await r.stdout_str())
 
     # Search across channel (scans all date files)
-    r = await ws.execute(f'rg message "{base}/"')
+    r = await ws.shell(f'rg message "{base}/"')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 1 /slack/")
+    r = await ws.shell("tree -L 1 /slack/")
     print(await r.stdout_str())
 
     # Navigate with cd/pwd
-    await ws.execute(f'cd "{base}"')
-    r = await ws.execute("pwd")
+    await ws.shell(f'cd "{base}"')
+    r = await ws.shell("pwd")
     print(await r.stdout_str())
 
 

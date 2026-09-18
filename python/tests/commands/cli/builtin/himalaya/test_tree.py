@@ -83,7 +83,7 @@ def test_write_classification_splits_reads_from_sends():
 async def test_installed_tree_composes_mime_without_sending():
     ws = Workspace({})
     ws.register_cli("himalaya", HIMALAYA, CONFIG)
-    io = await ws.execute(
+    io = await ws.shell(
         "himalaya message compose --to a@b.com --subject Hi --body yo")
     assert io.exit_code == 0
     message = BytesParser(policy=default_policy).parsebytes(await materialize(
@@ -104,7 +104,7 @@ async def test_the_write_alias_reaches_compose(monkeypatch):
     monkeypatch.setattr(util_module, "deliver", fake_deliver)
     ws = Workspace({})
     ws.register_cli("himalaya", HIMALAYA, CONFIG)
-    io = await ws.execute(
+    io = await ws.shell(
         "himalaya message write --to a@b.com --subject Hi --body yo --send")
     assert io.exit_code == 0
     assert b"Subject: Hi" in sent["raw"]
@@ -115,7 +115,7 @@ async def test_the_write_alias_reaches_compose(monkeypatch):
 async def test_a_missing_message_id_exits_1_with_the_leaf_message():
     ws = Workspace({})
     ws.register_cli("himalaya", HIMALAYA, CONFIG)
-    io = await ws.execute("himalaya message read")
+    io = await ws.shell("himalaya message read")
     assert io.exit_code == 1
     err = await materialize(io.stderr)
     assert b"message id is required" in err
@@ -126,7 +126,7 @@ async def test_a_missing_message_id_exits_1_with_the_leaf_message():
 async def test_an_upstream_verb_mirage_lacks_fails_loud():
     ws = Workspace({})
     ws.register_cli("himalaya", HIMALAYA, CONFIG)
-    io = await ws.execute("himalaya message move 7 --to Archive")
+    io = await ws.shell("himalaya message move 7 --to Archive")
     assert io.exit_code == 1
     err = await materialize(io.stderr)
     assert err == (b"himalaya: 'move' is not a himalaya message command. "
@@ -138,7 +138,7 @@ async def test_an_upstream_verb_mirage_lacks_fails_loud():
 async def test_unknown_verb_uses_git_wording():
     ws = Workspace({})
     ws.register_cli("himalaya", HIMALAYA, CONFIG)
-    io = await ws.execute("himalaya bogus")
+    io = await ws.shell("himalaya bogus")
     assert io.exit_code == 1
     err = await materialize(io.stderr)
     assert err == (b"himalaya: 'bogus' is not a himalaya command. "
@@ -230,7 +230,7 @@ def mounted() -> Workspace:
 
 
 async def out(ws: Workspace, line: str) -> str:
-    io = await ws.execute(line)
+    io = await ws.shell(line)
     assert io.exit_code == 0, await materialize(io.stderr)
     return (await materialize(io.stdout)).decode()
 

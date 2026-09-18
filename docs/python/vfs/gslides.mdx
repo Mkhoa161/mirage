@@ -106,39 +106,39 @@ async def main():
     ws = Workspace({"/gslides": vfs}, mode=MountMode.READ)
 
     # List structure
-    r = await ws.execute("ls /gslides/")
+    r = await ws.shell("ls /gslides/")
     print(await r.stdout_str())
 
     # List owned presentations
-    r = await ws.execute("ls /gslides/owned/")
+    r = await ws.shell("ls /gslides/owned/")
     print(await r.stdout_str())
 
     # Read a presentation
-    r = await ws.execute(
+    r = await ws.shell(
         "cat /gslides/owned/2026-04-04_QBR_Deck__1AbCdEf.gslide.json")
     print(await r.stdout_str())
 
     # Extract title with jq
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".title"'
         " /gslides/owned/2026-04-04_QBR_Deck__1AbCdEf.gslide.json")
     print(await r.stdout_str())
 
     # Search across all presentations
-    r = await ws.execute('rg "quarterly" /gslides/owned/')
+    r = await ws.shell('rg "quarterly" /gslides/owned/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 1 /gslides/")
+    r = await ws.shell("tree -L 1 /gslides/")
     print(await r.stdout_str())
 
     # Create a new presentation
-    r = await ws.execute(
+    r = await ws.shell(
         'gws slides presentations create --json \'{"title":"MIRAGE Deck"}\'')
     print(await r.stdout_str())
 
     # Batch update a presentation
-    r = await ws.execute(
+    r = await ws.shell(
         'gws slides presentations batchUpdate'
         ' --params \'{"presentationId":"1AbCdEf"}\''
         ' --json \'{"requests":[]}\'')

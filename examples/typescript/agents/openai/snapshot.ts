@@ -54,7 +54,7 @@ const agent = new Agent({
 const result = await run(agent, 'Create the report.')
 console.log('Agent output:', result.finalOutput)
 
-const findOrig = await ws.execute('find / -type f')
+const findOrig = await ws.shell('find / -type f')
 const origFiles = findOrig.stdoutText.trim().split('\n').filter(Boolean)
 
 console.log('\n--- Original files ---')
@@ -66,7 +66,7 @@ console.log(`snapshot mounts: ${state.mounts.length}`)
 
 console.log('\n--- Restoring into fresh workspace ---')
 const fresh = await Workspace.fromState(state)
-const findFresh = await fresh.execute('find / -type f')
+const findFresh = await fresh.shell('find / -type f')
 const freshFiles = findFresh.stdoutText.trim().split('\n').filter(Boolean)
 console.log(freshFiles.join('\n'))
 

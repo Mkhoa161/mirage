@@ -110,21 +110,21 @@ vfs = GridFSVFS(config)
 async def main() -> None:
     ws = Workspace({"/gridfs/": vfs}, mode=MountMode.WRITE)
 
-    await ws.execute("echo hello | tee /gridfs/notes/a.txt > /dev/null")
+    await ws.shell("echo hello | tee /gridfs/notes/a.txt > /dev/null")
 
-    r = await ws.execute("ls /gridfs/")
+    r = await ws.shell("ls /gridfs/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /gridfs/notes/a.txt")
+    r = await ws.shell("cat /gridfs/notes/a.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /gridfs/ -name '*.txt'")
+    r = await ws.shell("find /gridfs/ -name '*.txt'")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep hello /gridfs/notes/a.txt")
+    r = await ws.shell("grep hello /gridfs/notes/a.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /gridfs/notes/a.txt")
+    r = await ws.shell("stat /gridfs/notes/a.txt")
     print(await r.stdout_str())
 
 

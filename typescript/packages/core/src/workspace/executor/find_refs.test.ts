@@ -31,7 +31,7 @@ async function shellWs(): Promise<Workspace> {
 }
 
 async function out(ws: Workspace, line: string): Promise<[string, string, number]> {
-  const r = await ws.execute(line, { sessionId: 's' })
+  const r = await ws.shell(line, { sessionId: 's' })
   return [r.stdoutText, r.stderrText, r.exitCode]
 }
 
@@ -85,7 +85,7 @@ describe('resolveNewerRefs', () => {
     // both references.
     const ws = await shellWs()
     try {
-      await ws.execute(
+      await ws.shell(
         'printf o > /w/old; printf c > /w/cand; printf n > /w/new; cd /w; ' +
           "touch -d '2020-01-01 00:00:00' old; " +
           "touch -d '2021-01-01 00:00:00' cand; " +
@@ -112,7 +112,7 @@ describe('resolveNewerRefs', () => {
     // -P and a refusal when followed.
     const ws = await shellWs()
     try {
-      await ws.execute(
+      await ws.shell(
         'mkdir -p /w/d; printf t > /w/target; printf c > /w/d/cand; cd /w; ' +
           "touch -d '2020-01-01 00:00:00' target; " +
           "touch -d '2021-01-01 00:00:00' d/cand; " +

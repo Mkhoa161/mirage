@@ -38,9 +38,9 @@ const dataset = new HfDatasetsVFS({
 
 const ws = new Workspace({ '/ds/': dataset }, { mode: MountMode.READ })
 
-console.log((await ws.execute('ls -lh /ds/')).stdoutText)
-console.log((await ws.execute("find /ds/ -name '*.parquet' | wc -l")).stdoutText)
-console.log((await ws.execute('cat /ds/README.md | head -n 20')).stdoutText)
+console.log((await ws.shell('ls -lh /ds/')).stdoutText)
+console.log((await ws.shell("find /ds/ -name '*.parquet' | wc -l")).stdoutText)
+console.log((await ws.shell('cat /ds/README.md | head -n 20')).stdoutText)
 ```
 
 `HfDatasetsVFS` takes `repoId` in `namespace/dataset-name` form plus an

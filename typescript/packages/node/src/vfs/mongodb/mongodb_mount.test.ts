@@ -113,7 +113,7 @@ describe('MongoDBVFS mount integration', () => {
   })
 
   it('readdir /mongo returns user databases (admin/local/config filtered)', async () => {
-    const r = await ws.execute('ls /mongo')
+    const r = await ws.shell('ls /mongo')
     const stdout = new TextDecoder().decode(r.stdout)
     expect(stdout).toContain('app')
     expect(stdout).toContain('analytics')
@@ -121,7 +121,7 @@ describe('MongoDBVFS mount integration', () => {
   })
 
   it('readdir /mongo/app exposes database.json / collections / views', async () => {
-    const r = await ws.execute('ls /mongo/app')
+    const r = await ws.shell('ls /mongo/app')
     const stdout = new TextDecoder().decode(r.stdout)
     expect(stdout).toContain('database.json')
     expect(stdout).toContain('collections')
@@ -129,14 +129,14 @@ describe('MongoDBVFS mount integration', () => {
   })
 
   it('readdir /mongo/app/collections lists collection names', async () => {
-    const r = await ws.execute('ls /mongo/app/collections')
+    const r = await ws.shell('ls /mongo/app/collections')
     const stdout = new TextDecoder().decode(r.stdout)
     expect(stdout).toContain('profiles')
     expect(stdout).toContain('sessions')
   })
 
   it('cat documents.jsonl returns one BSON-faithful JSON line per doc', async () => {
-    const r = await ws.execute('cat /mongo/app/collections/profiles/documents.jsonl')
+    const r = await ws.shell('cat /mongo/app/collections/profiles/documents.jsonl')
     const text = new TextDecoder().decode(r.stdout).trim()
     const lines = text.split('\n')
     expect(lines).toHaveLength(3)
@@ -145,13 +145,13 @@ describe('MongoDBVFS mount integration', () => {
   })
 
   it('head -n 2 pushes down to find().limit(2)', async () => {
-    const r = await ws.execute('head -n 2 /mongo/app/collections/profiles/documents.jsonl')
+    const r = await ws.shell('head -n 2 /mongo/app/collections/profiles/documents.jsonl')
     const lines = new TextDecoder().decode(r.stdout).trim().split('\n')
     expect(lines).toHaveLength(2)
   })
 
   it('wc -l pushes down to countDocuments', async () => {
-    const r = await ws.execute('wc -l /mongo/app/collections/profiles/documents.jsonl')
+    const r = await ws.shell('wc -l /mongo/app/collections/profiles/documents.jsonl')
     expect(new TextDecoder().decode(r.stdout).trim()).toBe(
       '3 /mongo/app/collections/profiles/documents.jsonl',
     )

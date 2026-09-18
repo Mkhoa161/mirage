@@ -36,34 +36,34 @@ async def main():
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 
-    r = await ws.execute("ls /gmail/")
+    r = await ws.shell("ls /gmail/")
     print("=== labels ===")
     print(await r.stdout_str())
 
-    r = await ws.execute("ls /gmail/INBOX/ | head -n 3")
+    r = await ws.shell("ls /gmail/INBOX/ | head -n 3")
     print("=== INBOX (first 3) ===")
     print(await r.stdout_str())
 
     first = (await r.stdout_str()).strip().split("\n")[0]
 
     print("=== plan: cat ===")
-    dr = await ws.execute(f"cat /gmail/INBOX/{first}", provision=True)
+    dr = await ws.shell(f"cat /gmail/INBOX/{first}", provision=True)
     print(f"  network_read={dr.network_read}, precision={dr.precision}")
 
     print("=== cat message ===")
-    r = await ws.execute(f"cat /gmail/INBOX/{first}")
+    r = await ws.shell(f"cat /gmail/INBOX/{first}")
     print((await r.stdout_str())[:500])
 
     print("=== jq .subject ===")
-    r = await ws.execute(f'jq ".subject" /gmail/INBOX/{first}')
+    r = await ws.shell(f'jq ".subject" /gmail/INBOX/{first}')
     print(await r.stdout_str())
 
     print("=== gws gmail triage ===")
-    r = await ws.execute('gws gmail triage --query "is:unread" --max 5')
+    r = await ws.shell('gws gmail triage --query "is:unread" --max 5')
     print((await r.stdout_str())[:500])
 
     print("=== gws gmail send ===")
-    r = await ws.execute(
+    r = await ws.shell(
         'gws gmail send --to "zechengzhang97@gmail.com"'
         ' --subject "Hello from MIRAGE"'
         ' --body "This email was sent via the MIRAGE Gmail VFS."')

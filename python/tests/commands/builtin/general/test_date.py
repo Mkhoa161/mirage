@@ -21,7 +21,7 @@ from mirage import RAMVFS, MountMode, Workspace
 
 
 async def _run(ws: Workspace, line: str) -> tuple[str, str, int]:
-    io = await ws.execute(line)
+    io = await ws.shell(line)
     return await io.stdout_str(), await io.stderr_str(), io.exit_code
 
 
@@ -112,8 +112,8 @@ async def test_tz_never_leaks_between_workspaces():
     hong_kong = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     utc = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await hong_kong.execute("export TZ=Asia/Hong_Kong")
-        await utc.execute("export TZ=UTC")
+        await hong_kong.shell("export TZ=Asia/Hong_Kong")
+        await utc.shell("export TZ=UTC")
         line = "date -d @0 '+%H %z'"
         results = await asyncio.gather(
             *[_run(ws, line) for ws in (hong_kong, utc, hong_kong, utc)])

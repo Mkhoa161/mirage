@@ -101,19 +101,19 @@ vfs = SupabaseVFS(config=config)
 async def main() -> None:
     ws = Workspace({"/supabase/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /supabase/")
+    r = await ws.shell("ls /supabase/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /supabase/documents/data.csv | head -n 10")
+    r = await ws.shell("cat /supabase/documents/data.csv | head -n 10")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree -L 2 /supabase/")
+    r = await ws.shell("tree -L 2 /supabase/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /supabase/ -name '*.pdf'")
+    r = await ws.shell("find /supabase/ -name '*.pdf'")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /supabase/avatars/user-001.png")
+    r = await ws.shell("stat /supabase/avatars/user-001.png")
     print(await r.stdout_str())
 
 

@@ -124,7 +124,7 @@
     "  Redis ops have no ranged GET — every read fetches the full value.",
     "  Provision lets the agent budget IO / compute before running.",
     "",
-    "  ws.execute('cat /data/hello.txt', provision=True):",
+    "  ws.shell('cat /data/hello.txt', provision=True):",
     "    command        = None",
     "    network_read   = 12",
     "    read_ops       = 1",

@@ -50,7 +50,7 @@ class MirageSandboxSession(BaseSandboxSession):
         timeout: float | None = None,
     ) -> ExecResult:
         cmd_str = " ".join(str(c) for c in command)
-        io_result = await self._ws.execute(cmd_str)
+        io_result = await self._ws.shell(cmd_str)
         stdout = await io_result.materialize_stdout()
         stderr = with_refusal_bytes(await io_result.materialize_stderr(),
                                     io_result.refusal)

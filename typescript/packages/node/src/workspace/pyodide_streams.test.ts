@@ -31,7 +31,7 @@ describe('Pyodide captured streams', { timeout: 120_000 }, () => {
         await ws.dispatch('write', `/ram/${name}`, [new TextEncoder().encode(content)])
       }
       for (const step of fixture.steps) {
-        const result = await ws.execute(step.command)
+        const result = await ws.shell(step.command)
         expect(result.exitCode, step.command).toBe(step.expect.exit)
         expect(new TextDecoder().decode(result.stdout), step.command).toBe(step.expect.stdout)
         expect(new TextDecoder().decode(result.stderr), step.command).toBe(step.expect.stderr)

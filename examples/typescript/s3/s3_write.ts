@@ -148,7 +148,7 @@ async function driftAndPinDemo(): Promise<void> {
   const tempDir = mkdtempSync(join(tmpdir(), 'mirage-drift-'))
   const snap = join(tempDir, 'pin.json')
   try {
-    const readRes = await ws.execute(`cat ${probeVirtual}`)
+    const readRes = await ws.shell(`cat ${probeVirtual}`)
     console.log(`  agent saw: ${JSON.stringify(readRes.stdoutText.trim())}`)
     const size = await ws.snapshot(snap)
     console.log(`  snapshot: ${snap} (${String(size)} bytes)`)
@@ -164,7 +164,7 @@ async function driftAndPinDemo(): Promise<void> {
     const pinned = Object.keys(loaded.revisions)
     console.log(`  installed pins: ${pinned.length === 0 ? '(none)' : pinned.join(', ')}`)
     try {
-      const replay = await loaded.execute(`cat ${probeVirtual}`)
+      const replay = await loaded.shell(`cat ${probeVirtual}`)
       const served = replay.stdoutText.trim()
       if (versioned && served === 'original') {
         console.log(`  STRICT load -> served: ${JSON.stringify(served)} (OK pin served original)`)
@@ -194,7 +194,7 @@ function print(bytes: Uint8Array): void {
 
 async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<void> {
   console.log(`=== ${label} ===`)
-  const res = await ws.execute(cmd)
+  const res = await ws.shell(cmd)
   print(res.stdout)
 }
 
@@ -203,14 +203,14 @@ async function main(): Promise<void> {
   const ws = new Workspace({ '/s3/': new S3VFS(config) }, { mode: MountMode.WRITE })
   try {
     // Pre-clean any leftovers from a previous run.
-    await ws.execute('rm -rf /s3/demo')
+    await ws.shell('rm -rf /s3/demo')
 
     console.log('=== tee — create files ===')
-    await ws.execute('echo "hello from s3" | tee /s3/demo/hello.txt')
-    await ws.execute('printf "line1\\nline2\\nline3\\n" | tee /s3/demo/multi.txt')
-    await ws.execute(`echo '{"name":"alice","age":30}' | tee /s3/demo/user.json`)
-    await ws.execute('mkdir /s3/demo/reports')
-    await ws.execute('printf "revenue,100\\nexpense,80\\n" | tee /s3/demo/reports/q1.csv')
+    await ws.shell('echo "hello from s3" | tee /s3/demo/hello.txt')
+    await ws.shell('printf "line1\\nline2\\nline3\\n" | tee /s3/demo/multi.txt')
+    await ws.shell(`echo '{"name":"alice","age":30}' | tee /s3/demo/user.json`)
+    await ws.shell('mkdir /s3/demo/reports')
+    await ws.shell('printf "revenue,100\\nexpense,80\\n" | tee /s3/demo/reports/q1.csv')
 
     await runLabeled(ws, 'ls /s3/demo/', 'ls /s3/demo/')
     await runLabeled(ws, 'cat /s3/demo/hello.txt', 'cat /s3/demo/hello.txt')
@@ -221,15 +221,15 @@ async function main(): Promise<void> {
     await runLabeled(ws, 'stat /s3/demo/hello.txt', 'stat /s3/demo/hello.txt')
 
     console.log('=== cp /s3/demo/hello.txt /s3/demo/hello_copy.txt ===')
-    await ws.execute('cp /s3/demo/hello.txt /s3/demo/hello_copy.txt')
+    await ws.shell('cp /s3/demo/hello.txt /s3/demo/hello_copy.txt')
     await runLabeled(ws, 'cat hello_copy.txt', 'cat /s3/demo/hello_copy.txt')
 
     console.log('=== mv /s3/demo/hello_copy.txt /s3/demo/renamed.txt ===')
-    await ws.execute('mv /s3/demo/hello_copy.txt /s3/demo/renamed.txt')
+    await ws.shell('mv /s3/demo/hello_copy.txt /s3/demo/renamed.txt')
     await runLabeled(ws, 'ls /s3/demo/', 'ls /s3/demo/')
 
     console.log('=== rm /s3/demo/renamed.txt ===')
-    await ws.execute('rm /s3/demo/renamed.txt')
+    await ws.shell('rm /s3/demo/renamed.txt')
     await runLabeled(ws, 'ls /s3/demo/', 'ls /s3/demo/')
 
     await runLabeled(ws, 'du /s3/demo/', 'du /s3/demo/')
@@ -239,7 +239,7 @@ async function main(): Promise<void> {
     // S3 has no native attr slots, so chmod/chown/touch land in the
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
-    await ws.execute(
+    await ws.shell(
       'chmod 640 /s3/demo/hello.txt && chown 500:dev /s3/demo/hello.txt' +
         ' && touch -t 202601021530 /s3/demo/hello.txt',
     )
@@ -250,7 +250,7 @@ async function main(): Promise<void> {
     )
 
     console.log('\n=== CLEANUP ===')
-    await ws.execute('rm -rf /s3/demo')
+    await ws.shell('rm -rf /s3/demo')
     console.log('  all demo keys removed')
   } finally {
     await ws.close()

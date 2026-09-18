@@ -65,7 +65,7 @@ POINTS_CSV = "name,value\nalpha,1.5\nbeta,2.5\ngamma,4.0\n"
 
 
 async def show(ws: Workspace, command: str) -> None:
-    result = await ws.execute(command, cwd=REMOTE_DIR)
+    result = await ws.shell(command, cwd=REMOTE_DIR)
     print(f"$ {command}")
     stdout = await result.stdout_str()
     if stdout:
@@ -85,8 +85,8 @@ async def main() -> None:
 
     # Seed both sides through the workspace: the dataset into S3, the
     # loader onto the box (an SFTP write; the box provisions itself).
-    await ws.execute("cat > /data/points.csv", stdin=POINTS_CSV.encode())
-    await ws.execute(f"cat > {REMOTE_DIR}/load.py", stdin=LOAD_PY.encode())
+    await ws.shell("cat > /data/points.csv", stdin=POINTS_CSV.encode())
+    await ws.shell(f"cat > {REMOTE_DIR}/load.py", stdin=LOAD_PY.encode())
     await show(ws, "ls /data")
     await show(ws, "ls")
 

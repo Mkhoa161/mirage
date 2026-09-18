@@ -43,7 +43,7 @@ def _ws() -> Workspace:
 
 
 def _exec(ws: Workspace, cmd: str, **kw) -> IOResult:
-    return asyncio.run(ws.execute(cmd, **kw))
+    return asyncio.run(ws.shell(cmd, **kw))
 
 
 def _stdout(io: IOResult) -> str:
@@ -114,10 +114,10 @@ async def test_a_followed_history_streams_each_new_command():
     # exit.
     ws = _ws()
     try:
-        await ws.execute("pwd")
-        await ws.execute("tail -f -s 0.05 /.bash_history &")
+        await ws.shell("pwd")
+        await ws.shell("tail -f -s 0.05 /.bash_history &")
         await asyncio.sleep(0.15)
-        await ws.execute("echo marker")
+        await ws.shell("echo marker")
         await asyncio.sleep(0.25)
         job = ws.job_table.get(1, ws.default_session_id)
         assert job is not None
@@ -125,7 +125,7 @@ async def test_a_followed_history_streams_each_new_command():
         shown = await job.console.snapshot(Channel.STDOUT)
         assert b"pwd" in shown
         assert b"echo marker" in shown
-        assert (await ws.execute("kill %1")).exit_code == 0
+        assert (await ws.shell("kill %1")).exit_code == 0
     finally:
         await ws.close()
 

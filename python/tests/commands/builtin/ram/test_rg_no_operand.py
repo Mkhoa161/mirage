@@ -30,7 +30,7 @@ async def test_rg_no_operand_searches_cwd(workspace):
     await workspace.fs.write("/a.txt", b"hello\n")
     await workspace.fs.write("/sub/b.txt", b"hello\n")
 
-    io = await workspace.execute("rg hello", cwd="/")
+    io = await workspace.shell("rg hello", cwd="/")
     assert io.exit_code == 0
     assert (io.stdout or b"") == b"a.txt:hello\nsub/b.txt:hello\n"
 
@@ -41,11 +41,11 @@ async def test_rg_no_operand_attached_stdin_wins(workspace):
     # readable-stdin rule).
     await workspace.fs.write("/a.txt", b"hello\n")
 
-    io = await workspace.execute("rg hello", cwd="/", stdin=b"hello pipe\n")
+    io = await workspace.shell("rg hello", cwd="/", stdin=b"hello pipe\n")
     assert io.exit_code == 0
     assert (io.stdout or b"") == b"hello pipe\n"
 
-    io = await workspace.execute("rg hello", cwd="/", stdin=b"")
+    io = await workspace.shell("rg hello", cwd="/", stdin=b"")
     assert io.exit_code == 1
     assert (io.stdout or b"") == b""
 
@@ -54,7 +54,7 @@ async def test_rg_no_operand_attached_stdin_wins(workspace):
 async def test_rg_no_operand_no_match_exits_one(workspace):
     await workspace.fs.write("/a.txt", b"hello\n")
 
-    io = await workspace.execute("rg zzz", cwd="/")
+    io = await workspace.shell("rg zzz", cwd="/")
     assert io.exit_code == 1
     assert (io.stdout or b"") == b""
     assert not io.stderr

@@ -19,7 +19,7 @@ ws = Workspace({"/nc": NextcloudVFS(NextcloudConfig(...))})
 
 async for event in ws.watch("/nc/Documents"):
     print(event.kind, event.path.virtual)   # e.g. "update /nc/Documents/report.txt"
-    result = await ws.execute(f"cat {event.path.virtual}")  # guaranteed fresh
+    result = await ws.shell(f"cat {event.path.virtual}")  # guaranteed fresh
 ```
 
 No setup call is needed: the watch runtime attaches lazily on first use, and an

@@ -76,22 +76,22 @@ vfs = DiskVFS(root=tmp + "/files")
 async def main() -> None:
     ws = Workspace({"/data/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /data/")
+    r = await ws.shell("ls /data/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /data/example.json")
+    r = await ws.shell("cat /data/example.json")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /data/")
+    r = await ws.shell("tree /data/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /data/ -name '*.json'")
+    r = await ws.shell("find /data/ -name '*.json'")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep example /data/example.json")
+    r = await ws.shell("grep example /data/example.json")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /data/example.json")
+    r = await ws.shell("stat /data/example.json")
     print(await r.stdout_str())
 
 

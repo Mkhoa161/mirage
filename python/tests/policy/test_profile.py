@@ -693,10 +693,9 @@ def test_profiled_session_is_narrowed_end_to_end():
     ws.create_session("agent", profile=ANALYST)
 
     async def run():
-        listing = await ws.execute("ls /a", session_id="agent")
-        denied = await ws.execute("cat /a/secrets/token.txt",
-                                  session_id="agent")
-        profile = await ws.execute('echo "$ROLE"', session_id="agent")
+        listing = await ws.shell("ls /a", session_id="agent")
+        denied = await ws.shell("cat /a/secrets/token.txt", session_id="agent")
+        profile = await ws.shell('echo "$ROLE"', session_id="agent")
         return (await listing.stdout_str(), denied, await profile.stdout_str())
 
     listing_out, denied, role_out = asyncio.run(run())
@@ -715,7 +714,7 @@ def test_profile_env_reaches_the_process_view():
     ws.create_session("agent", profile=ANALYST)
 
     async def run():
-        listed = await ws.execute("env", session_id="agent")
+        listed = await ws.shell("env", session_id="agent")
         return await listed.stdout_str()
 
     assert "ROLE=analyst\n" in asyncio.run(run())
@@ -807,10 +806,10 @@ def test_default_profile_shapes_the_workspace_session_too():
     assert default.cwd == "/b"
 
     async def run():
-        pwd = await ws.execute("pwd")
-        pager = await ws.execute('echo "$PAGER"')
-        other = await ws.execute("ls /a")
-        vault = await ws.execute("mkdir /b/vault")
+        pwd = await ws.shell("pwd")
+        pager = await ws.shell('echo "$PAGER"')
+        other = await ws.shell("ls /a")
+        vault = await ws.shell("mkdir /b/vault")
         return (await pwd.stdout_str(), await
                 pager.stdout_str(), other.exit_code, vault.exit_code)
 
@@ -844,8 +843,8 @@ def test_a_role_keeps_a_mount_away_by_hiding_it_not_by_omitting_it():
     )
 
     async def run():
-        listed = await ws.execute("ls /a")
-        root = await ws.execute("ls /")
+        listed = await ws.shell("ls /a")
+        root = await ws.shell("ls /")
         return (listed.exit_code, await listed.stderr_str(), await
                 root.stdout_str())
 
@@ -918,7 +917,7 @@ def test_profile_cwd_is_where_the_session_starts():
     ws.create_session("agent", profile="reviewer")
 
     async def run():
-        out = await ws.execute("pwd", session_id="agent")
+        out = await ws.shell("pwd", session_id="agent")
         return await out.stdout_str()
 
     assert asyncio.run(run()) == "/b\n"
@@ -992,8 +991,8 @@ def _commands_ws() -> Workspace:
 
 
 async def _line(ws: Workspace, line: str, sid: str | None = None):
-    r = (await ws.execute(line, session_id=sid)
-         if sid is not None else await ws.execute(line))
+    r = (await ws.shell(line, session_id=sid)
+         if sid is not None else await ws.shell(line))
     return (r.exit_code, await
             r.stdout_str(), with_refusal(await r.stderr_str(), r.refusal))
 
@@ -1002,7 +1001,7 @@ async def _line(ws: Workspace, line: str, sid: str | None = None):
 async def test_allow_list_hides_unlisted_tools_from_dispatch_and_enumerators():
     ws = _commands_ws()
     try:
-        await ws.execute("mkdir -p /repo/d && touch /repo/d/x")
+        await ws.shell("mkdir -p /repo/d && touch /repo/d/x")
         # An unlisted tool is not a command for the session: 127 before
         # any admission hook, and every enumerator agrees.
         assert await _line(ws,
@@ -1039,7 +1038,7 @@ async def test_a_profiles_allow_list_is_the_only_one_a_session_reads():
     ws = _commands_ws()
     ws.create_session("rev", profile="reviewer")
     try:
-        await ws.execute("mkdir -p /repo/d && touch /repo/d/x")
+        await ws.shell("mkdir -p /repo/d && touch /repo/d/x")
         # The reviewer profile lists `cat` and not python3, whatever the
         # default profile lists; it lists `git log`, so `git` is visible but
         # a `git commit` line is covered by nothing (a refusal that names
@@ -1090,7 +1089,7 @@ async def test_a_profiles_allow_list_is_the_only_one_a_session_reads():
 async def test_deny_rules_by_source_scope_and_voice():
     ws = _commands_ws()
     try:
-        await ws.execute("mkdir -p /repo/d && touch /repo/d/x /scratch/z")
+        await ws.shell("mkdir -p /repo/d && touch /repo/d/x /scratch/z")
         # Operand-scoped: the GNU voice at 1, the operand as typed.
         assert await _line(
             ws,
@@ -1129,8 +1128,8 @@ async def test_find_delete_is_gated_at_the_op_door_not_by_a_named_rule():
     # does, at the op door the removal clears.
     ws = _commands_ws()
     try:
-        await ws.execute("mkdir -p /repo/d && touch /repo/d/x")
-        await ws.execute("find /repo/d -name x -delete")
+        await ws.shell("mkdir -p /repo/d && touch /repo/d/x")
+        await ws.shell("find /repo/d -name x -delete")
         assert (await _line(ws, "cat /repo/d/x"))[0] != 0
         assert await _line(ws, "find /repo/locked -name y -delete") == (
             1, "", "find: cannot delete '/repo/locked/y': frozen\n")
@@ -1170,9 +1169,9 @@ async def test_a_command_scoped_path_rule_reads_the_path_the_command_touches():
                    mode=MountMode.WRITE,
                    profiles={"default": LINK_DOC})
     try:
-        await ws.execute("echo top > /data/secret && "
-                         "ln -s /data/secret /data/link && "
-                         "ln -s /data/secret /data/other")
+        await ws.shell("echo top > /data/secret && "
+                       "ln -s /data/secret /data/link && "
+                       "ln -s /data/secret /data/other")
         assert await _line(
             ws, "cat /data/secret") == (1, "", "cat: /data/secret: sealed\n")
         # Through the link: refused, the operand named as typed.
@@ -1219,8 +1218,8 @@ async def test_redirect_targets_are_judged_with_the_line():
                    mode=MountMode.WRITE,
                    profiles={"default": SEALED_REDIRECT_DOC})
     try:
-        await ws.execute("echo top > /data/secret && "
-                         "printf 'one\\n' > /data/audit.log")
+        await ws.shell("echo top > /data/secret && "
+                       "printf 'one\\n' > /data/audit.log")
         assert await _line(
             ws, "cat < /data/secret") == (1, "", "cat: /data/secret: sealed\n")
         assert await _line(ws, "echo two > /data/audit.log") == (
@@ -1263,8 +1262,8 @@ async def test_a_mount_rule_speaks_on_a_walk_from_above():
             }
         })
     try:
-        await ws.execute("echo x > /scratch/a && echo x > /elsewhere/a && "
-                         "echo x > /scratch/child/c")
+        await ws.shell("echo x > /scratch/a && echo x > /elsewhere/a && "
+                       "echo x > /scratch/child/c")
         assert await _line(ws, "grep -r x /scratch") == (
             126, "", "grep: Permission denied\npolicy denied: boxed\n")
         code, out, _ = await _line(ws, "grep -r x /elsewhere")
@@ -1430,7 +1429,7 @@ async def test_a_bare_listing_in_a_ruled_directory_is_refused():
                        }
                    })
     try:
-        await ws.execute("mkdir -p /repo/sealed && echo x > /repo/sealed/f")
+        await ws.shell("mkdir -p /repo/sealed && echo x > /repo/sealed/f")
         assert await _line(ws,
                            "ls /repo/sealed") == (1, "",
                                                   "ls: /repo/sealed: sealed\n")
@@ -1491,8 +1490,8 @@ async def test_a_hidden_path_reads_as_absent_to_every_rule():
                    mode=MountMode.WRITE,
                    profiles={"default": VEILED_DOC})
     try:
-        await ws.execute("mkdir -p /repo/private /repo/shared && "
-                         "echo k > /repo/private/k && touch /repo/shared/a")
+        await ws.shell("mkdir -p /repo/private /repo/shared && "
+                       "echo k > /repo/private/k && touch /repo/shared/a")
         # The same rules plus three hides: what the hides cover is gone
         # before any rule is asked.
         ws.create_session(
@@ -1577,7 +1576,7 @@ def _ask_ws(**kwargs) -> Workspace:
 async def test_an_asked_line_is_refused_until_the_host_answers():
     ws = _ask_ws()
     try:
-        await ws.execute("mkdir -p /repo/d && touch /repo/d/x /scratch/z")
+        await ws.shell("mkdir -p /repo/d && touch /repo/d/x /scratch/z")
         # Asked: 126 in the requires-approval voice, quoting an id; the
         # request is on ws.decisions with what was asked; a retry quotes
         # the same id and adds nothing.
@@ -1596,7 +1595,7 @@ async def test_an_asked_line_is_refused_until_the_host_answers():
         # workspace's default agent, so a shared workspace attributes an
         # approval to whoever raised it.
         assert request.agent_id == ""
-        by_bob = await ws.execute("rm /scratch/z2", agent_id="bob")
+        by_bob = await ws.shell("rm /scratch/z2", agent_id="bob")
         assert by_bob.exit_code == 126
         assert [r.agent_id for r in ws.decisions.pending()] == ["", "bob"]
         # The agent rides with the execution, not the workspace: a line
@@ -1607,11 +1606,10 @@ async def test_an_asked_line_is_refused_until_the_host_answers():
         # the line is refused whole rather than running `echo` over an
         # empty substitution and exiting 0, which used to leave the
         # agent reading success for a removal that never happened.
-        nested = await ws.execute("echo $(rm /scratch/z3)", agent_id="carol")
+        nested = await ws.shell("echo $(rm /scratch/z3)", agent_id="carol")
         assert nested.exit_code == 126
-        await asyncio.gather(
-            ws.execute("rm /scratch/z4", agent_id="dan"),
-            ws.execute("eval 'rm /scratch/z5'", agent_id="eve"))
+        await asyncio.gather(ws.shell("rm /scratch/z4", agent_id="dan"),
+                             ws.shell("eval 'rm /scratch/z5'", agent_id="eve"))
         by_agent = {
             r.command + " " + " ".join(r.argv): r.agent_id
             for r in ws.decisions.pending()
@@ -1657,8 +1655,8 @@ async def test_an_asked_line_is_refused_until_the_host_answers():
 async def test_a_session_grant_covers_the_rule_and_a_deny_is_never_reopened():
     ws = _ask_ws()
     try:
-        await ws.execute("mkdir -p /repo/d && touch /repo/d/x /scratch/y "
-                         "/scratch/z")
+        await ws.shell("mkdir -p /repo/d && touch /repo/d/x /scratch/y "
+                       "/scratch/z")
         code, _, _ = await _line(ws, "rm /scratch/y")
         assert code == 126
         (request, ) = ws.decisions.pending()
@@ -1680,7 +1678,7 @@ async def test_a_session_grant_covers_the_rule_and_a_deny_is_never_reopened():
         stored = default.to_dict()["decisions"][0]
         assert (stored["outcome"], stored["scope"]) == ("allow", "session")
         ws.create_session("other")
-        await ws.execute("touch /scratch/w", session_id="other")
+        await ws.shell("touch /scratch/w", session_id="other")
         code, _, err = await _line(ws, "rm /scratch/w", "other")
         assert code == 126 and "requires approval" in err
     finally:
@@ -1691,7 +1689,7 @@ async def test_a_session_grant_covers_the_rule_and_a_deny_is_never_reopened():
 async def test_a_coded_ask_routes_to_the_same_door():
     ws = _ask_ws()
     try:
-        await ws.execute("touch /scratch/z")
+        await ws.shell("touch /scratch/z")
         code, _, err = await _line(ws, "wc -c /scratch/z")
         assert code == 126
         (request, ) = ws.decisions.pending()
@@ -1713,7 +1711,7 @@ async def test_a_coded_ask_routes_to_the_same_door():
 async def test_a_grant_is_consumed_through_a_fork():
     ws = _ask_ws()
     try:
-        await ws.execute("touch /scratch/z")
+        await ws.shell("touch /scratch/z")
         code, _, _ = await _line(ws, "rm /scratch/z")
         assert code == 126
         (request, ) = ws.decisions.pending()
@@ -1721,7 +1719,7 @@ async def test_a_grant_is_consumed_through_a_fork():
         # execute(env=) runs the line in a fork of the session: the once
         # grant is read and consumed through the manager, so the fork
         # spends it for the session it forked from.
-        forked = await ws.execute("rm /scratch/z", env={"X": "1"})
+        forked = await ws.shell("rm /scratch/z", env={"X": "1"})
         assert forked.exit_code == 0
         code, _, err = await _line(ws, "rm /scratch/z")
         assert code == 126 and "requires approval" in err
@@ -1744,14 +1742,14 @@ async def test_a_blocking_host_answers_inside_the_line():
     # with an outcome set.
     ws = _ask_ws(on_ask=_host_allows_once)
     try:
-        await ws.execute("touch /scratch/z")
+        await ws.shell("touch /scratch/z")
         assert (await _line(ws, "rm /scratch/z"))[0] == 0
         assert ws.decisions.pending() == ()
     finally:
         await ws.close()
     ws = _ask_ws(on_ask=_host_denies)
     try:
-        await ws.execute("touch /scratch/z")
+        await ws.shell("touch /scratch/z")
         assert await _line(ws, "rm /scratch/z") == (
             126, "", "rm: Permission denied\npolicy denied: sign-off\n")
         assert (await _line(ws, "cat /scratch/z"))[0] == 0
@@ -1774,9 +1772,8 @@ async def test_a_host_still_deciding_does_not_outlive_the_run():
     cancel = asyncio.Event()
     ws = _ask_ws(on_ask=never)
     try:
-        await ws.execute("touch /scratch/z")
-        line = asyncio.ensure_future(ws.execute("rm /scratch/z",
-                                                cancel=cancel))
+        await ws.shell("touch /scratch/z")
+        line = asyncio.ensure_future(ws.shell("rm /scratch/z", cancel=cancel))
         await started.wait()
         cancel.set()
         with pytest.raises(MirageAbortError):
@@ -1801,13 +1798,13 @@ async def test_a_compound_line_asked_before_it_runs_is_killable_too():
     cancel = asyncio.Event()
     ws = _ask_ws(on_ask=never)
     try:
-        await ws.execute("touch /scratch/z")
+        await ws.shell("touch /scratch/z")
         # More than one command, so the question is put by the prejudge
         # pass rather than the per-command gate. That pass took no kill
         # channel, so this shape sat on the host after the single
         # command one stopped doing so.
         line = asyncio.ensure_future(
-            ws.execute("rm /scratch/z; echo done", cancel=cancel))
+            ws.shell("rm /scratch/z; echo done", cancel=cancel))
         await started.wait()
         cancel.set()
         with pytest.raises(MirageAbortError):
@@ -1863,7 +1860,7 @@ def _walk_ws() -> Workspace:
 
 
 async def _seed_walk_tree(ws: Workspace) -> None:
-    await ws.execute(
+    await ws.shell(
         "mkdir -p /data/t/private /data/t/sealed/deep /data/t/locked "
         "/data/t/open /data/t/asked /data/t/ghost && "
         "echo k > /data/t/private/k && echo s > /data/t/sealed/s && "

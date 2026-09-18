@@ -62,7 +62,7 @@ class DriftQueue:
     ``Workspace.load`` records one entry per read whose snapshot
     manifest carried a fingerprint but no stable revision (a pinned
     read needs no check: the pin guarantees the bytes). The first
-    ``dispatch`` or ``execute`` drains them, so downstream code can
+    ``dispatch`` or ``shell`` drains them, so downstream code can
     rely on consistent state.
     """
 

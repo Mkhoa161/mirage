@@ -46,7 +46,7 @@ describe('PythonRuntime version defaults', () => {
       )
       try {
         for (const line of ['python --version', 'python3 -V', 'python -VV']) {
-          const io = await ws.execute(line, { env: { PYTHONPATH: '/startup' } })
+          const io = await ws.shell(line, { env: { PYTHONPATH: '/startup' } })
           expect(io.exitCode).toBe(1)
           expect(new TextDecoder().decode(io.stdout)).toBe('')
           expect(new TextDecoder().decode(io.stderr)).toBe(

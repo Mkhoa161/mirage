@@ -31,7 +31,7 @@ async def main() -> None:
     try:
         for case in json.loads(
                 Path(__file__).with_name("cases.json").read_text()):
-            result = await ws.execute(case["command"])
+            result = await ws.shell(case["command"])
             results.append({
                 "name": case["name"],
                 "stdout": result.stdout.decode(),
@@ -103,7 +103,7 @@ async def main() -> None:
                 "cat /wandb/lab/experiments/run-a/files/nope",
                 "echo bad > /wandb/lab/experiments/run-a/summary.json"
         ]:
-            assert (await ws.execute(command)).exit_code != 0
+            assert (await ws.shell(command)).exit_code != 0
     finally:
         await ws.close()
     requests = await request_checks(os.environ["WANDB_BASE_URL"])

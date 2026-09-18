@@ -33,7 +33,7 @@ def ws() -> Workspace:
 
 
 def _run(ws: Workspace, line: str):
-    return asyncio.run(ws.execute(line))
+    return asyncio.run(ws.shell(line))
 
 
 def test_slash_head_word_runs_the_file(ws):

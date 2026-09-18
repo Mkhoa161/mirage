@@ -44,7 +44,7 @@ const slack = new SlackVFS({
 })
 
 const ws = new Workspace({ '/slack': slack }, { mode: MountMode.READ })
-const res = await ws.execute('ls /slack/channels/')
+const res = await ws.shell('ls /slack/channels/')
 console.log(res.stdoutText)
 ```
 
@@ -106,7 +106,7 @@ const slack = new SlackVFS({
 })
 
 const ws = new Workspace({ '/slack': slack }, { mode: MountMode.READ })
-const res = await ws.execute('ls /slack/channels/')
+const res = await ws.shell('ls /slack/channels/')
 console.log(res.stdoutText)
 ```
 

@@ -842,7 +842,7 @@ async def _run_check(ws: Workspace, check: dict) -> tuple[bool, str]:
         ws (Workspace): Watched workspace.
         check (dict): {"cmd", "contains"?|"absent"?}.
     """
-    result = await ws.execute(check["cmd"])
+    result = await ws.shell(check["cmd"])
     out = (await result.stdout_str()).strip()
     if "contains" in check:
         ok = check["contains"] in out
@@ -871,7 +871,7 @@ async def _run_case(ws: Workspace, op: ExternalWriter, trigger: CaseTrigger,
     """
     want = case["expect"]
     for cmd in case.get("warm", []):
-        await ws.execute(cmd)
+        await ws.shell(cmd)
     await _mutate(op, case["mutate"])
     await trigger(case)
     if want.get("delivered", True):
@@ -915,8 +915,8 @@ async def _seed(ws: Workspace, op: ExternalWriter, spec: dict) -> None:
     root = _watch_rel(spec) + "/"
     await op.create_dir(root)
     await op.remove_all(root)
-    await ws.execute(f"rm -rf {spec['watch_dir']}")
-    await ws.execute(f"mkdir -p {spec['watch_dir']}")
+    await ws.shell(f"rm -rf {spec['watch_dir']}")
+    await ws.shell(f"mkdir -p {spec['watch_dir']}")
     for name in spec["seed"]:
         await op.write(f"data/{name}", b"seed")
 

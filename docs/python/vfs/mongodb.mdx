@@ -232,49 +232,49 @@ async def main():
     ws = Workspace({"/mongodb": vfs}, mode=MountMode.READ)
 
     # List all databases
-    r = await ws.execute("ls /mongodb/")
+    r = await ws.shell("ls /mongodb/")
     print(await r.stdout_str())
 
     # List the entities under a database (database.json, collections/, views/)
-    r = await ws.execute("ls /mongodb/sample_mflix/")
+    r = await ws.shell("ls /mongodb/sample_mflix/")
     print(await r.stdout_str())
 
     # List collections
-    r = await ws.execute("ls /mongodb/sample_mflix/collections/")
+    r = await ws.shell("ls /mongodb/sample_mflix/collections/")
     print(await r.stdout_str())
 
     # Read first 5 movies
-    r = await ws.execute(
+    r = await ws.shell(
         'head -n 5 "/mongodb/sample_mflix/collections/movies/documents.jsonl"')
     print(await r.stdout_str())
 
     # Read last 5 movies
-    r = await ws.execute(
+    r = await ws.shell(
         'tail -n 5 "/mongodb/sample_mflix/collections/movies/documents.jsonl"')
     print(await r.stdout_str())
 
     # Inspect the sampled schema and indexes
-    r = await ws.execute(
+    r = await ws.shell(
         'cat "/mongodb/sample_mflix/collections/movies/schema.json"')
     print(await r.stdout_str())
 
     # Extract titles with jq
-    r = await ws.execute(
+    r = await ws.shell(
         'jq -r ".[] | .title" "/mongodb/sample_mflix/collections/movies/documents.jsonl"'
     )
     print(await r.stdout_str())
 
     # Search across a database (uses MongoDB query engine)
-    r = await ws.execute('grep "Godfather" "/mongodb/sample_mflix/"')
+    r = await ws.shell('grep "Godfather" "/mongodb/sample_mflix/"')
     print(await r.stdout_str())
 
     # Count documents (server-side, no download)
-    r = await ws.execute(
+    r = await ws.shell(
         'wc -l "/mongodb/sample_mflix/collections/movies/documents.jsonl"')
     print(await r.stdout_str())
 
     # View the database overview without recursing
-    r = await ws.execute('cat "/mongodb/sample_mflix/database.json"')
+    r = await ws.shell('cat "/mongodb/sample_mflix/database.json"')
     print(await r.stdout_str())
 
 

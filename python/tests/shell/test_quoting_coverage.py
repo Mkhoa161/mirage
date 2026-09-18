@@ -54,7 +54,7 @@ def _stdout(io) -> bytes:
 
 
 def _exec(ws, cmd, **kw):
-    return _run(ws.execute(cmd, **kw))
+    return _run(ws.shell(cmd, **kw))
 
 
 # ── paths with spaces ──────────────────────────────────────

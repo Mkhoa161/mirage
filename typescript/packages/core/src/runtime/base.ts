@@ -105,7 +105,7 @@ export abstract class Runtime {
     this.binding = binding
   }
 
-  /** Engine entry point; Workspace.execute still owns shell admission and routing. */
+  /** Engine entry point; Workspace.shell still owns shell admission and routing. */
   async execute(request: ExecutionRequest, context?: RuntimeContext): Promise<RunResult> {
     const current = context ?? this.captureContext()
     if (current !== undefined) {

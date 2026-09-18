@@ -37,7 +37,7 @@ runtime = DockerRuntime(captures=["python3"],
 ws = Workspace({"/data": S3VFS(S3Config(bucket="my-bucket"))},
                mode=MountMode.EXEC,
                runtimes=[runtime, "workspace"])
-await ws.execute("python3 job.py", cwd="/data")
+await ws.shell("python3 job.py", cwd="/data")
 ```
 
 The `container` config accepts a container name or id. Unknown config fields

@@ -370,15 +370,15 @@ def _ws():
 
 
 async def _seed(ws):
-    await ws.execute("mkdir -p /base/sub", session_id="s")
-    await ws.execute("printf 111 > /base/f1", session_id="s")
-    await ws.execute("printf 2222222 > /base/sub/f2", session_id="s")
-    await ws.execute("printf 3333333 > /base/inner/g1", session_id="s")
-    await ws.execute("ln -s /base/sub/f2 /base/link", session_id="s")
+    await ws.shell("mkdir -p /base/sub", session_id="s")
+    await ws.shell("printf 111 > /base/f1", session_id="s")
+    await ws.shell("printf 2222222 > /base/sub/f2", session_id="s")
+    await ws.shell("printf 3333333 > /base/inner/g1", session_id="s")
+    await ws.shell("ln -s /base/sub/f2 /base/link", session_id="s")
 
 
 def _out(ws, line):
-    r = _run(ws.execute(line, session_id="s"))
+    r = _run(ws.shell(line, session_id="s"))
     return r.stdout.decode()
 
 
@@ -444,8 +444,8 @@ def test_glob_keeps_a_match_spelled_like_the_word():
     """
     ws = _ws()
     _run(_seed(ws))
-    _run(ws.execute("touch '/base/*a.txt'", session_id="s"))
-    _run(ws.execute("touch /base/xa.txt", session_id="s"))
+    _run(ws.shell("touch '/base/*a.txt'", session_id="s"))
+    _run(ws.shell("touch /base/xa.txt", session_id="s"))
     assert _out(
         ws, "echo /base/*a.txt").split() == ["/base/*a.txt", "/base/xa.txt"]
 
@@ -462,9 +462,9 @@ def test_glob_lists_a_directory_whose_name_holds_a_quoted_glob_char():
     """
     ws = _ws()
     _run(_seed(ws))
-    _run(ws.execute("mkdir '/base/*d'", session_id="s"))
-    _run(ws.execute("touch '/base/*d/one.txt'", session_id="s"))
-    _run(ws.execute("touch '/base/*d/two.txt'", session_id="s"))
+    _run(ws.shell("mkdir '/base/*d'", session_id="s"))
+    _run(ws.shell("touch '/base/*d/one.txt'", session_id="s"))
+    _run(ws.shell("touch '/base/*d/two.txt'", session_id="s"))
     assert _out(ws, "echo '/base/*d'/*.txt").split() == [
         "/base/*d/one.txt", "/base/*d/two.txt"
     ]
@@ -509,8 +509,8 @@ def test_glob_produced_mount_root_is_refused():
     """
     ws = _ws()
     _run(_seed(ws))
-    typed = _run(ws.execute("tar -cf /out.tar /base/inner", session_id="s"))
-    globbed = _run(ws.execute("tar -cf /out2.tar /base/i*", session_id="s"))
+    typed = _run(ws.shell("tar -cf /out.tar /base/inner", session_id="s"))
+    globbed = _run(ws.shell("tar -cf /out2.tar /base/i*", session_id="s"))
     assert globbed.stderr == typed.stderr
     assert globbed.exit_code == typed.exit_code
     assert b"Device or resource busy" in globbed.stderr
@@ -518,8 +518,8 @@ def test_glob_produced_mount_root_is_refused():
 
 def _seed_links(ws):
     _run(_seed(ws))
-    _run(ws.execute("ln -s /base/sub /base/dlink", session_id="s"))
-    _run(ws.execute("ln -s /base/inner /base/mlink", session_id="s"))
+    _run(ws.shell("ln -s /base/sub /base/dlink", session_id="s"))
+    _run(ws.shell("ln -s /base/inner /base/mlink", session_id="s"))
 
 
 def test_glob_descends_a_symlinked_directory():
@@ -575,16 +575,16 @@ def _dirs_ws():
 
 
 async def _seed_dirs(ws):
-    await ws.execute(
+    await ws.shell(
         "mkdir -p /data/records/2026-09-10 /data/records/2026-09-11",
         session_id="s")
-    await ws.execute("echo sample > /data/records/2026-09-10/sample.txt",
-                     session_id="s")
-    await ws.execute("echo plain > /data/records/plain.txt", session_id="s")
-    await ws.execute("ln -s /data/records/2026-09-10 /data/records/lnk",
-                     session_id="s")
-    await ws.execute("ln -s /data/records/nowhere /data/records/broken",
-                     session_id="s")
+    await ws.shell("echo sample > /data/records/2026-09-10/sample.txt",
+                   session_id="s")
+    await ws.shell("echo plain > /data/records/plain.txt", session_id="s")
+    await ws.shell("ln -s /data/records/2026-09-10 /data/records/lnk",
+                   session_id="s")
+    await ws.shell("ln -s /data/records/nowhere /data/records/broken",
+                   session_id="s")
 
 
 # Trailing-slash pathname expansion, pinned against bash 5.2.37

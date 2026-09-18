@@ -76,9 +76,9 @@ async def main() -> None:
     # notify invalidates the caches for the changed path and its
     # ancestor listings before delivering, so a read after an event
     # can never serve pre-change bytes.
-    result = await ws.execute(f"cat {MOUNT}/reports/q1.txt")
+    result = await ws.shell(f"cat {MOUNT}/reports/q1.txt")
     print(f"\nread after notify: {(await result.stdout_str()).strip()!r}")
-    result = await ws.execute(f"ls {MOUNT}/reports")
+    result = await ws.shell(f"ls {MOUNT}/reports")
     print(f"listing: {' '.join((await result.stdout_str()).split())}")
 
     await ws.close()

@@ -21,7 +21,7 @@ from mirage.vfs.ram import RAMVFS
 async def run(ws: Workspace, cmd: str) -> None:
     print(f"\n$ {cmd}")
     try:
-        result = await ws.execute(cmd)
+        result = await ws.shell(cmd)
         out = (await result.stdout_str()).rstrip()
         if out:
             print(out)

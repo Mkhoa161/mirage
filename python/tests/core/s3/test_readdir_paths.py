@@ -25,10 +25,10 @@ from mirage.workspace import Workspace
 def ws():
     mem = RAMVFS()
     w = Workspace(mounts={"/mnt/data": (mem, MountMode.WRITE)})
-    asyncio.run(w.execute("mkdir /mnt/data/dir"))
-    asyncio.run(w.execute("echo -n a > /mnt/data/dir/a.txt"))
-    asyncio.run(w.execute("echo -n b > /mnt/data/dir/b.txt"))
-    asyncio.run(w.execute("echo -n c > /mnt/data/c.csv"))
+    asyncio.run(w.shell("mkdir /mnt/data/dir"))
+    asyncio.run(w.shell("echo -n a > /mnt/data/dir/a.txt"))
+    asyncio.run(w.shell("echo -n b > /mnt/data/dir/b.txt"))
+    asyncio.run(w.shell("echo -n c > /mnt/data/c.csv"))
     return w
 
 
@@ -54,7 +54,7 @@ def test_readdir_root(ws):
 def test_readdir_glob_expansion(ws):
 
     async def _run():
-        io = await ws.execute("echo /mnt/data/dir/*.txt")
+        io = await ws.shell("echo /mnt/data/dir/*.txt")
         return await io.stdout_str()
 
     out = asyncio.run(_run()).strip()

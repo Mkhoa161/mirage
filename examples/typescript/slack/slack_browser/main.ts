@@ -23,18 +23,18 @@ async function main(): Promise<void> {
     console.log(`=== BROWSER MODE: SlackVFS → ${PROXY_URL} ===\n`)
 
     console.log('=== ls /slack/ ===')
-    let r = await ws.execute('ls /slack/')
+    let r = await ws.shell('ls /slack/')
     console.log(r.stdoutText)
 
     console.log('=== ls /slack/channels/ | head -n 3 ===')
-    r = await ws.execute('ls /slack/channels/ | head -n 3')
+    r = await ws.shell('ls /slack/channels/ | head -n 3')
     console.log(r.stdoutText)
 
     console.log('=== ls /slack/users/ | head -n 3 ===')
-    r = await ws.execute('ls /slack/users/ | head -n 3')
+    r = await ws.shell('ls /slack/users/ | head -n 3')
     console.log(r.stdoutText)
 
-    r = await ws.execute('ls /slack/channels/ | head -n 1')
+    r = await ws.shell('ls /slack/channels/ | head -n 1')
     const firstCh = r.stdoutText.trim()
     if (firstCh === '') {
       console.log('no channels found')
@@ -43,15 +43,15 @@ async function main(): Promise<void> {
     const base = `/slack/channels/${firstCh}`
 
     console.log(`=== ls ${base}/ | tail -n 3 ===`)
-    r = await ws.execute(`ls "${base}/" | tail -n 3`)
+    r = await ws.shell(`ls "${base}/" | tail -n 3`)
     console.log(r.stdoutText)
 
-    r = await ws.execute(`ls "${base}/" | tail -n 1`)
+    r = await ws.shell(`ls "${base}/" | tail -n 1`)
     const target = r.stdoutText.trim()
     if (target !== '') {
       const filePath = `${base}/${target}`
       console.log(`=== head -n 2 ${filePath} ===`)
-      r = await ws.execute(`head -n 2 "${filePath}"`)
+      r = await ws.shell(`head -n 2 "${filePath}"`)
       const out = r.stdoutText.trim()
       if (out !== '') {
         for (const line of out.split('\n')) {
@@ -62,12 +62,12 @@ async function main(): Promise<void> {
       }
 
       console.log(`\n=== wc -l ${filePath} ===`)
-      r = await ws.execute(`wc -l "${filePath}"`)
+      r = await ws.shell(`wc -l "${filePath}"`)
       console.log(`  ${r.stdoutText.trim()}`)
     }
 
     console.log('\n=== tree -L 1 /slack/ ===')
-    r = await ws.execute('tree -L 1 /slack/')
+    r = await ws.shell('tree -L 1 /slack/')
     const treeOut = r.stdoutText.trim()
     if (treeOut !== '') {
       for (const line of treeOut.split('\n')) {

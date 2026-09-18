@@ -66,7 +66,7 @@ def test_cross_vfs_no_aggregate_returns_error():
                            filetype=None,
                            fn=_noop_fn)
     _register_on_both(ws, rc)
-    io = asyncio.run(ws.execute("nocross /m1/a.txt /m2/b.txt"))
+    io = asyncio.run(ws.shell("nocross /m1/a.txt /m2/b.txt"))
     assert io.exit_code == 1
     assert b"cross-mount not supported" in io.stderr
 
@@ -80,7 +80,7 @@ def test_cross_vfs_no_aggregate_names_mounts():
                            filetype=None,
                            fn=_noop_fn)
     _register_on_both(ws, rc)
-    io = asyncio.run(ws.execute("nocross /m1/a.txt /m2/b.txt"))
+    io = asyncio.run(ws.shell("nocross /m1/a.txt /m2/b.txt"))
     stderr = io.stderr.decode()
     assert "/m1" in stderr
     assert "/m2" in stderr
@@ -89,7 +89,7 @@ def test_cross_vfs_no_aggregate_names_mounts():
 def test_cross_vfs_with_aggregate_works():
     ws = _make_ws()
     _seed(ws)
-    io = asyncio.run(ws.execute("cat /m1/a.txt /m2/b.txt"))
+    io = asyncio.run(ws.shell("cat /m1/a.txt /m2/b.txt"))
     assert io.exit_code == 0
 
 
@@ -102,7 +102,7 @@ def test_cross_vfs_single_mount_still_works():
                            filetype=None,
                            fn=_noop_fn)
     _register_on_both(ws, rc)
-    io = asyncio.run(ws.execute("nocross /m1/a.txt"))
+    io = asyncio.run(ws.shell("nocross /m1/a.txt"))
     assert io.exit_code == 0
 
 
@@ -126,7 +126,7 @@ def test_cross_vfs_three_mounts():
     ws._registry.mount_for("/m1/").register(rc)
     ws._registry.mount_for("/m2/").register(rc)
     ws._registry.mount_for("/m3/").register(rc)
-    io = asyncio.run(ws.execute("nocross /m1/a.txt /m2/b.txt /m3/c.txt"))
+    io = asyncio.run(ws.shell("nocross /m1/a.txt /m2/b.txt /m3/c.txt"))
     assert io.exit_code == 1
     stderr = io.stderr.decode()
     assert "/m1" in stderr or "/m2" in stderr or "/m3" in stderr
@@ -143,7 +143,7 @@ def test_plan_cross_vfs_no_aggregate_returns_unknown():
                            provision_fn=_noop_provision)
     _register_on_both(ws, rc)
     result = asyncio.run(
-        ws.execute("nocross /m1/a.txt /m2/b.txt", provision=True))
+        ws.shell("nocross /m1/a.txt /m2/b.txt", provision=True))
     assert hasattr(result, "precision")
 
 
@@ -158,7 +158,7 @@ def test_plan_cross_vfs_with_aggregate_sums_metrics():
                            provision_fn=_noop_provision)
     _register_on_both(ws, rc)
     result = asyncio.run(
-        ws.execute("nocross /m1/a.txt /m2/b.txt", provision=True))
+        ws.shell("nocross /m1/a.txt /m2/b.txt", provision=True))
     assert hasattr(result, "precision")
 
 
@@ -172,7 +172,7 @@ def test_plan_single_mount_still_works():
                            fn=_noop_fn,
                            provision_fn=_noop_provision)
     _register_on_both(ws, rc)
-    result = asyncio.run(ws.execute("nocross /m1/a.txt", provision=True))
+    result = asyncio.run(ws.shell("nocross /m1/a.txt", provision=True))
     assert isinstance(result, ProvisionResult)
     assert result.network_read_low == 10
 
@@ -180,21 +180,21 @@ def test_plan_single_mount_still_works():
 def test_aggregate_partial_failure_propagates_exit_code():
     ws = _make_ws()
     _seed(ws)
-    io = asyncio.run(ws.execute("cat /m1/a.txt /m2/missing.txt"))
+    io = asyncio.run(ws.shell("cat /m1/a.txt /m2/missing.txt"))
     assert io.exit_code != 0
 
 
 def test_aggregate_partial_failure_still_returns_output():
     ws = _make_ws()
     _seed(ws)
-    io = asyncio.run(ws.execute("cat /m1/a.txt /m2/missing.txt"))
+    io = asyncio.run(ws.shell("cat /m1/a.txt /m2/missing.txt"))
     assert io.exit_code != 0
 
 
 def test_aggregate_partial_failure_has_stderr():
     ws = _make_ws()
     _seed(ws)
-    io = asyncio.run(ws.execute("cat /m1/a.txt /m2/missing.txt"))
+    io = asyncio.run(ws.shell("cat /m1/a.txt /m2/missing.txt"))
     stderr = io.stderr if io.stderr else b""
     assert len(stderr) > 0
 
@@ -202,5 +202,5 @@ def test_aggregate_partial_failure_has_stderr():
 def test_aggregate_all_succeed_exit_zero():
     ws = _make_ws()
     _seed(ws)
-    io = asyncio.run(ws.execute("cat /m1/a.txt /m2/b.txt"))
+    io = asyncio.run(ws.shell("cat /m1/a.txt /m2/b.txt"))
     assert io.exit_code == 0

@@ -139,8 +139,8 @@ async def exercise_cancellation(runtime):
                     f'Path("{path}").write_text(str(os.getpid())); '
                     'time.sleep(60)')
             task = asyncio.create_task(
-                workspace.execute(f'exec python3 -c {shlex.quote(code)}',
-                                  cwd='/home/user'))
+                workspace.shell(f'exec python3 -c {shlex.quote(code)}',
+                                cwd='/home/user'))
             try:
                 await wait_for_remote(runtime, f'test -s {path}')
                 survivor = asyncio.create_task(
@@ -242,21 +242,21 @@ async def main():
             workspace = Workspace({'/home/user/work': vfs},
                                   mode=MountMode.EXEC,
                                   runtimes=[runtime, 'workspace'])
-            result = await workspace.execute(
-                'cat > /home/user/work/output.txt', stdin=b'old')
+            result = await workspace.shell('cat > /home/user/work/output.txt',
+                                           stdin=b'old')
             assert result.exit_code == 0
-            result = await workspace.execute('cat /home/user/work/output.txt')
+            result = await workspace.shell('cat /home/user/work/output.txt')
             assert await result.stdout_str() == 'old'
-            result = await workspace.execute('cat > /home/user/work/input.txt',
-                                             stdin=b'from vfs')
+            result = await workspace.shell('cat > /home/user/work/input.txt',
+                                           stdin=b'from vfs')
             assert result.exit_code == 0, await result.stderr_str()
             code = ('from pathlib import Path; p=Path("/home/user/work"); '
                     'assert (p/"input.txt").read_text()=="from vfs"; '
                     '(p/"output.txt").write_text("from ssh")')
-            result = await workspace.execute(f'python3 -c {shlex.quote(code)}',
-                                             cwd='/home/user/work')
+            result = await workspace.shell(f'python3 -c {shlex.quote(code)}',
+                                           cwd='/home/user/work')
             assert result.exit_code == 0, await result.stderr_str()
-            result = await workspace.execute('cat /home/user/work/output.txt')
+            result = await workspace.shell('cat /home/user/work/output.txt')
             assert await result.stdout_str() == 'from ssh'
             passed('python_router_shared_sftp_files')
             await sandbox.commands.run('python3 -m pip install -q mcp==1.26.0',

@@ -145,10 +145,10 @@ def test_aliased_mounts_refuse_the_move_that_used_to_lose_the_file():
     })
 
     async def _run():
-        await ws.execute("sh -c 'echo precious > /m1/x.txt'")
-        io = await ws.execute("mv /m1/x.txt /m2/x.txt")
+        await ws.shell("sh -c 'echo precious > /m1/x.txt'")
+        io = await ws.shell("mv /m1/x.txt /m2/x.txt")
         err = await io.stderr_str()
-        kept = await (await ws.execute("cat /m2/x.txt")).stdout_str()
+        kept = await (await ws.shell("cat /m2/x.txt")).stdout_str()
         return err, io.exit_code, kept
 
     err, code, kept = asyncio.run(_run())

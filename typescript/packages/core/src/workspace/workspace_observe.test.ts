@@ -69,7 +69,7 @@ describe('Workspace observer wiring', () => {
   it('writes at least one command entry after an execute', async () => {
     const store = new RAMObserverStore()
     const ws = buildWorkspace(store)
-    await ws.execute('echo hello > /data/test.txt')
+    await ws.shell('echo hello > /data/test.txt')
     const files = jsonlSessionFiles(store)
     expect(files.length).toBeGreaterThanOrEqual(1)
     const first = files[0]
@@ -89,8 +89,8 @@ describe('Workspace observer wiring', () => {
   it('writes both op and command entries after reads and writes', async () => {
     const store = new RAMObserverStore()
     const ws = buildWorkspace(store)
-    await ws.execute('echo hello > /data/test.txt')
-    await ws.execute('cat /data/test.txt')
+    await ws.shell('echo hello > /data/test.txt')
+    await ws.shell('cat /data/test.txt')
     const files = jsonlSessionFiles(store)
     const first = files[0]
     if (first === undefined) throw new Error('no session file')
@@ -108,8 +108,8 @@ describe('Workspace observer wiring', () => {
 
   it('does not mount the observer store (only root, /data, /dev, /.bash_history)', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo hi > /data/f.txt')
-    const result = await ws.execute('ls /.sessions')
+    await ws.shell('echo hi > /data/f.txt')
+    const result = await ws.shell('ls /.sessions')
     expect(result.exitCode).not.toBe(0)
     const prefixes = new Set(ws.registry.allMounts().map((m) => m.prefix))
     // No `/` was mounted, so the workspace adds an empty root anchor at `/`.
@@ -123,8 +123,8 @@ describe('Workspace observer wiring', () => {
   // and `history` views render fine without these fields.
   it('records exitCode and cwd on every command event', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo hello > /data/test.txt')
-    await ws.execute('cat /data/missing.txt')
+    await ws.shell('echo hello > /data/test.txt')
+    await ws.shell('cat /data/missing.txt')
     const commands = await ws.history()
     expect(commands).toHaveLength(2)
     expect(commands.every((e) => 'exit_code' in e)).toBe(true)
@@ -140,8 +140,8 @@ describe('Workspace observer wiring', () => {
   // python's test_execute_records_op_source.
   it('records a source and a read op on every op event', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo hello > /data/test.txt')
-    await ws.execute('cat /data/test.txt')
+    await ws.shell('echo hello > /data/test.txt')
+    await ws.shell('cat /data/test.txt')
     const events = await ws.observer.events()
     const ops = events.filter((e) => e.type === 'op')
     expect(ops.length).toBeGreaterThan(0)
@@ -173,7 +173,7 @@ describe('Workspace observer wiring', () => {
       'cat /db/report.json',
       'cp /s3/report.json /db/copy.json',
     ]) {
-      await ws.execute(line)
+      await ws.shell(line)
     }
     const ops = (await ws.observer.events())
       .filter((e) => e.type === 'op')
@@ -191,10 +191,10 @@ describe('Workspace observer wiring', () => {
 
   it('records clear, command, delete and op event types', async () => {
     const ws = buildWorkspace()
-    await ws.execute('echo hello > /data/test.txt')
-    await ws.execute('history -s synthetic')
-    await ws.execute('history -d 1')
-    await ws.execute('history -c')
+    await ws.shell('echo hello > /data/test.txt')
+    await ws.shell('history -s synthetic')
+    await ws.shell('history -d 1')
+    await ws.shell('history -c')
     const events = await ws.observer.events()
     const types = new Set(events.map((e) => e.type))
     for (const kind of ['clear', 'command', 'delete', 'op']) {

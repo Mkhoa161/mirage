@@ -81,7 +81,7 @@ const ws = new Workspace({
 })
 await ws.fuseReady()
 
-await ws.execute('echo hello | tee /data/x.txt')
+await ws.shell('echo hello | tee /data/x.txt')
 console.log('mountpoints:', ws.fuseMountpoints)
 
 // Any tool (ls, cat, external subprocess) can now see x.txt under the mountpoint.

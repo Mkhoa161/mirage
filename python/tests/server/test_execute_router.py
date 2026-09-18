@@ -92,7 +92,7 @@ async def test_execute_passes_runtime_through():
     async with AsyncClient(transport=transport,
                            base_url="http://test") as client:
         wid = await _create_workspace(client)
-        # An unknown entry name fails loud inside Workspace.execute,
+        # An unknown entry name fails loud inside Workspace.shell,
         # proving the field reaches the runtime argument.
         r = await client.post(
             f"/v1/workspaces/{wid}/execute",

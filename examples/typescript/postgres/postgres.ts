@@ -30,7 +30,7 @@ const DEC = new TextDecoder()
 
 async function run(label: string, cmd: string): Promise<void> {
   console.log(`\n=== ${label} ===`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   if (r.exitCode !== 0) {
     console.log(`(exit=${String(r.exitCode)})`)
     if (r.stderr.byteLength > 0) console.log(DEC.decode(r.stderr))
@@ -46,7 +46,7 @@ try {
 
   await run('cat /pg/database.json (head)', 'head -n 20 /pg/database.json')
 
-  const dirOut = await ws.execute('ls /pg/public/tables')
+  const dirOut = await ws.shell('ls /pg/public/tables')
   const tables = DEC.decode(dirOut.stdout).split('\n').filter((s) => s.length > 0)
   if (tables.length === 0) {
     console.log('\nno tables in public schema; stopping')
@@ -63,7 +63,7 @@ try {
     // workspace namespace (durable, snapshot-captured) and merge into
     // dispatch-level stat.
     console.log(`=== metadata overlay on ${dir}/rows.jsonl ===`)
-    const metaRes = await ws.execute(
+    const metaRes = await ws.shell(
       `chmod 640 "${dir}/rows.jsonl" && chown 500:dev "${dir}/rows.jsonl" && touch -t 202601021530 "${dir}/rows.jsonl"`,
     )
     console.log(`  chmod/chown/touch exit=${String(metaRes.exitCode)}`)

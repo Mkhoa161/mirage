@@ -125,9 +125,9 @@ describe('a guest sees the marks the workspace wired', () => {
         runtimes: [new MontyRuntime()],
       },
     )
-    await ws.execute('echo hi > /data/a.txt')
-    await ws.execute('ln -s /data/a.txt /data/lnk')
-    const io = await ws.execute(
+    await ws.shell('echo hi > /data/a.txt')
+    await ws.shell('ln -s /data/a.txt /data/lnk')
+    const io = await ws.shell(
       'python3 -c "from pathlib import Path;' +
         " print(Path('/data/lnk').is_symlink(), Path('/data/a.txt').is_symlink())\"",
     )

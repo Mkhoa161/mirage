@@ -78,7 +78,7 @@ async def main():
         print(f"  nonexistent: {os.path.exists('/s3/data/nope.txt')}")
 
         print("\n--- VFS commands ---")
-        result = await ws.execute("grep -c mirage /s3/data/example.jsonl")
+        result = await ws.shell("grep -c mirage /s3/data/example.jsonl")
         print(f"  grep matches: {(await result.stdout_str()).strip()}")
 
         print("\n=== KEY_PREFIX MOUNT (/deep → subdata/subsubdata/) ===\n")
@@ -105,11 +105,11 @@ async def main():
                 print(f"  [{i}] {json.dumps(rec)[:90]}...")
 
         print("\n--- VFS commands against /deep ---")
-        r = await ws.execute("grep -c mirage /deep/example.jsonl")
+        r = await ws.shell("grep -c mirage /deep/example.jsonl")
         print(f"  grep -c mirage     : {(await r.stdout_str()).strip()}")
-        r = await ws.execute("rg -l mirage /deep")
+        r = await ws.shell("rg -l mirage /deep")
         print(f"  rg -l mirage       : {(await r.stdout_str()).strip()}")
-        r = await ws.execute("jq .metadata.version /deep/example.json")
+        r = await ws.shell("jq .metadata.version /deep/example.json")
         print(f"  jq .metadata.version: {(await r.stdout_str()).strip()}")
 
         print("\n--- bash history ---")

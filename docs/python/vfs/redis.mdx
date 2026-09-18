@@ -74,27 +74,27 @@ async def main():
     ws = Workspace({"/redis": vfs}, mode=MountMode.WRITE)
 
     # Create directories and files
-    await ws.execute("mkdir -p /redis/data/")
-    await ws.execute('echo "hello world" | tee /redis/data/hello.txt')
+    await ws.shell("mkdir -p /redis/data/")
+    await ws.shell('echo "hello world" | tee /redis/data/hello.txt')
 
     # Read back
-    r = await ws.execute("cat /redis/data/hello.txt")
+    r = await ws.shell("cat /redis/data/hello.txt")
     print(await r.stdout_str())
 
     # List files
-    r = await ws.execute("ls /redis/data/")
+    r = await ws.shell("ls /redis/data/")
     print(await r.stdout_str())
 
     # Copy and move
-    await ws.execute("cp /redis/data/hello.txt /redis/data/copy.txt")
-    await ws.execute("mv /redis/data/copy.txt /redis/data/renamed.txt")
+    await ws.shell("cp /redis/data/hello.txt /redis/data/copy.txt")
+    await ws.shell("mv /redis/data/copy.txt /redis/data/renamed.txt")
 
     # Search
-    r = await ws.execute('grep "hello" /redis/data/')
+    r = await ws.shell('grep "hello" /redis/data/')
     print(await r.stdout_str())
 
     # Clean up
-    await ws.execute("rm -r /redis/data/")
+    await ws.shell("rm -r /redis/data/")
 
 
 if __name__ == "__main__":

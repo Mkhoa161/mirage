@@ -52,9 +52,9 @@ def label(exc: OSError) -> str:
 async def main():
     ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
 
-    await ws.execute('echo "hello world" | tee /data/hello.txt')
-    await ws.execute("mkdir /data/sub")
-    await ws.execute('echo "nested" | tee /data/sub/nested.txt')
+    await ws.shell('echo "hello world" | tee /data/hello.txt')
+    await ws.shell("mkdir /data/sub")
+    await ws.shell('echo "nested" | tee /data/sub/nested.txt')
 
     with ws:
         print("=== VFS MODE ===\n")

@@ -39,13 +39,13 @@ const model = new HfModelsVFS({
 const ws = new Workspace({ '/m/': model }, { mode: MountMode.READ })
 
 // ls is cheap: one HTTP list call
-console.log((await ws.execute('ls -lh /m/')).stdoutText)
+console.log((await ws.shell('ls -lh /m/')).stdoutText)
 
 // Read the config (small, fast)
-console.log((await ws.execute('cat /m/config.json')).stdoutText)
+console.log((await ws.shell('cat /m/config.json')).stdoutText)
 
 // Stat the weights without downloading them
-console.log((await ws.execute('stat /m/model.safetensors')).stdoutText)
+console.log((await ws.shell('stat /m/model.safetensors')).stdoutText)
 ```
 
 ## Reading, not writing

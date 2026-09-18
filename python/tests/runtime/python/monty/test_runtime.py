@@ -176,7 +176,7 @@ def test_python3_reports_missing_extra(monkeypatch):
     import mirage.runtime.python.monty.runtime as monty_module
     monkeypatch.setattr(monty_module, "pydantic_monty", None)
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC)
-    io = asyncio.run(ws.execute("python3 -c 'print(1)'"))
+    io = asyncio.run(ws.shell("python3 -c 'print(1)'"))
     assert io.exit_code == 127
     assert b"monty' extra" in io.stderr
 

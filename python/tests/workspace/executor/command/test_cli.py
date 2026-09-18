@@ -691,10 +691,10 @@ async def test_a_leaf_writes_the_session_through_its_door():
     # reaching into the session: the write lands, and the shell sees it.
     with Workspace({"/ram/": RAMVFS()}) as ws:
         ws.register_cli("stash", STASH)
-        result = await ws.execute("stash TOKEN abc")
+        result = await ws.shell("stash TOKEN abc")
         assert result.exit_code == 0
         assert result.stdout == b"TOKEN=abc\n"
-        echoed = await ws.execute("echo $TOKEN")
+        echoed = await ws.shell("echo $TOKEN")
         assert echoed.stdout == b"abc\n"
 
 
@@ -705,11 +705,11 @@ async def test_a_leafs_session_write_clears_the_same_gate_the_shell_does():
     # go through one door rather than to the session.
     with Workspace({"/ram/": RAMVFS()}, policies=[DenyAwsWrites()]) as ws:
         ws.register_cli("stash", STASH)
-        denied = await ws.execute("stash AWS_PROFILE prod")
+        denied = await ws.shell("stash AWS_PROFILE prod")
         assert denied.exit_code != 0
         assert b"not yours to set" in (denied.stderr or b"")
-        assert (await ws.execute("echo $AWS_PROFILE")).stdout == b"\n"
-        allowed = await ws.execute("stash OTHER fine")
+        assert (await ws.shell("echo $AWS_PROFILE")).stdout == b"\n"
+        allowed = await ws.shell("stash OTHER fine")
         assert allowed.exit_code == 0
 
 
@@ -733,13 +733,13 @@ def _disk_workspace(root):
 
 
 async def _warm_then_run(ws: Workspace, root, line: str) -> tuple[str, str]:
-    await ws.execute("cat /data/a.txt")
-    await ws.execute("ls /data")
+    await ws.shell("cat /data/a.txt")
+    await ws.shell("ls /data")
     (root / "a.txt").write_bytes(b"v2\n")
-    result = await ws.execute(line)
+    result = await ws.shell(line)
     assert result.exit_code == 0, result.stderr
-    body = (await ws.execute("cat /data/a.txt")).stdout.decode()
-    listing = (await ws.execute("ls /data")).stdout.decode()
+    body = (await ws.shell("cat /data/a.txt")).stdout.decode()
+    listing = (await ws.shell("ls /data")).stdout.decode()
     return body, listing
 
 

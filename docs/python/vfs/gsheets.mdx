@@ -108,44 +108,44 @@ async def main():
     ws.register_cli("gws", GWS, config.model_dump())
 
     # List structure
-    r = await ws.execute("ls /gsheets/")
+    r = await ws.shell("ls /gsheets/")
     print(await r.stdout_str())
 
     # List owned spreadsheets
-    r = await ws.execute("ls /gsheets/owned/")
+    r = await ws.shell("ls /gsheets/owned/")
     print(await r.stdout_str())
 
     # Read a spreadsheet
-    r = await ws.execute(
+    r = await ws.shell(
         "cat /gsheets/owned/2026-04-04_Roadmap__1AbCdEf.gsheet.json")
     print(await r.stdout_str())
 
     # Extract title with jq
-    r = await ws.execute(
+    r = await ws.shell(
         'jq ".properties.title"'
         " /gsheets/owned/2026-04-04_Roadmap__1AbCdEf.gsheet.json")
     print(await r.stdout_str())
 
     # Search across all spreadsheets
-    r = await ws.execute('rg "revenue" /gsheets/owned/')
+    r = await ws.shell('rg "revenue" /gsheets/owned/')
     print(await r.stdout_str())
 
     # Tree view
-    r = await ws.execute("tree -L 1 /gsheets/")
+    r = await ws.shell("tree -L 1 /gsheets/")
     print(await r.stdout_str())
 
     # Read cell values
-    r = await ws.execute(
+    r = await ws.shell(
         'gws sheets read --spreadsheet 1AbCdEf --range "Sheet1!A1:C3"')
     print(await r.stdout_str())
 
     # Append rows
-    r = await ws.execute(
+    r = await ws.shell(
         "gws sheets append --spreadsheet 1AbCdEf --values Alice,30,NYC")
     print(await r.stdout_str())
 
     # Create a new spreadsheet
-    r = await ws.execute(
+    r = await ws.shell(
         'gws sheets spreadsheets create'
         ' --json \'{"properties":{"title":"MIRAGE Sheet"}}\'')
     print(await r.stdout_str())

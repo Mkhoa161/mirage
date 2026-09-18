@@ -39,7 +39,7 @@ async def test_custom_process_version_never_executes_code(mode):
     ws = Workspace({"/": RAMVFS()}, mode=mode, runtimes=[runtime, "workspace"])
     try:
         for line in ["python --version", "python3 -V", "python -VV"]:
-            io = await ws.execute(line, env={"PYTHONPATH": "/startup"})
+            io = await ws.shell(line, env={"PYTHONPATH": "/startup"})
             assert io.exit_code == 1
             assert await io.stdout_str() == ""
             assert await io.stderr_str(

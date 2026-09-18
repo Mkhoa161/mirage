@@ -78,8 +78,8 @@ def test_strict_load_raises_when_s3_etag_drifts(tmp_path):
         stack.enter_context(patch_s3_multi({"test-bucket": store}))
         src = Workspace({"/s3": (S3VFS(_config()), MountMode.WRITE)},
                         mode=MountMode.WRITE)
-        asyncio.run(src.execute("ls /s3/"))
-        result = asyncio.run(src.execute("cat /s3/data.csv"))
+        asyncio.run(src.shell("ls /s3/"))
+        result = asyncio.run(src.shell("cat /s3/data.csv"))
         assert b"version 1" in result.stdout
 
         snap = tmp_path / "snap.tar"
@@ -98,7 +98,7 @@ def test_strict_load_raises_when_s3_etag_drifts(tmp_path):
                            size=len(b"version 1 bytes\n"))))
         assert asyncio.run(vfs.index.get("/s3/data.csv")).entry is not None
         with pytest.raises(ContentDriftError) as exc_info:
-            asyncio.run(dst.execute("cat /s3/data.csv"))
+            asyncio.run(dst.shell("cat /s3/data.csv"))
         assert exc_info.value.path == "/s3/data.csv"
         live = exc_info.value.live_fingerprint
         recorded = exc_info.value.snapshot_fingerprint
@@ -116,7 +116,7 @@ def test_strict_load_checks_drift_before_an_ops_write(tmp_path):
         stack.enter_context(patch_s3_multi({"test-bucket": store}))
         src = Workspace({"/s3": (S3VFS(_config()), MountMode.WRITE)},
                         mode=MountMode.WRITE)
-        asyncio.run(src.execute("cat /s3/data.csv"))
+        asyncio.run(src.shell("cat /s3/data.csv"))
 
         snap = tmp_path / "snap.tar"
         asyncio.run(src.snapshot(snap))
@@ -137,7 +137,7 @@ def test_off_load_serves_drifted_bytes_silently(tmp_path):
         stack.enter_context(patch_s3_multi({"test-bucket": store}))
         src = Workspace({"/s3": (S3VFS(_config()), MountMode.WRITE)},
                         mode=MountMode.WRITE)
-        asyncio.run(src.execute("cat /s3/data.csv"))
+        asyncio.run(src.shell("cat /s3/data.csv"))
 
         snap = tmp_path / "snap.tar"
         asyncio.run(src.snapshot(snap))
@@ -146,7 +146,7 @@ def test_off_load_serves_drifted_bytes_silently(tmp_path):
         dst = _load(snap,
                     mounts={"/s3": S3VFS(_config())},
                     drift_policy=DriftPolicy.OFF)
-        result = asyncio.run(dst.execute("cat /s3/data.csv"))
+        result = asyncio.run(dst.shell("cat /s3/data.csv"))
         assert b"VERSION 2 DRIFTED" in result.stdout
 
 
@@ -159,13 +159,13 @@ def test_strict_load_passes_when_etag_unchanged(tmp_path):
         stack.enter_context(patch_s3_multi({"test-bucket": store}))
         src = Workspace({"/s3": (S3VFS(_config()), MountMode.WRITE)},
                         mode=MountMode.WRITE)
-        asyncio.run(src.execute("cat /s3/data.csv"))
+        asyncio.run(src.shell("cat /s3/data.csv"))
 
         snap = tmp_path / "snap.tar"
         asyncio.run(src.snapshot(snap))
 
         dst = _load(snap, mounts={"/s3": S3VFS(_config())})
-        result = asyncio.run(dst.execute("cat /s3/data.csv"))
+        result = asyncio.run(dst.shell("cat /s3/data.csv"))
         assert b"stable bytes" in result.stdout
 
 
@@ -182,13 +182,13 @@ def test_unrecorded_path_skips_drift_check(tmp_path):
         stack.enter_context(patch_s3_multi({"test-bucket": store}))
         src = Workspace({"/s3": (S3VFS(_config()), MountMode.WRITE)},
                         mode=MountMode.WRITE)
-        asyncio.run(src.execute("cat /s3/read-me.txt"))
+        asyncio.run(src.shell("cat /s3/read-me.txt"))
 
         snap = tmp_path / "snap.tar"
         asyncio.run(src.snapshot(snap))
 
         dst = _load(snap, mounts={"/s3": S3VFS(_config())})
-        result = asyncio.run(dst.execute("cat /s3/added-later.txt"))
+        result = asyncio.run(dst.shell("cat /s3/added-later.txt"))
         assert b"not in snapshot" in result.stdout
 
 
@@ -205,7 +205,7 @@ def test_version_pin_serves_original_bytes_on_versioned_bucket(tmp_path):
             patch_s3_multi({"test-bucket": store}, versioned={"test-bucket"}))
         src = Workspace({"/s3": (S3VFS(_config()), MountMode.WRITE)},
                         mode=MountMode.WRITE)
-        asyncio.run(src.execute("cat /s3/data.csv"))
+        asyncio.run(src.shell("cat /s3/data.csv"))
 
         snap = tmp_path / "snap.tar"
         asyncio.run(src.snapshot(snap))
@@ -215,7 +215,7 @@ def test_version_pin_serves_original_bytes_on_versioned_bucket(tmp_path):
         # Cache holds snapshot bytes; clear so we hit S3 and exercise the
         # pin path, not the cache path.
         _drop_path_from_cache(dst, "/s3/data.csv")
-        result = asyncio.run(dst.execute("cat /s3/data.csv"))
+        result = asyncio.run(dst.shell("cat /s3/data.csv"))
         assert result.stdout == b"original\n"
 
 
@@ -232,8 +232,8 @@ def test_live_only_mount_does_not_block_snapshot(tmp_path, caplog):
     surfacing the live-only mount list.
     """
     src = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
-    asyncio.run(src.execute("echo body > /m/note.txt"))
-    asyncio.run(src.execute("cat /m/note.txt"))
+    asyncio.run(src.shell("echo body > /m/note.txt"))
+    asyncio.run(src.shell("cat /m/note.txt"))
 
     snap = tmp_path / "snap.tar"
     asyncio.run(src.snapshot(snap))
@@ -259,7 +259,7 @@ async def test_snapshot_prepares_new_mount_before_capturing_cache(capture):
         ws = Workspace({"/": ancestor})
         clone = None
         try:
-            assert (await ws.execute("cat /data/file /outside /data2/file")
+            assert (await ws.shell("cat /data/file /outside /data2/file")
                     ).stdout == b"oldkeepsibling"
             assert await ws.cache.get("/data/file") == b"old"
             ws.add_mount("/data", replacement)
@@ -278,7 +278,7 @@ async def test_snapshot_prepares_new_mount_before_capturing_cache(capture):
             assert await clone.cache.get("/data/file") is None
             assert await clone.cache.get("/outside") == b"keep"
             assert await clone.cache.get("/data2/file") == b"sibling"
-            assert (await clone.execute("cat /data/file")).stdout == b"new"
+            assert (await clone.shell("cat /data/file")).stdout == b"new"
         finally:
             if clone is not None:
                 await clone.close()
@@ -318,13 +318,12 @@ async def test_snapshot_fingerprints_keep_read_mount_ownership(
         ws.register_cli("gate", CLISpec(name="gate", fn=gate))
         reading = None
         try:
-            await ws.execute("cat /data/nested/file")
+            await ws.shell("cat /data/nested/file")
             if delayed:
-                reading = asyncio.create_task(
-                    ws.execute("cat /data/file; gate"))
+                reading = asyncio.create_task(ws.shell("cat /data/file; gate"))
                 await asyncio.wait_for(entered.wait(), 5)
             else:
-                await ws.execute("cat /data/file")
+                await ws.shell("cat /data/file")
             if not shadow:
                 await ws.unmount("/data")
             ws.add_mount("/data", replacement)
@@ -334,7 +333,7 @@ async def test_snapshot_fingerprints_keep_read_mount_ownership(
             state = await to_state_dict(ws)
             assert [e["path"]
                     for e in state["fingerprints"]] == ["/data/nested/file"]
-            await ws.execute("cat /data/file")
+            await ws.shell("cat /data/file")
             state = await to_state_dict(ws)
             entries = {e["path"]: e for e in state["fingerprints"]}
             new_read = next(
@@ -406,7 +405,7 @@ async def test_restored_drift_checks_do_not_follow_replaced_mounts(shadow):
             if not shadow:
                 await loaded.unmount("/data")
             loaded.add_mount("/data", replacement)
-            assert (await loaded.execute("cat /data/file")).stdout == b"new"
+            assert (await loaded.shell("cat /data/file")).stdout == b"new"
         finally:
             if loaded is not None:
                 await loaded.close()

@@ -1363,7 +1363,7 @@ async function openMem0(target: Target): Promise<Open> {
 }
 
 async function adminExec(ws: Workspace, command: string): Promise<void> {
-  const result = await ws.execute(command)
+  const result = await ws.shell(command)
   if (result.exitCode !== 0) {
     throw new Error(`admin command failed: ${command}: ${new TextDecoder().decode(result.stderr)}`)
   }
@@ -2033,7 +2033,7 @@ export async function openConsistency(
   }
   const shadow = opened.shadow()
   const mutate = async (path: string, content: Uint8Array): Promise<void> => {
-    const result = await shadow.execute(`tee ${path} > /dev/null`, { stdin: content })
+    const result = await shadow.shell(`tee ${path} > /dev/null`, { stdin: content })
     if (result.exitCode !== 0) {
       throw new Error(new TextDecoder().decode(result.stderr))
     }

@@ -21,7 +21,7 @@ const fs = require('fs') as typeof import('fs')
 async function run(ws: Workspace, cmd: string): Promise<void> {
   console.log(`\n$ ${cmd}`)
   try {
-    const r = await ws.execute(cmd)
+    const r = await ws.shell(cmd)
     const out = r.stdoutText.replace(/\s+$/, '')
     if (out !== '') console.log(out)
     const err = r.stderrText.replace(/\s+$/, '')

@@ -73,16 +73,16 @@ from mirage.vfs.s3 import S3Config, S3VFS
 ws = Workspace({"/s3": S3VFS(S3Config(bucket="my-bucket"))})
 
 # 1. Index miss → S3 LIST. Listing stored in index cache.
-await ws.execute("ls /s3/data/")
+await ws.shell("ls /s3/data/")
 
 # 2. Index hit → 0 network calls.
-await ws.execute('find /s3/data/ -name "*.jsonl"')
+await ws.shell('find /s3/data/ -name "*.jsonl"')
 
 # 3. File miss → S3 GET. Bytes stored in file cache.
-await ws.execute("cat /s3/data/log.jsonl | wc -l")
+await ws.shell("cat /s3/data/log.jsonl | wc -l")
 
 # 4. File hit → 0 network calls.
-await ws.execute("grep alert /s3/data/log.jsonl")
+await ws.shell("grep alert /s3/data/log.jsonl")
 ```
 
 ```typescript TypeScript
@@ -91,16 +91,16 @@ import { S3VFS, Workspace } from '@struktoai/mirage-node'
 const ws = new Workspace({ '/s3': new S3VFS({ bucket: 'my-bucket' }) })
 
 // 1. Index miss → S3 LIST. Listing stored in index cache.
-await ws.execute('ls /s3/data/')
+await ws.shell('ls /s3/data/')
 
 // 2. Index hit → 0 network calls.
-await ws.execute('find /s3/data/ -name "*.jsonl"')
+await ws.shell('find /s3/data/ -name "*.jsonl"')
 
 // 3. File miss → S3 GET. Bytes stored in file cache.
-await ws.execute('cat /s3/data/log.jsonl | wc -l')
+await ws.shell('cat /s3/data/log.jsonl | wc -l')
 
 // 4. File hit → 0 network calls.
-await ws.execute('grep alert /s3/data/log.jsonl')
+await ws.shell('grep alert /s3/data/log.jsonl')
 ```
 
 </CodeGroup>

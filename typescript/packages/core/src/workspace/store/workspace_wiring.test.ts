@@ -60,7 +60,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
   it('writes the discovery record on first execute', async () => {
     const store = new RAMWorkspaceStateStore()
     const ws = await mkWs(store, 'ws-a')
-    await ws.execute('echo hi')
+    await ws.shell('echo hi')
     const meta = await store.loadMeta('ws-a')
     expect(meta?.workspace_id).toBe('ws-a')
     expect(meta?.default_session_id).toBe(ws.defaultSessionId)
@@ -88,7 +88,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
   it('attach adopts the stored default session pointer', async () => {
     const store = new RAMWorkspaceStateStore()
     const wsA = await mkWs(store, 'shared')
-    await wsA.execute('export MARK=1')
+    await wsA.shell('export MARK=1')
     await wsA.flushSessions()
 
     const wsB = await mkWs(store, 'shared')
@@ -113,7 +113,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
       )
     const wsA = build()
     open.push(wsA)
-    await wsA.execute('mkdir -p /data/vault && echo top > /data/vault/secret')
+    await wsA.shell('mkdir -p /data/vault && echo top > /data/vault/secret')
     await wsA.setSessionProfile(
       wsA.defaultSessionId,
       parseSessionProfile({ paths: { hide: ['/data/vault'] } }),
@@ -131,7 +131,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
   it('an explicit session id is not adopted away', async () => {
     const store = new RAMWorkspaceStateStore()
     const wsA = await mkWs(store, 'shared')
-    await wsA.execute('echo hi')
+    await wsA.shell('echo hi')
 
     const parser = await getTestParser()
     const wsB = new Workspace(
@@ -206,7 +206,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
       created_at: 1,
     })
     const ws = await mkWs(store, 'ws-a')
-    await ws.execute('echo hi')
+    await ws.shell('echo hi')
     const meta = await ws.workspaceMeta()
     expect(meta.default_session_id).toBe('sess_x')
     expect(meta.created_at).toBe(1)
@@ -233,7 +233,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
     await wsA.flushSessions()
 
     const wsB = await mkWs(store, 'shared', ram)
-    const denied = await wsB.execute('echo blocked > /data/x.txt', { sessionId: 'narrow' })
+    const denied = await wsB.shell('echo blocked > /data/x.txt', { sessionId: 'narrow' })
     expect(denied.exitCode).not.toBe(0)
   })
 
@@ -252,10 +252,10 @@ describe('Workspace on a WorkspaceStateStore', () => {
     const store = new RAMWorkspaceStateStore()
     const ram = new RAMVFS()
     const wsA = await mkWs(store, 'shared', ram)
-    await wsA.execute('echo one')
+    await wsA.shell('echo one')
 
     const wsB = await mkWs(store, 'shared', ram)
-    const result = await wsB.execute('history')
+    const result = await wsB.shell('history')
     expect(result.stdoutText).toContain('echo one')
   })
 
@@ -268,10 +268,10 @@ describe('Workspace on a WorkspaceStateStore', () => {
       { mode: MountMode.EXEC, shellParser: parser, workspaceId: 'ws-a', store, observe: direct },
     )
     open.push(ws)
-    await ws.execute('echo hi')
+    await ws.shell('echo hi')
 
     const sibling = await mkWs(store, 'ws-a')
-    const result = await sibling.execute('history')
+    const result = await sibling.shell('history')
     expect(result.stdoutText).not.toContain('echo hi')
   })
 })

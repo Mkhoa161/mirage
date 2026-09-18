@@ -29,7 +29,7 @@ const email = new EmailVFS({
 })
 
 const ws = new Workspace({ '/mail': email }, { mode: MountMode.WRITE })
-await ws.execute('ls /mail/INBOX/')
+await ws.shell('ls /mail/INBOX/')
 ```
 
 | Field | Default | Notes |

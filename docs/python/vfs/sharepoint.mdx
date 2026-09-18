@@ -135,19 +135,19 @@ async def main() -> None:
     ws = Workspace({"/sharepoint/": vfs}, mode=MountMode.WRITE)
 
     # list sites, then drives in the first site
-    r = await ws.execute("ls /sharepoint/")
+    r = await ws.shell("ls /sharepoint/")
     print(await r.stdout_str())
 
-    r = await ws.execute("ls /sharepoint/Engineering/")
+    r = await ws.shell("ls /sharepoint/Engineering/")
     print(await r.stdout_str())
 
-    await ws.execute(
+    await ws.shell(
         "echo 'hello from mirage' > /sharepoint/Engineering/Documents/note.txt")
 
-    r = await ws.execute("cat /sharepoint/Engineering/Documents/note.txt")
+    r = await ws.shell("cat /sharepoint/Engineering/Documents/note.txt")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /sharepoint/Engineering/Documents/")
+    r = await ws.shell("tree /sharepoint/Engineering/Documents/")
     print(await r.stdout_str())
 
 

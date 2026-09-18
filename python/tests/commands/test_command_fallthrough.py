@@ -52,9 +52,9 @@ async def test_command_fallthrough_on_none():
         mount.register(rc)
     for rc in _testcmd_default._registered_commands:
         mount.register(rc)
-    await ws.execute("mkdir -p /data")
-    await ws.execute("touch /data/file.custom")
-    io = await ws.execute("testcmd /data/file.custom")
+    await ws.shell("mkdir -p /data")
+    await ws.shell("touch /data/file.custom")
+    io = await ws.shell("testcmd /data/file.custom")
     assert io.stdout == b"default handler"
 
 
@@ -66,7 +66,7 @@ async def test_command_no_fallthrough_when_stdout_present():
         mount.register(rc)
     for rc in _testcmd2_default._registered_commands:
         mount.register(rc)
-    await ws.execute("mkdir -p /data")
-    await ws.execute("touch /data/file.special")
-    io = await ws.execute("testcmd2 /data/file.special")
+    await ws.shell("mkdir -p /data")
+    await ws.shell("touch /data/file.special")
+    io = await ws.shell("testcmd2 /data/file.special")
     assert io.stdout == b"special handler"

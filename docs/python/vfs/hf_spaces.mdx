@@ -69,13 +69,13 @@ async def main() -> None:
         HfSpacesConfig(repo_id="HuggingFaceBio/carbon-demo"))
     ws = Workspace({"/s": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /s/")
+    r = await ws.shell("ls /s/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /s/README.md | head -n 20")
+    r = await ws.shell("cat /s/README.md | head -n 20")
     print(await r.stdout_str())
 
-    r = await ws.execute("grep -l import /s/*.py 2>/dev/null")
+    r = await ws.shell("grep -l import /s/*.py 2>/dev/null")
     print(await r.stdout_str())
 
 

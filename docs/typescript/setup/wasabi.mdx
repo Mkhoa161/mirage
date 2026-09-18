@@ -25,7 +25,7 @@ const wasabi = new WasabiVFS({
 })
 
 const ws = new Workspace({ '/bucket/': wasabi }, { mode: MountMode.READ })
-const res = await ws.execute('ls /bucket/')
+const res = await ws.shell('ls /bucket/')
 console.log(res.stdoutText)
 ```
 

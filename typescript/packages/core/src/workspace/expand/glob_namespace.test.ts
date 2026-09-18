@@ -37,16 +37,16 @@ async function makeWs(): Promise<Workspace> {
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
   )
   ws.createSession('s')
-  await ws.execute('mkdir -p /base/sub', { sessionId: 's' })
-  await ws.execute('printf 111 > /base/f1', { sessionId: 's' })
-  await ws.execute('printf 2222222 > /base/sub/f2', { sessionId: 's' })
-  await ws.execute('printf 3333333 > /base/inner/g1', { sessionId: 's' })
-  await ws.execute('ln -s /base/sub/f2 /base/link', { sessionId: 's' })
+  await ws.shell('mkdir -p /base/sub', { sessionId: 's' })
+  await ws.shell('printf 111 > /base/f1', { sessionId: 's' })
+  await ws.shell('printf 2222222 > /base/sub/f2', { sessionId: 's' })
+  await ws.shell('printf 3333333 > /base/inner/g1', { sessionId: 's' })
+  await ws.shell('ln -s /base/sub/f2 /base/link', { sessionId: 's' })
   return ws
 }
 
 async function out(ws: Workspace, line: string): Promise<string> {
-  return stdoutStr(await ws.execute(line, { sessionId: 's' }))
+  return stdoutStr(await ws.shell(line, { sessionId: 's' }))
 }
 
 describe('glob expansion sees namespace state', () => {
@@ -98,8 +98,8 @@ describe('glob expansion sees namespace state', () => {
   // The live `*` matches the literal `*` in the first name.
   it('keeps a match spelled like the glob word', async () => {
     const ws = await makeWs()
-    await ws.execute("touch '/base/*a.txt'", { sessionId: 's' })
-    await ws.execute('touch /base/xa.txt', { sessionId: 's' })
+    await ws.shell("touch '/base/*a.txt'", { sessionId: 's' })
+    await ws.shell('touch /base/xa.txt', { sessionId: 's' })
     expect((await out(ws, 'echo /base/*a.txt')).split(/\s+/).filter(Boolean)).toEqual([
       '/base/*a.txt',
       '/base/xa.txt',
@@ -114,9 +114,9 @@ describe('glob expansion sees namespace state', () => {
   //   echo '/data/*d'/*.txt -> /data/*d/one.txt /data/*d/two.txt
   it('lists a directory whose name holds a quoted glob character', async () => {
     const ws = await makeWs()
-    await ws.execute("mkdir '/base/*d'", { sessionId: 's' })
-    await ws.execute("touch '/base/*d/one.txt'", { sessionId: 's' })
-    await ws.execute("touch '/base/*d/two.txt'", { sessionId: 's' })
+    await ws.shell("mkdir '/base/*d'", { sessionId: 's' })
+    await ws.shell("touch '/base/*d/one.txt'", { sessionId: 's' })
+    await ws.shell("touch '/base/*d/two.txt'", { sessionId: 's' })
     expect((await out(ws, "echo '/base/*d'/*.txt")).split(/\s+/).filter(Boolean)).toEqual([
       '/base/*d/one.txt',
       '/base/*d/two.txt',
@@ -150,8 +150,8 @@ describe('glob expansion sees namespace state', () => {
   // checked. Both spellings must answer identically.
   it('refuses a mount root a glob produced', async () => {
     const ws = await makeWs()
-    const typed = await ws.execute('tar -cf /out.tar /base/inner', { sessionId: 's' })
-    const globbed = await ws.execute('tar -cf /out2.tar /base/i*', { sessionId: 's' })
+    const typed = await ws.shell('tar -cf /out.tar /base/inner', { sessionId: 's' })
+    const globbed = await ws.shell('tar -cf /out2.tar /base/i*', { sessionId: 's' })
     expect(new TextDecoder().decode(globbed.stderr)).toBe(new TextDecoder().decode(typed.stderr))
     expect(globbed.exitCode).toBe(typed.exitCode)
     expect(new TextDecoder().decode(globbed.stderr)).toContain('Device or resource busy')
@@ -166,8 +166,8 @@ describe('glob expansion sees namespace state', () => {
 describe('glob expansion follows a symlinked directory', () => {
   async function makeLinked(): Promise<Workspace> {
     const ws = await makeWs()
-    await ws.execute('ln -s /base/sub /base/dlink', { sessionId: 's' })
-    await ws.execute('ln -s /base/inner /base/mlink', { sessionId: 's' })
+    await ws.shell('ln -s /base/sub /base/dlink', { sessionId: 's' })
+    await ws.shell('ln -s /base/inner /base/mlink', { sessionId: 's' })
     return ws
   }
 
@@ -213,11 +213,11 @@ async function makeDirsWs(): Promise<Workspace> {
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
   )
   ws.createSession('s')
-  await ws.execute('mkdir -p /data/records/2026-09-10 /data/records/2026-09-11', { sessionId: 's' })
-  await ws.execute('echo sample > /data/records/2026-09-10/sample.txt', { sessionId: 's' })
-  await ws.execute('echo plain > /data/records/plain.txt', { sessionId: 's' })
-  await ws.execute('ln -s /data/records/2026-09-10 /data/records/lnk', { sessionId: 's' })
-  await ws.execute('ln -s /data/records/nowhere /data/records/broken', { sessionId: 's' })
+  await ws.shell('mkdir -p /data/records/2026-09-10 /data/records/2026-09-11', { sessionId: 's' })
+  await ws.shell('echo sample > /data/records/2026-09-10/sample.txt', { sessionId: 's' })
+  await ws.shell('echo plain > /data/records/plain.txt', { sessionId: 's' })
+  await ws.shell('ln -s /data/records/2026-09-10 /data/records/lnk', { sessionId: 's' })
+  await ws.shell('ln -s /data/records/nowhere /data/records/broken', { sessionId: 's' })
   return ws
 }
 
@@ -234,11 +234,11 @@ async function makeFlatWs(): Promise<Workspace> {
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
   )
   ws.createSession('s')
-  await ws.execute('mkdir -p /data/records/2026-09-10 /data/records/2026-09-11', { sessionId: 's' })
-  await ws.execute('echo sample > /data/records/2026-09-10/sample.txt', { sessionId: 's' })
-  await ws.execute('echo plain > /data/records/plain.txt', { sessionId: 's' })
-  await ws.execute('ln -s /data/records/2026-09-10 /data/records/lnk', { sessionId: 's' })
-  await ws.execute('ln -s /data/records/nowhere /data/records/broken', { sessionId: 's' })
+  await ws.shell('mkdir -p /data/records/2026-09-10 /data/records/2026-09-11', { sessionId: 's' })
+  await ws.shell('echo sample > /data/records/2026-09-10/sample.txt', { sessionId: 's' })
+  await ws.shell('echo plain > /data/records/plain.txt', { sessionId: 's' })
+  await ws.shell('ln -s /data/records/2026-09-10 /data/records/lnk', { sessionId: 's' })
+  await ws.shell('ln -s /data/records/nowhere /data/records/broken', { sessionId: 's' })
   return ws
 }
 

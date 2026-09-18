@@ -96,7 +96,7 @@ class ProbeRAMAccessor(RAMAccessor):
 
 
 async def stdout(ws: Workspace, command: str) -> str:
-    return await (await ws.execute(command)).stdout_str()
+    return await (await ws.shell(command)).stdout_str()
 
 
 @pytest.mark.asyncio
@@ -104,7 +104,7 @@ async def test_mounted_mktemp_preserves_virtual_and_vfs_paths():
     vfs = RAMVFS()
     ws = Workspace({"/scratch": vfs}, mode=MountMode.WRITE)
     try:
-        await ws.execute("mkdir -p /scratch/tmp")
+        await ws.shell("mkdir -p /scratch/tmp")
         output = await stdout(ws, "mktemp -p /scratch/tmp agent.XXXX")
         virtual = output.strip()
         assert virtual.startswith("/scratch/tmp/agent.")
@@ -124,18 +124,18 @@ async def test_mounted_mktemp_preserves_virtual_and_vfs_paths():
 async def test_cache_tracks_overwrite_rename_and_unlink_commands():
     ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.execute("echo old | tee /data/a.txt > /dev/null")
+        await ws.shell("echo old | tee /data/a.txt > /dev/null")
         assert await stdout(ws, "cat /data/a.txt") == "old\n"
 
-        await ws.execute("echo new | tee /data/a.txt > /dev/null")
+        await ws.shell("echo new | tee /data/a.txt > /dev/null")
         assert await stdout(ws, "cat /data/a.txt") == "new\n"
 
-        await ws.execute("mv /data/a.txt /data/b.txt")
-        missing = await ws.execute("cat /data/a.txt")
+        await ws.shell("mv /data/a.txt /data/b.txt")
+        missing = await ws.shell("cat /data/a.txt")
         assert missing.exit_code == 1
         assert await stdout(ws, "cat /data/b.txt") == "new\n"
 
-        await ws.execute("rm /data/b.txt")
+        await ws.shell("rm /data/b.txt")
         assert "b.txt" not in await stdout(ws, "ls /data")
     finally:
         await ws.close()
@@ -153,7 +153,7 @@ async def test_workspace_close_respects_store_ownership_end_to_end():
                        store=shared,
                        workspace_id="shared")
 
-    await first.execute("echo first")
+    await first.shell("echo first")
     await first.close()
     assert shared.close_calls == 0
     assert shared.namespace_probe.close_calls == 0
@@ -167,7 +167,7 @@ async def test_workspace_close_respects_store_ownership_end_to_end():
                       mode=MountMode.WRITE,
                       store=owned,
                       owns_store=True)
-    await owner.execute("echo owner")
+    await owner.shell("echo owner")
     await owner.close()
     await owner.close()
     assert owned.close_calls == 1
@@ -180,7 +180,7 @@ async def test_workspace_close_respects_store_ownership_end_to_end():
 async def test_close_leaves_mounts_shared_with_other_workspaces_open():
     vfs = ProbeRAMVFS()
     ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
-    await ws.execute("echo seed | tee /data/a.txt > /dev/null")
+    await ws.shell("echo seed | tee /data/a.txt > /dev/null")
 
     state = await to_state_dict(ws)
     replica = await Workspace.from_state(state, mounts={"/data": vfs})

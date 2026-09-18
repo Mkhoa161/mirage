@@ -105,12 +105,12 @@ interface CrossEnv {
 }
 
 async function runCmd(env: CrossEnv, cmd: string): Promise<string> {
-  const io = await env.ws.execute(cmd)
+  const io = await env.ws.shell(cmd)
   return new TextDecoder().decode(io.stdout)
 }
 
 async function runExit(env: CrossEnv, cmd: string): Promise<number> {
-  const io = await env.ws.execute(cmd)
+  const io = await env.ws.shell(cmd)
   return io.exitCode
 }
 

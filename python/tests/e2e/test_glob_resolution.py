@@ -66,7 +66,7 @@ def multi_ws():
 
 
 async def _run(ws, cmd):
-    io = await ws.execute(cmd)
+    io = await ws.shell(cmd)
     return await io.stdout_str(), io
 
 
@@ -142,7 +142,7 @@ async def test_s3_glob_no_match_keeps_literal(s3_ws):
 @pytest.mark.asyncio
 async def test_cross_mount_cp_with_gcs(multi_ws):
     with patch_async_session(S3_OBJECTS):
-        await multi_ws.execute("cp /gcs/data/report.txt /tmp/r.txt")
+        await multi_ws.shell("cp /gcs/data/report.txt /tmp/r.txt")
         out, io = await _run(multi_ws, "cat /tmp/r.txt")
     assert "line1" in out
     assert io.exit_code == 0

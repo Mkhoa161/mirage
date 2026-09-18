@@ -60,39 +60,39 @@ async def main() -> None:
     ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
 
     # Create files
-    await ws.execute('echo "hello world" | tee /data/hello.txt')
-    await ws.execute('echo \'{"name": "alice", "age": 30}\' | tee /data/user.json')
-    await ws.execute("mkdir /data/reports")
-    await ws.execute('echo "revenue,100" | tee /data/reports/q1.csv')
+    await ws.shell('echo "hello world" | tee /data/hello.txt')
+    await ws.shell('echo \'{"name": "alice", "age": 30}\' | tee /data/user.json')
+    await ws.shell("mkdir /data/reports")
+    await ws.shell('echo "revenue,100" | tee /data/reports/q1.csv')
 
     # Read
-    r = await ws.execute("cat /data/hello.txt")
+    r = await ws.shell("cat /data/hello.txt")
     print(await r.stdout_str())
 
     # List
-    r = await ws.execute("ls /data/")
+    r = await ws.shell("ls /data/")
     print(await r.stdout_str())
 
     # Query JSON
-    r = await ws.execute('jq ".name" /data/user.json')
+    r = await ws.shell('jq ".name" /data/user.json')
     print(await r.stdout_str())
 
     # Search
-    r = await ws.execute("grep hello /data/hello.txt")
+    r = await ws.shell("grep hello /data/hello.txt")
     print(await r.stdout_str())
 
     # Tree
-    r = await ws.execute("tree /data/")
+    r = await ws.shell("tree /data/")
     print(await r.stdout_str())
 
     # File info
-    r = await ws.execute("stat /data/hello.txt")
+    r = await ws.shell("stat /data/hello.txt")
     print(await r.stdout_str())
 
     # Copy, move, remove
-    await ws.execute("cp /data/hello.txt /data/hello_copy.txt")
-    await ws.execute("mv /data/hello_copy.txt /data/renamed.txt")
-    await ws.execute("rm /data/renamed.txt")
+    await ws.shell("cp /data/hello.txt /data/hello_copy.txt")
+    await ws.shell("mv /data/hello_copy.txt /data/renamed.txt")
+    await ws.shell("rm /data/renamed.txt")
 
 
 if __name__ == "__main__":

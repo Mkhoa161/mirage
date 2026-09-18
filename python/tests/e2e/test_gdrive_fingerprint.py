@@ -36,14 +36,14 @@ async def test_gdrive_always_refetches_after_external_mutation():
         consistency=ConsistencyPolicy.ALWAYS,
     )
     with patch_gdrive(fake):
-        await ws.execute("ls /gd")
-        io1 = await ws.execute("cat /gd/file.txt")
+        await ws.shell("ls /gd")
+        io1 = await ws.shell("cat /gd/file.txt")
         assert (await io1.materialize_stdout()) == b"v1"
 
         fake.add_file("file.txt", b"v2-external")
-        await ws.execute("ls /gd")
+        await ws.shell("ls /gd")
 
-        io2 = await ws.execute("cat /gd/file.txt")
+        io2 = await ws.shell("cat /gd/file.txt")
         assert (await io2.materialize_stdout()) == b"v2-external", (
             "GDrive ALWAYS must refetch after modifiedTime changes")
 
@@ -64,13 +64,13 @@ async def test_gdrive_lazy_may_serve_stale():
         consistency=ConsistencyPolicy.LAZY,
     )
     with patch_gdrive(fake):
-        await ws.execute("ls /gd")
-        io1 = await ws.execute("cat /gd/file.txt")
+        await ws.shell("ls /gd")
+        io1 = await ws.shell("cat /gd/file.txt")
         assert (await io1.materialize_stdout()) == b"v1"
 
         fake.add_file("file.txt", b"v2-external")
 
-        io2 = await ws.execute("cat /gd/file.txt")
+        io2 = await ws.shell("cat /gd/file.txt")
         got = await io2.materialize_stdout()
         assert got in (b"v1", b"v2-external"), (
             "LAZY allowed to serve cache; just confirming no crash")

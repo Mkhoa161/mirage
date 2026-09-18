@@ -120,11 +120,11 @@ it.each(missingQuoteCases.cases.filter((c) => c.expect.exit === 2).map((c) => c.
   async (command) => {
     const ws = new Workspace({ '/data': new RAMVFS() }, { shellParser: parser })
     try {
-      const io = await ws.execute(command)
+      const io = await ws.shell(command)
       expect(io.exitCode).toBe(2)
       expect(new TextDecoder().decode(io.stdout)).toBe('')
       expect(new TextDecoder().decode(io.stderr)).toContain('syntax error')
-      expect((await ws.execute('test -e /data/unexpected')).exitCode).toBe(1)
+      expect((await ws.shell('test -e /data/unexpected')).exitCode).toBe(1)
     } finally {
       await ws.close()
     }

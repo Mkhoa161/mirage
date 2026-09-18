@@ -31,7 +31,7 @@ async def request_checks(base: str) -> list[dict[str, Any]]:
                 if step.get('invalidate'):
                     await vfs.index.invalidate()
                 start = len(requests)
-                result = await ws.execute(step['command'])
+                result = await ws.shell(step['command'])
                 results.append({
                     'exit_code': result.exit_code,
                     'requests': requests[start:]

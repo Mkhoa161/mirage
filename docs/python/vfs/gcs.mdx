@@ -94,19 +94,19 @@ vfs = GCSVFS(config)
 async def main() -> None:
     ws = Workspace({"/gcs/": vfs}, mode=MountMode.READ)
 
-    r = await ws.execute("ls /gcs/")
+    r = await ws.shell("ls /gcs/")
     print(await r.stdout_str())
 
-    r = await ws.execute("cat /gcs/data/example.json | head -n 10")
+    r = await ws.shell("cat /gcs/data/example.json | head -n 10")
     print(await r.stdout_str())
 
-    r = await ws.execute("tree /gcs/")
+    r = await ws.shell("tree /gcs/")
     print(await r.stdout_str())
 
-    r = await ws.execute("find /gcs/ -name '*.parquet'")
+    r = await ws.shell("find /gcs/ -name '*.parquet'")
     print(await r.stdout_str())
 
-    r = await ws.execute("stat /gcs/data/example.json")
+    r = await ws.shell("stat /gcs/data/example.json")
     print(await r.stdout_str())
 
 

@@ -24,7 +24,7 @@ import { MountMode, OPFSVFS, Workspace } from '@struktoai/mirage-browser'
 const opfs = new OPFSVFS({ root: 'mirage' })
 
 const ws = new Workspace({ '/data': opfs }, { mode: MountMode.WRITE })
-await ws.execute('echo persistent | tee /data/note.txt')
+await ws.shell('echo persistent | tee /data/note.txt')
 ```
 
 | Field | Default | Notes |

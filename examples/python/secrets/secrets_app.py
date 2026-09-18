@@ -59,7 +59,7 @@ async def show(ws: Workspace, line: str) -> None:
         ws (Workspace): the workspace to run in.
         line (str): the shell line.
     """
-    result = await ws.execute(line)
+    result = await ws.shell(line)
     print(f"$ {line}")
     print(f"  exit {result.exit_code}")
     for stream, text in (("out", await

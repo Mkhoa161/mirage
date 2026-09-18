@@ -29,7 +29,7 @@ from mirage.workspace import Workspace
 ])
 def test_unsupported_builtin_returns_clear_error(name):
     ws = Workspace({"/data": RAMVFS()})
-    io = asyncio.run(ws.execute(name))
+    io = asyncio.run(ws.shell(name))
     assert io.exit_code == 2, (
         f"expected exit 2 for {name!r}, got {io.exit_code}")
     stderr = io.stderr or b""
@@ -44,7 +44,7 @@ def test_unsupported_builtin_returns_clear_error(name):
 ])
 def test_output_process_substitution_unsupported(cmd):
     ws = Workspace({"/data": RAMVFS()})
-    io = asyncio.run(ws.execute(cmd))
+    io = asyncio.run(ws.shell(cmd))
     assert io.exit_code == 2, (
         f"expected exit 2 for {cmd!r}, got {io.exit_code}")
     stderr = io.stderr or b""
@@ -57,6 +57,6 @@ def test_input_process_substitution_still_works():
     ram = RAMVFS()
     ram._store.files["/a"] = b"line1\nline2\n"
     ws = Workspace({"/data": (ram, MountMode.READ)})
-    io = asyncio.run(ws.execute("cat <(cat /data/a)"))
+    io = asyncio.run(ws.shell("cat <(cat /data/a)"))
     assert io.exit_code == 0, (
         f"input process substitution should still work, got {io}")

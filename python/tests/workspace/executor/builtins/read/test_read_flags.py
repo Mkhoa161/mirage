@@ -24,7 +24,7 @@ def _ws() -> Workspace:
 
 
 async def _run(ws: Workspace, cmd: str) -> tuple[str, int]:
-    io = await ws.execute(cmd)
+    io = await ws.shell(cmd)
     return (await io.stdout_str()), io.exit_code
 
 

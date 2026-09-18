@@ -40,14 +40,14 @@ def ops_summary() -> str:
 async def main():
     print(f"=== Wasabi at {config.resolved_endpoint_url()} ===")
 
-    r = await ws.execute("ls /wasabi/")
+    r = await ws.shell("ls /wasabi/")
     print("ls /wasabi/:\n" + await r.stdout_str())
 
-    r = await ws.execute("find /wasabi/ -name '*.json' | head -n 5")
+    r = await ws.shell("find /wasabi/ -name '*.json' | head -n 5")
     print("find *.json:\n" + await r.stdout_str())
 
-    r = await ws.execute("grep -m 1 mirage /wasabi/data/example.jsonl",
-                         provision=True)
+    r = await ws.shell("grep -m 1 mirage /wasabi/data/example.jsonl",
+                       provision=True)
     print(f"plan grep -m 1: network_read={r.network_read} "
           f"precision={r.precision}")
 

@@ -44,10 +44,10 @@ def test_s3_always_refetches_after_external_mutation():
         ws = _make_ws(ConsistencyPolicy.ALWAYS)
 
         async def run() -> tuple[bytes, bytes]:
-            io1 = await ws.execute("cat /data/file.txt")
+            io1 = await ws.shell("cat /data/file.txt")
             first = await io1.materialize_stdout()
             store["file.txt"] = b"v2"
-            io2 = await ws.execute("cat /data/file.txt")
+            io2 = await ws.shell("cat /data/file.txt")
             second = await io2.materialize_stdout()
             return first, second
 
@@ -67,10 +67,10 @@ def test_s3_lazy_serves_cache():
         ws = _make_ws(ConsistencyPolicy.LAZY)
 
         async def run() -> tuple[bytes, bytes]:
-            io1 = await ws.execute("cat /data/file.txt")
+            io1 = await ws.shell("cat /data/file.txt")
             first = await io1.materialize_stdout()
             store["file.txt"] = b"v2"
-            io2 = await ws.execute("cat /data/file.txt")
+            io2 = await ws.shell("cat /data/file.txt")
             second = await io2.materialize_stdout()
             return first, second
 

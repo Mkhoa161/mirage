@@ -163,7 +163,7 @@ describe('execution bindings', () => {
   it('retains session permissions and gated writes after capture', async () => {
     const ws = await world()
     try {
-      await ws.execute('echo private > /secret/a')
+      await ws.shell('echo private > /secret/a')
       ws.createSession('agent', { profile: { paths: { hide: ['/secret'] } } })
       const context = ws.runtimeContext('agent'),
         other = ws.runtimeContext()
@@ -196,9 +196,9 @@ describe('execution bindings', () => {
   it('projects live mounts, namespace links, and attributes through the binding', async () => {
     const ws = await world()
     try {
-      await ws.execute('echo shared > /data/a; chmod 600 /data/a')
+      await ws.shell('echo shared > /data/a; chmod 600 /data/a')
       const context = ws.runtimeContext()
-      await ws.execute('ln -s /data/a /data/link')
+      await ws.shell('ln -s /data/a /data/link')
       expect(required(context.ns.links).resolve('/data/link')).toBe('/data/a')
       ws.addMount('/data/nested', new RAMVFS(), MountMode.EXEC)
       expect(context.resolver.ownerOf('/data/nested/a')).toBe('/data/nested/')
@@ -253,7 +253,7 @@ it.each([
     )
     const ws = await world([runtime])
     try {
-      await ws.execute('echo shared > /data/file; ln -s /data/file /data/link')
+      await ws.shell('echo shared > /data/file; ln -s /data/file /data/link')
       ws.createSession('one')
       ws.createSession('two')
       const calls: string[][] = [[], []]
@@ -301,14 +301,14 @@ it('command execution supplies its active workspace context', async () => {
   const ws = await world([runtime])
   try {
     ws.createSession('agent')
-    await ws.execute('export PUBLIC=agent; cd /data', { sessionId: 'agent' })
-    const result = await ws.execute('python3 -c hello', { sessionId: 'agent' })
+    await ws.shell('export PUBLIC=agent; cd /data', { sessionId: 'agent' })
+    const result = await ws.shell('python3 -c hello', { sessionId: 'agent' })
     expect(dec.decode(result.stdout)).toBe('hello')
     const captured = required(runtime.contexts.at(-1))
     expect(captured.cwd.virtual).toBe('/data')
     expect(captured.env.PUBLIC).toBe('agent')
     expect(required(captured.sessionView).get('PUBLIC')).toBe('agent')
-    await ws.execute('python3 -c other')
+    await ws.shell('python3 -c other')
     expect(required(runtime.contexts.at(-1)).env.PUBLIC).toBeUndefined()
     expect(required(captured.sessionView).get('PUBLIC')).toBe('agent')
   } finally {

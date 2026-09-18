@@ -70,8 +70,8 @@ async def test_warm_read_stays_on_real_mount(tmp_path):
     ws = Workspace({"/": disk}, mode=MountMode.READ)
     ws.mount("/").register_fns([stat_zzz_disk])
 
-    first = await ws.execute("stat /example.zzz")
-    second = await ws.execute("stat /example.zzz")
+    first = await ws.shell("stat /example.zzz")
+    second = await ws.shell("stat /example.zzz")
     assert "CUSTOM DISK STAT" in (await first.stdout_str())
     assert "CUSTOM DISK STAT" in (await second.stdout_str()), (
         "warm read lost the real mount's custom handler; read-through should "
@@ -93,10 +93,10 @@ async def test_cross_mount_read_serves_cache(tmp_path):
     },
                    mode=MountMode.WRITE,
                    consistency=ConsistencyPolicy.LAZY)
-    await ws.execute("echo hi > /r/b.txt")
-    await (await ws.execute("cat /d/a.txt")).stdout_str()
+    await ws.shell("echo hi > /r/b.txt")
+    await (await ws.shell("cat /d/a.txt")).stdout_str()
     (tmp_path / "a.txt").write_bytes(b"v2\n")
-    out = await (await ws.execute("cat /d/a.txt /r/b.txt")).stdout_str()
+    out = await (await ws.shell("cat /d/a.txt /r/b.txt")).stdout_str()
     assert "v1" in out and "v2" not in out, (
         f"cross-mount read did not serve the warm operand from cache: {out!r}")
 
@@ -135,7 +135,7 @@ async def test_shell_stat_gcs_orphan_under_always():
     await ws.namespace.set_attrs("/r/gone.txt", mode=0o600)
     assert ws.namespace.meta_for("/r/gone.txt") is not None
 
-    await ws.execute("stat /r/gone.txt")
+    await ws.shell("stat /r/gone.txt")
 
     assert ws.namespace.meta_for("/r/gone.txt") is None
 

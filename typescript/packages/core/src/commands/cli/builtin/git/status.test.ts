@@ -122,7 +122,7 @@ function git(repo: string, args: string[]): string {
 /** Both answers to the same `git status` spelling, mirage's first. */
 async function both(setup: Setup, spelling: string[]): Promise<[string, string]> {
   const [ws, repo] = await stage(setup)
-  const result = await ws.execute(`git -C /repo status ${spelling.join(' ')}`)
+  const result = await ws.shell(`git -C /repo status ${spelling.join(' ')}`)
   return [DEC.decode(result.stdout), git(repo, ['status', ...spelling])]
 }
 

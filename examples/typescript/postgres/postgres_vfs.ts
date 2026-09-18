@@ -32,7 +32,7 @@ const DEC = new TextDecoder()
 
 async function dump(ws: Workspace, label: string, cmd: string): Promise<void> {
   console.log(`\n--- ${label} ---`)
-  const r = await ws.execute(cmd)
+  const r = await ws.shell(cmd)
   if (r.exitCode !== 0) {
     console.log(`(exit=${String(r.exitCode)}) ${DEC.decode(r.stderr)}`)
     return
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
     await dump(ws, 'ls /pg/public', 'ls /pg/public')
     await dump(ws, 'ls /pg/public/tables (first 5)', 'ls /pg/public/tables | head -n 5')
 
-    const tablesOut = await ws.execute('ls /pg/public/tables')
+    const tablesOut = await ws.shell('ls /pg/public/tables')
     const tables = DEC.decode(tablesOut.stdout).split('\n').filter((s) => s.length > 0)
     if (tables.length === 0) {
       console.log('\nno tables in public; stopping')
