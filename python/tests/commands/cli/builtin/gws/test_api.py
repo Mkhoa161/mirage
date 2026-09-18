@@ -24,7 +24,7 @@ from mirage.commands.errors import UsageError
 from mirage.core.google.config import GoogleConfig
 from mirage.io.stream import materialize
 
-METHODS = {(m.service, m.resource, m.method): m for m in GWS_METHODS}
+METHODS = {(m.service, m.vfs, m.method): m for m in GWS_METHODS}
 
 CONFIG = GoogleConfig(client_id="cid", refresh_token="rt")
 

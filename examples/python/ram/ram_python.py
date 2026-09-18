@@ -15,11 +15,11 @@
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 async def main() -> None:
-    ws = Workspace({"/ram": RAMResource()}, mode=MountMode.EXEC)
+    ws = Workspace({"/ram": RAMVFS()}, mode=MountMode.EXEC)
 
     print("=== python3 -c (basic) ===")
     r = await ws.execute('python3 -c "print(42)"')

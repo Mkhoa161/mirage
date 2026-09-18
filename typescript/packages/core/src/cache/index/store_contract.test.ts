@@ -10,7 +10,7 @@ function entry(name = 'a'): IndexEntry {
   return new IndexEntry({
     id: name,
     name,
-    resourceType: 'file',
+    vfsType: 'file',
     size: 2,
     remoteTime: '2026-09-05T10:55:39.123000Z',
     extra: { nested: { tags: ['x', 'y'] } },

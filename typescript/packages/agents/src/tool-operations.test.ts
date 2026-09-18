@@ -13,14 +13,14 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 import { MirageToolOperations } from './tool-operations.ts'
 
 let ws: Workspace
 let ops: MirageToolOperations
 
 beforeEach(() => {
-  ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+  ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
   ops = new MirageToolOperations(ws)
 })
 

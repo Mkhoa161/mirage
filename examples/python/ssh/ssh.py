@@ -15,8 +15,8 @@
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ssh import SSHConfig, SSHResource
 from mirage.types import PathSpec
+from mirage.vfs.ssh import SSHVFS, SSHConfig
 
 # ~/.ssh/config:
 #   Host dev
@@ -31,11 +31,11 @@ config = SSHConfig(
     known_hosts=None,
 )
 
-resource = SSHResource(config)
+vfs = SSHVFS(config)
 
 
 async def main() -> None:
-    ws = Workspace({"/ssh/": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/ssh/": vfs}, mode=MountMode.WRITE)
 
     print("=== ls /ssh/ ===")
     result = await ws.execute("ls /ssh/")
@@ -164,7 +164,7 @@ async def main() -> None:
     result = await ws.execute("ls /ssh/")
     print(await result.stdout_str())
 
-    await resource.accessor.close()
+    await vfs.accessor.close()
 
 
 if __name__ == "__main__":

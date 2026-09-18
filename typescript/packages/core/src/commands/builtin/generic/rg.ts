@@ -120,7 +120,7 @@ function makeSpec(path: string, template: PathSpec): PathSpec {
     virtual: path,
     directory: path,
     resolved: false,
-    resourcePath: mountKey(path, mountPrefixOf(template.virtual, template.resourcePath)),
+    vfsPath: mountKey(path, mountPrefixOf(template.virtual, template.vfsPath)),
   })
 }
 

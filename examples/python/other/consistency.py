@@ -21,15 +21,15 @@ import uuid
 from pathlib import Path
 
 from mirage import MountMode, Workspace
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.types import ConsistencyPolicy
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 
 try:
-    from mirage.resource.redis import RedisResource
+    from mirage.vfs.redis import RedisVFS
     _REDIS_IMPORT_OK = True
 except ImportError:
-    RedisResource = None
+    RedisVFS = None
     _REDIS_IMPORT_OK = False
 
 
@@ -43,9 +43,9 @@ async def disk_demo() -> None:
     lazy_root = Path(tempfile.mkdtemp(prefix="mirage-disk-lazy-"))
     try:
         (lazy_root / "file.txt").write_bytes(b"v1")
-        resource = DiskResource(root=str(lazy_root))
+        vfs = DiskVFS(root=str(lazy_root))
         ws = Workspace(
-            {"/data": (resource, MountMode.WRITE)},
+            {"/data": (vfs, MountMode.WRITE)},
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.LAZY,
         )
@@ -64,9 +64,9 @@ async def disk_demo() -> None:
     always_root = Path(tempfile.mkdtemp(prefix="mirage-disk-always-"))
     try:
         (always_root / "file.txt").write_bytes(b"v1")
-        resource = DiskResource(root=str(always_root))
+        vfs = DiskVFS(root=str(always_root))
         ws = Workspace(
-            {"/data": (resource, MountMode.WRITE)},
+            {"/data": (vfs, MountMode.WRITE)},
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.ALWAYS,
         )
@@ -88,26 +88,26 @@ async def ram_demo() -> None:
     Workspace-originated writes still invalidate the cache.
     """
     _banner("RAM + ALWAYS — no fingerprint, LAZY fallback serves stale")
-    resource = RAMResource()
-    resource._store.files["/file.txt"] = b"v1"
+    vfs = RAMVFS()
+    vfs._store.files["/file.txt"] = b"v1"
     ws = Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )
     io1 = await ws.execute("cat /data/file.txt")
     print(f"  first  read (v1 expected)              : "
           f"{(await io1.materialize_stdout())!r}")
-    resource._store.files["/file.txt"] = b"v2-external"
+    vfs._store.files["/file.txt"] = b"v2-external"
     io2 = await ws.execute("cat /data/file.txt")
     print(f"  second read after external mutation    : "
           f"{(await io2.materialize_stdout())!r}  <-- ALWAYS→LAZY, stale")
 
     _banner("RAM — workspace-originated write invalidates cache (fresh)")
-    resource2 = RAMResource()
-    resource2._store.files["/file.txt"] = b"v1"
+    vfs2 = RAMVFS()
+    vfs2._store.files["/file.txt"] = b"v1"
     ws2 = Workspace(
-        {"/data": (resource2, MountMode.WRITE)},
+        {"/data": (vfs2, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )
@@ -129,21 +129,21 @@ async def redis_demo() -> None:
 
     _banner("redis + ALWAYS — no fingerprint, LAZY fallback serves stale")
     try:
-        resource = RedisResource(url=redis_url, key_prefix=prefix)
+        vfs = RedisVFS(url=redis_url, key_prefix=prefix)
     except Exception as exc:
         print(f"  SKIPPED (could not connect to {redis_url}): {exc}")
         return
 
-    # Prime: write v1 through the workspace so it lands in the resource
+    # Prime: write v1 through the workspace so it lands in the VFS
     ws_primer = Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.LAZY,
     )
     await ws_primer.execute('echo -n "v1" > /data/file.txt')
     try:
         ws = Workspace(
-            {"/data": (resource, MountMode.WRITE)},
+            {"/data": (vfs, MountMode.WRITE)},
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.ALWAYS,
         )
@@ -156,8 +156,8 @@ async def redis_demo() -> None:
         # so it still serves v1 under ALWAYS (no fingerprint to compare).
         ws_other = Workspace(
             {
-                "/data": (RedisResource(url=redis_url,
-                                        key_prefix=prefix), MountMode.WRITE)
+                "/data":
+                (RedisVFS(url=redis_url, key_prefix=prefix), MountMode.WRITE)
             },
             mode=MountMode.WRITE,
         )

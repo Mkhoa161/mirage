@@ -45,11 +45,11 @@ class CacheManager:
         """Args:
             file_cache (FileCacheMixin | None): Workspace file cache
                 store; entries are keyed by mount-absolute path.
-            index (IndexCacheStore): The mount resource's index cache;
+            index (IndexCacheStore): The mount VFS's index cache;
                 listings are keyed by mount-absolute path, which every
                 backend agrees on.
             prefix (str): Mount prefix (e.g. "/data/").
-            caches_reads (bool): Whether the resource caches reads; the
+            caches_reads (bool): Whether the VFS caches reads; the
                 file cache only holds paths for read-caching backends.
             owns_path: whether this mount still owns a virtual cache key.
         """
@@ -105,7 +105,7 @@ class CacheManager:
         Only ``virtual`` is read, and the key is rebuilt against this
         manager's own prefix, exactly as ``Mount.execute_op`` rebuilds
         one before handing a path to a backend. The caller's
-        ``resource_path`` is deliberately ignored: it is not a fact
+        ``vfs_path`` is deliberately ignored: it is not a fact
         this class can trust, because ``PathSpec.from_str_path``
         fabricates one ("assumed root-mounted") for any caller that
         does not know its mount, and ~50 sites take that default.

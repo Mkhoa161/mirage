@@ -49,8 +49,8 @@ function findText(properties: XmlRecord[], field: Property): string | null {
 
 function hasCollection(properties: XmlRecord[]): boolean {
   return properties.some((propertySet) => {
-    const resourceType = propertySet[RESOURCE_TYPE.name]
-    return isRecord(resourceType) && 'collection' in resourceType
+    const vfsType = propertySet[RESOURCE_TYPE.name]
+    return isRecord(vfsType) && 'collection' in vfsType
   })
 }
 

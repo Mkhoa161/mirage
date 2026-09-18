@@ -1,8 +1,8 @@
 import pytest
 
 from mirage.io.stream import materialize
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.script import handle_source
 from mirage.workspace.session.session import Session
@@ -20,7 +20,7 @@ async def test_source_without_a_filename_is_a_usage_error():
 
 @pytest.mark.asyncio
 async def test_source_runs_the_file_in_the_calling_shell():
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE)
     await ws.execute("printf 'X=from_file\\necho arg1=$1\\n' > /data/s.sh")
     r = await ws.execute("source /data/s.sh one; echo X=$X")
@@ -30,7 +30,7 @@ async def test_source_runs_the_file_in_the_calling_shell():
 
 @pytest.mark.asyncio
 async def test_source_reports_a_missing_file():
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE)
     r = await ws.execute("source /data/nope.sh")
     assert r.exit_code == 1

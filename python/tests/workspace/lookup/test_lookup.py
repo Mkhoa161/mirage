@@ -15,8 +15,8 @@
 from mirage.commands.cli.types import CLISpec
 from mirage.io import IOResult
 from mirage.policy.types import AdmissionRules
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.lookup import (SHELL_CONSUMERS, Consumer,
                                      command_visible, lookup, lookup_all,
@@ -25,7 +25,7 @@ from mirage.workspace.session import Session
 
 
 def _fixture() -> tuple[Session, Workspace]:
-    ws = Workspace(resources={"/ram": (RAMResource(), MountMode.WRITE)})
+    ws = Workspace(mounts={"/ram": (RAMVFS(), MountMode.WRITE)})
     return Session(session_id="t"), ws
 
 

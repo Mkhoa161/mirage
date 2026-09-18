@@ -15,7 +15,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { LinearResource, MountMode, Workspace } from '@struktoai/mirage-browser'
+import { LinearVFS, MountMode, Workspace } from '@struktoai/mirage-browser'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../../.env.development') })
@@ -42,10 +42,10 @@ async function run(ws: Workspace, cmd: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const linear = new LinearResource(buildConfig())
+  const linear = new LinearVFS(buildConfig())
   const ws = new Workspace({ '/linear': linear }, { mode: MountMode.READ })
   try {
-    console.log('=== BROWSER MODE: LinearResource → api.linear.app/graphql (direct, CORS) ===\n')
+    console.log('=== BROWSER MODE: LinearVFS → api.linear.app/graphql (direct, CORS) ===\n')
 
     await run(ws, 'ls /linear/')
 

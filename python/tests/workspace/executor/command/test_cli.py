@@ -25,12 +25,12 @@ from mirage.io import IOResult
 from mirage.io.types import materialize
 from mirage.policy import Action, Deny, Policy
 from mirage.policy.types import SessionContext
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.runtime.language import LanguageRuntime
 from mirage.runtime.types import RunArgs, RunResult, ScriptSource
 from mirage.shell.variable import VarAttr
 from mirage.types import Limit, MountMode, PathSpec
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.cli.types import CLIInstall
 from mirage.workspace.executor.command.cli import (CLIContext,
@@ -689,7 +689,7 @@ STASH = CLISpec(name="stash", fn=stash, rest=Operand(type="str"))
 async def test_a_leaf_writes_the_session_through_its_door():
     # The session plane's door is what a registered CLI has instead of
     # reaching into the session: the write lands, and the shell sees it.
-    with Workspace({"/ram/": RAMResource()}) as ws:
+    with Workspace({"/ram/": RAMVFS()}) as ws:
         ws.register_cli("stash", STASH)
         result = await ws.execute("stash TOKEN abc")
         assert result.exit_code == 0
@@ -703,7 +703,7 @@ async def test_a_leafs_session_write_clears_the_same_gate_the_shell_does():
     # A door that skipped the gate would make an installed CLI the way
     # around every pre_session rule, which is the whole reason writes
     # go through one door rather than to the session.
-    with Workspace({"/ram/": RAMResource()}, policies=[DenyAwsWrites()]) as ws:
+    with Workspace({"/ram/": RAMVFS()}, policies=[DenyAwsWrites()]) as ws:
         ws.register_cli("stash", STASH)
         denied = await ws.execute("stash AWS_PROFILE prod")
         assert denied.exit_code != 0
@@ -727,7 +727,7 @@ def _out_of_band_writer(root):
 def _disk_workspace(root):
     root.mkdir(exist_ok=True)
     (root / "a.txt").write_bytes(b"v1\n")
-    disk = DiskResource(root=str(root))
+    disk = DiskVFS(root=str(root))
     disk.caches_reads = True
     return Workspace({"/data/": disk}, mode=MountMode.WRITE)
 

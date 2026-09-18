@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '../../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../../vfs/ram/ram.ts'
 import { CapacityState, MountMode } from '../../../../types.ts'
 import type { CapacityResult } from '../../../../types.ts'
 import { getTestParser } from '../../../fixtures/workspace_fixture.ts'
@@ -22,7 +22,7 @@ import { Workspace } from '../../../workspace/workspace.ts'
 // RAM backend that reports a fixed quota, standing in for a real filesystem
 // / a provider that exposes storage numbers (real disk free space is
 // machine-specific, so this keeps the output deterministic).
-class QuotaResource extends RAMResource {
+class QuotaVFS extends RAMVFS {
   override statfs(): Promise<CapacityResult> {
     return Promise.resolve({
       state: CapacityState.QUOTA,
@@ -39,7 +39,7 @@ class QuotaResource extends RAMResource {
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/mem': new RAMResource(), '/q': new QuotaResource() },
+    { '/mem': new RAMVFS(), '/q': new QuotaVFS() },
     { mode: MountMode.WRITE, shellParser: parser },
   )
 }
@@ -56,7 +56,7 @@ function cols(out: string, i: number): string[] {
 
 describe('df', () => {
   it('default statfs state is UNKNOWN', async () => {
-    const cap = await new RAMResource().statfs()
+    const cap = await new RAMVFS().statfs()
     expect(cap.state).toBe(CapacityState.UNKNOWN)
     expect(cap.total).toBeUndefined()
   })

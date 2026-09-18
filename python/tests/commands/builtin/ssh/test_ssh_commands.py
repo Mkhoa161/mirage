@@ -20,8 +20,8 @@ from unittest.mock import MagicMock
 import asyncssh
 import pytest
 
-from mirage.resource.ssh import SSHConfig, SSHResource
 from mirage.types import MountMode
+from mirage.vfs.ssh import SSHVFS, SSHConfig
 from mirage.workspace import Workspace
 
 
@@ -186,14 +186,14 @@ class SSHTestEnv:
 
     def __init__(self):
         self.config = SSHConfig(host="mock", root="/data", known_hosts=None)
-        self.resource = SSHResource(self.config)
+        self.vfs = SSHVFS(self.config)
         self._files: dict[str, bytes] = {}
         self._dirs: set[str] = {"/data"}
         self._sftp = MockSFTPClient(self._files, self._dirs)
-        self.resource.accessor._sftp = self._sftp
-        self.resource.accessor._conn = MagicMock()
+        self.vfs.accessor._sftp = self._sftp
+        self.vfs.accessor._conn = MagicMock()
         self.ws = Workspace(
-            {"/ssh": (self.resource, MountMode.WRITE)},
+            {"/ssh": (self.vfs, MountMode.WRITE)},
             mode=MountMode.WRITE,
         )
 

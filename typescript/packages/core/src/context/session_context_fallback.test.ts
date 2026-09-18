@@ -37,7 +37,7 @@ import type { Policies } from '../policy/policies.ts'
 import type { SessionManager } from '../workspace/session/manager.ts'
 import { Session } from '../workspace/session/session.ts'
 import { parseSessionProfile } from '../policy/profile.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { getTestParser } from '../workspace/fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
 import type * as asyncContextModule from '../utils/async_context.ts'
@@ -388,7 +388,7 @@ describe('a named facade session on the fallback storage', () => {
     // is what a command's runtime reaching `ws.fs` relies on.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.WRITE] as const },
+      { '/data': [new RAMVFS(), MountMode.WRITE] as const },
       {
         mode: MountMode.WRITE,
         shellParser: parser,

@@ -15,7 +15,7 @@
 import { pathAllowed } from '../../context/session_context.ts'
 import { mountKey } from '../../utils/key_prefix.ts'
 import { type ByteSource, IOResult, materialize } from '../../io/types.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 import { FileType, PathSpec } from '../../types.ts'
 import type { MountEntry } from '../mount/mount.ts'
 import { MountCommandUnsupported, type MountRegistry } from '../mount/registry.ts'
@@ -245,7 +245,7 @@ async function synthesizeFindMountEntries(
         new PathSpec({
           virtual: candidate,
           directory: candidate,
-          resourcePath: '',
+          vfsPath: '',
           resolved: true,
           rawPath: respellOne(candidate, targetPath, raw),
         }),
@@ -345,7 +345,7 @@ export async function fanOutTraversal(
   cwd: string,
   cmdStr: string,
   stdin: ByteSource | null,
-  ensureOpen: ((resource: Resource) => Promise<void>) | undefined,
+  ensureOpen: ((vfs: VFS) => Promise<void>) | undefined,
   // The name plane's facts, offered whole to every sub-run. The mount
   // boundaries, because a rollup total cannot be repaired by line
   // filtering: du must exclude a shadowed subtree while it is
@@ -414,7 +414,7 @@ export async function fanOutTraversal(
               new PathSpec({
                 virtual: head.virtual,
                 directory: head.directory,
-                resourcePath: head.resourcePath,
+                vfsPath: head.vfsPath,
                 resolved: head.resolved,
                 rawPath: targetPath,
               }),
@@ -443,7 +443,7 @@ export async function fanOutTraversal(
         new PathSpec({
           virtual: mountRoot,
           directory: mountRoot,
-          resourcePath: mountKey(mountRoot, rstripSlash(mount.prefix)),
+          vfsPath: mountKey(mountRoot, rstripSlash(mount.prefix)),
           rawPath: duMerge
             ? mountRoot
             : respellOne(mountRoot, targetPath, paths[0]?.rawPath ?? targetPath),
@@ -454,7 +454,7 @@ export async function fanOutTraversal(
     // whose command raises is a real failure, never a silently missing
     // slice of the aggregate. Unserved commands return 127 (below).
     if (ensureOpen !== undefined) {
-      await ensureOpen(mount.resource)
+      await ensureOpen(mount.vfs)
     }
     // The child-mount names and the dispatcher-backed start-point stat.
     // A start point only the namespace serves (a nested mount's
@@ -603,7 +603,7 @@ export function runWithFanout(
   registry: MountRegistry,
   cwd: string,
   ns: NamespaceView | undefined,
-  ensureOpen: ((resource: Resource) => Promise<void>) | undefined,
+  ensureOpen: ((vfs: VFS) => Promise<void>) | undefined,
   statPath: StatPath | null = null,
   signal?: AbortSignal,
 ): RunSingle {

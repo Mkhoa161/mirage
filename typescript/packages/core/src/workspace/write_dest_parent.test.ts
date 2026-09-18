@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -24,8 +24,8 @@ const DEC = new TextDecoder()
 async function ws(): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const root = new RAMResource()
-  ops.registerResource(root)
+  const root = new RAMVFS()
+  ops.registerVfs(root)
   return new Workspace({ '/': root }, { mode: MountMode.WRITE, ops, shellParser: parser })
 }
 

@@ -18,13 +18,13 @@ import pytest
 
 from mirage.policy import Deny
 from mirage.policy.base import Policy
-from mirage.resource.ram import RAMResource
 from mirage.types import FileStat, FileType, MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws():
-    return Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    return Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                      mode=MountMode.WRITE)
 
 
@@ -447,8 +447,8 @@ async def test_mv_file_onto_link_replaces_entry():
 async def test_cross_mount_link_follow():
     ws = Workspace(
         {
-            "/data": (RAMResource(), MountMode.WRITE),
-            "/other": (RAMResource(), MountMode.WRITE),
+            "/data": (RAMVFS(), MountMode.WRITE),
+            "/other": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE)
     await ws.execute("echo remote > /other/g.txt")
@@ -1286,7 +1286,7 @@ async def test_readlink_does_not_probe_past_a_policy_that_denies_stat():
                 return Deny(reason="no probing")
             return None
 
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    policies=[NoStat()])
     with pytest.raises(OSError) as caught:
@@ -1371,7 +1371,7 @@ async def test_mv_of_a_link_passes_the_admission_gate():
                 return Deny(reason="frozen")
             return None
 
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    policies=[NoRename()])
     await ws.execute("echo hi > /data/a.txt")

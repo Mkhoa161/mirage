@@ -25,10 +25,10 @@ from mirage import MountMode, Workspace
 from mirage.context import set_current_session
 from mirage.errors.posix import posix_errno
 from mirage.ops.os_patch import make_os_module, os_routing
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.runtime.verbs import PASSTHROUGH_VERBS, REFUSED_VERBS, ROUTED_VERBS
 from mirage.types import HiddenPaths, PathSpec
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 
 from .conftest import make_ops_with_dir, run
 
@@ -198,10 +198,9 @@ class TestReads:
         assert patched.access("/data/dir", os.X_OK) is True
 
     def test_access_refuses_write_on_a_read_only_mount(self):
-        resource = RAMResource()
-        run(resource.write(PathSpec.from_str_path("/fixed.txt"), b"ro"))
-        ws = Workspace({"/ro/": (resource, MountMode.READ)},
-                       mode=MountMode.WRITE)
+        vfs = RAMVFS()
+        run(vfs.write(PathSpec.from_str_path("/fixed.txt"), b"ro"))
+        ws = Workspace({"/ro/": (vfs, MountMode.READ)}, mode=MountMode.WRITE)
         patched = make_os_module(ws.fs)
         assert patched.access("/ro/fixed.txt", os.R_OK) is True
         assert patched.access("/ro/fixed.txt", os.W_OK) is False
@@ -465,7 +464,7 @@ def _extra_args(verb):
 class TestProcessPatch:
 
     def test_a_module_level_import_routes_inside_the_block(self):
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.mkdir("/mem/dir"))
         run(ws.fs.write("/mem/dir/a.txt", b"a"))
         host_listdir = os.listdir
@@ -480,7 +479,7 @@ class TestProcessPatch:
         assert sys.modules["os"] is os
 
     def test_pathlib_routes_for_content_and_metadata(self):
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.mkdir("/mem/dir"))
         run(ws.fs.write("/mem/dir/a.txt", b"hello"))
         with ws:
@@ -498,14 +497,14 @@ class TestProcessPatch:
         # passes the "locale" sentinel for the encoding on any
         # interpreter that is not in UTF-8 mode, which is the normal
         # case. This is that call, spelled out.
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.write("/mem/a.txt", b"hello"))
         with ws:
             with open("/mem/a.txt", "r", -1, "locale", None, None) as f:
                 assert f.read() == "hello"
 
     def test_shutil_copies_across_the_boundary(self, tmp_path):
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.mkdir("/mem/dir"))
         run(ws.fs.write("/mem/dir/a.txt", b"hello"))
         with ws:
@@ -516,7 +515,7 @@ class TestProcessPatch:
             assert os.path.getsize("/mem/dir/back.txt") == 5
 
     def test_a_hidden_path_reads_as_absent_through_os(self):
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.write("/mem/open.txt", b"public"))
         run(ws.fs.mkdir("/mem/secrets"))
         run(ws.fs.write("/mem/secrets/token.txt", b"s3cret"))
@@ -539,7 +538,7 @@ class TestProcessPatch:
         # lstat reads the link's row off the node table, so the gate has
         # to be the readlink probe in front of it: the table itself has
         # no session.
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.write("/mem/a.txt", b"hello"))
         session = ws.create_session("agent")
         session.hidden_paths = HiddenPaths(paths=(), patterns=("*.key", ))
@@ -557,12 +556,12 @@ class TestProcessPatch:
 
     def test_a_disk_mount_still_reaches_its_own_host_files(self, tmp_path):
         # The patch is process-wide, so the disk backend's own os calls
-        # go through it too; they name host paths under the resource
+        # go through it too; they name host paths under the VFS
         # root, which no mount owns, and fall through.
         root = tmp_path / "root"
         root.mkdir()
         (root / "f.txt").write_text("on disk")
-        ws = Workspace({"/work/": DiskResource(root=str(root))},
+        ws = Workspace({"/work/": DiskVFS(root=str(root))},
                        mode=MountMode.WRITE)
         with ws:
             assert os.listdir("/work") == ["f.txt"]
@@ -571,7 +570,7 @@ class TestProcessPatch:
             assert (root / "sub").is_dir() is True
 
     def test_the_host_filesystem_still_answers(self, tmp_path):
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         (tmp_path / "host.txt").write_text("host")
         with ws:
             assert os.listdir(str(tmp_path)) == ["host.txt"]

@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import {
   MountMode,
-  SlackResource,
+  SlackVFS,
   Workspace,
   type FileStat,
   type SlackConfig,
@@ -43,8 +43,8 @@ function assertNonEmpty(out: string, msg: string): void {
 }
 
 async function main(): Promise<void> {
-  const resource = new SlackResource(buildConfig())
-  const ws = new Workspace({ '/slack': resource }, { mode: MountMode.READ })
+  const vfs = new SlackVFS(buildConfig())
+  const ws = new Workspace({ '/slack': vfs }, { mode: MountMode.READ })
 
   try {
     // ── discover structure ─────────────────────────────

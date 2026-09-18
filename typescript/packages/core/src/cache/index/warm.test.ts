@@ -22,7 +22,7 @@ import { entryOrWarm } from './warm.ts'
 const KEY = '/owned/notes.json'
 
 function entryFor(id: string): IndexEntry {
-  return new IndexEntry({ id, name: 'notes', resourceType: 'gdocs', vfsName: 'notes.json' })
+  return new IndexEntry({ id, name: 'notes', vfsType: 'gdocs', vfsName: 'notes.json' })
 }
 
 describe('cache/index/warm: entryOrWarm', () => {

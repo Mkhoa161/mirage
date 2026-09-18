@@ -67,7 +67,7 @@ describe('gdrive cut', () => {
         new IndexEntry({
           id: 'file123',
           name: 'file.csv',
-          resourceType: 'gdrive/file',
+          vfsType: 'gdrive/file',
           remoteTime: '2026-01-01T00:00:00Z',
           vfsName: 'file.csv',
           size: 100,
@@ -80,7 +80,7 @@ describe('gdrive cut', () => {
       makeAccessor() as never,
       [
         new PathSpec({
-          resourcePath: 'test/file.csv',
+          vfsPath: 'test/file.csv',
           virtual: '/test/file.csv',
           directory: '/test',
         }),
@@ -100,7 +100,7 @@ describe('gdrive cut', () => {
         new IndexEntry({
           id: 'file456',
           name: 'file.txt',
-          resourceType: 'gdrive/file',
+          vfsType: 'gdrive/file',
           remoteTime: '2026-01-01T00:00:00Z',
           vfsName: 'file.txt',
           size: 100,
@@ -113,7 +113,7 @@ describe('gdrive cut', () => {
       makeAccessor() as never,
       [
         new PathSpec({
-          resourcePath: 'test/file.txt',
+          vfsPath: 'test/file.txt',
           virtual: '/test/file.txt',
           directory: '/test',
         }),

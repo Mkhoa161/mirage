@@ -15,15 +15,15 @@
 import { chmodSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
-import { DiskResource } from './resource/disk/disk.ts'
+import { DiskVFS } from './vfs/disk/disk.ts'
 import { tmpRoot } from './test-utils.ts'
 import { Workspace } from './workspace.ts'
 
 describe('@struktoai/mirage-node Workspace', () => {
   it('lazy-loads the shell parser via readFileSync(require.resolve(...)) on first execute()', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const res = await ws.execute('echo hi')
     expect(res.exitCode).toBe(0)
     expect(new TextDecoder().decode(res.stdout)).toBe('hi\n')
@@ -31,7 +31,7 @@ describe('@struktoai/mirage-node Workspace', () => {
   })
 
   it('reuses the cached parser across multiple execute() calls', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const r1 = await ws.execute('echo one')
     const r2 = await ws.execute('echo two')
     expect(new TextDecoder().decode(r1.stdout)).toBe('one\n')
@@ -42,7 +42,7 @@ describe('@struktoai/mirage-node Workspace', () => {
   it('respects an explicitly provided shellParserFactory', async () => {
     let calls = 0
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParserFactory: async () => {
@@ -67,7 +67,7 @@ describe('@struktoai/mirage-node Workspace', () => {
   it.each([['-maxdepth abc'], ['-mindepth xx'], ["-size ''"], ['-size abc'], ['-mtime abc']])(
     'find %s exits 1 with a clean stderr instead of crashing',
     async (expr) => {
-      const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+      const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
       const res = await ws.execute(`find / ${expr}`)
       expect(res.exitCode).toBe(1)
       const stderr = new TextDecoder().decode(res.stderr)
@@ -81,7 +81,7 @@ describe('@struktoai/mirage-node Workspace', () => {
     ["echo a '' b", 'a  b\n'],
     ['echo a "" b', 'a  b\n'],
   ])('keeps a quoted empty string as a real argument: %s', async (cmd, expected) => {
-    const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const res = await ws.execute(cmd)
     expect(res.exitCode).toBe(0)
     expect(new TextDecoder().decode(res.stdout)).toBe(expected)
@@ -94,7 +94,7 @@ describe('@struktoai/mirage-node Workspace disk metadata', () => {
     const { root, cleanup } = tmpRoot('mirage-node-meta-')
     writeFileSync(join(root, 'f.txt'), 'hello')
     const ws = new Workspace(
-      { '/data': [new DiskResource({ root }), MountMode.WRITE] },
+      { '/data': [new DiskVFS({ root }), MountMode.WRITE] },
       { mode: MountMode.WRITE },
     )
     return { ws, root, cleanup }

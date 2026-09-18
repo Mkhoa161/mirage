@@ -28,7 +28,7 @@ class NoopTransport implements TrelloTransport {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('trello stat virtual roots', () => {
@@ -59,7 +59,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'Acme',
-          resourceType: 'trello/workspace',
+          vfsType: 'trello/workspace',
           remoteTime: '2026-04-05T00:00:00.000Z',
           vfsName: 'Acme__w1',
         }),
@@ -84,7 +84,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'workspace.json',
-          resourceType: 'trello/workspace_json',
+          vfsType: 'trello/workspace_json',
           vfsName: 'workspace.json',
           size: 42,
         }),
@@ -109,7 +109,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'workspace.json',
-          resourceType: 'trello/workspace_json',
+          vfsType: 'trello/workspace_json',
           vfsName: 'workspace.json',
         }),
       ],
@@ -118,7 +118,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'w1',
           name: 'boards',
-          resourceType: 'trello/boards_dir',
+          vfsType: 'trello/boards_dir',
           vfsName: 'boards',
         }),
       ],
@@ -142,7 +142,7 @@ describe('trello stat workspace nodes', () => {
         new IndexEntry({
           id: 'b1',
           name,
-          resourceType: name === 'board.json' ? 'trello/board_json' : `trello/${name}_dir`,
+          vfsType: name === 'board.json' ? 'trello/board_json' : `trello/${name}_dir`,
           vfsName: name,
         }),
       ]),
@@ -171,7 +171,7 @@ describe('trello stat card leaves', () => {
         new IndexEntry({
           id: 'c1',
           name: 'card.json',
-          resourceType: 'trello/card_json',
+          vfsType: 'trello/card_json',
           vfsName: 'card.json',
           size: 99,
         }),
@@ -181,7 +181,7 @@ describe('trello stat card leaves', () => {
         new IndexEntry({
           id: 'c1',
           name: 'comments.jsonl',
-          resourceType: 'trello/comments_jsonl',
+          vfsType: 'trello/comments_jsonl',
           vfsName: 'comments.jsonl',
         }),
       ],

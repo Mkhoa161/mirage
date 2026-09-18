@@ -26,9 +26,9 @@ from camel.types import ModelPlatformType, ModelType
 
 from mirage import MountMode, Workspace
 from mirage.agents.camel import MirageFileToolkit, MirageTerminalToolkit
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
-ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 terminal = MirageTerminalToolkit(ws)
 files = MirageFileToolkit(ws)

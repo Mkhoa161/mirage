@@ -20,11 +20,11 @@ from dotenv import load_dotenv
 from mirage import MountMode, Workspace
 from mirage.agents.openai_agents import (MirageEditor, MirageShellExecutor,
                                          build_system_prompt)
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 load_dotenv(".env.development")
 
-ram = RAMResource()
+ram = RAMVFS()
 ws = Workspace({"/": ram}, mode=MountMode.WRITE)
 
 system_prompt = build_system_prompt(

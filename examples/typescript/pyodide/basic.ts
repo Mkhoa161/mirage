@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
 const DEC = new TextDecoder()
 
@@ -31,7 +31,7 @@ async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<vo
 }
 
 async function main(): Promise<void> {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ws = new Workspace({ '/data': ram }, { mode: MountMode.EXEC })
 
   console.log('python3 in @mirage-ai — Pyodide-backed, three invocation modes')

@@ -25,7 +25,7 @@ import { CLISpec } from '../../../../commands/cli/types.ts'
 import { ScriptSource } from '../../../routing/types.ts'
 import { Workspace } from '../../../../workspace/workspace/workspace.ts'
 import { getTestParser } from '../../../../workspace/fixtures/workspace_fixture.ts'
-import { RAMResource } from '../../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../../vfs/ram/ram.ts'
 
 import { getCurrentSession, runWithSession } from '../../../../context/session_context.ts'
 import { record, runWithRecording, startOp } from '../../../../observe/context.ts'
@@ -116,8 +116,8 @@ describe('Pyodide lazy VFS', { timeout: 60_000 }, () => {
     async (warm) => {
       const rt = new PyodideRuntime()
       const ws = new Workspace(
-        { '/data': new RAMResource() },
-        { mode: MountMode.EXEC, runtimes: [rt, 'vfs'], shellParser: await getTestParser() },
+        { '/data': new RAMVFS() },
+        { mode: MountMode.EXEC, runtimes: [rt, 'workspace'], shellParser: await getTestParser() },
       )
       ws.registerCli(
         'spin',

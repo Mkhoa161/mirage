@@ -18,7 +18,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildRuntime } from '@struktoai/mirage-core/runtime/table'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { Workspace } from '../../workspace.ts'
 import { LocalRuntime } from './local.ts'
@@ -97,7 +97,7 @@ describe('LocalRuntime', () => {
       const baseline = await rt.version({})
       const expected: unknown = JSON.parse(DEC.decode(baseline.stdout))
       expect(expected).toMatchObject({ MIRAGE_TEST_VERSION_ENV: 'host' })
-      const ws = new Workspace({ '/': new RAMResource() }, { mode, runtimes: [rt, 'vfs'] })
+      const ws = new Workspace({ '/': new RAMVFS() }, { mode, runtimes: [rt, 'workspace'] })
       try {
         for (const line of ['python --version', 'python3 -V', 'python -VV']) {
           const io = await ws.execute(line, { env: session })
@@ -127,8 +127,8 @@ describe('LocalRuntime', () => {
     const env = { PYTHONPATH: dir }
     const rt = new LocalRuntime({ config: { home: python } })
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.READ, runtimes: [rt, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.READ, runtimes: [rt, 'workspace'] },
     )
     try {
       for (const line of ['python --version', 'python3 -V', 'python -VV']) {

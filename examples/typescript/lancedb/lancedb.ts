@@ -18,7 +18,7 @@ import { Binary, Int32, Utf8 } from 'apache-arrow'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LanceDBResource, MountMode, Workspace, type FileStat } from '@struktoai/mirage-node'
+import { LanceDBVFS, MountMode, Workspace, type FileStat } from '@struktoai/mirage-node'
 
 const FASHION_VOCAB = [
   'men', 'women', 'tshirt', 'shirt', 'jeans', 'shoes', 'sneakers', 'heels',
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
   const uri = mkdtempSync(join(tmpdir(), 'mirage-fashion-'))
   await buildTable(uri)
 
-  const resource = new LanceDBResource({
+  const vfs = new LanceDBVFS({
     config: {
       uri,
       table: 'fashion',
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
       searchLimit: 4,
     },
   })
-  const ws = new Workspace({ '/fashion/': resource }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/fashion/': vfs }, { mode: MountMode.READ })
 
   console.log(`=== mounted LanceDB table 'fashion' (${uri}) at /fashion/ ===`)
 
@@ -155,7 +155,7 @@ async function main(): Promise<void> {
   const f = await ws.execute("find /fashion -name '*.md' | wc -l")
   console.log(`  product cards: ${DEC.decode(f.stdout).trim()}`)
 
-  await resource.close()
+  await vfs.close()
 }
 
 void main()

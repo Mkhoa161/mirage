@@ -386,7 +386,7 @@ def api_groups(service: str) -> tuple[CLISpec, ...]:
         if m.service != service:
             continue
         node = root
-        for word in m.resource.split():
+        for word in m.vfs.split():
             node = node.setdefault(word, {})
         node.setdefault("__methods__", []).append(m)
     return tuple(_build_group(name, sub) for name, sub in root.items())

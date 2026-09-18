@@ -71,7 +71,7 @@ async function listTraces(
       new IndexEntry({
         id: traceId,
         name: traceId,
-        resourceType: 'langfuse/trace',
+        vfsType: 'langfuse/trace',
         vfsName: filename,
       }),
     ]
@@ -90,7 +90,7 @@ async function listSessions(
       new IndexEntry({
         id: sessionId,
         name: sessionId,
-        resourceType: 'langfuse/session',
+        vfsType: 'langfuse/session',
         vfsName: sessionId,
       }),
     ]
@@ -117,7 +117,7 @@ async function listSessionTraces(
       new IndexEntry({
         id: traceId,
         name: traceId,
-        resourceType: 'langfuse/trace',
+        vfsType: 'langfuse/trace',
         vfsName: filename,
       }),
     ]
@@ -140,7 +140,7 @@ async function listPrompts(
       new IndexEntry({
         id: promptName,
         name: promptName,
-        resourceType: 'langfuse/prompt',
+        vfsType: 'langfuse/prompt',
         vfsName: promptName,
       }),
     ])
@@ -166,7 +166,7 @@ async function listPromptVersions(
         new IndexEntry({
           id: `${promptName}/${version}`,
           name: version,
-          resourceType: 'langfuse/prompt_version',
+          vfsType: 'langfuse/prompt_version',
           vfsName: filename,
         }),
       ])
@@ -187,7 +187,7 @@ async function listDatasets(
       new IndexEntry({
         id: datasetName,
         name: datasetName,
-        resourceType: 'langfuse/dataset',
+        vfsType: 'langfuse/dataset',
         vfsName: datasetName,
       }),
     ]
@@ -209,7 +209,7 @@ async function listDataset(
       new IndexEntry({
         id: `${datasetName}/items`,
         name: 'items.jsonl',
-        resourceType: 'langfuse/dataset_items',
+        vfsType: 'langfuse/dataset_items',
         vfsName: 'items.jsonl',
         size: jsonlBytes(items).byteLength,
       }),
@@ -219,7 +219,7 @@ async function listDataset(
       new IndexEntry({
         id: `${datasetName}/runs`,
         name: 'runs',
-        resourceType: 'langfuse/dataset_runs_dir',
+        vfsType: 'langfuse/dataset_runs_dir',
         vfsName: 'runs',
       }),
     ],
@@ -242,7 +242,7 @@ async function listDatasetRuns(
       new IndexEntry({
         id: runName,
         name: runName,
-        resourceType: 'langfuse/dataset_run',
+        vfsType: 'langfuse/dataset_run',
         vfsName: filename,
         size: jsonlBytes([r]).byteLength,
       }),

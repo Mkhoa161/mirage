@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import {
   MountMode,
-  TrelloResource,
+  TrelloVFS,
   Workspace,
   type FileStat,
   type TrelloConfig,
@@ -53,7 +53,7 @@ async function run(ws: Workspace, cmd: string): Promise<string> {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/trello': new TrelloResource(buildConfig()) },
+    { '/trello': new TrelloVFS(buildConfig()) },
     { mode: MountMode.WRITE },
   )
   try {

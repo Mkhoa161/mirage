@@ -12,11 +12,11 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from mirage.resource.ram.store import RAMStore
 from mirage.types import PathSpec
 from mirage.utils.errors import eexist, enoent, enotdir
 from mirage.utils.key_prefix import mounted_path
 from mirage.utils.path import ancestors
+from mirage.vfs.ram.store import RAMStore
 
 
 def check_dest_parents(store: RAMStore, dst_spec: PathSpec, d: str) -> None:

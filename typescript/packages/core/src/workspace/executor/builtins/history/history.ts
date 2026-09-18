@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { IOResult } from '../../../../io/types.ts'
-import { HISTORY_PREFIX } from '../../../../resource/history/history.ts'
+import { HISTORY_PREFIX } from '../../../../vfs/history/history.ts'
 import type { MountRegistry } from '../../../mount/registry.ts'
 import type { Session } from '../../../session/session.ts'
 import { ExecutionNode } from '../../../types.ts'
@@ -87,7 +87,7 @@ function parseArgs(args: string[]): ParsedArgs {
  *
  * GNU lookup order: builtins resolve before mount commands, so a
  * mount-local command named "history" can never shadow this one. The
- * semantics live on the view resource; this handler parses options and
+ * semantics live on the view VFS; this handler parses options and
  * routes.
  */
 export async function handleHistory(

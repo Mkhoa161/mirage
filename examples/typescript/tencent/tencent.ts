@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  TencentResource,
+  TencentVFS,
   Workspace,
   resolvedTencentEndpoint,
   type TencentConfig,
@@ -37,7 +37,7 @@ function configFromEnv(): TencentConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/cos/': new TencentResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/cos/': new TencentVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== Tencent COS at ${resolvedTencentEndpoint(config)} ===`)
 

@@ -66,7 +66,7 @@ async function putFile(index: RAMIndexCacheStore, key: string, name: string): Pr
       new IndexEntry({
         id: 'file123',
         name,
-        resourceType: 'gdrive/file',
+        vfsType: 'gdrive/file',
         remoteTime: '2026-01-01T00:00:00Z',
         vfsName: name,
         size: 100,
@@ -94,7 +94,7 @@ describe('gdrive sed', () => {
       makeAccessor() as never,
       [
         new PathSpec({
-          resourcePath: 'test/file.txt',
+          vfsPath: 'test/file.txt',
           virtual: '/test/file.txt',
           directory: '/test',
         }),
@@ -115,7 +115,7 @@ describe('gdrive sed', () => {
       makeAccessor() as never,
       [
         new PathSpec({
-          resourcePath: 'test/file.txt',
+          vfsPath: 'test/file.txt',
           virtual: '/test/file.txt',
           directory: '/test',
         }),
@@ -160,7 +160,7 @@ describe('gdrive sed', () => {
       makeAccessor() as never,
       [
         new PathSpec({
-          resourcePath: 'test/file.txt',
+          vfsPath: 'test/file.txt',
           virtual: '/test/file.txt',
           directory: '/test',
         }),

@@ -16,14 +16,14 @@ import { RAMIndexCacheStore } from '../../cache/index/ram.ts'
 import { checkCliVerbs } from '../session/validate.ts'
 import type { FileCache } from '../../cache/file/mixin.ts'
 import type { IndexConfig } from '../../cache/index/config.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { IOResult } from '../../io/types.ts'
 import { type EventDict, Observer } from '../../observe/observer.ts'
 import type { OpRecord } from '../../observe/record.ts'
 import { type OpKwargs, OpsRegistry } from '../../ops/registry.ts'
-import type { Resource } from '../../resource/base.ts'
-import { HISTORY_PREFIX, HistoryViewResource } from '../../resource/history/history.ts'
-import { resourceStateRequiresOverride } from '../../resource/secrets.ts'
+import type { VFS } from '../../vfs/base.ts'
+import { HISTORY_PREFIX, HistoryViewVFS } from '../../vfs/history/history.ts'
+import { vfsStateRequiresOverride } from '../../vfs/secrets.ts'
 import { GENERAL_COMMANDS } from '../../commands/builtin/general/index.ts'
 import { cliSpecFor } from '../../commands/cli/specs.ts'
 import type { CLISpec } from '../../commands/cli/types.ts'
@@ -45,7 +45,7 @@ import {
   buildMountArgs,
   type CLIOverrides,
   toStateDict,
-  withRebuiltResources,
+  withRebuiltMounts,
 } from '../snapshot/state.ts'
 import { readSnapshotTar } from '../snapshot/tar_io.ts'
 import type { WorkspaceStateDict, MountSnapshot } from '../snapshot/types.ts'
@@ -106,7 +106,7 @@ import { resolveControlStores } from './build.ts'
 import { executeLine, type ExecuteEnv } from './execute.ts'
 import { closeWorkspace } from './lifecycle.ts'
 import { WorkspaceMeta } from './meta.ts'
-import { normalizeResources, prepareAddedMount, unmountPrefix } from './mounts.ts'
+import { normalizeMounts, prepareAddedMount, unmountPrefix } from './mounts.ts'
 import { Router } from './routing.ts'
 import { Runtimes } from './runtimes.ts'
 import { SessionHandle } from './handle.ts'
@@ -125,18 +125,18 @@ export class Workspace {
   private readonly wsId: string
   private readonly stateStoreInternal: WorkspaceStateStore
   private readonly ownsStateStore: boolean
-  private readonly sharedResources = new Set<Resource>()
+  private readonly sharedMounts = new Set<VFS>()
   private readonly meta: WorkspaceMeta
   private readonly opsRegistry: OpsRegistry
   private readonly indexConfig: IndexConfig | undefined
   private shellParser: ShellParser | null
   private readonly shellParserFactory: (() => Promise<ShellParser>) | null
   private shellParserPromise: Promise<ShellParser> | null = null
-  private readonly opened = new Set<Resource>()
-  private readonly openOrder: Resource[] = []
+  private readonly opened = new Set<VFS>()
+  private readonly openOrder: VFS[] = []
   readonly jobTable: JobTable
   readonly agentId: string | null
-  readonly cache: FileCache & Resource
+  readonly cache: FileCache & VFS
   readonly namespace: Namespace
   private readonly dispatcher: Dispatcher
   readonly observer: Observer
@@ -180,8 +180,8 @@ export class Workspace {
   // FUSE lives entirely in the node Workspace (FUSE needs the OS; the browser
   // can't mount), so the core Workspace carries no FUSE state.
 
-  constructor(resources: Record<string, MountSpec>, options: WorkspaceOptions = {}) {
-    const normalized = normalizeResources(resources)
+  constructor(mounts: Record<string, MountSpec>, options: WorkspaceOptions = {}) {
+    const normalized = normalizeMounts(mounts)
     this.indexConfig = options.index
     this.registry = new MountRegistry(
       normalized.bare,
@@ -191,8 +191,8 @@ export class Workspace {
     const consistency = options.consistency ?? ConsistencyPolicy.LAZY
     this.registry.setConsistency(consistency)
     if (options.index !== undefined) {
-      for (const resource of Object.values(normalized.bare)) {
-        resource.setIndex?.(options.index)
+      for (const vfs of Object.values(normalized.bare)) {
+        vfs.setIndex?.(options.index)
       }
     }
     this.wsId = options.workspaceId ?? newWorkspaceId()
@@ -321,7 +321,7 @@ export class Workspace {
       this.registry.clis.install(cliName, cliSpec, cliConfig)
     }
     this.observer = new Observer(stores.observe)
-    this.registry.mount(HISTORY_PREFIX, new HistoryViewResource(this.observer), MountMode.READ)
+    this.registry.mount(HISTORY_PREFIX, new HistoryViewVFS(this.observer), MountMode.READ)
     this.cache = buildFileCache(options.cache, options.cacheLimit)
     this.registry.attachFileCache(this.cache)
     // Only an explicit agentId claims the workspace user; a bare launch
@@ -347,7 +347,7 @@ export class Workspace {
     // A synthetic anchor is internal to Mirage and must NOT be forwarded to Pyodide,
     // whose own `/` filesystem (holding the Python stdlib) would be hijacked.
     if (this.registry.rootMount === null) {
-      this.registry.mount('/', new RAMResource(), options.mode ?? MountMode.READ)
+      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ)
       this.syntheticRootAnchor = true
     }
     // The workspace's own session is a session created without a name,
@@ -356,15 +356,15 @@ export class Workspace {
     const defaultBase = this.baseProfile(null)
     this.sessionManager.defaultProfile =
       defaultBase === null ? null : compileProfile(defaultBase, this.profileName(null))
-    for (const resource of [...this.registry.allMounts().map((m) => m.resource), this.cache]) {
-      this.opsRegistry.registerResource(resource)
+    for (const vfs of [...this.registry.allMounts().map((m) => m.vfs), this.cache]) {
+      this.opsRegistry.registerVfs(vfs)
     }
     for (const mount of this.registry.allMounts()) {
-      const cmds = mount.resource.commands?.()
+      const cmds = mount.vfs.commands?.()
       if (cmds !== undefined) {
         for (const cmd of cmds) {
           if (cmd.filetype !== null) mount.register(cmd)
-          else if (cmd.resource === null) mount.registerGeneral(cmd)
+          else if (cmd.vfs === null) mount.registerGeneral(cmd)
           else mount.register(cmd)
         }
       }
@@ -401,7 +401,7 @@ export class Workspace {
       this.namespace,
       (path) => {
         const mount = this.registry.tryMountFor(path)
-        return mount === null ? null : { prefix: mount.prefix, kind: mount.resource.kind }
+        return mount === null ? null : { prefix: mount.prefix, kind: mount.vfs.kind }
       },
       { bind: (sessionId, run) => this.bindSession(sessionId, run) },
     )
@@ -434,7 +434,7 @@ export class Workspace {
    * shell surface rather than a place to put files, and the synthetic
    * root anchor, which nobody mounted: the workspace adds it so arg-less
    * commands and root listing have somewhere to resolve, so announcing
-   * it as a mount would make every runtime report a claim on a resource
+   * it as a mount would make every runtime report a claim on a VFS
    * the embedder never asked for.
    */
   private sandboxVisibleMounts(): string[] {
@@ -908,25 +908,25 @@ export class Workspace {
   }
 
   /**
-   * Add a mount to a running workspace. Registers the resource's ops globally
+   * Add a mount to a running workspace. Registers the VFS's ops globally
    * on this workspace's OpsRegistry so dispatch can find them.
    */
-  addMount(prefix: string, resource: Resource, mode: MountMode = MountMode.READ): MountEntry {
+  addMount(prefix: string, vfs: VFS, mode: MountMode = MountMode.READ): MountEntry {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
-    this.registry.checkResourceAvailable(resource)
+    this.registry.checkVfsAvailable(vfs)
     const previous = this.registry.allMounts()
     // Configure before mount() captures the index in its CacheManager.
-    // An alias must retain the index used by the resource's other mounts.
+    // An alias must retain the index used by the VFS's other mounts.
     if (
       this.indexConfig !== undefined &&
       this.registry.tryMountForPrefix(prefix) === null &&
-      !this.registry.allMounts().some((mount) => mount.resource === resource)
+      !this.registry.allMounts().some((mount) => mount.vfs === vfs)
     ) {
-      resource.setIndex?.(this.indexConfig)
+      vfs.setIndex?.(this.indexConfig)
     }
-    const m = this.registry.mount(prefix, resource, mode)
+    const m = this.registry.mount(prefix, vfs, mode)
     prepareAddedMount(this.registry, m, previous)
-    this.opsRegistry.registerResource(resource)
+    this.opsRegistry.registerVfs(vfs)
     return m
   }
 
@@ -938,10 +938,10 @@ export class Workspace {
   }
 
   /**
-   * Remove a mount by prefix. Closes the owned resource when its last alias
-   * leaves, including resources used without an explicit open. Drops cache entries under the
+   * Remove a mount by prefix. Closes the owned VFS when its last alias
+   * leaves, including mounts used without an explicit open. Drops cache entries under the
    * unmounted prefix. Forbidden prefixes: cache root, history view, /dev/.
-   * Waits for admitted calls and returned streams before closing the resource.
+   * Waits for admitted calls and returned streams before closing the VFS.
    * Callers must consume or close streams; closed instances cannot be remounted.
    */
   async unmount(prefix: string): Promise<void> {
@@ -952,7 +952,7 @@ export class Workspace {
         opsRegistry: this.opsRegistry,
         opened: this.opened,
         openOrder: this.openOrder,
-        sharedResources: this.sharedResources,
+        sharedMounts: this.sharedMounts,
         isShuttingDown: () => this.isShuttingDown(),
       },
       prefix,
@@ -985,7 +985,7 @@ export class Workspace {
     return this.fs.records
   }
 
-  /** Records that hit a remote resource (not cache). */
+  /** Records that hit a remote VFS (not cache). */
   get networkRecords(): OpRecord[] {
     return this.fs.networkRecords
   }
@@ -1131,30 +1131,30 @@ export class Workspace {
     return result
   }
 
-  async resolve(path: string): Promise<[Resource, PathSpec, MountMode]> {
+  async resolve(path: string): Promise<[VFS, PathSpec, MountMode]> {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
     return this.resolveInternal(path)
   }
 
-  private async resolveInternal(path: string): Promise<[Resource, PathSpec, MountMode]> {
+  private async resolveInternal(path: string): Promise<[VFS, PathSpec, MountMode]> {
     if (this.closed) {
       throw new Error('Workspace is closed')
     }
     const result = this.registry.resolve(path)
-    const [resource] = result
+    const [vfs] = result
     await this.registry.mountFor(path).ensureReady()
-    await this.ensureOpen(resource)
+    await this.ensureOpen(vfs)
     return result
   }
 
-  private async ensureOpen(resource: Resource): Promise<void> {
-    if (this.opened.has(resource)) return
-    const mount = this.registry.allMounts().find((m) => m.resource === resource && !m.retiring)
-    if (mount === undefined) throw new Error('resource is no longer mounted')
+  private async ensureOpen(vfs: VFS): Promise<void> {
+    if (this.opened.has(vfs)) return
+    const mount = this.registry.allMounts().find((m) => m.vfs === vfs && !m.retiring)
+    if (mount === undefined) throw new Error('VFS is no longer mounted')
     await mount.use(async () => {
-      await resource.open()
-      this.opened.add(resource)
-      this.openOrder.push(resource)
+      await vfs.open()
+      this.opened.add(vfs)
+      this.openOrder.push(vfs)
     })
   }
 
@@ -1279,7 +1279,7 @@ export class Workspace {
       registerCloser: (fn) => {
         this.closers.push(fn)
       },
-      ensureOpen: (resource) => this.ensureOpen(resource),
+      ensureOpen: (vfs) => this.ensureOpen(vfs),
       invalidateAllAfterRemote: () => this.invalidateAllAfterRemote(),
       provision: (cmd, opts) => this.provision(cmd, opts),
       execute: (cmd, opts) =>
@@ -1302,7 +1302,7 @@ export class Workspace {
   ): Promise<ExecuteResult | ProvisionResult> {
     // The top-level door, so it shuts as soon as a close starts. A line that
     // got in after `jobTable.killAll()` could submit a background job that
-    // teardown then never stops, and resources would close under it. The
+    // teardown then never stops, and mounts would close under it. The
     // internal dispatch path stays open, which is what the journal replay
     // uses.
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
@@ -1364,7 +1364,7 @@ export class Workspace {
     this: T,
     source: string | Uint8Array,
     options: WorkspaceOptions = {},
-    overrides: Record<string, Resource> = {},
+    overrides: Record<string, VFS> = {},
     cliOverrides: CLIOverrides = {},
   ): Promise<InstanceType<T>> {
     const bytes = typeof source === 'string' ? readFileBytes(source) : source
@@ -1376,7 +1376,7 @@ export class Workspace {
     this: T,
     state: WorkspaceStateDict,
     options: WorkspaceOptions = {},
-    overrides: Record<string, Resource> = {},
+    overrides: Record<string, VFS> = {},
     cliOverrides: CLIOverrides = {},
   ): Promise<InstanceType<T>> {
     const ws = await this._fromState(state, options, overrides, cliOverrides)
@@ -1385,14 +1385,14 @@ export class Workspace {
   }
 
   /**
-   * Build the resource a saved mount names, or null when this package
-   * cannot. Core holds no resource registry, so it never can; the node
-   * and browser workspaces answer through theirs (`buildResource`), which
+   * Build the VFS a saved mount names, or null when this package
+   * cannot. Core holds no VFS registry, so it never can; the node
+   * and browser workspaces answer through theirs (`buildVfs`), which
    * is what lets `load` rebuild a registered custom backend from its
    * `type` the way Python's loader does, instead of substituting an
-   * empty RAMResource.
+   * empty RAMVFS.
    */
-  protected static buildSavedResource(_entry: MountSnapshot): Promise<Resource | null> {
+  protected static buildSavedVfs(_entry: MountSnapshot): Promise<VFS | null> {
     return Promise.resolve(null)
   }
 
@@ -1400,14 +1400,14 @@ export class Workspace {
     this: T,
     state: WorkspaceStateDict,
     options: WorkspaceOptions = {},
-    overrides: Record<string, Resource> = {},
+    overrides: Record<string, VFS> = {},
     cliOverrides: CLIOverrides = {},
   ): Promise<InstanceType<T>> {
-    const rebuilt = await withRebuiltResources(state, overrides, (m) => this.buildSavedResource(m))
+    const rebuilt = await withRebuiltMounts(state, overrides, (m) => this.buildSavedVfs(m))
     const args = buildMountArgs(state, rebuilt, cliOverrides)
-    const resources: Record<string, MountSpec> = {}
-    for (const [prefix, [resource, mode]] of Object.entries(args.mountArgs)) {
-      resources[prefix] = [resource, mode]
+    const mounts: Record<string, MountSpec> = {}
+    for (const [prefix, [vfs, mode]] of Object.entries(args.mountArgs)) {
+      mounts[prefix] = [vfs, mode]
     }
     const mergedOptions: WorkspaceOptions = {
       ...(args.defaultSessionId !== undefined ? { sessionId: args.defaultSessionId } : {}),
@@ -1415,17 +1415,17 @@ export class Workspace {
       ...(args.clis !== undefined ? { clis: args.clis } : {}),
       ...options,
     }
-    const ws = new this(resources, mergedOptions) as InstanceType<T>
-    for (const resource of Object.values(overrides)) {
-      ws.sharedResources.add(resource)
+    const ws = new this(mounts, mergedOptions) as InstanceType<T>
+    for (const vfs of Object.values(overrides)) {
+      ws.sharedMounts.add(vfs)
     }
     await applyStateDict(ws, state)
     return ws
   }
 
   async copy(options: WorkspaceOptions = {}): Promise<this> {
-    // Mirrors Python's Workspace.copy(): remote-backed resources (Redis, S3,
-    // GDrive — with redacted config) are reused; local resources (RAM, Disk)
+    // Mirrors Python's Workspace.copy(): remote-backed mounts (Redis, S3,
+    // GDrive — with redacted config) are reused; local mounts (RAM, Disk)
     // are reconstructed from snapshot state. Uses _fromState directly (no tar
     // round-trip, no drift install) like Python's `type(self)._from_state`.
     const state = await toStateDict(this)
@@ -1442,17 +1442,17 @@ export class Workspace {
     opts.ops = options.ops ?? this.opsRegistry
     const parser = options.shellParser ?? this.shellParser
     if (parser !== null) opts.shellParser = parser
-    const overrides: Record<string, Resource> = {}
+    const overrides: Record<string, VFS> = {}
     for (const mount of this.registry.allMounts()) {
       for (const snap of state.mounts) {
-        if (snap.prefix === mount.prefix && resourceStateRequiresOverride(snap.resource_state)) {
-          overrides[mount.prefix] = mount.resource
+        if (snap.prefix === mount.prefix && vfsStateRequiresOverride(snap.vfs_state)) {
+          overrides[mount.prefix] = mount.vfs
         }
       }
     }
     // A same-process copy reinstalls every CLI from its live install
     // (spec + validated config), the way remote mounts share their live
-    // resources: a directly installed spec and a redacted secret both
+    // mounts: a directly installed spec and a redacted secret both
     // survive without a registry lookup.
     const cliOverrides: CLIOverrides = {}
     for (const [name, install] of this.registry.clis.items()) {
@@ -1489,12 +1489,12 @@ export class Workspace {
         registry: this.registry,
         opened: this.opened,
         openOrder: this.openOrder,
-        sharedResources: this.sharedResources,
+        sharedMounts: this.sharedMounts,
       })
     } finally {
       // Teardown has run either way, and `closing` is memoized, so it will
       // not run again. The guards that only read `closed` are the ones that
-      // stop a settled runner resuming onto a released resource, so a
+      // stop a settled runner resuming onto a released VFS, so a
       // teardown that raises must still close the door behind it.
       this.closed = true
     }

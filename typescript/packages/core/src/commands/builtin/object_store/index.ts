@@ -35,20 +35,20 @@ export const OBJECT_STORE_OVERRIDES = new Set(['stat', 'rm', 'mkdir', 'tee', 'to
  * there, so an override enforces the session's path axis and the coded
  * op policies exactly like the generic it replaces.
  *
- * @param resource resource name the commands register under
+ * @param vfs VFS name the commands register under
  * @param io the backend's op table; must wire the write-side slots the
  *   overrides consume
  */
 export function makeObjectStoreCommands<A extends Accessor>(
-  resource: string,
+  vfs: string,
   rawIo: CommandIO<A>,
 ): RegisteredCommand[] {
   const io = withPolicyGuard(withPathGuards(rawIo))
   return [
-    ...makeMkdir(resource, io),
-    ...makeRm(resource, io),
-    ...makeStat(resource, io),
-    ...makeTee(resource, io),
-    ...makeTouch(resource, io),
+    ...makeMkdir(vfs, io),
+    ...makeRm(vfs, io),
+    ...makeStat(vfs, io),
+    ...makeTee(vfs, io),
+    ...makeTouch(vfs, io),
   ]
 }

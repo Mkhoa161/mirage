@@ -573,7 +573,7 @@ class Ops:
 
     @property
     def network_records(self) -> list[OpRecord]:
-        """Records that hit a remote resource (not cache)."""
+        """Records that hit a remote VFS (not cache)."""
         return [r for r in self.records if not r.is_cache]
 
     @property

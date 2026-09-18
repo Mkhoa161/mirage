@@ -44,7 +44,7 @@ function channelWorld(endpoint: string): SlackResponse {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('stat virtual roots', () => {
@@ -87,7 +87,7 @@ describe('stat channel/dm dir', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          resourceType: 'slack/channel',
+          vfsType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '1609459200',
         }),
@@ -128,7 +128,7 @@ describe('stat channel/dm dir', () => {
         new IndexEntry({
           id: 'D1',
           name: 'alice',
-          resourceType: 'slack/dm',
+          vfsType: 'slack/dm',
           vfsName: 'alice__D1',
           remoteTime: '0',
         }),
@@ -155,7 +155,7 @@ describe('stat user file', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          resourceType: 'slack/user',
+          vfsType: 'slack/user',
           vfsName: 'alice__U1.json',
         }),
       ],
@@ -198,7 +198,7 @@ describe('stat date directory', () => {
         new IndexEntry({
           id: 'D1',
           name: 'alice',
-          resourceType: 'slack/dm',
+          vfsType: 'slack/dm',
           vfsName: 'alice__D1',
         }),
       ],
@@ -231,7 +231,7 @@ describe('stat chat.jsonl and files dir', () => {
         new IndexEntry({
           id: 'C1:2026-04-24:chat',
           name: 'chat.jsonl',
-          resourceType: 'slack/chat_jsonl',
+          vfsType: 'slack/chat_jsonl',
           vfsName: 'chat.jsonl',
           size: 42,
         }),
@@ -270,7 +270,7 @@ describe('stat chat.jsonl and files dir', () => {
         new IndexEntry({
           id: 'C1:2026-04-24:files',
           name: 'files',
-          resourceType: 'slack/files_dir',
+          vfsType: 'slack/files_dir',
           vfsName: 'files',
           extra: { channel_id: 'C1', date: '2026-04-24' },
         }),

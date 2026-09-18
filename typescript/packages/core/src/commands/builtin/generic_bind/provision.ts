@@ -124,7 +124,7 @@ async function walkFiles<A extends Accessor>(
         continue
       }
       for (const entry of entries) {
-        queue.push(PathSpec.fromStrPath(entry, rekey(p.virtual, p.resourcePath, entry)))
+        queue.push(PathSpec.fromStrPath(entry, rekey(p.virtual, p.vfsPath, entry)))
       }
       continue
     }
@@ -638,7 +638,7 @@ export function withDefaultProvisions<A extends Accessor>(
     return new RegisteredCommand({
       name: c.name,
       spec: c.spec,
-      resource: c.resource,
+      vfs: c.vfs,
       filetype: c.filetype,
       fn: c.fn,
       provisionFn: provision as ProvisionFn,

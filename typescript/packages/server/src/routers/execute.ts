@@ -14,7 +14,7 @@
 
 import { Buffer } from 'node:buffer'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { z } from '@struktoai/mirage-core/resource/secrets'
+import { z } from '@struktoai/mirage-core/vfs/secrets'
 import type { WorkspaceRegistry } from '../registry.ts'
 import { JobStatus, type JobTable } from '../jobs.ts'
 import { ioResultToDict } from '../io_serde.ts'

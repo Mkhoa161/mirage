@@ -15,7 +15,7 @@
 import { config as loadEnv } from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { MountMode, OpsRegistry, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, OpsRegistry, RAMVFS, Workspace } from '@struktoai/mirage-node'
 import { Agent } from '@mastra/core/agent'
 import { mirageTools } from '@struktoai/mirage-agents/mastra'
 import { buildSystemPrompt } from '@struktoai/mirage-agents/openai'
@@ -24,7 +24,7 @@ loadEnv({
   path: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../.env.development'),
 })
 
-const ram = new RAMResource()
+const ram = new RAMVFS()
 const ops = new OpsRegistry()
 for (const op of ram.ops()) ops.register(op)
 const ws = new Workspace({ '/': ram }, { mode: MountMode.WRITE, ops })

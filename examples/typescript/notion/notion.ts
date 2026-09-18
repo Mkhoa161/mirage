@@ -16,7 +16,7 @@ import { basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import { NTN } from '@struktoai/mirage-core'
-import { MountMode, NotionResource, Workspace, type FileStat, type NotionConfig } from '@struktoai/mirage-node'
+import { MountMode, NotionVFS, Workspace, type FileStat, type NotionConfig } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../.env.development') })
@@ -163,7 +163,7 @@ async function exploreCrossCutting(ws: Workspace): Promise<void> {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/notion': new NotionResource(buildConfig()) },
+    { '/notion': new NotionVFS(buildConfig()) },
     { mode: MountMode.READ },
   )
   ws.registerCli('ntn', NTN, buildConfig() as unknown as Record<string, unknown>)

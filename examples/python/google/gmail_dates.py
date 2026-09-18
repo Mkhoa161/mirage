@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gmail import GmailConfig, GmailResource
+from mirage.vfs.gmail import GmailConfig, GmailVFS
 
 load_dotenv(".env.development")
 
@@ -27,7 +27,7 @@ config = GmailConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GmailResource(config=config)
+vfs = GmailVFS(config=config)
 
 
 async def show(ws, cmd):
@@ -44,7 +44,7 @@ async def show(ws, cmd):
 
 
 async def main():
-    ws = Workspace({"/gmail": resource}, mode=MountMode.READ)
+    ws = Workspace({"/gmail": vfs}, mode=MountMode.READ)
 
     out, _, _ = await show(ws, "ls /gmail/INBOX/ | head -5")
     dates = [d for d in out.strip().split("\n") if d]

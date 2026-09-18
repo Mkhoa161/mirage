@@ -52,7 +52,7 @@ class FakeDiscordTransport implements DiscordTransport {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('snowflakeToDate', () => {
@@ -122,7 +122,7 @@ describe('readdir root', () => {
     expect(listing.entries).toEqual(['/mnt/discord/My Server__G1', '/mnt/discord/Other__G2'])
     const lookup = await idx.get('/mnt/discord/My Server__G1')
     expect(lookup.entry?.id).toBe('G1')
-    expect(lookup.entry?.resourceType).toBe('discord/guild')
+    expect(lookup.entry?.vfsType).toBe('discord/guild')
   })
 
   it('returns from cache without API call on second invocation', async () => {
@@ -133,7 +133,7 @@ describe('readdir root', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          resourceType: 'discord/guild',
+          vfsType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -208,7 +208,7 @@ describe('readdir /<guild>/channels', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          resourceType: 'discord/guild',
+          vfsType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -234,7 +234,7 @@ describe('readdir /<guild>/channels', () => {
     ])
     const lookup = await idx.get('/mnt/discord/My Server__G1/channels/general__C1')
     expect(lookup.entry?.id).toBe('C1')
-    expect(lookup.entry?.resourceType).toBe('discord/channel')
+    expect(lookup.entry?.vfsType).toBe('discord/channel')
     expect(lookup.entry?.remoteTime).toBe('175928847299117056')
     const announce = await idx.get('/mnt/discord/My Server__G1/channels/announcements__C3')
     expect(announce.entry?.remoteTime).toBe('')
@@ -269,7 +269,7 @@ describe('readdir /<guild>/channels', () => {
 })
 
 describe('readdir /<guild>/members', () => {
-  it('lists members with discord/member resourceType', async () => {
+  it('lists members with discord/member vfsType', async () => {
     const idx = new RAMIndexCacheStore()
     await idx.setDir('/mnt/discord', [
       [
@@ -277,7 +277,7 @@ describe('readdir /<guild>/members', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          resourceType: 'discord/guild',
+          vfsType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -303,7 +303,7 @@ describe('readdir /<guild>/members', () => {
     ])
     const lookup = await idx.get('/mnt/discord/My Server__G1/members/alice__U1.json')
     expect(lookup.entry?.id).toBe('U1')
-    expect(lookup.entry?.resourceType).toBe('discord/member')
+    expect(lookup.entry?.vfsType).toBe('discord/member')
     expect(lookup.entry?.name).toBe('alice')
   })
 
@@ -315,7 +315,7 @@ describe('readdir /<guild>/members', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          resourceType: 'discord/guild',
+          vfsType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -343,7 +343,7 @@ describe('readdir /<guild>/channels/<ch>/<date>', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          resourceType: 'discord/channel',
+          vfsType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '175928847299117056',
         }),
@@ -378,7 +378,7 @@ describe('readdir /<guild>/channels/<ch>/<date>', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          resourceType: 'discord/channel',
+          vfsType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '175928847299117056',
         }),
@@ -419,7 +419,7 @@ describe('readdir /<guild>/channels/<ch>', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          resourceType: 'discord/channel',
+          vfsType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '175928847299117056',
         }),
@@ -437,7 +437,7 @@ describe('readdir /<guild>/channels/<ch>', () => {
     expect(out[29]).toBe('/mnt/discord/My Server__G1/channels/general__C1/2016-04-01')
     const lookup = await idx.get('/mnt/discord/My Server__G1/channels/general__C1/2016-04-30')
     expect(lookup.entry?.id).toBe('C1:2016-04-30')
-    expect(lookup.entry?.resourceType).toBe('discord/history')
+    expect(lookup.entry?.vfsType).toBe('discord/history')
     expect(t.calls).toHaveLength(0)
   })
 
@@ -449,7 +449,7 @@ describe('readdir /<guild>/channels/<ch>', () => {
         new IndexEntry({
           id: 'C2',
           name: 'empty',
-          resourceType: 'discord/channel',
+          vfsType: 'discord/channel',
           vfsName: 'empty__C2',
           remoteTime: '',
         }),
@@ -477,7 +477,7 @@ describe('readdir /<guild>/channels/<ch>', () => {
         new IndexEntry({
           id: 'general__C1:2024-01-01',
           name: '2024-01-01',
-          resourceType: 'discord/date_dir',
+          vfsType: 'discord/date_dir',
           vfsName: '2024-01-01',
         }),
       ],
@@ -502,7 +502,7 @@ describe('readdir /<guild>/channels/<ch>', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          resourceType: 'discord/guild',
+          vfsType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],

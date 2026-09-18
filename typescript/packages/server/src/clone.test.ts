@@ -13,10 +13,10 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
-import { Workspace, buildResource, type SlackResource } from '@struktoai/mirage-node'
-import { z } from '@struktoai/mirage-core/resource/secrets'
+import { Workspace, buildVfs, type SlackVFS } from '@struktoai/mirage-node'
+import { z } from '@struktoai/mirage-core/vfs/secrets'
 import type { SecretEntries } from '@struktoai/mirage-core/secrets/config'
 import { registerSecrets } from '@struktoai/mirage-core/secrets/registry'
 import { cloneWorkspaceWithOverride } from './clone.ts'
@@ -38,7 +38,7 @@ function brokenBootstrap(source: string): SecretEntries {
 
 describe('cloneWorkspaceWithOverride', () => {
   it('produces an independent workspace whose writes do not touch the source', async () => {
-    const src = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const src = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     await src.execute('echo source-only > /file.txt')
     const clone = await cloneWorkspaceWithOverride(src, null)
     await clone.execute('echo clone-write > /file.txt')
@@ -58,7 +58,7 @@ describe('cloneWorkspaceWithOverride', () => {
       Promise.resolve({ fields: { credential: `${config.account}:${ref}` } }),
     )
     const src = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         secrets: { prod: { source: 'acct-clone', config: { account: 'a1' } } },
@@ -80,7 +80,7 @@ describe('cloneWorkspaceWithOverride', () => {
       Promise.resolve({ fields: { credential: `${config.account}:${ref}` } }),
     )
     const src = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         secrets: { prod: { source: 'acct-override', config: { account: 'live' } } },
@@ -98,25 +98,25 @@ describe('cloneWorkspaceWithOverride', () => {
   it('reads a pointer in an override mount config', async () => {
     // An override mount is built before the clone exists, so its
     // credential is fetched against the declarations the clone will
-    // run with -- unresolved, the pointer reached the resource's own
+    // run with -- unresolved, the pointer reached the VFS's own
     // schema as a mapping.
     registerSecrets('acct-mount', AccountConfig, (config: AccountConfig, ref: string) =>
       Promise.resolve({ fields: { credential: `${config.account}:${ref}` } }),
     )
     const src = new Workspace(
-      { '/': new RAMResource(), '/slack': await buildResource('slack', { token: 'xoxb-src' }) },
+      { '/': new RAMVFS(), '/slack': await buildVfs('slack', { token: 'xoxb-src' }) },
       { mode: MountMode.WRITE },
     )
     const clone = await cloneWorkspaceWithOverride(src, {
       secrets: { prod: { source: 'acct-mount', config: { account: 'live' } } },
       mounts: {
         '/slack': {
-          resource: 'slack',
+          vfs: 'slack',
           config: { token: { from: 'prod', ref: 'bot', key: 'credential' } },
         },
       },
     })
-    const mounted = clone.mount('/slack').resource as SlackResource
+    const mounted = clone.mount('/slack').vfs as SlackVFS
     expect(mounted.config.token).toBe('live:bot')
     await src.close()
     await clone.close()
@@ -129,7 +129,7 @@ describe('cloneWorkspaceWithOverride', () => {
     // a bootstrap file on behalf of an override that named no pointer.
     registerSecrets('acct-lazy', AccountConfig, fetchAccount)
     const src = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       { mode: MountMode.WRITE, secrets: brokenBootstrap('acct-lazy') },
     )
     const clone = await cloneWorkspaceWithOverride(src, null)
@@ -137,7 +137,7 @@ describe('cloneWorkspaceWithOverride', () => {
     await clone.close()
     // An override that swaps a mount without naming a pointer is the
     // same case.
-    const swapped = await cloneWorkspaceWithOverride(src, { mounts: { '/': { resource: 'ram' } } })
+    const swapped = await cloneWorkspaceWithOverride(src, { mounts: { '/': { vfs: 'ram' } } })
     await swapped.close()
     await src.close()
   })
@@ -145,14 +145,14 @@ describe('cloneWorkspaceWithOverride', () => {
   it('still builds the declared sources for an override pointer', async () => {
     registerSecrets('acct-wanted', AccountConfig, fetchAccount)
     const src = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       { mode: MountMode.WRITE, secrets: brokenBootstrap('acct-wanted') },
     )
     await expect(
       cloneWorkspaceWithOverride(src, {
         mounts: {
           '/slack': {
-            resource: 'slack',
+            vfs: 'slack',
             config: { token: { from: 'prod', ref: 'bot', key: 'credential' } },
           },
         },

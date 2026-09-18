@@ -12,10 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { DevResource, MountMode, Workspace } from '@struktoai/mirage-node'
+import { DevVFS, MountMode, Workspace } from '@struktoai/mirage-node'
 
 async function main(): Promise<void> {
-  const dev = new DevResource()
+  const dev = new DevVFS()
   const ws = new Workspace({ '/dev': dev }, { mode: MountMode.WRITE })
 
   console.log('=== ls /dev/ ===')

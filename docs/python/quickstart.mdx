@@ -19,7 +19,7 @@ If you are not using uv:
 pip install mirage-ai
 ```
 
-For resources with extra dependencies, install the matching extra:
+For VFS types with extra dependencies, install the matching extra:
 
 ```bash
 uv add "mirage-ai[s3]"
@@ -27,17 +27,17 @@ uv add "mirage-ai[s3]"
 
 ## Create a Workspace
 
-Start with the RAM resource so you can try Mirage without credentials.
+Start with the RAM VFS so you can try Mirage without credentials.
 
 ```python
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 async def main() -> None:
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
     await ws.execute('echo "hello mirage" | tee /data/hello.txt')
     result = await ws.execute("cat /data/hello.txt")
@@ -51,18 +51,18 @@ asyncio.run(main())
 
 ## Run Commands
 
-Once a resource is mounted, you can use Mirage like a shell over your
+Once a VFS is mounted, you can use Mirage like a shell over your
 virtual filesystem:
 
 ```python
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 async def main() -> None:
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
     await ws.execute('echo \'{"name": "alice"}\' | tee /data/user.json')
 
@@ -119,20 +119,20 @@ Caps fire only on the **terminal** command of a pipeline, so
 ### Configure per mount
 
 Limits are per-command and per-mount. Attach them when you mount a
-resource by passing a `(resource, mode, {command: Limit})`
+VFS by passing a `(vfs, mode, {command: Limit})`
 tuple. Each guard sets `max_lines` / `max_bytes` (output cap) and/or
 `timeout_seconds` (deadline); `on_exceed` is `TRUNCATE` (default, exit 0
 plus notice) or `ERROR` (exit 1 plus notice):
 
 ```python
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 from mirage.types import Limit, OnExceed
 
 ws = Workspace(
     {
         "/data": (
-            RAMResource(),
+            RAMVFS(),
             MountMode.WRITE,
             {
                 "head": Limit(max_lines=100),  # cap, keep going
@@ -150,6 +150,6 @@ block in the workspace YAML.
 
 ## Next Steps
 
-- See [Python Installation](/python/install) for resource extras and the `uv` workflow.
+- See [Python Installation](/python/install) for VFS extras and the `uv` workflow.
 - Browse [Python Agents](/python/agents/index) to wire Mirage into the OpenAI Agents SDK, LangChain, Pydantic AI, CAMEL, and OpenHands.
-- Pick a real backend from [Resource Docs](/python/resource/index), such as [S3](/python/resource/s3), [Slack](/python/resource/slack), or [GitHub](/python/resource/github).
+- Pick a real backend from [VFS Docs](/python/vfs/index), such as [S3](/python/vfs/s3), [Slack](/python/vfs/slack), or [GitHub](/python/vfs/github).

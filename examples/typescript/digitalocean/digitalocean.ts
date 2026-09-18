@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  DigitalOceanResource,
+  DigitalOceanVFS,
   Workspace,
   resolvedDigitalOceanEndpoint,
   type DigitalOceanConfig,
@@ -37,7 +37,7 @@ function configFromEnv(): DigitalOceanConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/do/': new DigitalOceanResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/do/': new DigitalOceanVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== DigitalOcean Spaces at ${resolvedDigitalOceanEndpoint(config)} ===`)
 

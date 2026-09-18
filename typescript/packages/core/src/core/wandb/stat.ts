@@ -18,7 +18,7 @@ export async function stat(
   const found = await resolveEntry(readdir, accessor, path, index)
   if (!found) throw enoent(path)
   const name = ps.at(-1) ?? ''
-  const directory = found.resourceType === 'wandb/directory'
+  const directory = found.vfsType === 'wandb/directory'
   let content: ContentType | null = null
   if (!directory) {
     if (ps.length > 4) content = ContentType.BINARY

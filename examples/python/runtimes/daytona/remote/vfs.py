@@ -18,7 +18,7 @@ import asyncio
 import os
 
 from mirage import MountMode, Workspace
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.s3 import S3VFS, S3Config
 
 
 async def run():
@@ -28,7 +28,7 @@ async def run():
         aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
     )
-    with Workspace({"/s3/": S3Resource(cfg)}, mode=MountMode.READ) as ws:
+    with Workspace({"/s3/": S3VFS(cfg)}, mode=MountMode.READ) as ws:
         r = await ws.execute("ls /s3/")
         print("--- ls /s3/ ---")
         print((await r.stdout_str()).rstrip())

@@ -14,7 +14,7 @@
 
 import { constants as fsConstants } from 'node:fs'
 import { runWithSession } from '@struktoai/mirage-core/context/session_context'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { ContentType, FileStat, FileType, MountMode } from '@struktoai/mirage-core/types'
 import { mtimeMs } from '@struktoai/mirage-core/utils/stat_view'
 import { describe, expect, it, vi } from 'vitest'
@@ -25,7 +25,7 @@ const NAIVE_STAMP = '2026-01-02T03:04:05'
 
 async function mkCore(): Promise<MountCore> {
   const ws = new Workspace(
-    { '/data/': new RAMResource(), '/extra/': new RAMResource() },
+    { '/data/': new RAMVFS(), '/extra/': new RAMVFS() },
     { mode: MountMode.WRITE },
   )
   await ws.execute("echo 'hello world' | tee /data/greeting.txt")
@@ -41,7 +41,7 @@ describe('MountCore', () => {
     // refusal is ENOENT: symlink is a create, and a create under a
     // hidden directory answers as every read of that directory does.
     const ws = new Workspace(
-      { '/data/': new RAMResource(), '/extra/': new RAMResource() },
+      { '/data/': new RAMVFS(), '/extra/': new RAMVFS() },
       { mode: MountMode.WRITE },
     )
     await ws.execute("echo 'hello' > /data/greeting.txt")
@@ -68,7 +68,7 @@ describe('MountCore', () => {
     // no-name-leak rule: only an op that spells out a name it is
     // creating answers EACCES.
     const ws = new Workspace(
-      { '/data/': new RAMResource(), '/extra/': new RAMResource() },
+      { '/data/': new RAMVFS(), '/extra/': new RAMVFS() },
       { mode: MountMode.WRITE },
     )
     await ws.execute("echo 'classified' > /extra/secret.txt")
@@ -85,7 +85,7 @@ describe('MountCore', () => {
     // The other side of routing removal through the door: an unscoped
     // mount still drops the link entry, and only that, the way
     // unlink(2) on a symlink leaves the pointee alone.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute("echo 'body' > /data/f.txt")
     await ws.execute('ln -s f.txt /data/lk')
     const core = new MountCore(ws.fs)
@@ -188,7 +188,7 @@ describe('MountCore', () => {
     // The dispatcher follows both paths to one file, so a handle opened on
     // the target and an O_TRUNC open through a link to it are the same
     // file: the queued write lands first and the truncation wins.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute("echo 'hello world' | tee /data/greeting.txt")
     await ws.execute('ln -s greeting.txt /data/lk')
     const core = new MountCore(ws.fs)
@@ -208,7 +208,7 @@ describe('MountCore', () => {
     // The first open's read was out when the O_TRUNC open landed; what it
     // fetched is the old body, and installing it would let that handle
     // and later stats serve pre-truncation content.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.fs.writeFile('/data/api.json', new TextEncoder().encode('hydrated bytes'))
     vi.spyOn(ws.fs, 'stat').mockResolvedValue(
       new FileStat({ name: 'api.json', type: FileType.FILE, content: ContentType.JSON }),
@@ -254,7 +254,7 @@ describe('MountCore', () => {
     // The flush detached its buffer and is awaiting the backend write when
     // the O_TRUNC open arrives. Truncating right away would let the flush
     // finish afterwards and restore the old body over the truncation.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute("echo 'hello world' | tee /data/greeting.txt")
     const original = ws.fs.writeFile.bind(ws.fs)
     let release: () => void = () => undefined
@@ -288,7 +288,7 @@ describe('MountCore', () => {
     // The target was opened and released as greeting.txt, leaving its
     // bytes in the TTL cache; truncating through the link must drop that
     // entry too, or the next stat of the target serves the old length.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute("echo 'hello world' | tee /data/greeting.txt")
     await ws.execute('ln -s greeting.txt /data/lk')
     const realStat = ws.fs.stat.bind(ws.fs)
@@ -308,7 +308,7 @@ describe('MountCore', () => {
   })
 
   it('keeps no prefetch generation once the prefetch has settled', async () => {
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute("echo 'hello world' | tee /data/greeting.txt")
     const core = new MountCore(ws.fs)
     const generations = (core as unknown as { prefetchGen: Map<string, number> }).prefetchGen
@@ -325,10 +325,10 @@ describe('MountCore', () => {
     // The acknowledged bytes must stay buffered so that handle's own
     // flush reports the refusal rather than succeeding over an empty
     // buffer.
-    const resource = new RAMResource()
-    const seed = new Workspace({ '/data/': resource }, { mode: MountMode.WRITE })
+    const vfs = new RAMVFS()
+    const seed = new Workspace({ '/data/': vfs }, { mode: MountMode.WRITE })
     await seed.fs.writeFile('/data/existing.txt', 'seed')
-    const core = new MountCore(new Workspace({ '/data/': resource }, { mode: MountMode.READ }).fs)
+    const core = new MountCore(new Workspace({ '/data/': vfs }, { mode: MountMode.READ }).fs)
     const first = await core.open('/data/existing.txt', fsConstants.O_WRONLY)
     await core.write('/data/existing.txt', first, new TextEncoder().encode('QUEUED'), 0)
     await expect(
@@ -356,7 +356,7 @@ describe('MountCore', () => {
     // answered the mount's construction time for every link, so a
     // no-follow touch through the mount was invisible right after it
     // landed.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute("echo 'hello' > /data/greeting.txt")
     await ws.execute('ln -s greeting.txt /data/lk')
     await ws.dispatch('setattr', '/data/lk', [], {
@@ -402,7 +402,7 @@ describe('MountCore', () => {
   })
 
   it('honors the root prefix when resolving', () => {
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     const core = new MountCore(ws.fs, { rootPrefix: '/data/' })
     expect(core.resolve('/')).toBe('/data')
     expect(core.resolve('/x.txt')).toBe('/data/x.txt')

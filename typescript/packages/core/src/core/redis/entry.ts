@@ -30,7 +30,7 @@ export class RedisIndexEntry extends IndexEntry {
     return new RedisIndexEntry({
       id: path,
       name,
-      resourceType: RedisResourceType.FILE,
+      vfsType: RedisResourceType.FILE,
       vfsName: name,
       size,
     })
@@ -41,7 +41,7 @@ export class RedisIndexEntry extends IndexEntry {
     return new RedisIndexEntry({
       id: path,
       name,
-      resourceType: RedisResourceType.FOLDER,
+      vfsType: RedisResourceType.FOLDER,
       vfsName: name,
     })
   }

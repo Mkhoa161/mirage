@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { runWithSession } from '../../context/session_context.ts'
 import { revisionFor } from '../../observe/context.ts'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { Limit, MountMode, PathSpec } from '../../types.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
 import { Session } from '../session/session.ts'
@@ -28,8 +28,8 @@ const DEC = new TextDecoder()
 describe('dispatch applies limits on the executing mount', () => {
   it('a symlink into a limited mount gets the target mount limit', async () => {
     const parser = await getTestParser()
-    const data = new RAMResource()
-    const plain = new RAMResource()
+    const data = new RAMVFS()
+    const plain = new RAMVFS()
     const ws = new Workspace(
       {
         '/data': [data, MountMode.EXEC, { read: new Limit({ maxBytes: 8 }) }],
@@ -56,7 +56,7 @@ describe('dispatch rename addresses dst against the source mount', () => {
   it('cross-mount dst is refused like Python refuses it (EXDEV is a follow-up)', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource(), '/b': new RAMResource() },
+      { '/a': new RAMVFS(), '/b': new RAMVFS() },
       { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -86,12 +86,12 @@ describe('dispatch resolves filetype-registered ops by path extension', () => {
     // dispatcher must stamp it the same way or every dispatch-based path
     // (crossmount relay, FUSE) misses the op.
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     registry.register({
       name: 'read',
-      resource: 'ram',
+      vfs: 'ram',
       filetype: '.gdoc.json',
       write: false,
       fn: () => Promise.resolve(ENC.encode('rendered')),
@@ -118,7 +118,7 @@ describe('unlink of a namespace link', () => {
     // in place. That is what left `git checkout` unable to drop a link the
     // other branch does not have.
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ws = new Workspace(
       { '/ram': ram },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
@@ -136,7 +136,7 @@ describe('unlink of a namespace link', () => {
 
   it('still reaches the backend for an ordinary file', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ws = new Workspace(
       { '/ram': ram },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
@@ -155,7 +155,7 @@ describe('unlink of a namespace link', () => {
 describe('the node table answers every verb that names a link', () => {
   async function linkWorkspace(): Promise<Workspace> {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ws = new Workspace(
       { '/ram': ram },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
@@ -301,16 +301,16 @@ describe('the fenced remnant cascade rides the mount revisions', () => {
     // one public trigger: an rmdir whose only remnants the session
     // cannot see.
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const ws = new Workspace(
       { '/ram': ram },
       { mode: MountMode.WRITE, ops: registry, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
       await ws.execute('mkdir /ram/d && echo x > /ram/d/h.txt')
-      // Mounting re-registers the resource's ops (workspace.ts), so the
+      // Mounting re-registers the VFS's ops (workspace.ts), so the
       // probe wraps readdir only after construction, or it is clobbered.
       const original = registry.find('readdir', 'ram')
       if (original === null) throw new Error('ram readdir op missing')
@@ -348,7 +348,7 @@ describe('the turf mode gates the node table', () => {
     // mount except its names.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/extra': new RAMResource() },
+      { '/extra': new RAMVFS() },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -378,8 +378,8 @@ describe('the turf mode gates the node table', () => {
     // backend cannot write, and a symlink is namespace state needing no
     // write capability from it -- which is why a link above postgres,
     // mongodb, chroma and qdrant (all mounted read) is pinned working in
-    // integ/resources/<svc>/sym.json. Only a session grant binds here.
-    const ws = new Workspace({ '/ro': [new RAMResource(), MountMode.READ] })
+    // integ/vfs/<svc>/sym.json. Only a session grant binds here.
+    const ws = new Workspace({ '/ro': [new RAMVFS(), MountMode.READ] })
     try {
       await ws.dispatch('symlink', '/ro/lk', [], { target: 't' })
       expect(ws.namespace.isLink('/ro/lk')).toBe(true)
@@ -401,7 +401,7 @@ describe('the turf mode gates the node table', () => {
     // and the session is the only thing narrowing either.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/rw': new RAMResource(), '/ro': new RAMResource() },
+      { '/rw': new RAMVFS(), '/ro': new RAMVFS() },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -429,7 +429,7 @@ describe('a rename moves what the node table holds', () => {
     // the old name next inherited it.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource() },
+      { '/a': new RAMVFS() },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -448,7 +448,7 @@ describe('a rename moves what the node table holds', () => {
     // goes with it rather than staying to shadow what just landed.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource() },
+      { '/a': new RAMVFS() },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -471,7 +471,7 @@ describe('a hide answers a create by what its parent answers', () => {
     // same refusal an ordinary missing directory does.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/ram': new RAMResource() },
+      { '/ram': new RAMVFS() },
       { mode: MountMode.WRITE, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -521,10 +521,10 @@ describe('a hide answers a create by what its parent answers', () => {
 describe('a failed backend open is not evidence of absence', () => {
   it('symlink refuses a name whose backend could not be opened', async () => {
     const parser = await getTestParser()
-    const broken = new RAMResource()
+    const broken = new RAMVFS()
     vi.spyOn(broken, 'open').mockRejectedValue(new Error('401 bad credentials'))
     const ws = new Workspace(
-      { '/r': new RAMResource(), '/data': broken },
+      { '/r': new RAMVFS(), '/data': broken },
       { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -541,14 +541,14 @@ describe('a failed backend open is not evidence of absence', () => {
 
   it('a failing parent listing propagates out of the parent-listing probe', async () => {
     const parser = await getTestParser()
-    const listing = new RAMResource()
+    const listing = new RAMVFS()
     // The store's key iteration is reached only by the parent readdir, not
     // by the stat probe ahead of it, so this fails exactly the one channel.
     vi.spyOn(listing.store.files, 'keys').mockImplementation(() => {
       throw new Error('backend listing failed')
     })
     const ws = new Workspace(
-      { '/r': new RAMResource(), '/data': listing },
+      { '/r': new RAMVFS(), '/data': listing },
       { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {
@@ -567,7 +567,7 @@ describe('a failed backend open is not evidence of absence', () => {
   it('readlink still answers ENOENT where no mount serves the path', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/r': new RAMResource() },
+      { '/r': new RAMVFS() },
       { mode: MountMode.EXEC, shellParserFactory: () => Promise.resolve(parser) },
     )
     try {

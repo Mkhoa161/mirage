@@ -16,8 +16,8 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -28,7 +28,7 @@ from mirage.workspace import Workspace
     "ulimit",
 ])
 def test_unsupported_builtin_returns_clear_error(name):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     io = asyncio.run(ws.execute(name))
     assert io.exit_code == 2, (
         f"expected exit 2 for {name!r}, got {io.exit_code}")
@@ -43,7 +43,7 @@ def test_unsupported_builtin_returns_clear_error(name):
     "cat >(wc)",
 ])
 def test_output_process_substitution_unsupported(cmd):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     io = asyncio.run(ws.execute(cmd))
     assert io.exit_code == 2, (
         f"expected exit 2 for {cmd!r}, got {io.exit_code}")
@@ -54,7 +54,7 @@ def test_output_process_substitution_unsupported(cmd):
 
 
 def test_input_process_substitution_still_works():
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/a"] = b"line1\nline2\n"
     ws = Workspace({"/data": (ram, MountMode.READ)})
     io = asyncio.run(ws.execute("cat <(cat /data/a)"))

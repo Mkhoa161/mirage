@@ -377,7 +377,7 @@ async def _run_argv(
     # ── boundary globs ──────────────────────────
     # A glob whose directory holds a child mount cannot be pushed down
     # to one backend: the mount root is a child of that directory but
-    # its keys live in another resource, so the backend reports "no such
+    # its keys live in another VFS, so the backend reports "no such
     # file" for a name its own listing shows. Expanding such a word here
     # lets the matches route per mount. It has to happen before the
     # admission policies below, not just before the follow policy: a

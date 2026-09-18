@@ -39,7 +39,7 @@ export async function ensureDirSizes(
     const lookup = await index.get(child)
     const entry = lookup.entry
     if (entry === undefined || entry === null) continue
-    if (entry.resourceType === 'file' && entry.size === null) pending.set(child, entry)
+    if (entry.vfsType === 'file' && entry.size === null) pending.set(child, entry)
   }
   if (pending.size === 0) return
   const slugs: string[] = []

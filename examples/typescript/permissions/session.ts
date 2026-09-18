@@ -14,7 +14,7 @@
 
 import {
   MountMode,
-  RAMResource,
+  RAMVFS,
   Workspace,
   parseSessionProfile,
 } from "@struktoai/mirage-node";
@@ -145,7 +145,7 @@ async function write(
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { "/repo/": new RAMResource() },
+    { "/repo/": new RAMVFS() },
     {
       mode: MountMode.WRITE,
       profiles: Object.fromEntries(

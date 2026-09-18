@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import type { PathSpec } from '../../types.ts'
 import { Invalidation } from '../invalidation.ts'
 import { KeyLock } from '../lock.ts'
@@ -20,7 +20,7 @@ import { CacheEntry } from './entry.ts'
 import { type FileCache, validateMaxDrainBytes } from './mixin.ts'
 import { defaultFingerprintAsync, parseLimit } from './utils.ts'
 
-export class RAMFileCacheStore extends RAMResource implements FileCache {
+export class RAMFileCacheStore extends RAMVFS implements FileCache {
   private readonly entries = new Map<string, CacheEntry>()
   private readonly lock = new KeyLock()
   private readonly limit: number

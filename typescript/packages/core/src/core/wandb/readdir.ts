@@ -14,7 +14,7 @@ function entry(name: string, directory: boolean, size: number | null = null): In
     id: name,
     name,
     vfsName: name,
-    resourceType: directory ? 'wandb/directory' : 'wandb/file',
+    vfsType: directory ? 'wandb/directory' : 'wandb/file',
     size: directory ? 0 : size,
   })
 }
@@ -28,7 +28,7 @@ export function fileTree(files: FileMetadata[]): Map<string, [string, IndexEntry
       const node = entry(child, depth < segments.length - 1, file.sizeBytes)
       const children = directories.get(parent) ?? new Map<string, IndexEntry>()
       const previous = children.get(child)
-      if (previous && previous.resourceType !== node.resourceType)
+      if (previous && previous.vfsType !== node.vfsType)
         throw new WandbAPIError('W&B file and directory name collision')
       children.set(child, node)
       directories.set(parent, children)
@@ -67,7 +67,7 @@ export async function listing(
     const result = tree.get(prefix)
     if (!result) throw enoent(path)
     if (index) {
-      const root = mountPrefixOf(path.virtual, path.resourcePath) + '/' + ps.slice(0, 4).join('/')
+      const root = mountPrefixOf(path.virtual, path.vfsPath) + '/' + ps.slice(0, 4).join('/')
       await index.invalidatePrefix(root)
       await index.put(root, entry('files', true))
       for (const [directory, entries] of tree)

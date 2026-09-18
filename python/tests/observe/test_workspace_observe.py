@@ -17,11 +17,11 @@ import json
 
 from mirage import MountMode, Workspace
 from mirage.observe.store import RAMObserverStore
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 def test_workspace_creates_default_observer():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     assert ws.observer is not None
     assert isinstance(ws.observer.store, RAMObserverStore)
 
@@ -29,7 +29,7 @@ def test_workspace_creates_default_observer():
 def test_workspace_custom_observe_store():
     obs_store = RAMObserverStore()
     ws = Workspace(
-        {"/data/": RAMResource()},
+        {"/data/": RAMVFS()},
         mode=MountMode.WRITE,
         observe=obs_store,
     )
@@ -38,7 +38,7 @@ def test_workspace_custom_observe_store():
 
 def test_logs_populated_after_execute():
     obs_store = RAMObserverStore()
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    observe=obs_store)
     asyncio.run(ws.execute("echo hello > /data/test.txt"))
@@ -53,7 +53,7 @@ def test_logs_populated_after_execute():
 
 def test_logs_contain_op_records():
     obs_store = RAMObserverStore()
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    observe=obs_store)
     asyncio.run(ws.execute("echo hello > /data/test.txt"))
@@ -67,7 +67,7 @@ def test_logs_contain_op_records():
 
 
 def test_observer_store_not_mounted():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     asyncio.run(ws.execute("echo hi > /data/f.txt"))
     result = asyncio.run(ws.execute("ls /.sessions"))
     assert result.exit_code != 0
@@ -80,7 +80,7 @@ def test_observer_store_not_mounted():
 # wiring from a command to its event would not be caught there, and the
 # /.bash_history and `history` views render fine without these fields.
 def test_execute_records_exit_code_and_cwd():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     asyncio.run(ws.execute("echo hello > /data/test.txt"))
     asyncio.run(ws.execute("cat /data/missing.txt"))
     commands = asyncio.run(ws.history())
@@ -91,7 +91,7 @@ def test_execute_records_exit_code_and_cwd():
 
 
 def test_execute_records_op_source():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     asyncio.run(ws.execute("echo hello > /data/test.txt"))
     asyncio.run(ws.execute("cat /data/test.txt"))
     events = asyncio.run(ws.observer.events())
@@ -102,11 +102,7 @@ def test_execute_records_op_source():
 
 
 def test_execute_records_op_path_per_mount():
-    ws = Workspace({
-        "/s3/": RAMResource(),
-        "/db/": RAMResource()
-    },
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/s3/": RAMVFS(), "/db/": RAMVFS()}, mode=MountMode.WRITE)
     for line in ("echo one > /s3/report.json", "echo two > /db/report.json",
                  "cat /s3/report.json", "cat /db/report.json",
                  "cp /s3/report.json /db/copy.json"):
@@ -124,7 +120,7 @@ def test_execute_records_op_path_per_mount():
 
 
 def test_execute_records_every_event_type():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     asyncio.run(ws.execute("echo hello > /data/test.txt"))
     asyncio.run(ws.execute("history -s synthetic"))
     asyncio.run(ws.execute("history -d 1"))

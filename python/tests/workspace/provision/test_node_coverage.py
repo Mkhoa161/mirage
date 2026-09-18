@@ -21,8 +21,8 @@ from mirage.policy import Policy
 from mirage.policy.types import (Action, AdmissionRules, Ask, CommandContext,
                                  Deny)
 from mirage.provision import Precision
-from mirage.resource.ram import RAMResource
 from mirage.shell.node_kind import NodeKind
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.node.provision_node import provision_node
 
 # Drift guard: every statement kind the executor supports must have a
@@ -78,7 +78,7 @@ def test_plans_cover_the_full_enum():
 @pytest.mark.parametrize("kind", list(NodeKind))
 async def test_every_kind_plans(kind):
     snippet, net, write, precision = PLANS[kind]
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
     result = await ws.execute(snippet, provision=True)
     if kind is NodeKind.UNSUPPORTED:
@@ -115,7 +115,7 @@ async def test_provision_asks_the_command_gate_first():
     # so a command the policy refuses is not estimated either: the
     # denied session must not learn byte counts the run itself would
     # never be allowed to produce.
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[_NoCat()])
     try:
@@ -134,7 +134,7 @@ async def test_provision_does_not_run_ahead_of_an_ask():
     # An ask cannot be raised from a dry run (nothing here may reach
     # the host), so a command that would ask is not priced before the
     # approval it would need.
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[_AskCat()])
     try:
@@ -179,7 +179,7 @@ async def test_provision_consults_pre_command_once_per_redirected_command():
     # its verdict to the inner COMMAND recursion, so a stateful or
     # metered hook is consulted exactly once per statement, never twice.
     counting = _Counting()
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[counting])
     try:
@@ -198,7 +198,7 @@ async def test_provision_gates_a_builtin_before_pricing_its_redirect():
     # the statement's redirect targets judged on the same call. A
     # denied `read < file` must plan the same way: no exact-looking
     # builtin plan, and the redirect source never stat'd or priced.
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[_NoRead()])
     try:
@@ -208,7 +208,7 @@ async def test_provision_gates_a_builtin_before_pricing_its_redirect():
         assert result.network_read == "0"
     finally:
         await ws.close()
-    control = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    control = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await control.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
         priced = await control.execute("read x < /data/a.txt", provision=True)
@@ -221,7 +221,7 @@ async def test_provision_gates_a_builtin_before_pricing_its_redirect():
 async def test_provision_gates_a_function_before_walking_its_body():
     # A denied shell function must not have its body walked: the body's
     # own reads are byte counts the refusal is protecting.
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[_NoF()])
     try:
@@ -241,7 +241,7 @@ async def test_provision_vouches_for_a_function_the_script_defines():
     # The walk vouches for its own definitions, so a script that
     # defines and calls a function still plans its body under a
     # commands.allow profile that lists only the real tools it uses.
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
         session = ws._session_mgr.get(ws._session_mgr.default_id)
@@ -268,7 +268,7 @@ async def test_unsupported_node_plans_unknown():
 
 @pytest.mark.asyncio
 async def test_function_call_and_env_prefix_plan():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
     result = await ws.execute("f() { cat /data/a.txt; }; f", provision=True)
     assert result.network_read == "24"
@@ -291,8 +291,8 @@ async def test_function_call_and_env_prefix_plan():
 @pytest.mark.asyncio
 async def test_provision_follows_symlinks_and_spans_mounts():
     ws = Workspace({
-        "/data": RAMResource(),
-        "/data2": RAMResource()
+        "/data": RAMVFS(),
+        "/data2": RAMVFS()
     },
                    mode=MountMode.WRITE)
     await ws.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
@@ -312,7 +312,7 @@ async def test_provision_follows_symlinks_and_spans_mounts():
 
 @pytest.mark.asyncio
 async def test_provision_is_dry_and_case_arms_run_fully():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
     # a dry run must not execute command substitutions
     result = await ws.execute(
@@ -340,7 +340,7 @@ async def test_provision_is_dry_and_case_arms_run_fully():
 
 @pytest.mark.asyncio
 async def test_stdin_driven_and_expanded_estimates():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /data/a.txt > /dev/null", stdin=b"x" * 24)
     await ws.execute("mkdir /data/tree")
     await ws.execute("tee /data/tree/b.txt > /dev/null", stdin=b"y" * 10)

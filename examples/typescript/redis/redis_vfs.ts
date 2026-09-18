@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { createRequire } from 'node:module'
-import { MountMode, RedisResource, Workspace, patchNodeFs } from '@struktoai/mirage-node'
+import { MountMode, RedisVFS, Workspace, patchNodeFs } from '@struktoai/mirage-node'
 
 const require = createRequire(import.meta.url)
 const fs = require('fs') as typeof import('fs')
@@ -39,7 +39,7 @@ async function isDir(p: string): Promise<boolean> {
 
 async function main(): Promise<void> {
   const seedWs = new Workspace(
-    { '/data': new RedisResource({ url: REDIS_URL }) },
+    { '/data': new RedisVFS({ url: REDIS_URL }) },
     { mode: MountMode.WRITE },
   )
   await seedWs.execute('echo "hello world" | tee /data/hello.txt')
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   await seedWs.close()
 
   const ws = new Workspace(
-    { '/data': new RedisResource({ url: REDIS_URL }) },
+    { '/data': new RedisVFS({ url: REDIS_URL }) },
     { mode: MountMode.WRITE },
   )
   patchNodeFs(ws)

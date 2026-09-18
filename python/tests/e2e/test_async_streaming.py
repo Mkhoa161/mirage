@@ -16,14 +16,14 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 @pytest.fixture
 def ws():
-    mem = RAMResource()
+    mem = RAMVFS()
     big_content = b"\n".join([f"line {i}".encode() for i in range(10000)])
     asyncio.run(mem.write(PathSpec.from_str_path("/big.txt"),
                           data=big_content))

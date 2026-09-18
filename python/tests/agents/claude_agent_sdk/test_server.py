@@ -2,13 +2,13 @@ import pytest
 
 pytest.importorskip("claude_agent_sdk")
 
-from mirage import MountMode, RAMResource, Workspace  # noqa: E402
+from mirage import RAMVFS, MountMode, Workspace  # noqa: E402
 from mirage.agents.claude_agent_sdk.server import _MirageTools  # noqa: E402
 
 
 @pytest.fixture
 def workspace():
-    return Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 
 @pytest.fixture

@@ -21,12 +21,12 @@ import pytest
 
 from mirage import MountMode, Workspace
 from mirage.ops.host_io import host_io, in_host_io, with_host_io
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 from .conftest import run
 
 # The configuration the bypass exists for: the mount prefix IS the disk
-# resource's root, so every physical path the backend reaches for is
+# VFS's root, so every physical path the backend reaches for is
 # spelled exactly like a virtual one. Run in a child process, because a
 # regression is an unbounded re-entry that hangs instead of raising.
 COLLIDING_ROOT = """
@@ -36,13 +36,13 @@ import tempfile
 from pathlib import Path
 
 from mirage import MountMode, Workspace
-from mirage.resource.disk import DiskResource
+from mirage.vfs.disk import DiskVFS
 
 
 async def main():
     root = str(Path(tempfile.mkdtemp()).resolve())
     Path(root, "a.txt").write_text("hello")
-    mounts = {root + "/": DiskResource(root=root)}
+    mounts = {root + "/": DiskVFS(root=root)}
     with Workspace(mounts, mode=MountMode.WRITE) as ws:
         print("listdir", sorted(os.listdir(root)))
         with open(os.path.join(root, "a.txt")) as f:
@@ -93,7 +93,7 @@ class TestDepth:
 class TestDoors:
 
     def test_the_patched_doors_answer_nothing_while_a_backend_serves(self):
-        ws = Workspace({"/mem/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/mem/": RAMVFS()}, mode=MountMode.WRITE)
         run(ws.fs.mkdir("/mem/dir"))
         run(ws.fs.write("/mem/dir/a.txt", b"a"))
         with ws:

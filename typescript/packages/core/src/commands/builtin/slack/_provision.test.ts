@@ -23,7 +23,7 @@ import { FakeSlackTransport } from './_test_util.ts'
 import { fileReadProvision, metadataProvision } from './_provision.ts'
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('fileReadProvision', () => {
@@ -48,7 +48,7 @@ describe('fileReadProvision', () => {
       new IndexEntry({
         id: 'U1',
         name: 'alice',
-        resourceType: 'slack/user',
+        vfsType: 'slack/user',
         vfsName: 'alice__U1.json',
       }),
     )

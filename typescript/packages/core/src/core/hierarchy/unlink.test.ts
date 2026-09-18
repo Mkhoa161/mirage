@@ -53,7 +53,7 @@ function spec(mountPath: string): PathSpec {
   return new PathSpec({
     virtual: key !== '' ? `/h${mountPath}` : '/h',
     directory: '/h/',
-    resourcePath: key,
+    vfsPath: key,
   })
 }
 
@@ -62,7 +62,7 @@ const listRooms: Lister<FakeAccessor> = (accessor, _match) => {
   return Promise.resolve(
     (TREE.rooms ?? []).map((room): [string, IndexEntry] => [
       room,
-      new IndexEntry({ id: room, name: room, resourceType: 'fake/room', vfsName: room }),
+      new IndexEntry({ id: room, name: room, vfsType: 'fake/room', vfsName: room }),
     ]),
   )
 }
@@ -73,7 +73,7 @@ const listNotes: Lister<FakeAccessor> = (accessor, match) => {
   return Promise.resolve(
     (TREE[room] ?? []).map((note): [string, IndexEntry] => [
       note,
-      new IndexEntry({ id: note, name: note, resourceType: 'fake/note', vfsName: note }),
+      new IndexEntry({ id: note, name: note, vfsType: 'fake/note', vfsName: note }),
     ]),
   )
 }

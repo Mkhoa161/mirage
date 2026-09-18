@@ -59,7 +59,7 @@ export function pushRevision(item: DriveItem): void {
 }
 
 // Creating a Drive file with a google-apps MIME type auto-creates the
-// linked Docs/Sheets/Slides resource under the same id, mirroring the real
+// linked Docs/Sheets/Slides VFS under the same id, mirroring the real
 // coupling between Drive and the editors.
 export function autoLink(st: GwsState, item: DriveItem): void {
   if (item.mimeType === DOC_MIME && !st.docs.has(item.id)) {

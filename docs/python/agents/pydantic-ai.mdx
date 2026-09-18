@@ -28,9 +28,9 @@ from pydantic_ai_backends import create_console_toolset
 
 from mirage import MountMode, Workspace
 from mirage.agents.pydantic_ai import PydanticAIWorkspace, build_system_prompt
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
-ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 backend = PydanticAIWorkspace(ws)
 
 

@@ -16,8 +16,8 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 from mirage.commands.builtin.generic.shuf import (  # isort: skip
@@ -27,7 +27,7 @@ from mirage.commands.builtin.generic.shuf import (  # isort: skip
 
 
 def _ws():
-    mem = RAMResource()
+    mem = RAMVFS()
     ws = Workspace(
         {"/data": (mem, MountMode.WRITE)},
         mode=MountMode.WRITE,
@@ -283,7 +283,7 @@ def test_shuf_no_write_op_is_not_swallowed_by_that_catch():
             shuf([], [],
                  read_bytes=_unused_read_bytes,
                  stdin=b"a\n",
-                 output=PathSpec(resource_path="o.txt",
+                 output=PathSpec(vfs_path="o.txt",
                                  virtual="/o.txt",
                                  directory="/",
                                  resolved=True),

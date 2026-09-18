@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { homedir } from 'node:os'
-import { MountMode, SSHResource, type FileStat, type SSHConfig, Workspace } from '@struktoai/mirage-node'
+import { MountMode, SSHVFS, type FileStat, type SSHConfig, Workspace } from '@struktoai/mirage-node'
 
 const config: SSHConfig = {
   host: 'dev',
@@ -23,10 +23,10 @@ const config: SSHConfig = {
   root: '/home/ubuntu/mirage-test',
 }
 
-const resource = new SSHResource(config)
+const vfs = new SSHVFS(config)
 
 async function main(): Promise<void> {
-  const ws = new Workspace({ '/ssh/': resource }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/ssh/': vfs }, { mode: MountMode.WRITE })
 
   const show = async (label: string, cmd: string): Promise<void> => {
     console.log(`=== ${label} ===`)

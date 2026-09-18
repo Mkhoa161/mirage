@@ -402,9 +402,9 @@ export class MountCore {
   async create(path: string): Promise<number> {
     const key = this.identity(path)
     await this.mutate(key, async () => {
-      // Route through the resource's `create` op so backends that distinguish
+      // Route through the VFS's `create` op so backends that distinguish
       // "create empty" from "write bytes" get the right code path. Falls back
-      // to writeFile(empty) when the resource doesn't expose `create`.
+      // to writeFile(empty) when the VFS doesn't expose `create`.
       try {
         await this.ops.create(this.resolve(path))
       } catch (dispatchErr) {
@@ -575,8 +575,8 @@ export class MountCore {
       for (const ctx of this.handles.values()) {
         if (ctx.key === key) await this.persistBuffered(ctx)
       }
-      // Prefer the resource's dedicated `truncate` op (atomic on most
-      // backends). Fall back to read/resize/write for resources that don't
+      // Prefer the VFS's dedicated `truncate` op (atomic on most
+      // backends). Fall back to read/resize/write for mounts that don't
       // expose one.
       try {
         await this.ops.truncate(this.resolve(path), size)

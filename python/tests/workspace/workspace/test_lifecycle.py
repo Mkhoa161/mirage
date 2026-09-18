@@ -27,12 +27,12 @@ from mirage.commands.config import RegisteredCommand
 from mirage.commands.spec import CommandSpec, Operand
 from mirage.io import IOResult
 from mirage.ops.registry import op
-from mirage.resource.ram import RAMResource
 from mirage.runtime.base import Runtime
 from mirage.shell.console import Channel
 from mirage.shell.job_table import JobStatus
 from mirage.types import CapacityResult, CapacityState, MountMode, PathSpec
 from mirage.utils.key_prefix import mount_key
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.shared import expand_operands
 from mirage.workspace.executor.command.run import drop_mount_caches
@@ -49,7 +49,7 @@ _RELEASE: list[asyncio.Event] = []
 ])
 async def test_first_mount_access_prepares_expansion_and_provision(action):
 
-    class IndexedRAM(RAMResource):
+    class IndexedRAM(RAMVFS):
 
         def set_index(self, config=None):
             # Keep the backend's shared index across workspace configuration.
@@ -67,7 +67,7 @@ async def test_first_mount_access_prepares_expansion_and_provision(action):
                 ]
             return await super().resolve_glob(paths, prefix)
 
-    ancestor = RAMResource()
+    ancestor = RAMVFS()
     ws = Workspace({"/": ancestor}, index=IndexConfig(ttl=600))
     replacement = IndexedRAM()
     replacement._index = ancestor.index
@@ -95,7 +95,7 @@ async def test_first_mount_access_prepares_expansion_and_provision(action):
             expanded = await expand_operands(ws._namespace, [
                 PathSpec(virtual="/data/*.txt",
                          directory="/data/",
-                         resource_path="*.txt",
+                         vfs_path="*.txt",
                          pattern="*.txt",
                          resolved=False)
             ])
@@ -123,7 +123,7 @@ async def test_first_mount_access_prepares_expansion_and_provision(action):
 @pytest.mark.asyncio
 async def test_unmount_waits_for_an_inflight_cache_write(monkeypatch):
 
-    class CachedRAM(RAMResource):
+    class CachedRAM(RAMVFS):
         caches_reads = True
 
     old = CachedRAM()
@@ -165,14 +165,14 @@ async def test_unmount_waits_for_an_inflight_cache_write(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancel", [False, True])
-async def test_resource_cannot_be_remounted_while_close_is_pending(
+async def test_vfs_cannot_be_remounted_while_close_is_pending(
         monkeypatch, cancel):
-    resource = RAMResource()
-    ws = Workspace({"/data": resource})
+    vfs = RAMVFS()
+    ws = Workspace({"/data": vfs})
     entered = asyncio.Event()
     release = asyncio.Event()
     closed = asyncio.Event()
-    close = resource.close
+    close = vfs.close
 
     async def blocked_close():
         entered.set()
@@ -180,7 +180,7 @@ async def test_resource_cannot_be_remounted_while_close_is_pending(
         await close()
         closed.set()
 
-    monkeypatch.setattr(resource, "close", blocked_close)
+    monkeypatch.setattr(vfs, "close", blocked_close)
     removing = asyncio.create_task(ws.unmount("/data"))
     try:
         await asyncio.wait_for(entered.wait(), timeout=5)
@@ -189,19 +189,18 @@ async def test_resource_cannot_be_remounted_while_close_is_pending(
             with pytest.raises(asyncio.CancelledError):
                 await removing
         for prefix in ("/data", "/alias"):
-            with pytest.raises(ValueError,
-                               match="resource is being unmounted"):
-                ws.add_mount(prefix, resource)
+            with pytest.raises(ValueError, match="VFS is being unmounted"):
+                ws.add_mount(prefix, vfs)
         release.set()
         await asyncio.wait_for(closed.wait(), timeout=5)
         await asyncio.sleep(0)
         if not cancel:
             await removing
-        with pytest.raises(ValueError, match="resource is closed"):
-            ws.add_mount("/data", resource)
-        with pytest.raises(ValueError, match="resource is closed"):
-            Workspace({"/data": resource})
-        ws.add_mount("/data", RAMResource())
+        with pytest.raises(ValueError, match="VFS is closed"):
+            ws.add_mount("/data", vfs)
+        with pytest.raises(ValueError, match="VFS is closed"):
+            Workspace({"/data": vfs})
+        ws.add_mount("/data", RAMVFS())
     finally:
         release.set()
         await asyncio.gather(removing, return_exceptions=True)
@@ -214,7 +213,7 @@ async def test_retired_command_cannot_cache_bytes_for_replacement_mount(
         change):
     shadow = change == "shadow"
 
-    class CachedRAM(RAMResource):
+    class CachedRAM(RAMVFS):
         caches_reads = True
 
     old = CachedRAM()
@@ -233,10 +232,10 @@ async def test_retired_command_cannot_cache_bytes_for_replacement_mount(
         return None, IOResult()
 
     prefix = "/" if shadow else "/data"
-    resources = {prefix: old}
+    mounts = {prefix: old}
     if change == "reveal":
-        resources["/"] = replacement
-    ws = Workspace(resources)
+        mounts["/"] = replacement
+    ws = Workspace(mounts)
     ws.register_cli("gate", CLISpec(name="gate", fn=gate))
     retired = ws.mount(prefix).cache_manager
     running = asyncio.create_task(ws.execute("cat /data/file; gate"))
@@ -254,9 +253,8 @@ async def test_retired_command_cannot_cache_bytes_for_replacement_mount(
         assert await ws.cache.get("/data/file") == b"new"
         assert retired is not None
         assert await retired.cached_bytes(
-            PathSpec(virtual="/data/file",
-                     directory="/data/",
-                     resource_path="file")) is None
+            PathSpec(virtual="/data/file", directory="/data/",
+                     vfs_path="file")) is None
     finally:
         release.set()
         await asyncio.gather(running, return_exceptions=True)
@@ -268,15 +266,15 @@ async def test_retired_command_cannot_cache_bytes_for_replacement_mount(
 @pytest.mark.parametrize("cache_kind", ["file", "index"])
 async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
         monkeypatch, fail_eviction, cache_kind):
-    resource = RAMResource()
-    resource.load_state({"files": {"/file": b"old"}})
-    ws = Workspace({"/data": resource}, mode=MountMode.WRITE)
+    vfs = RAMVFS()
+    vfs.load_state({"files": {"/file": b"old"}})
+    ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
     cache = ws.cache
-    ws.add_mount("/alias", resource)
+    ws.add_mount("/alias", vfs)
     alias_entries = await ws.fs.readdir("/alias")
     entered = asyncio.Event()
     release = asyncio.Event()
-    store = cache if cache_kind == "file" else resource.index
+    store = cache if cache_kind == "file" else vfs.index
     method = "evict_prefix" if cache_kind == "file" else "invalidate_prefix"
     evict = getattr(store, method)
 
@@ -296,7 +294,7 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
         await asyncio.wait_for(entered.wait(), timeout=5)
         await ws.mount("/alias").ensure_ready()
         with pytest.raises(ValueError, match="duplicate mount prefix"):
-            ws.add_mount("/data", RAMResource())
+            ws.add_mount("/data", RAMVFS())
         with pytest.raises(OSError) as reading:
             await ws.fs.readdir("/data")
         assert reading.value.errno == errno.EBUSY
@@ -305,12 +303,12 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
         assert writing.value.errno == errno.EBUSY
         for line in ("cat /data/file", "echo changed > /data/file"):
             assert (await ws.execute(line)).exit_code != 0
-        assert resource.get_state()["files"]["/file"] == b"old"
+        assert vfs.get_state()["files"]["/file"] == b"old"
         release.set()
         if fail_eviction:
             with pytest.raises(RuntimeError, match="cache unavailable"):
                 await removing
-            assert ws.mount("/data").resource is resource
+            assert ws.mount("/data").vfs is vfs
             monkeypatch.setattr(store, method, evict)
             await ws.unmount("/data")
         else:
@@ -319,7 +317,7 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
         assert await cache.get("/data/file") is None
         assert await cache.get("/database/file") == b"peer"
         assert await ws.fs.readdir("/alias") == alias_entries
-        ws.add_mount("/data", RAMResource())
+        ws.add_mount("/data", RAMVFS())
     finally:
         release.set()
         await asyncio.gather(removing, return_exceptions=True)
@@ -337,10 +335,10 @@ async def test_mount_change_invalidates_index_before_replacement(
         if not url:
             pytest.skip("REDIS_URL not set")
         config = RedisIndexConfig(url=url, key_prefix=f"lifecycle:{uuid4()}:")
-    resource = RAMResource()
-    ws = Workspace({"/" if shadow else "/data": resource}, index=config)
-    ws.add_mount("/alias", resource)
-    index = resource.index
+    vfs = RAMVFS()
+    ws = Workspace({"/" if shadow else "/data": vfs}, index=config)
+    ws.add_mount("/alias", vfs)
+    index = vfs.index
     entry = IndexEntry(id="old", name="private.txt", resource_type="file")
     try:
         await index.put("/data", entry)
@@ -348,7 +346,7 @@ async def test_mount_change_invalidates_index_before_replacement(
             await index.set_dir(path, [("private.txt", entry)])
         if not shadow:
             await ws.unmount("/data")
-        replacement = RAMResource()
+        replacement = RAMVFS()
         ws.add_mount("/data", replacement)
         if shadow:
             assert await ws.fs.readdir("/data") == []
@@ -368,8 +366,7 @@ async def test_mount_change_invalidates_index_before_replacement(
 
 
 def _workspace() -> Workspace:
-    return Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                     mode=MountMode.WRITE)
+    return Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
 
 
 async def _deaf_run(job):
@@ -452,13 +449,13 @@ async def test_close_is_idempotent_with_a_job_running():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("blocked_phase", ["runtime", "resource"])
+@pytest.mark.parametrize("blocked_phase", ["runtime", "vfs"])
 async def test_close_refuses_lifecycle_changes_but_allows_runtime_drain(
         monkeypatch, blocked_phase):
     entered = asyncio.Event()
     release = asyncio.Event()
-    resource = RAMResource()
-    ws = Workspace({"/m": (resource, MountMode.WRITE)})
+    vfs = RAMVFS()
+    ws = Workspace({"/m": (vfs, MountMode.WRITE)})
     closes = []
     drained = []
 
@@ -478,24 +475,24 @@ async def test_close_refuses_lifecycle_changes_but_allows_runtime_drain(
                 await release.wait()
             await ws.fs.write("/m/journal.txt", b"drained")
 
-    close_resource = resource.close
+    close_vfs = vfs.close
 
-    async def closing_resource():
-        closes.append("resource")
-        if blocked_phase == "resource":
+    async def closing_vfs():
+        closes.append("vfs")
+        if blocked_phase == "vfs":
             entered.set()
             await release.wait()
         drained.append(await ws.fs.read("/m/journal.txt"))
-        await close_resource()
+        await close_vfs()
 
-    monkeypatch.setattr(resource, "close", closing_resource)
+    monkeypatch.setattr(vfs, "close", closing_vfs)
     runtime = DrainingRuntime()
     ws.add_runtime(runtime)
     closing = asyncio.create_task(ws.close())
     try:
         await asyncio.wait_for(entered.wait(), timeout=5)
         for mutate in (
-                lambda: ws.add_mount("/late", RAMResource()),
+                lambda: ws.add_mount("/late", RAMVFS()),
                 lambda: ws.set_mount_mode("/m", MountMode.READ),
                 lambda: ws.add_runtime(runtime),
                 lambda: ws.register_cli("late", spec),
@@ -511,29 +508,29 @@ async def test_close_refuses_lifecycle_changes_but_allows_runtime_drain(
         release.set()
         await asyncio.wait_for(asyncio.gather(closing, ws.close()), timeout=5)
 
-    assert closes == ["runtime", "resource"]
+    assert closes == ["runtime", "vfs"]
     assert drained == [b"drained"]
 
 
 @pytest.mark.asyncio
-async def test_unmount_preserves_operations_of_each_surviving_resource():
+async def test_unmount_preserves_operations_of_each_surviving_vfs():
 
-    class LabeledRAM(RAMResource):
+    class LabeledRAM(RAMVFS):
 
         def __init__(self, label, specialized=False):
             super().__init__()
             self.closes = 0
 
-            @op("identity", resource="ram")
+            @op("identity", vfs="ram")
             async def identity(accessor, path, **kwargs):
                 if self.closes:
-                    raise RuntimeError("resource closed")
+                    raise RuntimeError("VFS closed")
                 return label.encode()
 
             self.register_op(identity)
             if specialized:
 
-                @op("unique", resource="ram")
+                @op("unique", vfs="ram")
                 async def unique(accessor, path, **kwargs):
                     return label.encode()
 
@@ -644,9 +641,9 @@ async def test_close_settles_pending_profile_persistence(
                                                ("command", True),
                                                ("df", False)])
 @pytest.mark.parametrize("alias", [None, "initial", "dynamic"])
-async def test_unmount_waits_for_admitted_resource_use(monkeypatch, surface,
-                                                       streaming, alias):
-    resource = RAMResource()
+async def test_unmount_waits_for_admitted_vfs_use(monkeypatch, surface,
+                                                  streaming, alias):
+    vfs = RAMVFS()
     entered = asyncio.Event()
     release = asyncio.Event()
     closed = False
@@ -665,7 +662,7 @@ async def test_unmount_waits_for_admitted_resource_use(monkeypatch, surface,
         assert not closed
         return b"value"
 
-    @op("read", resource="ram")
+    @op("read", vfs="ram")
     async def read(accessor, scope, **kwargs):
         return await read_body()
 
@@ -678,28 +675,28 @@ async def test_unmount_waits_for_admitted_resource_use(monkeypatch, surface,
         assert not closed
         return CapacityResult(state=CapacityState.UNKNOWN)
 
-    monkeypatch.setattr(resource, "statfs", statfs)
-    resource.register_op(read)
-    resources = {"/data": resource}
+    monkeypatch.setattr(vfs, "statfs", statfs)
+    vfs.register_op(read)
+    mounts = {"/data": vfs}
     if alias == "initial":
-        resources["/alias"] = resource
-    ws = Workspace(resources)
+        mounts["/alias"] = vfs
+    ws = Workspace(mounts)
     if alias == "dynamic":
-        ws.add_mount("/alias", resource)
+        ws.add_mount("/alias", vfs)
     ws.mount("/data").register(
         RegisteredCommand(name="readvalue",
                           spec=CommandSpec(rest=Operand(type="path")),
-                          resource="ram",
+                          vfs="ram",
                           filetype=None,
                           fn=command))
-    close_resource = resource.close
+    close_vfs = vfs.close
 
     async def close():
         nonlocal closed
         closed = True
-        await close_resource()
+        await close_vfs()
 
-    monkeypatch.setattr(resource, "close", close)
+    monkeypatch.setattr(vfs, "close", close)
 
     async def consume():
         if surface == "df":
@@ -743,27 +740,27 @@ async def test_unmount_waits_for_admitted_resource_use(monkeypatch, surface,
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancel_unmount", [False, True])
-async def test_workspace_close_waits_for_resource_retirements(
+async def test_workspace_close_waits_for_vfs_retirements(
         monkeypatch, cancel_unmount):
-    resource = RAMResource()
-    ws = Workspace({"/data": resource})
+    vfs = RAMVFS()
+    ws = Workspace({"/data": vfs})
     entered = asyncio.Event()
     release = asyncio.Event()
     events = []
-    close_resource = resource.close
+    close_vfs = vfs.close
     close_store = ws.state_store.close
 
     async def retiring_close():
         entered.set()
         await release.wait()
-        await close_resource()
-        events.append("resource")
+        await close_vfs()
+        events.append("vfs")
 
     async def store_close():
         events.append("store")
         await close_store()
 
-    monkeypatch.setattr(resource, "close", retiring_close)
+    monkeypatch.setattr(vfs, "close", retiring_close)
     monkeypatch.setattr(ws.state_store, "close", store_close)
     removing = asyncio.create_task(ws.unmount("/data"))
     closing = None
@@ -779,7 +776,7 @@ async def test_workspace_close_waits_for_resource_retirements(
         assert events == []
         release.set()
         await asyncio.wait_for(closing, 5)
-        assert events == ["resource", "store"]
+        assert events == ["vfs", "store"]
     finally:
         release.set()
         await asyncio.gather(removing,
@@ -790,17 +787,17 @@ async def test_workspace_close_waits_for_resource_retirements(
 
 @pytest.mark.asyncio
 async def test_unmount_drains_metadata_glob_and_its_index_writes(monkeypatch):
-    resource = RAMResource()
-    ws = Workspace({"/data": resource}, index=IndexConfig(ttl=600))
+    vfs = RAMVFS()
+    ws = Workspace({"/data": vfs}, index=IndexConfig(ttl=600))
     entered, release = asyncio.Event(), asyncio.Event()
     closed = False
-    index = resource.index
-    close_resource = resource.close
+    index = vfs.index
+    close_vfs = vfs.close
 
     async def close():
         nonlocal closed
         closed = True
-        await close_resource()
+        await close_vfs()
 
     async def glob(paths, prefix=""):
         entered.set()
@@ -811,13 +808,13 @@ async def test_unmount_drains_metadata_glob_and_its_index_writes(monkeypatch):
         ])
         return []
 
-    monkeypatch.setattr(resource, "resolve_glob", glob)
-    monkeypatch.setattr(resource, "close", close)
+    monkeypatch.setattr(vfs, "resolve_glob", glob)
+    monkeypatch.setattr(vfs, "close", close)
     expanding = asyncio.create_task(
         expand_operands(ws._namespace, [
             PathSpec(virtual="/data/*",
                      directory="/data/",
-                     resource_path="*",
+                     vfs_path="*",
                      pattern="*",
                      resolved=False)
         ]))
@@ -844,10 +841,10 @@ async def test_unmount_drains_metadata_glob_and_its_index_writes(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["service", "clear"])
 async def test_unmount_drains_service_index_invalidation(monkeypatch, kind):
-    resource = RAMResource()
-    ws = Workspace({"/data": resource})
+    vfs = RAMVFS()
+    ws = Workspace({"/data": vfs})
     entered, release = asyncio.Event(), asyncio.Event()
-    index = resource.index
+    index = vfs.index
     method = "invalidate" if kind == "service" else "clear"
     invalidate = getattr(index, method)
     await index.put("/outside-scope",
@@ -856,7 +853,7 @@ async def test_unmount_drains_service_index_invalidation(monkeypatch, kind):
     async def delayed_invalidate():
         entered.set()
         await release.wait()
-        assert not resource.is_closed
+        assert not vfs.is_closed
         await invalidate()
 
     monkeypatch.setattr(index, method, delayed_invalidate)
@@ -871,11 +868,11 @@ async def test_unmount_drains_service_index_invalidation(monkeypatch, kind):
         removing = asyncio.create_task(ws.unmount("/data"))
         await asyncio.sleep(0.02)
         assert not removing.done()
-        assert not resource.is_closed
+        assert not vfs.is_closed
         release.set()
         await updating
         await removing
-        assert resource.is_closed
+        assert vfs.is_closed
         if kind == "clear":
             assert (await index.get("/outside-scope")).entry is None
     finally:
@@ -888,21 +885,21 @@ async def test_unmount_drains_service_index_invalidation(monkeypatch, kind):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("used", [False, True])
-async def test_unmount_leaves_borrowed_resources_open(used):
-    resource = RAMResource()
-    resource.load_state({"files": {"/file": b"seed"}})
-    ws = Workspace({"/data": resource})
+async def test_unmount_leaves_borrowed_mounts_open(used):
+    vfs = RAMVFS()
+    vfs.load_state({"files": {"/file": b"seed"}})
+    ws = Workspace({"/data": vfs})
     state = await to_state_dict(ws)
-    replica = await Workspace.from_state(state, resources={"/data": resource})
+    replica = await Workspace.from_state(state, mounts={"/data": vfs})
     try:
         if used:
             assert (await replica.execute("cat /data/file")).stdout == b"seed"
         await replica.unmount("/data")
-        assert not resource.is_closed
+        assert not vfs.is_closed
         await replica.close()
-        assert not resource.is_closed
+        assert not vfs.is_closed
         await ws.close()
-        assert resource.is_closed
+        assert vfs.is_closed
     finally:
         await replica.close()
         await ws.close()

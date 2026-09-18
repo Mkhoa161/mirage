@@ -3,7 +3,7 @@
     "python": {
       "command": [
         "./python/.venv/bin/python",
-        "examples/python/redis_resource/example_redis.py"
+        "examples/python/redis_vfs/example_redis.py"
       ]
     }
   },
@@ -144,7 +144,7 @@
     {
       "volatile": "  saved → /var/folders/4d/s_lrmhbd7xb9jglnmy13sz_w0000gn/T/tmpkfj1d4zs.tar (20480 bytes)"
     },
-    "  ✓ load() w/o resources raises: Workspace.load: resources= must include overrides for: ['/data/']. A l…",
+    "  ✓ load() w/o mounts raises: Workspace.load: mounts= must include overrides for: ['/data/']. A l…",
     "  loaded ws ls /data: dup.txt",
     "hello.txt",
     "reports",

@@ -15,8 +15,10 @@
 import pytest
 
 from mirage import MountMode, Workspace
-from tests.resource.databricks_volume.test_databricks_volume import (
-    FakeFiles, make_resource, seed_directory, seed_file)
+from tests.vfs.databricks_volume.test_databricks_volume import (FakeFiles,
+                                                                make_vfs,
+                                                                seed_directory,
+                                                                seed_file)
 
 ROOT = "/Volumes/main/default/agent_files/root"
 
@@ -33,7 +35,7 @@ def dbx_files() -> FakeFiles:
 
 @pytest.fixture
 def ws(dbx_files: FakeFiles) -> Workspace:
-    return Workspace({"/dbx/": make_resource(dbx_files)}, mode=MountMode.READ)
+    return Workspace({"/dbx/": make_vfs(dbx_files)}, mode=MountMode.READ)
 
 
 @pytest.mark.asyncio

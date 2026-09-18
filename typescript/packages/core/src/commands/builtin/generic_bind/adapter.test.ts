@@ -55,7 +55,7 @@ function nsDir(dir: string): CommandOpts {
 
 function glob(dir: string, pattern: string): PathSpec {
   return new PathSpec({
-    resourcePath: stripSlash(dir),
+    vfsPath: stripSlash(dir),
     virtual: dir,
     directory: dir,
     pattern,
@@ -85,7 +85,7 @@ describe('resolveGlobOf', () => {
     const word = new PathSpec({
       virtual: '/d/*',
       directory: '/d/',
-      resourcePath: '*',
+      vfsPath: '*',
       pattern: '*',
       resolved: false,
       rawPath: '/d/*/',
@@ -108,7 +108,7 @@ describe('makeResolveGlob', () => {
     const readdir = () => Promise.reject(new Error('should not readdir'))
     const resolveGlob = makeResolveGlob(readdir)
     const p = new PathSpec({
-      resourcePath: 'd/a.txt',
+      vfsPath: 'd/a.txt',
       virtual: '/d/a.txt',
       directory: '/d/',
       resolved: true,
@@ -128,7 +128,7 @@ describe('makeResolveGlob', () => {
     const readdir = () => Promise.reject(new Error('should not readdir'))
     const resolveGlob = makeResolveGlob(readdir)
     const p = new PathSpec({
-      resourcePath: 'd/a.txt',
+      vfsPath: 'd/a.txt',
       virtual: '/d/a.txt',
       directory: '/d/',
       resolved: false,
@@ -273,7 +273,7 @@ describe('withRuleGuard', () => {
     new PathSpec({
       virtual,
       directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
-      resourcePath: virtual,
+      vfsPath: virtual,
       resolved: true,
     })
 
@@ -365,7 +365,7 @@ describe('withPolicyGuard', () => {
     new PathSpec({
       virtual,
       directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
-      resourcePath: virtual,
+      vfsPath: virtual,
       resolved: true,
     })
 
@@ -684,7 +684,7 @@ describe('withHiddenGuard rmdir under namespace children', () => {
     if (rmdir === undefined) throw new Error('rmdir slot missing')
     const sess = new Session({ sessionId: 'narrowed' })
     sess.hiddenPaths = { paths: ['/m/d/h'] }
-    const spec = new PathSpec({ virtual: '/m/d', directory: '/m', resourcePath: 'd' })
+    const spec = new PathSpec({ virtual: '/m/d', directory: '/m', vfsPath: 'd' })
     await runWithSession(sess, async () => {
       await expect(rmdir(accessor, spec)).rejects.toMatchObject({ code: 'ENOTEMPTY' })
     })
@@ -720,7 +720,7 @@ describe('withHiddenGuard rmdir under namespace children', () => {
     if (rmdir === undefined) throw new Error('rmdir slot missing')
     const sess = new Session({ sessionId: 'narrowed' })
     sess.hiddenPaths = { paths: ['/m/d/h'] }
-    const spec = new PathSpec({ virtual: '/m/d', directory: '/m', resourcePath: 'd' })
+    const spec = new PathSpec({ virtual: '/m/d', directory: '/m', vfsPath: 'd' })
     await runWithSession(sess, async () => {
       await expect(rmdir(accessor, spec)).rejects.toMatchObject({ code: 'ENOTEMPTY' })
     })
@@ -732,7 +732,7 @@ describe('withAbortGuard', () => {
     new PathSpec({
       virtual,
       directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
-      resourcePath: virtual,
+      vfsPath: virtual,
       resolved: true,
     })
 

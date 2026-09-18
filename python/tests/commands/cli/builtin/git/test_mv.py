@@ -19,9 +19,9 @@ import pytest
 from mirage.commands.cli.builtin.git import GIT
 from mirage.commands.cli.builtin.git.mv import Move, moved_path, parse_flags
 from mirage.commands.spec.flag_view import FlagView
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from tests.commands.cli.builtin.git.conftest import MOUNT, conflict_index
 
@@ -258,8 +258,8 @@ async def test_a_directory_carries_its_symlinks(git_rw):
 async def test_a_directory_holding_a_mount_will_not_move(repo_path: Path):
     with Workspace(
         {
-            MOUNT: DiskResource(root=str(repo_path)),
-            "/repo/docs/inner/": RAMResource(),
+            MOUNT: DiskVFS(root=str(repo_path)),
+            "/repo/docs/inner/": RAMVFS(),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -277,8 +277,8 @@ async def test_a_directory_holding_a_mount_will_not_move(repo_path: Path):
 async def test_a_mount_root_itself_will_not_move(repo_path: Path):
     with Workspace(
         {
-            MOUNT: DiskResource(root=str(repo_path)),
-            "/repo/inner/": RAMResource(),
+            MOUNT: DiskVFS(root=str(repo_path)),
+            "/repo/inner/": RAMVFS(),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -300,8 +300,8 @@ async def test_a_file_will_not_move_into_another_mount(repo_path: Path):
     # path.
     with Workspace(
         {
-            MOUNT: DiskResource(root=str(repo_path)),
-            "/repo/inner/": RAMResource(),
+            MOUNT: DiskVFS(root=str(repo_path)),
+            "/repo/inner/": RAMVFS(),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -318,8 +318,8 @@ async def test_a_file_will_not_move_into_another_mount(repo_path: Path):
 async def test_a_file_will_not_move_out_of_a_nested_mount(repo_path: Path):
     with Workspace(
         {
-            MOUNT: DiskResource(root=str(repo_path)),
-            "/repo/inner/": RAMResource(),
+            MOUNT: DiskVFS(root=str(repo_path)),
+            "/repo/inner/": RAMVFS(),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -337,8 +337,8 @@ async def test_a_move_inside_one_mount_still_goes(repo_path: Path):
     # that never leaves the repository's own mount is untouched by it.
     with Workspace(
         {
-            MOUNT: DiskResource(root=str(repo_path)),
-            "/repo/inner/": RAMResource(),
+            MOUNT: DiskVFS(root=str(repo_path)),
+            "/repo/inner/": RAMVFS(),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -352,8 +352,8 @@ async def test_a_move_inside_one_mount_still_goes(repo_path: Path):
 async def test_k_skips_a_source_that_holds_a_mount(repo_path: Path):
     with Workspace(
         {
-            MOUNT: DiskResource(root=str(repo_path)),
-            "/repo/docs/inner/": RAMResource(),
+            MOUNT: DiskVFS(root=str(repo_path)),
+            "/repo/docs/inner/": RAMVFS(),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -490,7 +490,7 @@ async def test_f_takes_the_destinations_conflict_stages_with_it(
     # since write_index lays them back over the entry and the moved
     # blob is the copy that disappears.
     conflict_index(repo_path, "b.txt")
-    with Workspace({MOUNT: DiskResource(root=str(repo_path))},
+    with Workspace({MOUNT: DiskVFS(root=str(repo_path))},
                    mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         assert (await run(ws, "status --short"))[1].startswith(b"UU b.txt\n")

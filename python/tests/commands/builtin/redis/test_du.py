@@ -18,7 +18,7 @@ import pytest
 import pytest_asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.redis import RedisResource
+from mirage.vfs.redis import RedisVFS
 
 REDIS_URL = os.environ.get("REDIS_URL", "")
 pytestmark = pytest.mark.skipif(not REDIS_URL, reason="REDIS_URL not set")
@@ -26,12 +26,12 @@ pytestmark = pytest.mark.skipif(not REDIS_URL, reason="REDIS_URL not set")
 
 @pytest_asyncio.fixture()
 async def workspace():
-    resource = RedisResource(url=REDIS_URL, key_prefix="test:du:")
-    await resource._store.clear()
-    ws = Workspace({"/": resource}, mode=MountMode.WRITE)
+    vfs = RedisVFS(url=REDIS_URL, key_prefix="test:du:")
+    await vfs._store.clear()
+    ws = Workspace({"/": vfs}, mode=MountMode.WRITE)
     yield ws
-    await resource._store.clear()
-    await resource._store.close()
+    await vfs._store.clear()
+    await vfs._store.close()
 
 
 @pytest.mark.asyncio
@@ -91,9 +91,9 @@ async def test_du_reads_an_unstattable_mount_root():
     subtree instead of calling the operand unreadable. Mounted away from
     ``/`` so the operand does not fan out across sibling mounts.
     """
-    resource = RedisResource(url=REDIS_URL, key_prefix="test:du:root:")
-    await resource._store.clear()
-    ws = Workspace({"/data": resource}, mode=MountMode.WRITE)
+    vfs = RedisVFS(url=REDIS_URL, key_prefix="test:du:root:")
+    await vfs._store.clear()
+    ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
     try:
         await ws.fs.write("/data/a.txt", b"hello")
         io = await ws.execute("du /data")
@@ -101,8 +101,8 @@ async def test_du_reads_an_unstattable_mount_root():
         assert io.stdout.decode() == "5\t/data\n"
         assert (io.stderr or b"") == b""
     finally:
-        await resource._store.clear()
-        await resource._store.close()
+        await vfs._store.clear()
+        await vfs._store.close()
 
 
 @pytest.mark.asyncio

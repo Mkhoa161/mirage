@@ -14,12 +14,12 @@
 
 import pytest
 
-from mirage import DiskResource, MountMode, Workspace
+from mirage import DiskVFS, MountMode, Workspace
 
 
 @pytest.fixture
 def workspace(tmp_path):
-    return Workspace({"/": DiskResource(root=tmp_path)}, mode=MountMode.WRITE)
+    return Workspace({"/": DiskVFS(root=tmp_path)}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio

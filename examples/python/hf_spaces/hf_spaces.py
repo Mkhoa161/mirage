@@ -19,8 +19,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.hf_spaces import HfSpacesConfig, HfSpacesResource
 from mirage.types import PathSpec
+from mirage.vfs.hf_spaces import HfSpacesConfig, HfSpacesVFS
 
 load_dotenv(".env.development")
 
@@ -28,8 +28,8 @@ config = HfSpacesConfig(
     repo_id=os.environ.get("HF_SPACE_REPO", "HuggingFaceBio/carbon-demo"),
     token=os.environ.get("HF_TOKEN"),
 )
-resource = HfSpacesResource(config)
-ws = Workspace({"/s/": resource}, mode=MountMode.READ)
+vfs = HfSpacesVFS(config)
+ws = Workspace({"/s/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:
@@ -46,7 +46,7 @@ def show_plan(label: str, dr) -> None:
 
 
 async def main():
-    print(f"=== mounted {resource.accessor.bucket_uri} at /s/ ===")
+    print(f"=== mounted {vfs.accessor.bucket_uri} at /s/ ===")
 
     print("\n=== not-found errors show the full virtual path ===")
     for cmd in ("cat /s/__nf_missing__.txt", "head /s/__nf_missing__.txt",

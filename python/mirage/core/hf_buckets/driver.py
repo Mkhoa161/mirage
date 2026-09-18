@@ -197,7 +197,7 @@ def _is_not_found(exc: Exception) -> bool:
 
 
 DRIVER: ObjectStoreDriver[_HfAccessor, AsyncOperator] = ObjectStoreDriver(
-    resource="hf",
+    vfs="hf",
     scope_error=SCOPE_ERROR,
     key_prefix_of=_key_prefix_of,
     connect=_connect,

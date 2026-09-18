@@ -39,7 +39,7 @@ def make_rename(driver: ObjectStoreDriver[A, C],
     move_prefix = driver.move_prefix
     if move_file is None or move_prefix is None:
         raise ValueError(
-            f"{driver.resource} driver has no native move; leave rename "
+            f"{driver.vfs} driver has no native move; leave rename "
             "unwired instead of building it")
 
     async def rename(accessor: A, src_spec: PathSpec,

@@ -27,7 +27,7 @@ export class DiskIndexEntry extends IndexEntry {
     return new DiskIndexEntry({
       id: path,
       name,
-      resourceType: DiskResourceType.FILE,
+      vfsType: DiskResourceType.FILE,
       vfsName: name,
       size,
       remoteTime: modified,
@@ -39,7 +39,7 @@ export class DiskIndexEntry extends IndexEntry {
     return new DiskIndexEntry({
       id: path,
       name,
-      resourceType: DiskResourceType.FOLDER,
+      vfsType: DiskResourceType.FOLDER,
       vfsName: name,
       remoteTime: modified,
     })

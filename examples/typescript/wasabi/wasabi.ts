@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  WasabiResource,
+  WasabiVFS,
   Workspace,
   resolvedWasabiEndpoint,
   type WasabiConfig,
@@ -37,7 +37,7 @@ function configFromEnv(): WasabiConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/wasabi/': new WasabiResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/wasabi/': new WasabiVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== Wasabi at ${resolvedWasabiEndpoint(config)} ===`)
 

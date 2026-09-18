@@ -1,6 +1,6 @@
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.io.stream import materialize
 from mirage.shell.variable import VarAttr
 from mirage.workspace.executor.builtins.declare import handle_export
@@ -92,7 +92,7 @@ async def test_export_p_with_name_does_not_print():
 
 @pytest.mark.asyncio
 async def test_export_p_via_workspace():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute('export ZEP1=v1; export -p | grep ZEP1')
     assert io.exit_code == 0
     assert (io.stdout or b"") == b'declare -x ZEP1="v1"\n'
@@ -100,7 +100,7 @@ async def test_export_p_via_workspace():
 
 @pytest.mark.asyncio
 async def test_export_invalid_option_via_workspace():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute("export -z")
     assert io.exit_code == 2
     assert b"invalid option" in (io.stderr or b"")
@@ -158,7 +158,7 @@ async def test_export_reports_first_invalid_option():
 
 @pytest.mark.asyncio
 async def test_export_p_terminator_via_workspace():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute('export ZEP5=v5; export -p -- | grep ZEP5')
     assert io.exit_code == 0
     assert (io.stdout or b"") == b'declare -x ZEP5="v5"\n'

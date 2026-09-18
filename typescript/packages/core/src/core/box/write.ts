@@ -64,7 +64,7 @@ async function invalidateLevels(path: PathSpec, count: number): Promise<void> {
   // listing (not just the final target's) so a cached ancestor listing from
   // an earlier command re-fetches and sees the new folders. Box resolves ids
   // through those listings, so a stale ancestor hides new children.
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   const segments = rstripVirtual(path.virtual).split('/')
   for (let i = 0; i < count; i++) {
     const depth = segments.length - count + i + 1
@@ -192,7 +192,7 @@ export async function rename(accessor: BoxAccessor, src: PathSpec, dst: PathSpec
 }
 
 function childSpec(parent: PathSpec, name: string): PathSpec {
-  const prefix = mountPrefixOf(parent.virtual, parent.resourcePath)
+  const prefix = mountPrefixOf(parent.virtual, parent.vfsPath)
   const virtual = `${rstripVirtual(parent.virtual)}/${name}`
   return PathSpec.fromStrPath(virtual, mountKey(virtual, prefix))
 }

@@ -17,21 +17,21 @@ import sys
 import pytest
 import pytest_asyncio
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.io.types import materialize
 from mirage.runtime.python import LocalRuntime
 
 
 @pytest_asyncio.fixture
 async def ws():
-    workspace = Workspace({"/": RAMResource()}, mode=MountMode.EXEC)
+    workspace = Workspace({"/": RAMVFS()}, mode=MountMode.EXEC)
     yield workspace
     await workspace.close()
 
 
 @pytest_asyncio.fixture
 async def ws_cpython():
-    workspace = Workspace({"/": RAMResource()},
+    workspace = Workspace({"/": RAMVFS()},
                           mode=MountMode.EXEC,
                           runtimes=[LocalRuntime()])
     yield workspace
@@ -103,7 +103,7 @@ async def test_program_version_operand_is_not_intercepted(ws, line):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("name", ["python", "python3", "js", "node"])
 async def test_version_without_a_runtime_uses_the_invoked_name(name):
-    ws = Workspace({"/": RAMResource()}, runtimes=[])
+    ws = Workspace({"/": RAMVFS()}, runtimes=[])
     try:
         io = await ws.execute(f"{name} --version")
         assert io.exit_code == 127

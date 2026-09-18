@@ -22,7 +22,7 @@ import { DropboxApiError } from './client.ts'
 import { getMetadata, listFolder, type DropboxEntry } from './api.ts'
 import { stripSlash } from '../../utils/slash.ts'
 
-function resourceTypeFor(entry: DropboxEntry): string {
+function vfsTypeFor(entry: DropboxEntry): string {
   if (entry['.tag'] === 'folder') return 'dropbox/folder'
   return 'dropbox/file'
 }
@@ -62,8 +62,8 @@ export async function readdir(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<string[]> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
-  const key = (path.pattern !== null ? path.dir : path).resourcePath
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
+  const key = (path.pattern !== null ? path.dir : path).vfsPath
   const virtualKey = key !== '' ? `${prefix}/${key}` : prefix !== '' ? prefix : '/'
 
   if (index !== undefined) {
@@ -102,7 +102,7 @@ export async function readdir(
     const entry = new IndexEntry({
       id: f.id ?? f.path_display ?? filename,
       name: filename,
-      resourceType: resourceTypeFor(f),
+      vfsType: vfsTypeFor(f),
       remoteTime: modified,
       vfsName: filename,
       size: !isDir ? size : null,

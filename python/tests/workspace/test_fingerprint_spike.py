@@ -15,10 +15,10 @@
 import asyncio
 import time
 
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
 from mirage.types import ConsistencyPolicy, MountMode
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
 
@@ -28,9 +28,9 @@ def test_disk_always_refetches_after_external_mutation(tmp_path):
     root.mkdir()
     (root / "file.txt").write_bytes(b"v1")
 
-    resource = DiskResource(root=str(root))
+    vfs = DiskVFS(root=str(root))
     ws = Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )
@@ -55,9 +55,9 @@ def test_disk_lazy_keeps_stale_cache_after_external_mutation(tmp_path):
     root.mkdir()
     (root / "file.txt").write_bytes(b"v1")
 
-    resource = DiskResource(root=str(root))
+    vfs = DiskVFS(root=str(root))
     ws = Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.LAZY,
     )
@@ -93,7 +93,7 @@ def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
             aws_secret_access_key="fake",
         )
         ws = Workspace(
-            {"/s3": (S3Resource(config), MountMode.WRITE)},
+            {"/s3": (S3VFS(config), MountMode.WRITE)},
             mode=MountMode.WRITE,
             consistency=ConsistencyPolicy.ALWAYS,
         )
@@ -115,10 +115,10 @@ def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
 
 
 def test_ram_falls_back_to_lazy_when_fingerprint_absent():
-    resource = RAMResource()
-    resource._store.files["/file.txt"] = b"v1"
+    vfs = RAMVFS()
+    vfs._store.files["/file.txt"] = b"v1"
     ws = Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )

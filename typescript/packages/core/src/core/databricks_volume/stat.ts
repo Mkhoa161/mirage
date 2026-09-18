@@ -62,12 +62,12 @@ export async function stat(
   // type for every listed entry, so stat returns without a network round-trip.
   // Mirrors Python's mirage/core/databricks_volume/stat.py.
   if (index !== undefined) {
-    const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+    const prefix = mountPrefixOf(path.virtual, path.vfsPath)
     const virtualKey = prefix !== '' ? `${rstripSlash(prefix)}/${stripped}` : `/${stripped}`
     const lookup = await index.get(virtualKey)
     if (lookup.entry !== undefined && lookup.entry !== null) {
       const entry = lookup.entry
-      if (entry.resourceType === 'folder') {
+      if (entry.vfsType === 'folder') {
         return new FileStat({ name: entry.name, type: FileType.DIRECTORY })
       }
       return new FileStat({

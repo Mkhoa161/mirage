@@ -12,10 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
 async function main(): Promise<void> {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ws = new Workspace({ '/ram': ram }, { mode: MountMode.EXEC })
 
   console.log('python3 reads a script file from ANY mount — demo: /ram/\n')

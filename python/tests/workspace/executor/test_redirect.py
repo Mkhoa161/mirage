@@ -14,11 +14,11 @@
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 
 
 async def _workspace() -> Workspace:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("mkdir -p /data")
     return ws
 
@@ -392,7 +392,7 @@ async def test_stdin_from_a_closed_or_write_only_descriptor_is_unreadable(
     # bash 5.2.37 opens the command all the same and the first read
     # fails with EBADF; a command that never reads succeeds. GNU cat's
     # `closing standard input` second line after `<&-` is not rendered.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(line)
         assert (await io.stdout_str(), await io.stderr_str()) == expected
@@ -430,7 +430,7 @@ async def test_stdin_from_a_closed_or_write_only_descriptor_is_unreadable(
     ("cat /nonexistent <<EOF 2>/dev/null || echo fb\nx\nEOF", ("fb\n", 0)),
 ])
 async def test_heredoc_operator_line_list(line, expected):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(line)
         assert (await io.stdout_str(), io.exit_code) == expected
@@ -490,7 +490,7 @@ async def test_heredoc_file_redirect_then_list():
     ("x=1; cat <<EOF; echo $x\n$x\nEOF", ("1\n1\n", 0)),
 ])
 async def test_heredoc_operator_line_terminators(line, expected):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(line)
         assert (await io.stdout_str(), io.exit_code) == expected

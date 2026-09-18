@@ -35,7 +35,7 @@ export async function readdir(
   // reason).
   const target = path.pattern !== null ? path.dir : path
   const virtual = target.mountPath
-  const mountPrefix = mountPrefixOf(target.virtual, target.resourcePath)
+  const mountPrefix = mountPrefixOf(target.virtual, target.vfsPath)
   // Canonical key: no trailing slash (except root), or the same dir
   // indexes under two keys and cache hits return doubled-slash entries.
   const virtualKey = rstripSlash(mountPrefix + virtual) || '/'
@@ -69,7 +69,7 @@ export async function readdir(
       new IndexEntry({
         id: `${dirPrefix}${name}`,
         name,
-        resourceType: ResourceType.FILE,
+        vfsType: ResourceType.FILE,
       }),
     ])
     await index.setDir(virtualKey, indexEntries)

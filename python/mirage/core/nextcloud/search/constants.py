@@ -3,7 +3,7 @@ from http import HTTPStatus
 from mirage.core.nextcloud.search.types import Namespace, Property
 
 DISPLAY_NAME = Property(Namespace.DAV, "displayname")
-RESOURCE_TYPE = Property(Namespace.DAV, "resourcetype")
+RESOURCE_TYPE = Property(Namespace.DAV, "vfstype")
 CONTENT_LENGTH = Property(Namespace.DAV, "getcontentlength")
 LAST_MODIFIED = Property(Namespace.DAV, "getlastmodified")
 SIZE = Property(Namespace.OWNCLOUD, "size")

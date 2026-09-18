@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -22,9 +22,9 @@ import { Workspace } from './workspace/workspace.ts'
 describe('Workspace + Python mount', () => {
   it('Workspace.addMount makes paths visible inside Python after it loads', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     await ws.fs.writeFile('/ram/hello.txt', 'world')
@@ -36,9 +36,9 @@ describe('Workspace + Python mount', () => {
 
   it('Python writes flush back through the bridge', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     const io = await ws.execute(
@@ -52,9 +52,9 @@ describe('Workspace + Python mount', () => {
 
   it('Workspace.addMount does not load Pyodide when no Python ever runs', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     await ws.fs.writeFile('/ram/never.txt', 'unused')
@@ -64,19 +64,19 @@ describe('Workspace + Python mount', () => {
     await ws.close()
   }, 30_000)
 
-  it('unmount drains in-flight Python addMount before closing the resource', async () => {
+  it('unmount drains in-flight Python addMount before closing the VFS', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     await ws.fs.writeFile('/ram/seed.txt', 'seed')
     const io = await ws.execute(`python3 -c "pass"`)
     expect(io.exitCode).toBe(0)
     await ws.unmount('/ram/')
-    const ram2 = new RAMResource()
-    ops.registerResource(ram2)
+    const ram2 = new RAMVFS()
+    ops.registerVfs(ram2)
     ws.addMount('/ram', ram2, MountMode.WRITE)
     await ws.fs.writeFile('/ram/post.txt', 'post')
     expect(new TextDecoder().decode(await ws.fs.readFile('/ram/post.txt'))).toBe('post')
@@ -85,9 +85,9 @@ describe('Workspace + Python mount', () => {
 
   it('Python writes a 50KB chunked file end-to-end', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace({}, { mode: MountMode.EXEC, ops, shellParser: parser })
     ws.addMount('/ram', ram, MountMode.EXEC)
     const code =
@@ -107,9 +107,9 @@ describe('Workspace + Python mount', () => {
 
   it('PIL saves an image to a mounted prefix and loads it back', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace(
       {},
       {

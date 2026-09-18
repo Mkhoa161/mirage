@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { IOResult } from '../../../io/types.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { MountMode, PathSpec } from '../../../types.ts'
 import { getTestParser } from '../../fixtures/workspace_fixture.ts'
 import { Workspace } from '../../workspace/workspace.ts'
@@ -145,7 +145,7 @@ describe('builtins/shared: expandOperands', () => {
   it('expands a pattern per mount and passes a plain path through', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, shellParser: parser },
     )
     await ws.execute('echo a > /data/a.txt && echo b > /data/b.txt')
@@ -154,7 +154,7 @@ describe('builtins/shared: expandOperands', () => {
       directory: '/data/',
       pattern: '*.txt',
       resolved: false,
-      resourcePath: '*.txt',
+      vfsPath: '*.txt',
     })
     const expanded = await expandOperands(ws.namespace, [globSpec, '/data/c.md'])
     expect(expanded.map((p) => p.virtual).sort()).toEqual([
@@ -218,7 +218,7 @@ describe('builtins/shared: the session helpers', () => {
     // command tier renders this line for a backend operand and the node
     // table renders it for a symlink, so `rm f.txt` and `rm lk` under one
     // read grant answer identically.
-    const ws = new Workspace({ '/data': [new RAMResource(), MountMode.WRITE] })
+    const ws = new Workspace({ '/data': [new RAMVFS(), MountMode.WRITE] })
     const owned = PathSpec.fromStrPath('/data/lk')
     expect(readOnlyError('rm', ws.namespace, owned)).toBe('rm: read-only mount at /data/\n')
   })

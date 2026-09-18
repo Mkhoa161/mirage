@@ -30,7 +30,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { IOResult } from '../../../../io/types.ts'
 import { OpsRegistry } from '../../../../ops/registry.ts'
-import { RAMResource } from '../../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../../../../shell/parse/index.ts'
 import { MountMode } from '../../../../types.ts'
 import { Workspace } from '../../../../workspace/workspace/workspace.ts'
@@ -85,9 +85,9 @@ async function stage(setup: Setup): Promise<[Workspace, string]> {
   execFileSync('bash', [BUILDER, repo], { stdio: 'ignore' })
   setup(repo)
 
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   const ws = new Workspace(
     { '/repo': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },

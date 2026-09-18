@@ -27,7 +27,7 @@ def _minimal_config() -> dict:
         "config": {
             "mounts": {
                 "/": {
-                    "resource": "ram",
+                    "vfs": "ram",
                     "mode": "WRITE"
                 }
             },
@@ -279,14 +279,14 @@ async def test_execute_with_stdin_multipart():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("background", [False, True])
-@pytest.mark.parametrize("resource", ["ram", "disk"])
-async def test_large_multipart_stdin_roundtrip(tmp_path, resource, background):
+@pytest.mark.parametrize("vfs", ["ram", "disk"])
+async def test_large_multipart_stdin_roundtrip(tmp_path, vfs, background):
     app = build_app(idle_grace_seconds=10.0)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport,
                            base_url="http://test") as client:
-        mount = {"resource": resource, "mode": "WRITE"}
-        if resource == "disk":
+        mount = {"vfs": vfs, "mode": "WRITE"}
+        if vfs == "disk":
             mount["config"] = {"root": str(tmp_path)}
         created = await client.post(
             "/v1/workspaces", json={"config": {

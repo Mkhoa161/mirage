@@ -14,7 +14,7 @@
 
 import dotenv from 'dotenv'
 import {
-  DiscordResource,
+  DiscordVFS,
   MountMode,
   Workspace,
   type DiscordConfig,
@@ -36,8 +36,8 @@ function assertNonEmpty(out: string, msg: string): void {
 }
 
 async function main(): Promise<void> {
-  const resource = new DiscordResource(buildConfig())
-  const ws = new Workspace({ '/discord': resource }, { mode: MountMode.READ })
+  const vfs = new DiscordVFS(buildConfig())
+  const ws = new Workspace({ '/discord': vfs }, { mode: MountMode.READ })
 
   try {
     console.log('=== ls /discord/ (guilds) ===')

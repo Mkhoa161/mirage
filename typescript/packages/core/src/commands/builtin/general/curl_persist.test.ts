@@ -14,8 +14,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsRegistry } from '../../../ops/registry.ts'
-import { BaseResource } from '../../../resource/base.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { BaseVFS } from '../../../vfs/base.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { MountMode } from '../../../types.ts'
 import { getTestParser } from '../../../workspace/fixtures/workspace_fixture.ts'
 import { Workspace } from '../../../workspace/workspace/workspace.ts'
@@ -37,7 +37,7 @@ function mockFetch(): void {
   ) as typeof fetch
 }
 
-class StubResource extends BaseResource {
+class StubVFS extends BaseVFS {
   readonly kind = 'stub'
   open(): Promise<void> {
     return Promise.resolve()
@@ -49,11 +49,11 @@ class StubResource extends BaseResource {
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const ramRw = new RAMResource()
-  const ramRo = new RAMResource()
-  const stub = new StubResource()
+  const ramRw = new RAMVFS()
+  const ramRo = new RAMVFS()
+  const stub = new StubVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ramRw)
+  registry.registerVfs(ramRw)
   const ws = new Workspace(
     { '/ram': ramRw },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -103,7 +103,7 @@ describe('curl -o persists to mount', () => {
     await ws.close()
   })
 
-  it('fails when target resource has no write op', async () => {
+  it('fails when target VFS has no write op', async () => {
     const ws = await makeWs()
     const io = await ws.execute('curl -sS https://x.test/file -o /nowrite/foo.bin')
     expect(io.exitCode).toBe(23)

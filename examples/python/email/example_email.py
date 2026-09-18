@@ -19,8 +19,8 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.himalaya import HIMALAYA
-from mirage.resource.email import EmailConfig, EmailResource
 from mirage.types import PathSpec
+from mirage.vfs.email import EmailConfig, EmailVFS
 
 load_dotenv(".env.development")
 
@@ -31,11 +31,11 @@ config = EmailConfig(
     password=os.environ["EMAIL_PASSWORD"],
     max_messages=20,
 )
-resource = EmailResource(config=config)
+vfs = EmailVFS(config=config)
 
 
 async def main() -> None:
-    ws = Workspace({"/email": resource}, mode=MountMode.READ)
+    ws = Workspace({"/email": vfs}, mode=MountMode.READ)
     # The mail verbs are a CLI install, separate from the mount: the
     # mount serves files, himalaya acts on the account.
     ws.register_cli("himalaya", HIMALAYA, config.model_dump())

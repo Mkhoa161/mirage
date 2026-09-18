@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.gws import GWS
-from mirage.resource.gslides import GSlidesConfig, GSlidesResource
+from mirage.vfs.gslides import GSlidesConfig, GSlidesVFS
 
 load_dotenv(".env.development")
 
@@ -29,11 +29,11 @@ config = GSlidesConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GSlidesResource(config=config)
+vfs = GSlidesVFS(config=config)
 
 
 async def main():
-    ws = Workspace({"/gslides": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/gslides": vfs}, mode=MountMode.WRITE)
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 

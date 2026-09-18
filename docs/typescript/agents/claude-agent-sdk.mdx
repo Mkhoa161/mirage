@@ -26,11 +26,11 @@ pnpm add @struktoai/mirage-agents @struktoai/mirage-browser @anthropic-ai/claude
 `buildOptions` wires a workspace into ready-to-use query options: it registers the Mirage MCP server, restricts the agent to Mirage's tools, and injects a system prompt describing the mounted paths.
 
 ```ts
-import { MountMode, OpsRegistry, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, OpsRegistry, RAMVFS, Workspace } from '@struktoai/mirage-node'
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { buildOptions } from '@struktoai/mirage-agents/claude-agent-sdk'
 
-const ram = new RAMResource()
+const ram = new RAMVFS()
 const ops = new OpsRegistry()
 for (const op of ram.ops()) ops.register(op)
 const ws = new Workspace({ '/': ram }, { mode: MountMode.WRITE, ops })

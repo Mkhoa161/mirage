@@ -17,7 +17,7 @@ import asyncio
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 async def _slow_stdin():
@@ -43,7 +43,7 @@ async def _multiline_stdin():
 
 
 def _ws():
-    return Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio

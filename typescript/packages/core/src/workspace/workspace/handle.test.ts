@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { runWithSession } from '../../context/session_context.ts'
 import { parseSessionProfile } from '../../policy/profile.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { RAMSessionStore } from '../session/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser, stdoutStr } from '../fixtures/workspace_fixture.ts'
@@ -31,7 +31,7 @@ afterEach(async () => {
 async function seeded(): Promise<Workspace> {
   const parser = await getTestParser()
   const ws = new Workspace(
-    { '/repo': [new RAMResource(), MountMode.WRITE] as const },
+    { '/repo': [new RAMVFS(), MountMode.WRITE] as const },
     {
       mode: MountMode.WRITE,
       shellParser: parser,
@@ -84,7 +84,7 @@ describe('SessionHandle', () => {
     const store = new RAMSessionStore()
     const build = (): Workspace => {
       const ws = new Workspace(
-        { '/repo': [new RAMResource(), MountMode.WRITE] as const },
+        { '/repo': [new RAMVFS(), MountMode.WRITE] as const },
         {
           mode: MountMode.WRITE,
           shellParser: parser,

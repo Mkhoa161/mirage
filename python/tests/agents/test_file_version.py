@@ -1,6 +1,6 @@
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.agents.file_version import (FileVersionTracker,
                                         StaleMirageFileError, fingerprint)
 from mirage.agents.tool_operations import MirageToolOperations
@@ -8,7 +8,7 @@ from mirage.agents.tool_operations import MirageToolOperations
 
 @pytest.fixture
 def workspace():
-    return Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 
 class _RenderingOps:

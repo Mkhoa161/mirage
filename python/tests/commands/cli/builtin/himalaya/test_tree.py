@@ -24,7 +24,7 @@ from mirage.commands.cli.builtin.himalaya import HIMALAYA
 from mirage.commands.cli.builtin.himalaya import util as util_module
 from mirage.core.email.config import EmailConfig
 from mirage.io.types import materialize
-from mirage.resource.email.email import EmailResource
+from mirage.vfs.email.email import EmailVFS
 
 CONFIG = {
     "imap_host": "h",
@@ -175,7 +175,7 @@ def _header(uid: str, subject: str) -> dict:
 def mailbox(monkeypatch):
     # The CLI and a mount are two doors to one account, so a message the
     # CLI files has to show in the mount's listing without waiting out
-    # the index TTL. The mailbox here is test state; the resource, the
+    # the index TTL. The mailbox here is test state; the VFS, the
     # CLI, the workspace and its caches are the real ones.
     readdir_module = sys.modules["mirage.core.email.readdir"]
     store: dict[str, list[str]] = {}
@@ -222,8 +222,8 @@ def mailbox(monkeypatch):
 
 def mounted() -> Workspace:
     ws = Workspace({
-        "/mail": EmailResource(config=EmailConfig(**CONFIG)),
-        "/alias": EmailResource(config=EmailConfig(**CONFIG)),
+        "/mail": EmailVFS(config=EmailConfig(**CONFIG)),
+        "/alias": EmailVFS(config=EmailConfig(**CONFIG)),
     })
     ws.register_cli("himalaya", HIMALAYA, CONFIG)
     return ws

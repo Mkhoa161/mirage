@@ -56,7 +56,7 @@ async function listRoot(
   const dbs = await listDatabases(accessor)
   return dbs.map((db) => [
     db,
-    new IndexEntry({ id: db, name: db, resourceType: RESOURCE_TYPE_DATABASE, vfsName: db }),
+    new IndexEntry({ id: db, name: db, vfsType: RESOURCE_TYPE_DATABASE, vfsName: db }),
   ])
 }
 
@@ -70,7 +70,7 @@ function listDatabase(
   return Promise.resolve(
     names.map((name): [string, IndexEntry] => [
       name,
-      new IndexEntry({ id: name, name, resourceType: 'mongodb/database_entry', vfsName: name }),
+      new IndexEntry({ id: name, name, vfsType: 'mongodb/database_entry', vfsName: name }),
     ]),
   )
 }
@@ -83,7 +83,7 @@ async function listKindDir(
   const names = await listCollections(accessor, match.slots.database ?? '', kind)
   return names.map((name) => [
     name,
-    new IndexEntry({ id: name, name, resourceType: KIND_TO_RESOURCE_TYPE[kind], vfsName: name }),
+    new IndexEntry({ id: name, name, vfsType: KIND_TO_RESOURCE_TYPE[kind], vfsName: name }),
   ])
 }
 
@@ -94,7 +94,7 @@ function listEntityFiles(
   return Promise.resolve(
     ENTITY_FILES.map((name): [string, IndexEntry] => [
       name,
-      new IndexEntry({ id: name, name, resourceType: 'mongodb/entity_file', vfsName: name }),
+      new IndexEntry({ id: name, name, vfsType: 'mongodb/entity_file', vfsName: name }),
     ]),
   )
 }

@@ -30,7 +30,7 @@ from mirage.commands.builtin.object_store.touch import make_touch
 OBJECT_STORE_OVERRIDES = {"stat", "rm", "mkdir", "tee", "touch"}
 
 
-def make_object_store_commands(resource: str,
+def make_object_store_commands(vfs: str,
                                io: CommandIO) -> list[Callable[..., Any]]:
     """Build the five keyed-store command overrides for one backend.
 
@@ -40,15 +40,15 @@ def make_object_store_commands(resource: str,
     coded op policies exactly like the generic it replaces.
 
     Args:
-        resource (str): resource name the commands register under.
+        vfs (str): VFS name the commands register under.
         io (CommandIO): the backend's op table; must wire the write-side
             slots the overrides consume.
     """
     io = with_policy_guard(with_path_guards(io))
     return [
-        make_mkdir(resource, io),
-        make_rm(resource, io),
-        make_stat(resource, io),
-        make_tee(resource, io),
-        make_touch(resource, io),
+        make_mkdir(vfs, io),
+        make_rm(vfs, io),
+        make_stat(vfs, io),
+        make_tee(vfs, io),
+        make_touch(vfs, io),
     ]

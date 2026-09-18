@@ -60,7 +60,7 @@ describe('buildWorkspaceFromConfig', () => {
   it('builds a workspace from YAML', async () => {
     const dir = mkTempDir()
     const path = join(dir, 'workspace.yaml')
-    writeFileSync(path, 'mounts:\n  /:\n    resource: ram\n')
+    writeFileSync(path, 'mounts:\n  /:\n    vfs: ram\n')
 
     const workspace = await buildWorkspaceFromConfig(path)
     await workspace.fs.writeFile('/hello.txt', 'hello')

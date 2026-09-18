@@ -62,7 +62,7 @@ function followParent(namespace: Namespace, virtual: string): string {
 // a directory). `slashFollows` turns that override off, which only tar
 // wants: it strips the slash before it stats.
 // A rewritten spec keeps the user-typed form in `rawPath` so error messages
-// still name the operand as typed; the mount re-stamps `resourcePath` at
+// still name the operand as typed; the mount re-stamps `vfsPath` at
 // dispatch. Throws CycleError (carrying the typed operand) on ELOOP.
 export function followPaths(
   namespace: Namespace,
@@ -92,7 +92,7 @@ export function followPaths(
       new PathSpec({
         virtual,
         directory: virtual.slice(0, virtual.lastIndexOf('/') + 1) || '/',
-        resourcePath: '',
+        vfsPath: '',
         pattern: item.pattern,
         resolved: item.resolved,
         rawPath: item.rawPath,

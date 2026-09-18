@@ -19,13 +19,13 @@ expansions, and ``extglob`` refused because the parser has no such mode.
 """
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws() -> Workspace:
-    return Workspace({"data": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"data": RAMVFS()}, mode=MountMode.WRITE)
 
 
 async def _run(ws: Workspace, cmd: str) -> tuple[str, int]:

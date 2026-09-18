@@ -31,7 +31,7 @@ class NoopTransport implements LinearTransport {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('linear stat modified', () => {
@@ -43,7 +43,7 @@ describe('linear stat modified', () => {
         new IndexEntry({
           id: 'TEAM1',
           name: 'Engineering',
-          resourceType: 'linear/team',
+          vfsType: 'linear/team',
           remoteTime: '2026-04-05T00:00:00Z',
           vfsName: 'ENG__Engineering__TEAM1',
         }),
@@ -67,7 +67,7 @@ describe('linear stat modified', () => {
         new IndexEntry({
           id: 'ISSUE1',
           name: 'issue.json',
-          resourceType: 'linear/issue_json',
+          vfsType: 'linear/issue_json',
           remoteTime: '2026-04-05T00:00:00Z',
           vfsName: 'issue.json',
           size: 321,

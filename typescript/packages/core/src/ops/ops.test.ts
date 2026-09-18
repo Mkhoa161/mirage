@@ -19,7 +19,7 @@ import { OpsRegistry } from './registry.ts'
 import type { Policy } from '../policy/base.ts'
 import { PolicyDenied, PolicyError } from '../policy/errors.ts'
 import type { Action, OpsContext, OpsResultContext } from '../policy/types.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { FileType, Limit, MountMode, OnExceed } from '../types.ts'
 import { enoent, enotdir } from '../utils/errors.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
@@ -27,22 +27,22 @@ import { Workspace } from '../workspace/workspace/workspace.ts'
 const DEC = new TextDecoder()
 
 function mkWorkspace(): Workspace {
-  const resource = new RAMResource()
+  const vfs = new RAMVFS()
   const ops = new OpsRegistry()
-  for (const op of resource.ops()) ops.register(op)
-  return new Workspace({ '/data': resource }, { mode: MountMode.WRITE, ops })
+  for (const op of vfs.ops()) ops.register(op)
+  return new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops })
 }
 
 // The Workspace constructor re-registers each mount's ops, so the failing
 // stat has to land on the registry after the workspace is built.
 function mkFailingStat(err: unknown): Workspace {
-  const resource = new RAMResource()
+  const vfs = new RAMVFS()
   const ops = new OpsRegistry()
-  for (const op of resource.ops()) ops.register(op)
-  const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE, ops })
+  for (const op of vfs.ops()) ops.register(op)
+  const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops })
   ops.register({
     name: 'stat',
-    resource: resource.kind,
+    vfs: vfs.kind,
     filetype: null,
     fn: () => {
       throw err
@@ -212,11 +212,11 @@ describe('Ops policy door', () => {
   }
 
   function mkGuarded(): Workspace {
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register(op)
+    for (const op of vfs.ops()) ops.register(op)
     return new Workspace(
-      { '/data': resource },
+      { '/data': vfs },
       {
         mode: MountMode.WRITE,
         ops,
@@ -266,13 +266,10 @@ describe('Ops is one door with the dispatcher', () => {
 
   it('fires each admission gate exactly once per op', async () => {
     const counter = new CountPre()
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register(op)
-    const ws = new Workspace(
-      { '/data': resource },
-      { mode: MountMode.WRITE, ops, policies: [counter] },
-    )
+    for (const op of vfs.ops()) ops.register(op)
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops, policies: [counter] })
     await ws.fs.writeFile('/data/a.txt', 'hello')
     await ws.fs.readFile('/data/a.txt')
     expect(counter.seen).toEqual(['write:/data/', 'read:/data/'])
@@ -289,11 +286,11 @@ describe('Ops is one door with the dispatcher', () => {
     // '/data/inner' is served by no backend: it exists only because a
     // mount sits below it. The dispatcher answers it, so the facade
     // does too.
-    const outer = new RAMResource()
-    const inner = new RAMResource()
+    const outer = new RAMVFS()
+    const inner = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(outer)
-    ops.registerResource(inner)
+    ops.registerVfs(outer)
+    ops.registerVfs(inner)
     const ws = new Workspace({}, { mode: MountMode.WRITE, ops })
     ws.addMount('/data/inner/deep', inner, MountMode.WRITE)
     ws.addMount('/other', outer, MountMode.WRITE)
@@ -307,11 +304,11 @@ describe('Ops is one door with the dispatcher', () => {
     // granted mount sits below it. Attributing it to the lexical owner
     // invents a network op against that backend for every such lookup.
     // Mirrors Python's tests/ops/test_ops.py.
-    const outer = new RAMResource()
-    const inner = new RAMResource()
+    const outer = new RAMVFS()
+    const inner = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of outer.ops()) ops.register({ ...op, resource: 's3' })
-    ops.registerResource(inner)
+    for (const op of outer.ops()) ops.register({ ...op, vfs: 's3' })
+    ops.registerVfs(inner)
     Object.assign(outer, { kind: 's3' })
     const ws = new Workspace({}, { mode: MountMode.WRITE, ops })
     ws.addMount('/m', outer, MountMode.WRITE)
@@ -329,11 +326,11 @@ describe('Ops is one door with the dispatcher', () => {
     // Refusing the synthetic answer does not make the parent backend
     // have served it: a deny suppresses a result nothing was contacted
     // to produce. Mirrors Python's tests/ops/test_ops.py.
-    const outer = new RAMResource()
-    const inner = new RAMResource()
+    const outer = new RAMVFS()
+    const inner = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of outer.ops()) ops.register({ ...op, resource: 's3' })
-    ops.registerResource(inner)
+    for (const op of outer.ops()) ops.register({ ...op, vfs: 's3' })
+    ops.registerVfs(inner)
     Object.assign(outer, { kind: 's3' })
     const ws = new Workspace({}, { mode: MountMode.WRITE, ops, policies: [new DenyInner()] })
     ws.addMount('/m', outer, MountMode.WRITE)
@@ -351,17 +348,17 @@ describe('Ops is one door with the dispatcher', () => {
     // The door stamps the path's extension so a filetype-scoped op wins;
     // `raw` passes an explicit null filetype to stop that, which is the
     // read the FUSE read-modify-write path needs.
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(resource)
+    ops.registerVfs(vfs)
     ops.register({
       name: 'read',
-      resource: resource.kind,
+      vfs: vfs.kind,
       filetype: '.gdoc.json',
       write: false,
       fn: () => Promise.resolve(new TextEncoder().encode('rendered')),
     })
-    const ws = new Workspace({ '/m': resource }, { mode: MountMode.WRITE, ops })
+    const ws = new Workspace({ '/m': vfs }, { mode: MountMode.WRITE, ops })
     await ws.fs.writeFile('/m/doc.gdoc.json', 'stored')
     expect(await ws.fs.readFileText('/m/doc.gdoc.json')).toBe('rendered')
     expect(DEC.decode(await ws.fs.readFile('/m/doc.gdoc.json', { raw: true }))).toBe('stored')
@@ -373,11 +370,11 @@ describe('Ops is one door with the dispatcher', () => {
     // rendering sits under the very key a raw read asks for. Seeding
     // the cache directly is the same state one command earlier reaches.
     // Mirrors Python's tests/ops/test_raw_read.py.
-    const resource = new RAMResource()
-    Object.assign(resource, { cachesReads: true })
+    const vfs = new RAMVFS()
+    Object.assign(vfs, { cachesReads: true })
     const ops = new OpsRegistry()
-    ops.registerResource(resource)
-    const ws = new Workspace({ '/m': resource }, { mode: MountMode.WRITE, ops })
+    ops.registerVfs(vfs)
+    const ws = new Workspace({ '/m': vfs }, { mode: MountMode.WRITE, ops })
     await ws.fs.writeFile('/m/doc.gdoc.json', 'stored')
     await ws.cache.set('/m/doc.gdoc.json', new TextEncoder().encode('rendered'))
     expect(await ws.fs.readFileText('/m/doc.gdoc.json')).toBe('rendered')
@@ -385,10 +382,10 @@ describe('Ops is one door with the dispatcher', () => {
   })
 
   it('refuses a write to a read-only mount at the door', async () => {
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register(op)
-    const ws = new Workspace({ '/ro': resource }, { mode: MountMode.READ, ops })
+    for (const op of vfs.ops()) ops.register(op)
+    const ws = new Workspace({ '/ro': vfs }, { mode: MountMode.READ, ops })
     await expect(ws.fs.writeFile('/ro/a.txt', 'x')).rejects.toThrow('read-only')
   })
 })
@@ -430,10 +427,10 @@ describe('Ops accounting survives the delegation', () => {
   }
 
   function mkWs(policy: Policy): Workspace {
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register(op)
-    return new Workspace({ '/data': resource }, { mode: MountMode.WRITE, ops, policies: [policy] })
+    for (const op of vfs.ops()) ops.register(op)
+    return new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops, policies: [policy] })
   }
 
   it('records a post-denied read: the backend already ran', async () => {
@@ -457,12 +454,12 @@ describe('Ops accounting survives the delegation', () => {
     // An ERROR-mode cap refuses the caller the bytes, but the backend
     // already moved them; dropping the record loses the whole transfer
     // rather than just truncating it. Mirrors Python's test_policies.py.
-    const resource = new RAMResource()
-    Object.assign(resource, { kind: 's3' })
+    const vfs = new RAMVFS()
+    Object.assign(vfs, { kind: 's3' })
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register({ ...op, resource: 's3' })
+    for (const op of vfs.ops()) ops.register({ ...op, vfs: 's3' })
     const ws = new Workspace(
-      { '/m': resource },
+      { '/m': vfs },
       { mode: MountMode.WRITE, ops, policies: [new HardCapReadsTo3()] },
     )
     await ws.fs.writeFile('/m/a.txt', '0123456789')
@@ -480,12 +477,12 @@ describe('Ops accounting survives the delegation', () => {
     // must stay on the books: the door stamped the report at
     // completion, so the record does not depend on what kind of
     // exception followed. Mirrors Python's test_policies.py.
-    const resource = new RAMResource()
-    Object.assign(resource, { kind: 's3' })
+    const vfs = new RAMVFS()
+    Object.assign(vfs, { kind: 's3' })
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register({ ...op, resource: 's3' })
+    for (const op of vfs.ops()) ops.register({ ...op, vfs: 's3' })
     const ws = new Workspace(
-      { '/m': resource },
+      { '/m': vfs },
       { mode: MountMode.WRITE, ops, policies: [new BrokenPostOps()] },
     )
     ws.records.length = 0
@@ -499,12 +496,12 @@ describe('Ops accounting survives the delegation', () => {
   it('does not count a hard-capped warm read as network traffic', async () => {
     // Same refusal, but the cache produced the bytes, so the transfer
     // it stands for never happened.
-    const resource = new RAMResource()
-    Object.assign(resource, { cachesReads: true, kind: 's3' })
+    const vfs = new RAMVFS()
+    Object.assign(vfs, { cachesReads: true, kind: 's3' })
     const ops = new OpsRegistry()
-    ops.registerResource(resource)
+    ops.registerVfs(vfs)
     const ws = new Workspace(
-      { '/m': resource },
+      { '/m': vfs },
       { mode: MountMode.WRITE, ops, policies: [new HardCapReadsTo3()] },
     )
     await ws.cache.set('/m/a.txt', new TextEncoder().encode('0123456789'))
@@ -520,12 +517,12 @@ describe('Ops accounting survives the delegation', () => {
     // The deny suppresses a result the cache produced, so nothing
     // crossed the network; recording it against the backend would count
     // traffic that never happened.
-    const resource = new RAMResource()
-    Object.assign(resource, { cachesReads: true, kind: 's3' })
+    const vfs = new RAMVFS()
+    Object.assign(vfs, { cachesReads: true, kind: 's3' })
     const ops = new OpsRegistry()
-    ops.registerResource(resource)
+    ops.registerVfs(vfs)
     const ws = new Workspace(
-      { '/m': resource },
+      { '/m': vfs },
       { mode: MountMode.WRITE, ops, policies: [new DenyBigReads()] },
     )
     await ws.cache.set('/m/a.txt', new TextEncoder().encode('0123456789'))
@@ -563,11 +560,11 @@ describe('a warm cache still answers a ranged read with the window', () => {
   // dispatcher directly, which is where the window has to be applied.
   // Mirrors Python's tests/ops/test_raw_read.py.
   function mkCaching(): Workspace {
-    const resource = new RAMResource()
-    Object.assign(resource, { cachesReads: true })
+    const vfs = new RAMVFS()
+    Object.assign(vfs, { cachesReads: true })
     const ops = new OpsRegistry()
-    ops.registerResource(resource)
-    return new Workspace({ '/m': resource }, { mode: MountMode.WRITE, ops })
+    ops.registerVfs(vfs)
+    return new Workspace({ '/m': vfs }, { mode: MountMode.WRITE, ops })
   }
 
   async function readAt(ws: Workspace, offset: number, size: number | null): Promise<string> {
@@ -598,11 +595,11 @@ describe('a warm cache still answers a ranged read with the window', () => {
 
 describe('Ops rename is bounded by the mount', () => {
   function mkTwoMounts(): Workspace {
-    const a = new RAMResource()
-    const b = new RAMResource()
+    const a = new RAMVFS()
+    const b = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(a)
-    ops.registerResource(b)
+    ops.registerVfs(a)
+    ops.registerVfs(b)
     const ws = new Workspace({}, { mode: MountMode.WRITE, ops })
     ws.addMount('/a', a, MountMode.WRITE)
     ws.addMount('/b', b, MountMode.WRITE)
@@ -714,12 +711,12 @@ describe('Ops.readlink', () => {
   // absence takes the parent's listing too: reading only the first
   // channel would report an implicit directory as ENOENT.
   it('reads the listing channel when a backend has no directory object', async () => {
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    const realReaddir = resource.ops().find((op) => op.name === 'readdir')?.fn
-    if (realReaddir === undefined) throw new Error('RAMResource has no readdir op')
-    for (const op of resource.ops()) ops.register(op)
-    const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE, ops })
+    const realReaddir = vfs.ops().find((op) => op.name === 'readdir')?.fn
+    if (realReaddir === undefined) throw new Error('RAMVFS has no readdir op')
+    for (const op of vfs.ops()) ops.register(op)
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops })
     await ws.fs.mkdir('/data/d')
     await ws.fs.writeFile('/data/d/under.txt', 'x')
     // Registered after the writes, so only the probe sees them: a prefix
@@ -729,7 +726,7 @@ describe('Ops.readlink', () => {
     // stat silenced is what proves the listing is the channel read.
     ops.register({
       name: 'stat',
-      resource: resource.kind,
+      vfs: vfs.kind,
       filetype: null,
       fn: () => {
         throw enoent('/data/d')
@@ -738,7 +735,7 @@ describe('Ops.readlink', () => {
     })
     ops.register({
       name: 'readdir',
-      resource: resource.kind,
+      vfs: vfs.kind,
       filetype: null,
       fn: async (accessor, path, args, kwargs) => {
         const entries = (await realReaddir(accessor, path, args, kwargs)) as string[]
@@ -755,9 +752,9 @@ describe('Ops.readlink', () => {
   // channel that will not answer is not evidence of absence, so the
   // errno collapses to the EINVAL every miss gave before the split.
   it('does not probe past a policy that denies stat', async () => {
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register(op)
+    for (const op of vfs.ops()) ops.register(op)
     const noProbe: Policy = {
       preOps: (ctx: OpsContext) =>
         Promise.resolve(
@@ -766,10 +763,7 @@ describe('Ops.readlink', () => {
             : null,
         ),
     }
-    const ws = new Workspace(
-      { '/data': resource },
-      { mode: MountMode.WRITE, ops, policies: [noProbe] },
-    )
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops, policies: [noProbe] })
     expect(await codeOf(ws, '/data/missing')).toBe('EINVAL')
   })
 })

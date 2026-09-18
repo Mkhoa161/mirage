@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MountMode } from '@struktoai/mirage-core/types'
-import { DiskResource } from '../resource/disk/disk.ts'
+import { DiskVFS } from '../vfs/disk/disk.ts'
 import { Workspace } from '../workspace.ts'
 
 const DEC = new TextDecoder()
@@ -28,7 +28,7 @@ describe('disk streaming commands on missing files', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'mirage-missing-'))
-    ws = new Workspace({ '/disk': new DiskResource({ root }) }, { mode: MountMode.WRITE })
+    ws = new Workspace({ '/disk': new DiskVFS({ root }) }, { mode: MountMode.WRITE })
   })
 
   afterEach(async () => {

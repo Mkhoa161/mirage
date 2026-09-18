@@ -14,7 +14,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { LocalRuntime, Workspace, parseSessionProfile } from '@struktoai/mirage-node'
 import { MirageService } from './service.ts'
@@ -34,7 +34,7 @@ async function makeShell(
   seed: Record<string, string> = {},
   config: MirageShellConfig = {},
 ): Promise<{ shell: MirageShellExecutor; ws: Workspace }> {
-  const ws = new Workspace({ '/data': [new RAMResource(), MountMode.WRITE] })
+  const ws = new Workspace({ '/data': [new RAMVFS(), MountMode.WRITE] })
   workspaces.push(ws)
   for (const [path, content] of Object.entries(seed)) {
     await ws.fs.writeFile(`/data/${path}`, content)
@@ -223,8 +223,8 @@ describe('sandbox policy', () => {
 
   it('narrows a confined session without widening it', async () => {
     const ws = new Workspace({
-      '/allowed': [new RAMResource(), MountMode.WRITE],
-      '/secret': [new RAMResource(), MountMode.WRITE],
+      '/allowed': [new RAMVFS(), MountMode.WRITE],
+      '/secret': [new RAMVFS(), MountMode.WRITE],
     })
     workspaces.push(ws)
     await ws.fs.writeFile('/allowed/a.txt', 'granted')
@@ -268,7 +268,7 @@ describe('sandbox policy', () => {
 
   it("carries the bound session's command rules into the read-only twin", async () => {
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.WRITE] },
+      { '/data': [new RAMVFS(), MountMode.WRITE] },
       {
         profiles: {
           scoped: parseSessionProfile(
@@ -434,7 +434,7 @@ describe('session binding', () => {
   })
 
   it('keeps differently bound executors apart on one workspace', async () => {
-    const ws = new Workspace({ '/data': [new RAMResource(), MountMode.WRITE] })
+    const ws = new Workspace({ '/data': [new RAMVFS(), MountMode.WRITE] })
     workspaces.push(ws)
     const alpha = await attachShell(ws, { sessionId: 'alpha' })
     const beta = await attachShell(ws, { sessionId: 'beta' })
@@ -448,7 +448,7 @@ describe('session binding', () => {
   })
 
   it('adopts an existing session instead of recreating it', async () => {
-    const ws = new Workspace({ '/data': [new RAMResource(), MountMode.WRITE] })
+    const ws = new Workspace({ '/data': [new RAMVFS(), MountMode.WRITE] })
     workspaces.push(ws)
     ws.createSession('pre')
     await ws.execute('export SEED=planted', { sessionId: 'pre' })

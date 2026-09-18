@@ -26,7 +26,7 @@ import type {
   FsWriteIntent,
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
-import { DiskResource } from '@struktoai/mirage-node'
+import { DiskVFS } from '@struktoai/mirage-node'
 import { sessionPathAllowed } from '@struktoai/mirage-core/context/session_context'
 import type { MountEntry } from '@struktoai/mirage-core/workspace/mount/mount'
 import type { Session } from '@struktoai/mirage-core/workspace/session/session'
@@ -375,9 +375,9 @@ export class MirageFileSystem extends FileSystem {
     const host = resolve(hostPath)
     const mounts = workspace.mounts()
     for (const entry of mounts) {
-      const { resource } = entry
-      if (!(resource instanceof DiskResource)) continue
-      const rel = relative(resource.root, host)
+      const { vfs } = entry
+      if (!(vfs instanceof DiskVFS)) continue
+      const rel = relative(vfs.root, host)
       if (escapesRoot(rel)) continue
       // `prefix` always carries a trailing slash, and `rel` is empty for
       // the root itself, so the join is a concatenation and the slash is
@@ -387,7 +387,7 @@ export class MirageFileSystem extends FileSystem {
       // A mount nested under this one owns its own subtree, and dispatch
       // routes the path there, so the disk file at this host location is
       // not what the virtual path reads. Keep looking rather than name a
-      // path that answers with another resource's bytes.
+      // path that answers with another VFS's bytes.
       if (ownerPrefixOf(virtual, mounts) !== entry.prefix) continue
       // A namespace symlink at or above this path is followed before
       // dispatch, so a read would land on the link's target rather than

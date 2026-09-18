@@ -73,7 +73,7 @@ async def _write(monkeypatch, mount_path: str) -> tuple[_FakeManager, list]:
             S3Accessor(S3Config(bucket="b")),
             PathSpec(virtual="/mnt" + mount_path,
                      directory="/mnt/",
-                     resource_path=mount_path.lstrip("/")),
+                     vfs_path=mount_path.lstrip("/")),
             b"hi",
         )
     finally:

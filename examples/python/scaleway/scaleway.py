@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.scaleway import ScalewayConfig, ScalewayResource
 from mirage.types import PathSpec
+from mirage.vfs.scaleway import ScalewayConfig, ScalewayVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = ScalewayConfig(
     access_key_id=os.environ["SCW_ACCESS_KEY"],
     secret_access_key=os.environ["SCW_SECRET_KEY"],
 )
-resource = ScalewayResource(config)
-ws = Workspace({"/scw/": resource}, mode=MountMode.READ)
+vfs = ScalewayVFS(config)
+ws = Workspace({"/scw/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

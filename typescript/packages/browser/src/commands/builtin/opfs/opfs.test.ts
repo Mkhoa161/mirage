@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { installFakeNavigator, makeMockRoot } from '../../../test-utils.ts'
-import { OPFSResource } from '../../../resource/opfs/opfs.ts'
+import { OPFSVFS } from '../../../vfs/opfs/opfs.ts'
 import { Workspace } from '../../../workspace.ts'
 
 let ws: Workspace
@@ -33,7 +33,7 @@ async function run(cmd: string): Promise<{ stdout: string; stderr: string; exitC
 
 beforeEach(async () => {
   restoreNav = installFakeNavigator(() => makeMockRoot())
-  ws = new Workspace({ '/data': new OPFSResource() }, { mode: MountMode.WRITE })
+  ws = new Workspace({ '/data': new OPFSVFS() }, { mode: MountMode.WRITE })
   await ws.fs.writeFile('/data/hello.txt', 'hello from opfs\n')
   await ws.fs.writeFile('/data/q1.csv', 'revenue,100\nexpense,80\nprofit,20\n')
   await ws.fs.mkdir('/data/sub')

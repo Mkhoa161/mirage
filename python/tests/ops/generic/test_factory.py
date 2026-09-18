@@ -50,7 +50,7 @@ def make_table(**kwargs) -> CommandIO:
 
 
 def rows(ops) -> set:
-    return {(o.name, o.resource, o.filetype, o.write) for o in ops}
+    return {(o.name, o.vfs, o.filetype, o.write) for o in ops}
 
 
 def test_read_only_table_emits_trio():
@@ -89,9 +89,9 @@ def test_full_table_emits_mutations():
     }
 
 
-def test_multi_resource_fan_out():
+def test_multi_vfs_fan_out():
     ops = make_generic_ops(["a", "b"], make_table())
-    assert {o.resource for o in ops} == {"a", "b"}
+    assert {o.vfs for o in ops} == {"a", "b"}
     assert len(ops) == 6
 
 

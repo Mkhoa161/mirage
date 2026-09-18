@@ -34,7 +34,7 @@ export async function readdir(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<string[]> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   let target = path.pattern !== null ? path.directory : path.virtual
   if (prefix !== '' && target.startsWith(prefix)) {
     const rest = target.slice(prefix.length)
@@ -115,7 +115,7 @@ export async function readdir(
           new IndexEntry({
             id: key,
             name,
-            resourceType: directories.has(key) ? ResourceType.FOLDER : ResourceType.FILE,
+            vfsType: directories.has(key) ? ResourceType.FOLDER : ResourceType.FILE,
             size: directories.has(key) ? null : (info?.size ?? null),
             remoteTime: info?.modified ?? '',
           }),

@@ -22,22 +22,13 @@ import type { SessionProfile } from '@struktoai/mirage-core/policy/profile'
 
 // integ/runtime holds the runtime suite (its own schema and runners,
 // integ/runtime/run.{py,ts} + cli.sh), not battery cases; keep it out.
-const CASE_DIRS = [
-  'unix',
-  'bash',
-  'crossmount',
-  'resources',
-  'cli',
-  'session',
-  'console',
-  'secrets',
-]
+const CASE_DIRS = ['unix', 'bash', 'crossmount', 'vfs', 'cli', 'session', 'console', 'secrets']
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
 
 export interface Mount {
   path: string
-  resource: string
+  vfs: string
   backend: string
   mode?: string
   fixture?: string
@@ -116,12 +107,12 @@ export interface Target {
   facet?: string
   // Where background-job consoles live: { type: 'redis' } puts each
   // job's console on its own Redis stream (REDIS_URL). Only the ram
-  // opener consults it; main.ts refuses it on any other resource.
+  // opener consults it; main.ts refuses it on any other VFS.
   console?: { type?: string }
   // The env plane fixture this target declares: 'healthy' registers the
   // counting fake source and builds the managed env block, 'dead' a
   // source whose every fetch fails. Only the ram opener consults it;
-  // main.ts refuses it on any other resource.
+  // main.ts refuses it on any other VFS.
   secrets?: string
   clis?: string[]
   // Scope an installed account CLI to this mount's folder, so the CLI and
@@ -234,7 +225,7 @@ export interface ExecWorkspace {
     kwargs?: Record<string, unknown>,
   ): Promise<unknown>
   cache: { clear(): Promise<void> }
-  mounts(): readonly { resource: { index?: { clear(): Promise<void> } } }[]
+  mounts(): readonly { vfs: { index?: { clear(): Promise<void> } } }[]
   createSession(
     sessionId: string,
     options: { profile?: string | SessionProfile; permissions?: SessionProfile },
@@ -739,11 +730,11 @@ export async function runCase(
 }> {
   if (c.clear_cache === true) {
     // A full clear means the file cache AND every mount's index cache:
-    // remote listings live in the per-resource index, and a listing
-    // populated by an earlier case must not leak into this one. Resources
+    // remote listings live in the per-VFS index, and a listing
+    // populated by an earlier case must not leak into this one. mounts
     // without an index cache (e.g. opfs) have nothing to clear.
     await ws.cache.clear()
-    for (const m of ws.mounts()) await m.resource.index?.clear()
+    for (const m of ws.mounts()) await m.vfs.index?.clear()
   }
   const start = performance.now()
   if (c.provision === true) {

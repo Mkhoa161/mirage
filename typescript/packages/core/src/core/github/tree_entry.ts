@@ -43,7 +43,7 @@ export function indexEntryFromTree(item: {
     id: item.sha,
     name,
     vfsName: name,
-    resourceType: item.type === 'tree' ? 'folder' : 'file',
+    vfsType: item.type === 'tree' ? 'folder' : 'file',
     size: item.size ?? null,
   })
 }

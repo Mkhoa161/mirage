@@ -19,8 +19,8 @@ under the default mask because a fresh file already renders as 644.
 """
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.scope import _to_scope
 from mirage.workspace.executor.create import create_file
@@ -75,7 +75,7 @@ async def test_both_redirect_forms_agree_end_to_end():
     """The reason this module exists: the rule used to be private to the
     plain-redirect path, so `exec > f` created a 644 file where
     `echo x > f` created a 600 one."""
-    ws = Workspace({"data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"data": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute("umask 077; echo z > /data/p; "
                           "( exec > /data/e; echo z ); "
                           "stat -c '%a %n' /data/p /data/e")

@@ -320,7 +320,7 @@ async def _synthesize_find_mount_entries(
             out.append(
                 PathSpec(virtual=candidate,
                          directory=candidate,
-                         resource_path="",
+                         vfs_path="",
                          resolved=True,
                          raw_path=respell_one(candidate, target_path, raw)))
     return out
@@ -425,7 +425,7 @@ async def _fan_out_traversal(
     mount-prefix-sorted order, except single-operand find, whose merged
     lines are path-sorted (see below). The parent mount's output is
     filtered to drop lines that fall under any descendant mount (avoids
-    duplicates when the parent's resource has shadowed keys).
+    duplicates when the parent's VFS has shadowed keys).
 
     For `find`, mount-prefix paths themselves are injected as synthetic
     directory entries (subject to depth and -type filters) because
@@ -513,7 +513,7 @@ async def _fan_out_traversal(
             sub_paths = [
                 PathSpec(virtual=mount_root,
                          directory=mount_root,
-                         resource_path="",
+                         vfs_path="",
                          resolved=True,
                          raw_path=mount_root if du_merge else respell_one(
                              mount_root, target_path, paths[0].raw_path))

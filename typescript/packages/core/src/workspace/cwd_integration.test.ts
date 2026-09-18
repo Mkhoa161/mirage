@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -27,7 +27,7 @@ const ENC = new TextEncoder()
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   r.store.dirs.add('/subdir')
   r.store.dirs.add('/subdir/nested')
@@ -35,7 +35,7 @@ async function makeWs(): Promise<Workspace> {
   r.store.files.set('/subdir/nested/deep.txt', ENC.encode('deep'))
 
   const registry = new OpsRegistry()
-  registry.registerResource(r)
+  registry.registerVfs(r)
   return new Workspace(
     { '/ram/': r },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -44,13 +44,13 @@ async function makeWs(): Promise<Workspace> {
 
 async function makeWsSpecial(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   r.store.dirs.add("/Zecheng's Server")
   r.store.files.set("/Zecheng's Server/image.png", ENC.encode('PNG'))
 
   const registry = new OpsRegistry()
-  registry.registerResource(r)
+  registry.registerVfs(r)
   return new Workspace(
     { '/ram/': r },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },

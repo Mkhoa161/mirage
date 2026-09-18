@@ -107,7 +107,7 @@ class MirageSandboxSession(BaseSandboxSession):
 
     async def hydrate_workspace(self, data: io.IOBase) -> None:
         # Restore the snapshot's non-mount state (cache, sessions,
-        # inodes, history, jobs) AND each resource's content (via
+        # inodes, history, jobs) AND each VFS's content (via
         # load_state) into THIS workspace. The workspace must already
         # have the same mount shape that was saved — Workspace.load()
         # is the alternative that constructs a fresh Workspace from

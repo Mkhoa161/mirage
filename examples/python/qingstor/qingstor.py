@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.qingstor import QingStorConfig, QingStorResource
 from mirage.types import PathSpec
+from mirage.vfs.qingstor import QingStorConfig, QingStorVFS
 
 load_dotenv(".env.development")
 
@@ -33,8 +33,8 @@ config = QingStorConfig(
     access_key_id=os.environ["QINGSTOR_ACCESS_KEY_ID"],
     secret_access_key=os.environ["QINGSTOR_SECRET_ACCESS_KEY"],
 )
-resource = QingStorResource(config)
-ws = Workspace({"/qs/": resource}, mode=MountMode.READ)
+vfs = QingStorVFS(config)
+ws = Workspace({"/qs/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

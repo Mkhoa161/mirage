@@ -23,7 +23,7 @@ import { rstripSlash, stripSlash } from '../../utils/slash.ts'
 import { enoent, isEnoent } from '../../utils/errors.ts'
 
 function stripPrefix(path: PathSpec): string {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   let p = path.virtual
   if (prefix !== '' && p.startsWith(prefix)) {
     p = p.slice(prefix.length) || '/'
@@ -36,7 +36,7 @@ export async function stat(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<FileStat> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   const p = stripPrefix(path)
   const trimmed = stripSlash(p)
   if (trimmed === '') {
@@ -56,7 +56,7 @@ export async function stat(
           virtual: parentPath,
           directory: parentPath,
           resolved: false,
-          resourcePath: mountKey(parentPath, prefix),
+          vfsPath: mountKey(parentPath, prefix),
         }),
         index,
       )
@@ -67,7 +67,7 @@ export async function stat(
     if (!children.includes(ikey)) throw enoent(path)
     const result = await index.get(ikey)
     if (result.entry === undefined || result.entry === null) throw enoent(path)
-    if (result.entry.resourceType === 'folder') {
+    if (result.entry.vfsType === 'folder') {
       return new FileStat({ name: result.entry.name, type: FileType.DIRECTORY })
     }
     return new FileStat({

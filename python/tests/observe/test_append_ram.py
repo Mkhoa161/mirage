@@ -16,11 +16,11 @@ import asyncio
 
 from mirage import MountMode, Workspace
 from mirage.ops import Ops
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
-def _make_ops() -> tuple[Ops, RAMResource]:
-    mem = RAMResource()
+def _make_ops() -> tuple[Ops, RAMVFS]:
+    mem = RAMVFS()
     ws = Workspace({"/data/": mem}, mode=MountMode.WRITE)
     return ws.fs, mem
 

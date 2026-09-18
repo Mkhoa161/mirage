@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.slack import SlackConfig, SlackResource
 from mirage.types import ContentType, FileStat, FileType
+from mirage.vfs.slack import SlackConfig, SlackVFS
 
 DAYS = [f"2026-{m:02d}-{d:02d}" for m in range(1, 5) for d in range(1, 16)]
 
@@ -32,7 +32,7 @@ async def test_slack_grep_glob_expanded_to_60_paths_reads_those_60_days():
     # did not match, since slack search also reaches past the browse window.
     # It is 60 named files: read them. The saving was real and is gone with
     # it; the answer it bought was not the question asked.
-    slack = SlackResource(
+    slack = SlackVFS(
         config=SlackConfig(token="xoxb-test", search_token="xoxp-test"))
     ws = Workspace({"/slack": (slack, MountMode.READ)}, mode=MountMode.READ)
     expanded = " ".join(f"/slack/channels/general__C1/{day}/chat.jsonl"

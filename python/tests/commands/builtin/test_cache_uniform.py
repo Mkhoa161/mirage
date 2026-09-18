@@ -42,7 +42,7 @@ class _CountingReader:
 
 
 def _spec() -> PathSpec:
-    return PathSpec(resource_path=mount_key("/s3/a.txt", "/s3/"),
+    return PathSpec(vfs_path=mount_key("/s3/a.txt", "/s3/"),
                     virtual="/s3/a.txt",
                     directory="/s3/")
 

@@ -18,7 +18,7 @@
 import { LookupStatus } from '@struktoai/mirage-core/cache/index/config'
 import {
   IndexEntry,
-  RAMResource,
+  RAMVFS,
   RedisIndexCacheStore,
   Workspace,
   type RedisIndexConfig,
@@ -57,7 +57,7 @@ function sameList(got: readonly string[] | null | undefined, want: readonly stri
 }
 
 function makeStore(prefix: string): { ws: Workspace; store: RedisIndexCacheStore } {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const index: RedisIndexConfig = { type: 'redis', url: REDIS_URL, keyPrefix: prefix, ttl: TTL }
   const ws = new Workspace({ [DIR]: ram }, { index })
   const store = ram.index
@@ -79,7 +79,7 @@ async function write(prefix: string): Promise<void> {
   const fileEntry = new IndexEntry({
     id: FILE,
     name: FILE_NAME,
-    resourceType: 'file',
+    vfsType: 'file',
     remoteTime: REMOTE_TIME,
     size: 6,
     extra: { ...EXTRA },
@@ -87,7 +87,7 @@ async function write(prefix: string): Promise<void> {
   const folderEntry = new IndexEntry({
     id: `${DIR}/${FOLDER_NAME}`,
     name: FOLDER_NAME,
-    resourceType: 'folder',
+    vfsType: 'folder',
     remoteTime: REMOTE_TIME,
   })
   await store.setDir(DIR, [
@@ -115,7 +115,7 @@ async function read(prefix: string): Promise<void> {
       (got.status ?? null) === null &&
       entry.id === FILE &&
       entry.name === FILE_NAME &&
-      entry.resourceType === 'file' &&
+      entry.vfsType === 'file' &&
       entry.remoteTime === REMOTE_TIME &&
       entry.size === 6 &&
       JSON.stringify(entry.extra) === JSON.stringify(EXTRA) &&

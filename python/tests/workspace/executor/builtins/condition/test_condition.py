@@ -16,7 +16,7 @@ from typing import Any, cast
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.io import IOResult
 from mirage.types import ContentType, FileStat, FileType, PathSpec
 from mirage.workspace.executor.builtins.condition import CondContext, eval_flat
@@ -100,7 +100,7 @@ def _stub_ctx(dispatch: Any) -> CondContext:
 
 
 async def _workspace() -> Workspace:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("mkdir -p /data/sub")
     await ws.execute("tee /data/plain.txt > /dev/null", stdin=b"y\n")
     await ws.execute("cd /data")

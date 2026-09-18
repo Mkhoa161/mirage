@@ -14,8 +14,8 @@
 
 import pytest
 
-from mirage.resource.gdrive import GoogleDriveConfig, GoogleDriveResource
 from mirage.types import MountMode
+from mirage.vfs.gdrive import GoogleDriveConfig, GoogleDriveVFS
 from mirage.workspace import Workspace
 from tests.e2e.gdrive_mock import FakeGDrive, patch_gdrive
 
@@ -31,8 +31,8 @@ def gdrive_ws():
         client_secret="fake-secret",
         refresh_token="fake-refresh",
     )
-    resource = GoogleDriveResource(config)
-    ws = Workspace({"/gd": resource}, mode=MountMode.READ)
+    vfs = GoogleDriveVFS(config)
+    ws = Workspace({"/gd": vfs}, mode=MountMode.READ)
     with patch_gdrive(fake):
         yield ws, fake
 

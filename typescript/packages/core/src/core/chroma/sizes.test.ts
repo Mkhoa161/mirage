@@ -56,7 +56,7 @@ function fileEntry(name: string, slug: string): IndexEntry {
   return new IndexEntry({
     id: slug,
     name,
-    resourceType: 'file',
+    vfsType: 'file',
     vfsName: name,
     extra: { slug, source_size: 999 },
   })

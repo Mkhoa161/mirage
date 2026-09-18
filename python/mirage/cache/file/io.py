@@ -148,7 +148,7 @@ async def _background_drain(
     shutdown. If the drain exceeds max_bytes (the cache's drain_budget)
     without exhausting the source, the partial buffer is discarded and
     the path is not cached (next read will fetch fresh from the
-    resource). The fingerprint is looked up after the drain: streaming
+    VFS). The fingerprint is looked up after the drain: streaming
     backends stamp their read record lazily, once the GET response
     arrives.
     """

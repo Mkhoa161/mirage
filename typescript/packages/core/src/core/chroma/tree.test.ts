@@ -87,7 +87,7 @@ describe('buildDirEntries', () => {
     const guides = entries.get('/knowledge/guides') ?? []
     expect(guides).toHaveLength(1)
     const auth = guides[0]?.[1]
-    expect(auth?.resourceType).toBe('file')
+    expect(auth?.vfsType).toBe('file')
     // The path tree's own size never becomes the byte length: it describes
     // the producer's source document, so it rides in extra and the size is
     // measured later, from the rendered chunks.

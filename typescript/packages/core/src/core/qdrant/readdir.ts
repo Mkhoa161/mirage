@@ -15,7 +15,7 @@
 import type { QdrantAccessor } from '../../accessor/qdrant.ts'
 import { IndexEntry } from '../../cache/index/config.ts'
 import type { IndexCacheStore } from '../../cache/index/store.ts'
-import type { QdrantConfigResolved } from '../../resource/qdrant/config.ts'
+import type { QdrantConfigResolved } from '../../vfs/qdrant/config.ts'
 import type { QdrantRow } from './client.ts'
 import { PathSpec } from '../../types.ts'
 import { perAccessor } from '../hierarchy/bind.ts'
@@ -31,7 +31,7 @@ import { fieldValue } from './payload.ts'
 const GROUP_TYPE = 'qdrant/group'
 
 function dirEntry(name: string): IndexEntry {
-  return new IndexEntry({ id: name, name, resourceType: GROUP_TYPE, vfsName: name })
+  return new IndexEntry({ id: name, name, vfsType: GROUP_TYPE, vfsName: name })
 }
 
 function blobSize(value: unknown): number | null {
@@ -58,7 +58,7 @@ function rowEntries(rows: QdrantRow[], config: QdrantConfigResolved): [string, I
       new IndexEntry({
         id,
         name: `${stem}.json`,
-        resourceType: 'qdrant/row_json',
+        vfsType: 'qdrant/row_json',
         vfsName: `${stem}.json`,
         size: renderJson(row, config).byteLength,
       }),
@@ -73,7 +73,7 @@ function rowEntries(rows: QdrantRow[], config: QdrantConfigResolved): [string, I
         new IndexEntry({
           id,
           name: `${stem}.txt`,
-          resourceType: 'qdrant/row_text',
+          vfsType: 'qdrant/row_text',
           vfsName: `${stem}.txt`,
           size: renderText(row, config).byteLength,
         }),
@@ -90,7 +90,7 @@ function rowEntries(rows: QdrantRow[], config: QdrantConfigResolved): [string, I
         new IndexEntry({
           id,
           name: blobName,
-          resourceType: 'qdrant/row_blob',
+          vfsType: 'qdrant/row_blob',
           vfsName: blobName,
           size: blobSize(fieldValue(row, config.blobField)),
         }),

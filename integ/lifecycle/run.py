@@ -31,18 +31,18 @@ from mirage.errors import classify
 from mirage.policy import Policy
 from mirage.policy.types import (CommandContext, Deny, OpsContext,
                                  SessionContext)
-from mirage.resource.ram import RAMResource
-from mirage.resource.registry import build_resource, register_resource
 from mirage.runtime.types import ScriptSource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.registry import build_vfs, register_vfs
 from mirage.workspace import Workspace
 from mirage.workspace.snapshot import apply_state_dict, to_state_dict
 
 SUITE = Path(__file__).with_name("cases.json")
 
 
-class CachedRAMResource(RAMResource):
-    """A local fixture exercising the same read cache as remote resources."""
+class CachedRAMVFS(RAMVFS):
+    """A local fixture exercising the same read cache as remote mounts."""
 
     caches_reads = True
 
@@ -56,7 +56,7 @@ class CachedRAMResource(RAMResource):
         })
 
 
-register_resource("cached-ram", CachedRAMResource)
+register_vfs("cached-ram", CachedRAMVFS)
 
 
 class RulePolicy(Policy):
@@ -117,12 +117,12 @@ async def action(ws: Workspace, step: dict[str, Any],
         finally:
             reset_current_session(token)
     if op == "mount":
-        resource = build_resource(step["resource"], step.get("config", {}))
+        vfs = build_vfs(step["vfs"], step.get("config", {}))
         try:
-            return ws.add_mount(step["path"], resource,
+            return ws.add_mount(step["path"], vfs,
                                 MountMode(step.get("mode", "read"))).prefix
         except Exception:
-            await resource.close()
+            await vfs.close()
             raise
     if op == "unmount":
         await ws.unmount(step["path"])

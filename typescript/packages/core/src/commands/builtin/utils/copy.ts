@@ -26,7 +26,7 @@ export function backendKeyDefault(path: PathSpec): string {
 
 function childPath(parent: PathSpec, name: string): PathSpec {
   const child = `${rstripSlash(parent.virtual)}/${name}`
-  return PathSpec.fromStrPath(child, rekey(parent.virtual, parent.resourcePath, child))
+  return PathSpec.fromStrPath(child, rekey(parent.virtual, parent.vfsPath, child))
 }
 
 // Multiple sources require the directory form, and GNU distinguishes why it

@@ -58,7 +58,7 @@ async function seeded(): Promise<RAMIndexCacheStore> {
 }
 
 function spec(p: string): PathSpec {
-  return new PathSpec({ resourcePath: p.slice(1), virtual: p, directory: p })
+  return new PathSpec({ vfsPath: p.slice(1), virtual: p, directory: p })
 }
 
 describe('github readdir freshness', () => {
@@ -128,17 +128,14 @@ for (const backend of ['ram', 'redis']) {
         accessor.truncated = true
         try {
           await index.setDir('/repo', [
-            ['src', new IndexEntry({ id: 'old-src', name: 'src', resourceType: 'folder' })],
+            ['src', new IndexEntry({ id: 'old-src', name: 'src', vfsType: 'folder' })],
           ])
           await index.setDir('/repo/src', [
-            [
-              'nested',
-              new IndexEntry({ id: 'old-nested', name: 'nested', resourceType: 'folder' }),
-            ],
+            ['nested', new IndexEntry({ id: 'old-nested', name: 'nested', vfsType: 'folder' })],
           ])
           await index.setDir('/repo/src/nested', [], new Date(Date.now() - 1000))
           const path = new PathSpec({
-            resourcePath: 'src/nested',
+            vfsPath: 'src/nested',
             virtual: '/repo/src/nested',
             directory: '/repo/src/nested',
           })
@@ -205,19 +202,19 @@ for (const backend of ['ram', 'redis']) {
           defaultBranch: 'main',
         })
         const path = new PathSpec({
-          resourcePath: 'src',
+          vfsPath: 'src',
           virtual: '/repo/src',
           directory: '/repo/src',
         })
         try {
           await index.setDir('/other', [
-            ['keep', new IndexEntry({ id: 'keep', name: 'keep', resourceType: 'file' })],
+            ['keep', new IndexEntry({ id: 'keep', name: 'keep', vfsType: 'file' })],
           ])
           await index.setDir('/repo', [
-            ['src', new IndexEntry({ id: 'old', name: 'src', resourceType: 'folder' })],
+            ['src', new IndexEntry({ id: 'old', name: 'src', vfsType: 'folder' })],
           ])
           await index.setDir('/repo/src', [
-            ['old.py', new IndexEntry({ id: 'old-file', name: 'old.py', resourceType: 'file' })],
+            ['old.py', new IndexEntry({ id: 'old-file', name: 'old.py', vfsType: 'file' })],
           ])
           await index.invalidate()
           for (let i = 0; i < 2; i++)
@@ -275,10 +272,10 @@ for (const backend of ['ram', 'redis']) {
                 defaultBranch: 'main',
               })
               const root = prefix || '/'
-              const rootPath = new PathSpec({ resourcePath: '', virtual: root, directory: root })
+              const rootPath = new PathSpec({ vfsPath: '', virtual: root, directory: root })
               const docs = `${prefix}/docs`
               const docsPath = new PathSpec({
-                resourcePath: 'docs',
+                vfsPath: 'docs',
                 virtual: docs,
                 directory: docs,
               })

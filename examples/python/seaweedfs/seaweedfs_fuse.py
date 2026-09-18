@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import Mount, MountBackend, MountMode, Workspace
-from mirage.resource.seaweedfs import SeaweedFSConfig, SeaweedFSResource
+from mirage.vfs.seaweedfs import SeaweedFSConfig, SeaweedFSVFS
 
 load_dotenv(".env.development")
 
@@ -29,7 +29,7 @@ config = SeaweedFSConfig(
     secret_access_key=os.environ.get("SEAWEEDFS_SECRET_KEY", "any"),
 )
 
-resource = SeaweedFSResource(config)
+vfs = SeaweedFSVFS(config)
 
 SEED_KEYS = ("/seaweedfs/data/example.jsonl", "/seaweedfs/data/config.json",
              "/seaweedfs/notes.txt")
@@ -53,9 +53,7 @@ async def cleanup(ws: Workspace) -> None:
 
 
 mounts = {
-    "/seaweedfs/": Mount(resource,
-                         mode=MountMode.WRITE,
-                         backend=MountBackend.FUSE)
+    "/seaweedfs/": Mount(vfs, mode=MountMode.WRITE, backend=MountBackend.FUSE)
 }
 with Workspace(mounts) as ws:
     asyncio.run(seed(ws))

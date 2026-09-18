@@ -31,7 +31,7 @@ import {
   type ProcessExecutor,
 } from '../../../runtime/mixin.ts'
 import type { ProcessExecution, RunResult, RuntimeOptions } from '../../../runtime/types.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { Limit, MountMode } from '../../../types.ts'
 import * as globs from '../../expand/globs.ts'
 import { Consumer, SHELL_NAMES, lookup, lookupAll } from '../../lookup/index.ts'
@@ -77,7 +77,7 @@ class DelayedProcessProbe extends ProcessProbe {
 
 async function workspace(probe: Runtime, others: Runtime[] = []): Promise<Workspace> {
   return new Workspace(
-    { '/': new RAMResource() },
+    { '/': new RAMVFS() },
     {
       mode: MountMode.EXEC,
       shellParser: await getTestParser(),
@@ -289,7 +289,7 @@ class ShellProbe extends Runtime implements LineExecutor {
 function registerBoardList(ws: Workspace): void {
   for (const registered of command({
     name: 'trello board list',
-    resource: 'ram',
+    vfs: 'ram',
     spec: new CommandSpec({ positional: [new Operand()], rest: new Operand({ type: 'str' }) }),
     fn: () => [ENC.encode('ok\n'), new IOResult()],
   }))
@@ -332,9 +332,9 @@ describe('external command routing regressions', () => {
       const probe = kind === 'process' ? new ProcessProbe(options) : new ShellProbe(options)
       const ws = new Workspace(
         {
-          '/': new RAMResource(),
-          '/base/inner': new RAMResource(),
-          '/base/other': new RAMResource(),
+          '/': new RAMVFS(),
+          '/base/inner': new RAMVFS(),
+          '/base/other': new RAMVFS(),
         },
         { mode: MountMode.EXEC, shellParser: await getTestParser(), runtimes: [probe] },
       )
@@ -430,7 +430,7 @@ describe.each(['process', 'shell'] as const)('external %s path admission', (kind
     const options = { captures: ['cat', 'grep', 'tar'] }
     const probe = kind === 'process' ? new ProcessProbe(options) : new ShellProbe(options)
     const ws = new Workspace(
-      { '/work': new RAMResource() },
+      { '/work': new RAMVFS() },
       {
         shellParser: await getTestParser(),
         runtimes: [probe],

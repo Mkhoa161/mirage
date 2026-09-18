@@ -21,12 +21,12 @@ from dotenv import load_dotenv
 from mirage import MountMode, Workspace
 from mirage.agents.langchain import (LangchainWorkspace, build_system_prompt,
                                      extract_text)
-from mirage.resource.databricks_volume import (DatabricksVolumeConfig,
-                                               DatabricksVolumeResource)
+from mirage.vfs.databricks_volume import (DatabricksVolumeConfig,
+                                          DatabricksVolumeVFS)
 
 load_dotenv(".env.development")
 
-resource = DatabricksVolumeResource(
+vfs = DatabricksVolumeVFS(
     DatabricksVolumeConfig(
         catalog=os.environ["DATABRICKS_VOLUME_CATALOG"],
         schema=os.environ["DATABRICKS_VOLUME_SCHEMA"],
@@ -37,7 +37,7 @@ resource = DatabricksVolumeResource(
         profile=os.environ.get("DATABRICKS_CONFIG_PROFILE"),
     ))
 
-ws = Workspace({"/dbx/": resource}, mode=MountMode.READ)
+ws = Workspace({"/dbx/": vfs}, mode=MountMode.READ)
 
 agent = create_deep_agent(
     model=ChatDatabricks(endpoint=os.environ["DATABRICKS_CHAT_ENDPOINT"], ),

@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { ConsistencyPolicy, MountMode, PathSpec } from '../types.ts'
 import { getTestParser } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -25,9 +25,9 @@ const DEC = new TextDecoder()
 // Dispatcher, so sandbox I/O shares the shell path's file cache:
 // warm reads serve cached bytes and writes invalidate, exactly as in
 // Python where Workspace.dispatch delegates to the Dispatcher.
-async function makeCachingWorkspace(): Promise<{ ws: Workspace; ram: RAMResource }> {
+async function makeCachingWorkspace(): Promise<{ ws: Workspace; ram: RAMVFS }> {
   const parser = await getTestParser()
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   // Force the cache on a local backend so reads are cached and, under
   // LAZY, never revalidated (the cache_mount.test.ts pattern).
   ;(ram as unknown as { cachesReads: boolean }).cachesReads = true

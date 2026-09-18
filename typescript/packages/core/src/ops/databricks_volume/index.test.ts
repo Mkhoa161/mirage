@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { ResourceName } from '../../types.ts'
+import { VFSName } from '../../types.ts'
 import { DATABRICKS_VOLUME_OPS } from './index.ts'
 
 describe('DATABRICKS_VOLUME_OPS', () => {
@@ -41,9 +41,9 @@ describe('DATABRICKS_VOLUME_OPS', () => {
     expect(writes).toEqual(new Set(['create', 'mkdir', 'rename', 'rmdir', 'unlink', 'write']))
   })
 
-  it('targets the databricks_volume resource', () => {
+  it('targets the databricks_volume VFS', () => {
     for (const op of DATABRICKS_VOLUME_OPS) {
-      expect(op.resource).toBe(ResourceName.DATABRICKS_VOLUME)
+      expect(op.vfs).toBe(VFSName.DATABRICKS_VOLUME)
       expect(op.filetype).toBeNull()
     }
   })

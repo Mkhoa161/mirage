@@ -17,7 +17,7 @@ import { SPECS } from '../../commands/spec/index.ts'
 import { concatBytes } from '../../core/jq/format.ts'
 import type { ByteSource } from '../../io/types.ts'
 import { IOResult, materialize } from '../../io/types.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 import type { CallStack } from '../../shell/call_stack.ts'
 import type { JobTable } from '../../shell/job_table/index.ts'
 import { PathSpec } from '../../types.ts'
@@ -152,7 +152,7 @@ export async function handleCommand(
   stdin: ByteSource | null = null,
   callStack: CallStack | null = null,
   jobTable: JobTable | null = null,
-  ensureOpen?: (resource: Resource) => Promise<void>,
+  ensureOpen?: (vfs: VFS) => Promise<void>,
   runtimeBindings?: Record<string, Runtime>,
   namespace?: Namespace,
   routingDecision?: RouteDecision,
@@ -544,7 +544,7 @@ export async function handleCommand(
       : null
 
   if (ensureOpen !== undefined) {
-    await ensureOpen(mount.resource)
+    await ensureOpen(mount.vfs)
   }
 
   const singleNs = namespaceViewOf(registry, namespace ?? null, dispatch)

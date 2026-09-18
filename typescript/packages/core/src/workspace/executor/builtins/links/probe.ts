@@ -96,7 +96,7 @@ export async function pathStat(
 // Resolves through the op dispatcher rather than one backend, so a
 // directory served by another mount answers. This is what a walker reads
 // once it crosses a mount boundary: the subtree under a nested mount
-// lives in a resource the walker's own accessor cannot open.
+// lives in a VFS the walker's own accessor cannot open.
 export async function pathReaddir(dispatch: DispatchFn, virtual: string): Promise<string[]> {
   const spec = PathSpec.fromStrPath(virtual, '')
   const [entries] = await dispatch('readdir', spec)

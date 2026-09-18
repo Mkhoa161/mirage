@@ -19,10 +19,10 @@ from pathlib import Path
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
 from mirage.runtime.python import WasiRuntime
 from mirage.runtime.python.wasi import WASI_HOME_ENV
 from mirage.runtime.types import RunArgs
+from mirage.vfs.ram import RAMVFS
 
 
 def _build_dir() -> str | None:
@@ -106,7 +106,7 @@ def test_wasi_host_fs_and_network_invisible():
 @live
 @pytest.mark.asyncio
 async def test_wasi_python3_command_end_to_end():
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/calc.py"] = (b"import sys\n"
                                     b"print(int(sys.argv[1]) * 6)\n")
     ws = Workspace({"/ram": ram}, mode=MountMode.EXEC, runtimes=["wasi"])
@@ -154,9 +154,7 @@ def test_wasi_reuses_compiled_module():
 async def test_wasi_mounts_read_write_listdir():
     # Guest file I/O bridges through the workspace dispatch: reads see
     # shell writes, guest writes land in the mount, listdir lists it.
-    ws = Workspace({"/data": RAMResource()},
-                   mode=MountMode.EXEC,
-                   runtimes=["wasi"])
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC, runtimes=["wasi"])
     await ws.execute("echo hello-mount > /data/in.txt")
     code = ("import os\n"
             "print(open('/data/in.txt').read().strip())\n"
@@ -176,9 +174,7 @@ async def test_wasi_mounts_read_write_listdir():
 async def test_wasi_root_mount_coexists_with_the_build():
     # Mount prefixes route to the workspace; everything else is served
     # from the build directory, so a root mount and the stdlib coexist.
-    ws = Workspace({"/": RAMResource()},
-                   mode=MountMode.EXEC,
-                   runtimes=["wasi"])
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.EXEC, runtimes=["wasi"])
     await ws.execute("echo root-mount > /f.txt")
     code = ("import sys\n"
             "print(open('/f.txt').read().strip())\n"
@@ -215,9 +211,7 @@ def test_wasi_build_directory_is_read_only():
 async def test_wasi_session_narrowing_reaches_the_guest():
     # A session narrowed to read on the mount denies guest writes at
     # open() and still serves reads; the default session is unaffected.
-    ws = Workspace({"/data": RAMResource()},
-                   mode=MountMode.EXEC,
-                   runtimes=["wasi"])
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC, runtimes=["wasi"])
     await ws.execute("echo seeded > /data/f0.txt")
     ws.create_session("narrow", {"/data": "read"})
     code = ("\ntry:\n"
@@ -237,4 +231,4 @@ async def test_wasi_session_narrowing_reaches_the_guest():
 
 
 def test_reach_is_vfs():
-    assert WasiRuntime.reach == "vfs"
+    assert WasiRuntime.reach == "workspace"

@@ -8,7 +8,7 @@ export const DISPLAY_NAME: Property = {
 export const RESOURCE_TYPE: Property = {
   namespace: Namespace.DAV,
   prefix: 'd',
-  name: 'resourcetype',
+  name: 'vfstype',
 }
 export const CONTENT_LENGTH: Property = {
   namespace: Namespace.DAV,

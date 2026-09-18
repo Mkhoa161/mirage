@@ -62,7 +62,7 @@ async function listPagesRoot(
       new IndexEntry({
         id: pickString(page, 'id'),
         name: dirname,
-        resourceType: 'notion/page',
+        vfsType: 'notion/page',
         remoteTime: pickString(page, 'last_edited_time'),
         vfsName: dirname,
       }),
@@ -92,7 +92,7 @@ async function listDatabasesRoot(
       new IndexEntry({
         id: databaseId,
         name,
-        resourceType: 'notion/database',
+        vfsType: 'notion/database',
         remoteTime: pickString(database, 'last_edited_time'),
         vfsName: name,
       }),
@@ -117,7 +117,7 @@ async function listPage(
       new IndexEntry({
         id: `${pageId}:page`,
         name: 'page.json',
-        resourceType: 'file',
+        vfsType: 'file',
         vfsName: 'page.json',
       }),
     ],
@@ -129,7 +129,7 @@ async function listPage(
       new IndexEntry({
         id: ref.id,
         name: dirname,
-        resourceType: 'notion/page',
+        vfsType: 'notion/page',
         remoteTime: ref.lastEditedTime,
         vfsName: dirname,
       }),
@@ -152,7 +152,7 @@ async function listDatabase(
       new IndexEntry({
         id: `${databaseId}:database`,
         name: 'database.json',
-        resourceType: 'file',
+        vfsType: 'file',
         vfsName: 'database.json',
         size: toJsonBytes(normalizeDatabase(database)).byteLength,
       }),
@@ -166,7 +166,7 @@ async function listDatabase(
       new IndexEntry({
         id: pickString(record, 'id'),
         name: segment,
-        resourceType: 'notion/data_source',
+        vfsType: 'notion/data_source',
         remoteTime: pickString(database, 'last_edited_time'),
         vfsName: segment,
       }),
@@ -188,7 +188,7 @@ async function listDataSource(
       new IndexEntry({
         id: `${dataSourceId}:data_source`,
         name: 'data_source.json',
-        resourceType: 'file',
+        vfsType: 'file',
         vfsName: 'data_source.json',
         size: toJsonBytes(normalizeDataSource(dataSource)).byteLength,
       }),
@@ -202,7 +202,7 @@ async function listDataSource(
       new IndexEntry({
         id: pickString(row, 'id'),
         name: segment,
-        resourceType: 'notion/page',
+        vfsType: 'notion/page',
         remoteTime: pickString(row, 'last_edited_time'),
         vfsName: segment,
       }),

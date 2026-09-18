@@ -14,7 +14,7 @@
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.shell.constants import RANDOM, RANDOM_MAX, RANDOM_UNSET
 from mirage.shell.errors import ArithError
 from mirage.shell.variable import ShellVar
@@ -137,7 +137,7 @@ def test_a_child_shell_does_not_replay_a_pending_seed():
 
 @pytest.mark.asyncio
 async def test_random_expands_in_the_shell():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute(
         'RANDOM=42; a=$RANDOM; RANDOM=42; b=$RANDOM; echo $a $b')
     assert await io.stdout_str() == "17772 17772\n"
@@ -170,7 +170,7 @@ async def test_random_expands_in_the_shell():
 @pytest.mark.parametrize("draw_first", [False, True])
 async def test_child_random_reads_preserve_the_parent_sequence(
         child, draw_first):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         prefix = 'RANDOM=42; ' + (': $RANDOM; ' if draw_first else '')
         io = await ws.execute(prefix + child + '; echo $RANDOM')
@@ -201,7 +201,7 @@ async def test_child_random_reads_preserve_the_parent_sequence(
      ''),
 ])
 async def test_random_seed_diagnostics(command, stdout, prefix):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute(command)
     assert io.exit_code == 0
     assert await io.stdout_str() == stdout
@@ -229,7 +229,7 @@ async def test_random_seed_diagnostics(command, stdout, prefix):
      ('RANDOM=42; [[ RANDOM -eq 17772 ]]; echo $? $RANDOM', '0 26794\n'),
      ('unset RANDOM; RANDOM=42; echo $((RANDOM)) $((RANDOM))', '42 42\n')])
 async def test_arithmetic_random_reads_are_lazy(command, stdout):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(command)
         assert io.exit_code == 0
@@ -303,7 +303,7 @@ async def test_arithmetic_random_reads_are_lazy(command, stdout):
     ])
 async def test_arithmetic_random_assignment_seeds_within_the_expression(
         command, stdout):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(command)
         assert io.exit_code == 0
@@ -364,7 +364,7 @@ async def test_arithmetic_random_assignment_seeds_within_the_expression(
     ])
 @pytest.mark.asyncio
 async def test_subscripts_and_offsets_land_their_assignments(command, stdout):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(command)
         assert io.exit_code == 0
@@ -411,7 +411,7 @@ def test_random_reader_draws_from_the_pending_seed_and_settles():
 @pytest.mark.asyncio
 async def test_a_subscript_or_operand_that_fails_ends_the_line(
         command, stderr):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(command)
         assert io.exit_code == 1
@@ -430,7 +430,7 @@ async def test_operand_env_is_a_view_over_the_visible_env():
     # serve as a scalar; the operand's env lays its pending writes over
     # that env as a view, so the reference neither breaks the operand
     # nor hides the write.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute("declare -a nrb=(1); declare -n nrc=nrb; "
                               'v=abcdef; echo "${v:(x=1):2}" $x')
@@ -458,7 +458,7 @@ async def test_operand_env_is_a_view_over_the_visible_env():
 @pytest.mark.asyncio
 async def test_a_conditional_operators_word_expands_only_when_selected(
         command, stdout, stderr):
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(command)
         assert io.exit_code == 0
@@ -512,7 +512,7 @@ async def test_an_array_on_random_ends_its_special_meaning(command, stdout):
     # `declare -a RANDOM` conversion looks the name up more than once
     # there, so element 0 holds a later draw of the same sequence; and a
     # popped local RANDOM reseeds bash's generator where mirage resumes.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute(command)
     assert await io.stderr_str() == ''
     assert io.exit_code == 0

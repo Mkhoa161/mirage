@@ -33,7 +33,7 @@ function spec(virtual: string): PathSpec {
   return new PathSpec({
     virtual,
     directory: virtual,
-    resourcePath: mountKey(virtual, PREFIX),
+    vfsPath: mountKey(virtual, PREFIX),
   })
 }
 
@@ -44,7 +44,7 @@ async function warm(index: RAMIndexCacheStore): Promise<void> {
       new IndexEntry({
         id: 'INBOX',
         name: 'INBOX',
-        resourceType: 'gmail/label',
+        vfsType: 'gmail/label',
         vfsName: 'INBOX',
       }),
     ],
@@ -55,7 +55,7 @@ async function warm(index: RAMIndexCacheStore): Promise<void> {
       new IndexEntry({
         id: '2026-04-12',
         name: '2026-04-12',
-        resourceType: 'gmail/date',
+        vfsType: 'gmail/date',
         vfsName: '2026-04-12',
       }),
     ],

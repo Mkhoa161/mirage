@@ -7,8 +7,8 @@ from mirage.commands.config import CommandOpts
 from mirage.io.types import materialize
 from mirage.ops.types import NamespaceView
 from mirage.policy.profile import SessionProfile
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.session.session import Session
 from mirage.workspace.session.state import session_view
@@ -44,9 +44,9 @@ async def _run(ws: Workspace, line: str) -> tuple[int, str]:
 
 
 def _ws(**kwargs) -> Workspace:
-    resource = RAMResource()
-    resource._store.files["/f.txt"] = b"hello"
-    return Workspace({"/data/": (resource, MountMode.WRITE)},
+    vfs = RAMVFS()
+    vfs._store.files["/f.txt"] = b"hello"
+    return Workspace({"/data/": (vfs, MountMode.WRITE)},
                      mode=MountMode.WRITE,
                      **kwargs)
 

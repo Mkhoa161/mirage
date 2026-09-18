@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  CephResource,
+  CephVFS,
   Workspace,
   type CephConfig,
   type FileStat,
@@ -36,7 +36,7 @@ function configFromEnv(): CephConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/ceph/': new CephResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/ceph/': new CephVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== Ceph RGW at ${config.endpoint} ===`)
 

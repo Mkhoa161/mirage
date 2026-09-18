@@ -15,14 +15,14 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { OpsRegistry } from '@struktoai/mirage-core/ops/registry'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { Workspace } from '@struktoai/mirage-node'
 import { describe, expect, it } from 'vitest'
 import { createMirageMcpServer } from './server.ts'
 
 function mkWs(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
   for (const op of ram.ops()) ops.register(op)
   return new Workspace({ '/': ram }, { mode: MountMode.WRITE, ops })

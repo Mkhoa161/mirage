@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Policy } from '../../../../policy/base.ts'
 import type { Action, OpsContext } from '../../../../policy/types.ts'
-import { RAMResource } from '../../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../../vfs/ram/ram.ts'
 import { MountMode, PathSpec } from '../../../../types.ts'
 import { getTestParser } from '../../../fixtures/workspace_fixture.ts'
 import { Workspace } from '../../../workspace/workspace.ts'
@@ -53,7 +53,7 @@ function dispatchOf(ws: Workspace): DispatchFn {
 async function makeWs(policies: Policy[] = []): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       policies,

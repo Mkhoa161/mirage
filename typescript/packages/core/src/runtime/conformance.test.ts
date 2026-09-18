@@ -15,7 +15,7 @@
 import { WorkspaceBinding } from './binding.ts'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { ContentType, FileStat, FileType, MountMode } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../workspace/fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
@@ -430,15 +430,15 @@ const QUICKJS_ROWS: Row[] = [
 async function world(runtime: string): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const data = new RAMResource()
-  const other = new RAMResource()
-  const ro = new RAMResource()
-  ops.registerResource(data)
-  ops.registerResource(other)
-  ops.registerResource(ro)
+  const data = new RAMVFS()
+  const other = new RAMVFS()
+  const ro = new RAMVFS()
+  ops.registerVfs(data)
+  ops.registerVfs(other)
+  ops.registerVfs(ro)
   const ws = new Workspace(
     {},
-    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [runtime, 'vfs'] },
+    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [runtime, 'workspace'] },
   )
   ws.addMount('/data', data, MountMode.WRITE)
   ws.addMount('/other', other, MountMode.WRITE)
@@ -502,11 +502,11 @@ conformance('quickjs conformance', 'quickjs', 'node -e "1"', QUICKJS_ROWS)
 async function rootWorld(runtime: string): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const root = new RAMResource()
-  ops.registerResource(root)
+  const root = new RAMVFS()
+  ops.registerVfs(root)
   return new Workspace(
     { '/': [root, MountMode.EXEC] },
-    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [runtime, 'vfs'] },
+    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [runtime, 'workspace'] },
   )
 }
 

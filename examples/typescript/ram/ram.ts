@@ -15,9 +15,9 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
-const resource = new RAMResource()
+const vfs = new RAMVFS()
 
 function print(bytes: Uint8Array): void {
   process.stdout.write(new TextDecoder().decode(bytes) + '\n')
@@ -30,7 +30,7 @@ async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<vo
 }
 
 async function main(): Promise<void> {
-  const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
 
   console.log('=== tee (create files) ===')
   await ws.execute('echo "hello world" | tee /data/hello.txt')

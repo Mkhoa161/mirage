@@ -231,12 +231,12 @@ class MirageWorkspace(LocalWorkspace):
     def git_changes(self, path: str | Path) -> list[GitChange]:
         raise NotImplementedError(
             "Mirage workspaces do not expose git semantics over their "
-            "virtual mounts; query the underlying resource directly.")
+            "virtual mounts; query the underlying VFS directly.")
 
     def git_diff(self, path: str | Path) -> GitDiff:
         raise NotImplementedError(
             "Mirage workspaces do not expose git semantics over their "
-            "virtual mounts; query the underlying resource directly.")
+            "virtual mounts; query the underlying VFS directly.")
 
     def _ensure_parent(self, parent: str) -> None:
         result = self._bridge.run(

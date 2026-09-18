@@ -19,13 +19,13 @@ import pytest
 from mirage.commands.builtin.generic.expand import (TabStops, next_tab_stop,
                                                     parse_flags,
                                                     parse_tab_stops)
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws():
-    mem = RAMResource()
+    mem = RAMVFS()
     ws = Workspace(
         {"/data": (mem, MountMode.WRITE)},
         mode=MountMode.WRITE,

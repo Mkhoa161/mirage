@@ -17,11 +17,11 @@ from pathlib import Path
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 
 
 async def _workspace_at(cwd: str) -> Workspace:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute(f"mkdir -p {cwd}")
     await ws.execute(f"cd {cwd}")
     return ws
@@ -498,7 +498,7 @@ HEREDOC_CASES = json.loads(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", HEREDOC_CASES, ids=lambda case: case["id"])
 async def test_heredoc_reader_integration(case):
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
         io = await ws.execute(case["command"])
         assert {
@@ -520,7 +520,7 @@ NESTED_HEREDOC_CASES = json.loads(
                          NESTED_HEREDOC_CASES,
                          ids=lambda case: case["id"])
 async def test_heredoc_nested_mount_integration(case):
-    parent, child, ghost = RAMResource(), RAMResource(), RAMResource()
+    parent, child, ghost = RAMVFS(), RAMVFS(), RAMVFS()
     ws = Workspace(
         {
             "/data": parent,

@@ -21,7 +21,7 @@ import { RAMFileCacheStore } from '../../cache/file/ram.ts'
 import { IndexEntry } from '../../cache/index/config.ts'
 import { RAMIndexCacheStore } from '../../cache/index/ram.ts'
 import { CacheManager } from '../../cache/manager.ts'
-import { RAMStore } from '../../resource/ram/store.ts'
+import { RAMStore } from '../../vfs/ram/store.ts'
 import { PathSpec } from '../../types.ts'
 import { rmR } from './rm.ts'
 
@@ -35,7 +35,7 @@ async function seeded(): Promise<[RAMAccessor, RAMFileCacheStore, RAMIndexCacheS
   const cache = new RAMFileCacheStore()
   const index = new RAMIndexCacheStore({ ttl: 600 })
   await cache.set('/data/a/b/f.txt', ENC.encode('hi\n'))
-  const entry = new IndexEntry({ id: '1', name: 'f.txt', resourceType: 'file' })
+  const entry = new IndexEntry({ id: '1', name: 'f.txt', vfsType: 'file' })
   await index.setDir('/data/a', [['b', entry]])
   await index.setDir('/data/a/b', [['f.txt', entry]])
   return [new RAMAccessor(store), cache, index]

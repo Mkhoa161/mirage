@@ -15,8 +15,8 @@
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
 from mirage.runtime.types import ScriptSource
+from mirage.vfs.ram import RAMVFS
 
 # A JS-only world with a JS policy. The quickjs runtime carries the
 # evaluator capability, so it doubles as the policy engine: the policy
@@ -39,11 +39,11 @@ JS_POLICY = ScriptSource(
 async def main() -> None:
     ws = Workspace(
         {
-            "/data": RAMResource(),
-            "/prod": RAMResource()
+            "/data": RAMVFS(),
+            "/prod": RAMVFS()
         },
         mode=MountMode.EXEC,
-        runtimes=["quickjs", "vfs"],
+        runtimes=["quickjs", "workspace"],
         route_policy=JS_POLICY,
     )
     try:

@@ -18,12 +18,12 @@ from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from dotenv import load_dotenv
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.agents.agno import MirageToolkit
 
 load_dotenv(".env.development")
 
-ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),

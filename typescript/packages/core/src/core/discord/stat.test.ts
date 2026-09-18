@@ -34,7 +34,7 @@ class FakeDiscordTransport implements DiscordTransport {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('stat virtual root', () => {
@@ -56,7 +56,7 @@ describe('stat guild dir', () => {
         new IndexEntry({
           id: 'G1',
           name: 'My Server',
-          resourceType: 'discord/guild',
+          vfsType: 'discord/guild',
           vfsName: 'My Server__G1',
         }),
       ],
@@ -129,7 +129,7 @@ describe('stat channel dir', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          resourceType: 'discord/channel',
+          vfsType: 'discord/channel',
           vfsName: 'general__C1',
           remoteTime: '794354201395200000',
         }),
@@ -179,7 +179,7 @@ describe('stat member file', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          resourceType: 'discord/member',
+          vfsType: 'discord/member',
           vfsName: 'alice__U1.json',
         }),
       ],

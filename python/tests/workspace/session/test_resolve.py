@@ -190,7 +190,7 @@ def _read_op(virtual: str) -> OpsContext:
     return OpsContext(op="read",
                       path=PathSpec(virtual=virtual,
                                     directory=virtual.rsplit("/", 1)[0],
-                                    resource_path=virtual,
+                                    vfs_path=virtual,
                                     raw_path=virtual),
                       write=False,
                       prefix="/other")

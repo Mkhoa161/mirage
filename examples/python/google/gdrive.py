@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gdrive import GoogleDriveConfig, GoogleDriveResource
+from mirage.vfs.gdrive import GoogleDriveConfig, GoogleDriveVFS
 
 load_dotenv(".env.development")
 
@@ -27,11 +27,11 @@ config = GoogleDriveConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GoogleDriveResource(config=config)
+vfs = GoogleDriveVFS(config=config)
 
 
 async def main():
-    ws = Workspace({"/gdrive": resource}, mode=MountMode.READ)
+    ws = Workspace({"/gdrive": vfs}, mode=MountMode.READ)
 
     print("=== ls /gdrive/ (first 10) ===")
     r = await ws.execute("ls /gdrive/ | head -n 10")

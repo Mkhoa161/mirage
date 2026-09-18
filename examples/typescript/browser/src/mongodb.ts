@@ -14,7 +14,7 @@
 
 import {
   HttpMongoDriver,
-  MongoDBResource,
+  MongoDBVFS,
   MountMode,
   Workspace,
 } from '@struktoai/mirage-browser'
@@ -42,11 +42,11 @@ async function main(): Promise<void> {
   line('=== MongoDB via HTTP proxy (Vite middleware → mongodb driver in node) ===', 'ok')
 
   const driver = new HttpMongoDriver({ endpoint: '/api/mongo' })
-  const resource = new MongoDBResource({
+  const vfs = new MongoDBVFS({
     config: { uri: 'http://proxy', defaultDocLimit: 200 },
     driver,
   })
-  const ws = new Workspace({ '/mongodb/': resource }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/mongodb/': vfs }, { mode: MountMode.READ })
 
   try {
     await run(ws, 'ls /mongodb')

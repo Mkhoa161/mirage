@@ -20,7 +20,7 @@ import {
   IOResult,
   Operand,
   Option,
-  RAMResource,
+  RAMVFS,
   Workspace,
   z,
   type CommandFnResult,
@@ -135,7 +135,7 @@ async function show(ws: Workspace, line: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const ws = new Workspace({ '/workspace': new RAMResource() })
+  const ws = new Workspace({ '/workspace': new RAMVFS() })
 
   // One immutable program tree can be installed more than once. Each head
   // word gets independently validated configuration: two accounts, one CLI.

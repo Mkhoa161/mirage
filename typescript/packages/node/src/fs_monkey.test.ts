@@ -18,9 +18,9 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
-import { DiskResource } from './resource/disk/disk.ts'
+import { DiskVFS } from './vfs/disk/disk.ts'
 import { patchNodeFs } from './fs_monkey.ts'
 import { Workspace } from './workspace.ts'
 
@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe('patchNodeFs — mounted paths', () => {
   it('routes fs.promises.readFile through the workspace', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -56,7 +56,7 @@ describe('patchNodeFs — mounted paths', () => {
   })
 
   it('returns Buffer when no encoding is given', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -68,7 +68,7 @@ describe('patchNodeFs — mounted paths', () => {
   })
 
   it('writeFile + readdir + unlink + mkdir + rmdir all route through the workspace', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -93,10 +93,7 @@ describe('patchNodeFs — mounted paths', () => {
 
 describe('patchNodeFs — mirageStat adapter', () => {
   it('fs.promises.stat() returns an object with isFile()/isDirectory() methods', async () => {
-    const ws = new Workspace(
-      { '/data': new DiskResource({ root: scratch }) },
-      { mode: MountMode.WRITE },
-    )
+    const ws = new Workspace({ '/data': new DiskVFS({ root: scratch }) }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -119,7 +116,7 @@ describe('patchNodeFs — mirageStat adapter', () => {
 
 describe('patchNodeFs — fall-through to native fs', () => {
   it('unmounted paths reach the real filesystem', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -131,7 +128,7 @@ describe('patchNodeFs — fall-through to native fs', () => {
   })
 
   it('a single program can mix mounted and unmounted reads', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -147,7 +144,7 @@ describe('patchNodeFs — fall-through to native fs', () => {
 
 describe('patchNodeFs — sync methods + restore()', () => {
   it('readFileSync on a mounted path throws (sync not supported)', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -156,7 +153,7 @@ describe('patchNodeFs — sync methods + restore()', () => {
   })
 
   it('callback readFile on a mounted path returns workspace bytes', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     restore = patchNodeFs(ws)
     const fs = requireCjs('fs') as Fs
 
@@ -172,7 +169,7 @@ describe('patchNodeFs — sync methods + restore()', () => {
   })
 
   it('restore() leaves fs.promises.readFile working on real files', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const undo = patchNodeFs(ws)
     undo()
     restore = null

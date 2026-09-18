@@ -5,8 +5,8 @@ import shlex
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.dify import DifyConfig, DifyResource
 from mirage.types import PathSpec
+from mirage.vfs.dify import DifyConfig, DifyVFS
 
 load_dotenv(".env.development")
 
@@ -18,14 +18,14 @@ def require_env(name: str) -> str:
     return value
 
 
-def build_resource() -> DifyResource:
+def build_vfs() -> DifyVFS:
     config = DifyConfig(
         api_key=require_env("DIFY_API_KEY"),
         base_url=os.environ.get("DIFY_BASE_URL", "https://api.dify.ai/v1"),
         dataset_id=require_env("DIFY_DATASET_ID"),
         slug_metadata_name=os.environ.get("DIFY_SLUG_METADATA_NAME", "slug"),
     )
-    return DifyResource(config=config)
+    return DifyVFS(config=config)
 
 
 async def run(ws: Workspace, command: str, max_chars: int = 800) -> str:
@@ -51,8 +51,8 @@ async def first_document_path(ws: Workspace) -> str | None:
 
 
 async def main() -> None:
-    resource = build_resource()
-    ws = Workspace({"/knowledge/": resource}, mode=MountMode.READ)
+    vfs = build_vfs()
+    ws = Workspace({"/knowledge/": vfs}, mode=MountMode.READ)
 
     print("=== Dify Knowledge ===\n")
 

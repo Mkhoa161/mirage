@@ -19,13 +19,13 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.ntn import NTN
-from mirage.resource.notion import NotionConfig, NotionResource
 from mirage.types import PathSpec
+from mirage.vfs.notion import NotionConfig, NotionVFS
 
 load_dotenv(".env.development")
 
 config = NotionConfig(api_key=os.environ["NOTION_API_KEY"])
-resource = NotionResource(config=config)
+vfs = NotionVFS(config=config)
 
 
 async def run(ws: Workspace, cmd: str, limit: int = 1500) -> str:
@@ -162,7 +162,7 @@ async def explore_cross_cutting(ws: Workspace) -> None:
 
 
 async def main() -> None:
-    ws = Workspace({"/notion": resource}, mode=MountMode.READ)
+    ws = Workspace({"/notion": vfs}, mode=MountMode.READ)
     ws.register_cli("ntn", NTN, config.model_dump())
     await explore_pages(ws)
     await explore_databases(ws)

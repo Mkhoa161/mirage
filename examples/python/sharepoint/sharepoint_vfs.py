@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.sharepoint import SharePointConfig, SharePointResource
+from mirage.vfs.sharepoint import SharePointConfig, SharePointVFS
 
 load_dotenv(".env.development")
 
@@ -105,10 +105,7 @@ async def main():
     print("Token loaded ✓\n")
 
     ws = Workspace(
-        {
-            "/sharepoint/":
-            SharePointResource(SharePointConfig(access_token=token))
-        },
+        {"/sharepoint/": SharePointVFS(SharePointConfig(access_token=token))},
         mode=MountMode.WRITE,
     )
 

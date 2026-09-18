@@ -18,10 +18,10 @@ from functools import partial
 import pytest
 
 from mirage.io import IOResult
-from mirage.resource.ram import RAMResource
 from mirage.shell.console import Channel
 from mirage.shell.job_table import Job, JobStatus, JobTable
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.jobs import (handle_disown, handle_fg,
                                             handle_jobs, handle_kill,
@@ -30,8 +30,7 @@ from mirage.workspace.types import ExecutionNode
 
 
 def _workspace() -> Workspace:
-    return Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                     mode=MountMode.WRITE)
+    return Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
 
 
 async def _run_bg(cmd: str, job_id: int = 1) -> tuple[bytes, bytes]:
@@ -428,7 +427,7 @@ async def test_wait_bad_option():
 async def test_wait_p_names_the_job_whose_status_is_returned():
     """`wait id1 id2` answers with the last id's status, so `-p` names
     that job however many ids were waited for."""
-    ws = Workspace({"data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"data": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute("(exit 3) & (exit 5) & wait -p V %1 %2; "
                           "echo rc=$? V=$V")
     assert (await io.stdout_str()) == "rc=5 V=2\n"
@@ -439,7 +438,7 @@ async def test_wait_p_names_the_job_whose_status_is_returned():
 async def test_wait_p_with_no_operand_leaves_the_variable_unset():
     """The no-operand form waits for everything and reports no one job,
     so bash leaves the variable unset (having cleared it first)."""
-    ws = Workspace({"data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"data": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute("(exit 0) & V=stale; wait -p V; "
                           "echo \"V=[${V-UNSET}]\"")
     assert (await io.stdout_str()) == "V=[UNSET]\n"

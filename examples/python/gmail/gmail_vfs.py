@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gmail import GmailConfig, GmailResource
+from mirage.vfs.gmail import GmailConfig, GmailVFS
 
 load_dotenv(".env.development")
 
@@ -28,11 +28,11 @@ config = GmailConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GmailResource(config=config)
+vfs = GmailVFS(config=config)
 
 
 async def main():
-    with Workspace({"/gmail/": resource}, mode=MountMode.READ) as ws:
+    with Workspace({"/gmail/": vfs}, mode=MountMode.READ) as ws:
         print("=== VFS MODE ===\n")
 
         print("--- os.listdir() labels ---")

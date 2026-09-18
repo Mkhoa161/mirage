@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { beforeAll, describe, expect, it } from 'vitest'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { Channel } from '../../shell/console/index.ts'
 import { JobStatus } from '../../shell/job_table/index.ts'
 import type { ShellParser } from '../../shell/parse/index.ts'
@@ -31,7 +31,7 @@ beforeAll(async () => {
 
 function buildWs(): Workspace {
   return new Workspace(
-    { '/m': [new RAMResource(), MountMode.WRITE] },
+    { '/m': [new RAMVFS(), MountMode.WRITE] },
     { mode: MountMode.WRITE, shellParser: parser },
   )
 }

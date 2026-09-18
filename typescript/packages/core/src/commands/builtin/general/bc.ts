@@ -1515,7 +1515,7 @@ async function bcCommand(
 
 export const GENERAL_BC = command({
   name: 'bc',
-  resource: null,
+  vfs: null,
   spec: specOf('bc'),
   fn: bcCommand,
   provision: pureProvision,

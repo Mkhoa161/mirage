@@ -19,8 +19,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.oci import OCIConfig, OCIResource
 from mirage.types import PathSpec
+from mirage.vfs.oci import OCIVFS, OCIConfig
 
 load_dotenv(".env.development")
 
@@ -33,7 +33,7 @@ config = OCIConfig(
     secret_access_key=os.environ["OCI_SECRET_ACCESS_KEY"],
 )
 
-backend = OCIResource(config)
+backend = OCIVFS(config)
 ws = Workspace({"/oci/": backend}, mode=MountMode.READ)
 
 

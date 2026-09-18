@@ -12,15 +12,15 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, SlackResource, Workspace } from '@struktoai/mirage-browser'
+import { MountMode, SlackVFS, Workspace } from '@struktoai/mirage-browser'
 
 const PROXY_URL = process.env.SLACK_PROXY_URL ?? 'http://127.0.0.1:8901/api/slack'
 
 async function main(): Promise<void> {
-  const slack = new SlackResource({ proxyUrl: PROXY_URL })
+  const slack = new SlackVFS({ proxyUrl: PROXY_URL })
   const ws = new Workspace({ '/slack': slack }, { mode: MountMode.READ })
   try {
-    console.log(`=== BROWSER MODE: SlackResource → ${PROXY_URL} ===\n`)
+    console.log(`=== BROWSER MODE: SlackVFS → ${PROXY_URL} ===\n`)
 
     console.log('=== ls /slack/ ===')
     let r = await ws.execute('ls /slack/')

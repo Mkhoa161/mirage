@@ -16,7 +16,7 @@ import pytest
 
 from mirage.policy import Action, Deny, Policy
 from mirage.policy.types import SessionContext
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -32,7 +32,7 @@ class DenyAws(Policy):
 @pytest.fixture
 def guarded():
     """A workspace whose policy refuses writes to ``AWS_*``."""
-    with Workspace({"/ram/": RAMResource()}, policies=[DenyAws()]) as ws:
+    with Workspace({"/ram/": RAMVFS()}, policies=[DenyAws()]) as ws:
         yield ws
 
 

@@ -34,11 +34,11 @@ export type RuntimeLanguage = 'python' | 'js'
  * The workspace dispatch is a gate: it checks mount modes, session
  * grants, and policy, records the op, and only then touches the real
  * backend behind the mount (S3, disk, an API). Reach states whether
- * that gate is avoidable, not where bytes physically end up; a 'vfs'
+ * that gate is avoidable, not where bytes physically end up; a 'workspace'
  * write to an S3 mount still lands in real S3, but only after the
  * gate said yes.
  *
- * - 'vfs': the gate is the code's only door. The engine runs as an
+ * - 'workspace': the gate is the code's only door. The engine runs as an
  *   in-process guest with no syscalls, so its I/O can only travel the
  *   VFS bridge (or the workspace executor itself) and a mount-mode or
  *   policy refusal is final.
@@ -49,7 +49,7 @@ export type RuntimeLanguage = 'python' | 'js'
  * - 'remote': the code runs on another machine and acts on that
  *   machine's world; the gate never sees those effects.
  */
-export type RuntimeReach = 'vfs' | 'process' | 'remote'
+export type RuntimeReach = 'workspace' | 'process' | 'remote'
 
 /**
  * The workspace op dispatch: run `op` against the mount owning `path`

@@ -23,7 +23,7 @@ import {
   revisionFor,
   startOp,
 } from '../../observe/context.ts'
-import type { FindOptions } from '../../resource/base.ts'
+import type { FindOptions } from '../../vfs/base.ts'
 import { FileStat, FileType, PathSpec } from '../../types.ts'
 import { enoent, listingError } from '../../utils/errors.ts'
 import { contentTypeForPath } from '../../utils/filetype.ts'
@@ -612,7 +612,7 @@ export async function readdirItems(
       new IndexEntry({
         id: path,
         name,
-        resourceType: folder ? ResourceType.FOLDER : ResourceType.FILE,
+        vfsType: folder ? ResourceType.FOLDER : ResourceType.FILE,
         // Folder `size` is aggregate storage metadata, never rendered
         // content length: cache it as extra, not as the entry size.
         size: folder ? null : asNumber(child.size),
@@ -646,8 +646,8 @@ export async function statItem(
       const entry = lookup.entry
       return new FileStat({
         name: entry.name,
-        type: entry.resourceType === ResourceType.FOLDER ? FileType.DIRECTORY : FileType.FILE,
-        content: entry.resourceType === ResourceType.FOLDER ? null : contentTypeForPath(entry.name),
+        type: entry.vfsType === ResourceType.FOLDER ? FileType.DIRECTORY : FileType.FILE,
+        content: entry.vfsType === ResourceType.FOLDER ? null : contentTypeForPath(entry.name),
         size: entry.size,
         modified: entry.remoteTime || null,
         fingerprint: asString(entry.extra.ctag),

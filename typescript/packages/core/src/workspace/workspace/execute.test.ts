@@ -16,8 +16,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { RegisteredCommand } from '../../commands/config.ts'
 import { CommandSpec } from '../../commands/spec/types.ts'
 import { IOResult } from '../../io/types.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
-import { MountMode, ResourceName } from '../../types.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
+import { MountMode, VFSName } from '../../types.ts'
 import type { Action, CommandContext, Policy } from '../../policy/index.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace.ts'
@@ -30,7 +30,7 @@ const open: Workspace[] = []
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   r.store.dirs.add('/subdir')
   r.store.dirs.add('/other')
@@ -41,9 +41,9 @@ async function makeWs(): Promise<Workspace> {
 
 async function makeTwoMounts(): Promise<Workspace> {
   const parser = await getTestParser()
-  const a = new RAMResource()
+  const a = new RAMVFS()
   a.store.dirs.add('/')
-  const b = new RAMResource()
+  const b = new RAMVFS()
   b.store.dirs.add('/')
   b.store.files.set('/y.txt', ENC.encode('secret\n'))
   const ws = new Workspace({ '/a': a, '/b': b }, { mode: MountMode.WRITE, shellParser: parser })
@@ -167,7 +167,7 @@ describe('the ambient session is scoped to its workspace', () => {
     const rc = new RegisteredCommand({
       name: 'crossprobe',
       spec: PROBE_SPEC,
-      resource: ResourceName.RAM,
+      vfs: VFSName.RAM,
       fn: async () => {
         const io = await wsB.execute('pwd')
         seen.push(stdoutStr(io).trim())
@@ -185,7 +185,7 @@ describe('the ambient session is scoped to its workspace', () => {
     // session's: a re-entrant line runs in the live ambient fork.
     const seen: string[] = []
     const parser = await getTestParser()
-    const r = new RAMResource()
+    const r = new RAMVFS()
     r.store.dirs.add('/')
     r.store.dirs.add('/subdir')
     const ws = new Workspace(
@@ -203,7 +203,7 @@ describe('the ambient session is scoped to its workspace', () => {
     const rc = new RegisteredCommand({
       name: 'policyprobe',
       spec: PROBE_SPEC,
-      resource: ResourceName.RAM,
+      vfs: VFSName.RAM,
       fn: async () => {
         await ws.execute('pwd')
         return [new Uint8Array(), new IOResult()]
@@ -226,7 +226,7 @@ class DenySecret implements Policy {
 
 async function policedWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   const ws = new Workspace(
     { '/ram/': r },

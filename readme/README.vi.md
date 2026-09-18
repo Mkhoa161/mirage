@@ -41,12 +41,12 @@ Mirage là **terminal ảo cho AI Agent**. Hệ thống tệp ảo mang lại ng
 ```python
 ws = Workspace(
     {
-        "/tmp":   (RAMResource(), MountMode.EXEC),
-        "/redis": (RedisResource(url=redis_url), MountMode.WRITE),
-        "/slack": (SlackResource(SlackConfig(token=slack_bot_token)), MountMode.EXEC),
+        "/tmp":   (RAMVFS(), MountMode.EXEC),
+        "/redis": (RedisVFS(url=redis_url), MountMode.WRITE),
+        "/slack": (SlackVFS(SlackConfig(token=slack_bot_token)), MountMode.EXEC),
     },
     # monty bắt python, nên script chạy trong sandbox bên trong workspace
-    runtimes=[MontyRuntime(captures=["python", "python3"]), "vfs"],
+    runtimes=[MontyRuntime(captures=["python", "python3"]), "workspace"],
 )
 
 # một lệnh grep quét mọi nguồn
@@ -121,12 +121,12 @@ npx @struktoai/mirage-cli
 
 ```python
 from mirage import Workspace
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3Config, S3VFS
 
 ws = Workspace({
-    "/data": RAMResource(),
-    "/s3":   S3Resource(S3Config(bucket="my-bucket")),
+    "/data": RAMVFS(),
+    "/s3":   S3VFS(S3Config(bucket="my-bucket")),
 })
 
 await ws.execute("cp /s3/report.csv /data/report.csv")
@@ -138,11 +138,11 @@ await ws.snapshot("demo.tar")
 ### TypeScript
 
 ```ts
-import { Workspace, RAMResource, S3Resource } from '@struktoai/mirage-node'
+import { Workspace, RAMVFS, S3VFS } from '@struktoai/mirage-node'
 
 const ws = new Workspace({
-  '/data': new RAMResource(),
-  '/s3':   new S3Resource({ bucket: 'my-bucket' }),
+  '/data': new RAMVFS(),
+  '/s3':   new S3VFS({ bucket: 'my-bucket' }),
 })
 
 await ws.execute('cp /s3/report.csv /data/report.csv')
@@ -163,7 +163,7 @@ mirage workspace load demo.tar --id demo-restored
 
 ## Framework agent
 
-Mirage cắm vào các framework agent như một lớp sandbox hoặc công cụ. Các thao tác POSIX như `read` cũng có thể tùy biến theo tài nguyên và loại tệp: Mirage không đi kèm bộ render định dạng nào, nên một định dạng hiển thị đúng theo cách bạn đăng ký, và lệnh đăng ký cho một tài nguyên và phần mở rộng cụ thể sẽ thắng lệnh chung.
+Mirage cắm vào các framework agent như một lớp sandbox hoặc công cụ. Các thao tác POSIX như `read` cũng có thể tùy biến theo VFS và loại tệp: Mirage không đi kèm bộ render định dạng nào, nên một định dạng hiển thị đúng theo cách bạn đăng ký, và lệnh đăng ký cho một VFS và phần mở rộng cụ thể sẽ thắng lệnh chung.
 
 |              | Tích hợp                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -181,10 +181,10 @@ Mỗi `Workspace` có bộ nhớ đệm hai tầng, để công việc lặp l�
 Cả hai tầng mặc định dùng RAM trong tiến trình, không cần cấu hình. Store Redis chia sẻ trạng thái cache giữa các worker, tiến trình và máy:
 
 ```ts
-import { RedisFileCacheStore, S3Resource, Workspace } from '@struktoai/mirage-node'
+import { RedisFileCacheStore, S3VFS, Workspace } from '@struktoai/mirage-node'
 
 const ws = new Workspace(
-  { '/s3': new S3Resource({ bucket: 'my-bucket' }) },
+  { '/s3': new S3VFS({ bucket: 'my-bucket' }) },
   {
     cache: new RedisFileCacheStore({ url: 'redis://localhost:6379/0', cacheLimit: '8GB' }),
     index: { type: 'redis', url: 'redis://localhost:6379/0', ttl: 600 },

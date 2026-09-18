@@ -8,8 +8,8 @@ from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import spec_flag_names
 from mirage.io import IOResult
 from mirage.ops.types import NamespaceView
-from mirage.resource.ram import RAMResource
 from mirage.types import FileStat, FileType, MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.fanout import (_adjust_depth_texts,
                                               _fan_out_traversal,
@@ -52,8 +52,7 @@ class TraversalMount:
             exit_code=self.exit_code,
             stderr=stderr,
             matched_runs=[[
-                PathSpec(
-                    virtual=row, directory=row, resource_path="", raw_path=row)
+                PathSpec(virtual=row, directory=row, vfs_path="", raw_path=row)
                 for row in self.output.decode().splitlines()
             ]] if name == "find" else None)
 
@@ -146,11 +145,11 @@ def test_adjust_depth_texts_same_mount_unchanged():
 
 
 def test_maxdepth_applies_to_child_mount_depth_end_to_end():
-    parent = RAMResource()
-    child = RAMResource()
+    parent = RAMVFS()
+    child = RAMVFS()
     child._store.dirs.add("/a")
     child._store.files["/a/b.txt"] = b"deep\n"
-    ws = Workspace(resources={
+    ws = Workspace(mounts={
         "/": (parent, MountMode.EXEC),
         "/data/": (child, MountMode.EXEC),
     }, )
@@ -161,12 +160,12 @@ def test_maxdepth_applies_to_child_mount_depth_end_to_end():
 
 
 def _nested_ghost_workspace() -> Workspace:
-    parent = RAMResource()
+    parent = RAMVFS()
     parent._store.files["/top.txt"] = b"hello\n"
-    deep = RAMResource()
+    deep = RAMVFS()
     deep._store.files["/leaf.txt"] = b"deep\n"
     return Workspace(
-        resources={
+        mounts={
             "/": (parent, MountMode.EXEC),
             "/ghost/very/deep/": (deep, MountMode.EXEC),
         })
@@ -246,14 +245,14 @@ def test_filter_still_reads_find_and_grep_paths_from_the_front():
 
 
 def _shadowed_workspace(top: int = 10, real: int = 7) -> Workspace:
-    parent = RAMResource()
+    parent = RAMVFS()
     parent._store.files["/top.txt"] = b"T" * top
     parent._store.dirs.add("/inner")
     parent._store.files["/inner/leftover.txt"] = b"S" * 1000
-    child = RAMResource()
+    child = RAMVFS()
     child._store.files["/real.txt"] = b"R" * real
     return Workspace(
-        resources={
+        mounts={
             "/base/": (parent, MountMode.EXEC),
             "/base/inner/": (child, MountMode.EXEC),
         })
@@ -379,15 +378,15 @@ def test_fanout_offers_the_namespace_view_to_every_sub_run():
 
 
 def _linked_workspace(nested: bool) -> Workspace:
-    parent = RAMResource()
+    parent = RAMVFS()
     parent._store.files["/top.txt"] = b"T" * 10
     parent._store.dirs.add("/inner")
-    resources = {"/base/": (parent, MountMode.EXEC)}
+    mounts = {"/base/": (parent, MountMode.EXEC)}
     if nested:
-        child = RAMResource()
+        child = RAMVFS()
         child._store.files["/real.txt"] = b"R" * 7
-        resources["/base/inner/"] = (child, MountMode.EXEC)
-    ws = Workspace(resources=resources)
+        mounts["/base/inner/"] = (child, MountMode.EXEC)
+    ws = Workspace(mounts=mounts)
     asyncio.run(ws.execute("ln -s /base/top.txt /base/link.txt"))
     return ws
 
@@ -418,16 +417,16 @@ def test_fanout_link_rows_match_the_unmounted_tree():
 
 
 def _spanning_workspace() -> Workspace:
-    parent = RAMResource()
+    parent = RAMVFS()
     parent._store.files["/top.txt"] = b"T" * 10
     parent._store.dirs.add("/inner")
     parent._store.files["/inner/leftover.txt"] = b"S" * 1000
-    child = RAMResource()
+    child = RAMVFS()
     child._store.files["/real.txt"] = b"hit here\n"
-    other = RAMResource()
+    other = RAMVFS()
     other._store.files["/o.txt"] = b"hit there\n"
     return Workspace(
-        resources={
+        mounts={
             "/base/": (parent, MountMode.EXEC),
             "/base/inner/": (child, MountMode.EXEC),
             "/other/": (other, MountMode.EXEC),
@@ -506,12 +505,12 @@ def _unnamed_mountpoint_workspace() -> Workspace:
     under `inner/` and so names the mountpoint from its own readdir
     whatever the namespace says.
     """
-    parent = RAMResource()
+    parent = RAMVFS()
     parent._store.files["/top.txt"] = b"T\n"
-    child = RAMResource()
+    child = RAMVFS()
     child._store.files["/real.txt"] = b"hit\n"
     return Workspace(
-        resources={
+        mounts={
             "/base/": (parent, MountMode.EXEC),
             "/base/nested/": (child, MountMode.EXEC),
         })
@@ -540,13 +539,13 @@ def test_ls_r_lists_a_mountpoint_below_the_operand():
     `deep` is a row of `base/sub`, which is a directory the parent's own
     backend serves.
     """
-    parent = RAMResource()
+    parent = RAMVFS()
     parent._store.dirs.add("/sub")
     parent._store.files["/sub/p.txt"] = b"P\n"
-    child = RAMResource()
+    child = RAMVFS()
     child._store.files["/real.txt"] = b"hit\n"
     ws = Workspace(
-        resources={
+        mounts={
             "/base/": (parent, MountMode.EXEC),
             "/base/sub/deep/": (child, MountMode.EXEC),
         })
@@ -594,9 +593,9 @@ def test_ls_r_renders_a_file_mount_as_one_row_and_no_group():
     mount on top of it, so the same name arrived twice in two wrong
     shapes.
     """
-    root = RAMResource()
+    root = RAMVFS()
     root._store.files["/top.txt"] = b"T\n"
-    ws = Workspace(resources={"/": (root, MountMode.EXEC)})
+    ws = Workspace(mounts={"/": (root, MountMode.EXEC)})
     io = asyncio.run(ws.execute("ls -aRF /"))
     assert _stdout(io) == ("/:\n.bash_history\ndev/\ntop.txt\n\n"
                            "/dev:\nnull\nzero\n")

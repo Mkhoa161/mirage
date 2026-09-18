@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from mirage.commands.cli.walk import invoked_env_names, supplied_env_names
 from mirage.runtime.base import Runtime
 from mirage.runtime.routing import RouteDecision
-from mirage.runtime.table import VFSRuntime
+from mirage.runtime.table import WorkspaceRuntime
 from mirage.secrets.errors import SecretsError
 from mirage.secrets.registry import fetch_secret
 from mirage.secrets.summary import field_summary
@@ -124,7 +124,7 @@ def guest_bound(nodes: Sequence[TSNodeLike], decision: RouteDecision | None,
     A guest receives the exported environment as one snapshot, so
     every managed name may be read whatever the line spells --
     ``python3 -c 'os.environ[...]'`` never writes a ``$NAME`` the walk
-    could see. The vfs runtime is the executor itself, whose commands
+    could see. The workspace runtime is the executor itself, whose commands
     read vars one at a time, so it does not count. Keyed on the walked
     set's own command words (stored function bodies included) because
     the static table binds every captured command in the workspace, not
@@ -146,7 +146,7 @@ def guest_bound(nodes: Sequence[TSNodeLike], decision: RouteDecision | None,
         words |= command_words(node)
     for word in words:
         runtime = bindings.get(word)
-        if runtime is not None and not isinstance(runtime, VFSRuntime):
+        if runtime is not None and not isinstance(runtime, WorkspaceRuntime):
             return True
     return False
 

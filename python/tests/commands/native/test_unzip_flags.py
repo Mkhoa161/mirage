@@ -16,8 +16,8 @@ import asyncio
 import io
 import zipfile
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -104,8 +104,8 @@ def test_unzip_extract_member_writes_only_that_member(env):
 def test_unzip_p_member_is_not_resolved_as_a_path():
     ws = Workspace(
         {
-            "/": (RAMResource(), MountMode.WRITE),
-            "/work": (RAMResource(), MountMode.WRITE),
+            "/": (RAMVFS(), MountMode.WRITE),
+            "/work": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )

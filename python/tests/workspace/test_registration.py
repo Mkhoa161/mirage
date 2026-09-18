@@ -20,21 +20,20 @@ from mirage.commands.registry import RegisteredCommand
 from mirage.commands.spec import SPECS
 from mirage.io.types import IOResult
 from mirage.ops.registry import op
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 @pytest.fixture
 def ws():
-    return Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
 
 @pytest.fixture
 def ws_two_mounts():
     return Workspace({
-        "/a": RAMResource(),
-        "/b": RAMResource(),
-    },
-                     mode=MountMode.WRITE)
+        "/a": RAMVFS(),
+        "/b": RAMVFS(),
+    }, mode=MountMode.WRITE)
 
 
 def test_ws_mounts_returns_all(ws):
@@ -66,7 +65,7 @@ def test_registered_ops_introspection(ws):
 
 def test_register_fns_adds_command(ws):
 
-    @command("test_custom", resource="ram", spec=SPECS["cat"])
+    @command("test_custom", vfs="ram", spec=SPECS["cat"])
     async def custom(accessor, paths, *texts, **kw):
         return b"custom", IOResult()
 
@@ -78,7 +77,7 @@ def test_register_fns_adds_command(ws):
 
 def test_register_fns_adds_registered_command(ws):
 
-    @command("test_custom", resource="ram", spec=SPECS["cat"])
+    @command("test_custom", vfs="ram", spec=SPECS["cat"])
     async def custom(accessor, paths, *texts, **kw):
         return b"custom", IOResult()
 
@@ -89,7 +88,7 @@ def test_register_fns_adds_registered_command(ws):
 
 def test_register_fns_adds_op(ws):
 
-    @op("test_custom_op", resource="ram")
+    @op("test_custom_op", vfs="ram")
     async def custom_op(accessor, scope, **kwargs):
         return b"hello"
 
@@ -117,7 +116,7 @@ def test_unregister_removes_all_filetypes(ws):
     m.register(
         RegisteredCommand("cat",
                           spec=SPECS["cat"],
-                          resource="ram",
+                          vfs="ram",
                           filetype=".demo",
                           fn=demo_cat))
     assert len(m.commands().get("cat", [])) > 1
@@ -131,7 +130,7 @@ async def test_unregister_then_register_works(ws):
     m.unregister(["cat"])
     assert "cat" not in m.commands()
 
-    @command("cat", resource="ram", spec=SPECS["cat"])
+    @command("cat", vfs="ram", spec=SPECS["cat"])
     async def custom_cat(accessor, paths, *texts, **kw):
         return b"custom cat output", IOResult()
 
@@ -153,7 +152,7 @@ def test_register_isolated_per_mount(ws_two_mounts):
 
 def test_register_fns_isolated_per_mount(ws_two_mounts):
 
-    @command("only_on_a", resource="ram", spec=SPECS["cat"])
+    @command("only_on_a", vfs="ram", spec=SPECS["cat"])
     async def only_a(accessor, paths, *texts, **kw):
         return b"a", IOResult()
 
@@ -162,9 +161,9 @@ def test_register_fns_isolated_per_mount(ws_two_mounts):
     assert "only_on_a" not in ws_two_mounts.mount("/b/").commands()
 
 
-def test_register_fns_wrong_resource_raises(ws):
+def test_register_fns_wrong_vfs_raises(ws):
 
-    @command("s3_only", resource="s3", spec=SPECS["cat"])
+    @command("s3_only", vfs="s3", spec=SPECS["cat"])
     async def s3_cmd(accessor, paths, *texts, **kw):
         return b"s3", IOResult()
 
@@ -173,9 +172,9 @@ def test_register_fns_wrong_resource_raises(ws):
         m.register_fns([s3_cmd])
 
 
-def test_register_fns_wrong_resource_op_raises(ws):
+def test_register_fns_wrong_vfs_op_raises(ws):
 
-    @op("s3_read", resource="s3")
+    @op("s3_read", vfs="s3")
     async def s3_op(accessor, scope, **kwargs):
         return b"s3"
 
@@ -184,9 +183,9 @@ def test_register_fns_wrong_resource_op_raises(ws):
         m.register_fns([s3_op])
 
 
-def test_register_fns_multi_resource_filters_to_matching(ws):
+def test_register_fns_multi_vfs_filters_to_matching(ws):
 
-    @command("multi", resource=["ram", "s3"], spec=SPECS["cat"])
+    @command("multi", vfs=["ram", "s3"], spec=SPECS["cat"])
     async def multi(accessor, paths, *texts, **kw):
         return b"multi", IOResult()
 

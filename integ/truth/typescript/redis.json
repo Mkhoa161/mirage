@@ -147,7 +147,7 @@
     "    readOps        = 1",
     "    precision      = exact",
     "",
-    "  fileReadProvision(resource.accessor, [hello.txt, user.json]):",
+    "  fileReadProvision(VFS.accessor, [hello.txt, user.json]):",
     "    networkRead    = 41 bytes (2 reads)",
     "    precision      = exact",
     "  headTailProvision(...) — Redis fetches full value regardless of -n:",

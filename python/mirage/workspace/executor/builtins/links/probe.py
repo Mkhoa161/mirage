@@ -74,7 +74,7 @@ async def path_stat(dispatch: DispatchFn, virtual: str) -> FileStat | None:
     """
     spec = PathSpec(virtual=virtual,
                     directory=virtual[:virtual.rfind("/") + 1] or "/",
-                    resource_path="")
+                    vfs_path="")
     return await resolve_path_stat(dispatch, spec)
 
 
@@ -84,7 +84,7 @@ async def path_readdir(dispatch: DispatchFn, virtual: str) -> list[str]:
     Resolves through the op dispatcher rather than one backend, so a
     directory served by another mount answers. This is what a walker
     reads once it crosses a mount boundary: the subtree under a nested
-    mount lives in a resource the walker's own accessor cannot open.
+    mount lives in a VFS the walker's own accessor cannot open.
 
     Args:
         dispatch (DispatchFn): op dispatcher.
@@ -92,7 +92,7 @@ async def path_readdir(dispatch: DispatchFn, virtual: str) -> list[str]:
     """
     spec = PathSpec(virtual=virtual,
                     directory=virtual[:virtual.rfind("/") + 1] or "/",
-                    resource_path="")
+                    vfs_path="")
     entries, _ = await dispatch("readdir", spec)
     return list(entries)
 
@@ -136,7 +136,7 @@ async def link_target_stat(namespace: Namespace, dispatch: DispatchFn,
         return None
     spec = PathSpec(virtual=target,
                     directory=target[:target.rfind("/") + 1] or "/",
-                    resource_path="")
+                    vfs_path="")
     return await stat_or_none(dispatch, spec)
 
 

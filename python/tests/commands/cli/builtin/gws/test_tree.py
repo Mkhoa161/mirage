@@ -37,7 +37,7 @@ def test_tree_lists_every_service():
     ]
 
 
-def test_passthroughs_nest_by_discovery_resource():
+def test_passthroughs_nest_by_discovery_vfs():
     assert [v.name for v in leaf("drive", "files").subcommands] == [
         "list", "get", "create", "update", "copy", "delete", "export"
     ]
@@ -75,7 +75,7 @@ def test_writes_follow_http_semantics():
     assert not leaf("gmail", "triage").write
 
 
-def test_calendar_passthroughs_nest_by_discovery_resource():
+def test_calendar_passthroughs_nest_by_discovery_vfs():
     assert [v.name for v in leaf("calendar").subcommands
             ] == ["calendarList", "calendars", "events", "freebusy"]
     assert [v.name for v in leaf("calendar", "events").subcommands
@@ -88,7 +88,7 @@ def test_calendar_passthroughs_nest_by_discovery_resource():
     assert leaf("calendar", "freebusy", "query").write
 
 
-def test_forms_passthroughs_nest_by_discovery_resource():
+def test_forms_passthroughs_nest_by_discovery_vfs():
     assert [v.name for v in leaf("forms").subcommands] == ["forms"]
     assert [v.name for v in leaf("forms", "forms").subcommands
             ] == ["create", "get", "batchUpdate", "responses"]

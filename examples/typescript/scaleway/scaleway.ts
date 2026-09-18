@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  ScalewayResource,
+  ScalewayVFS,
   Workspace,
   resolvedScalewayEndpoint,
   type ScalewayConfig,
@@ -37,7 +37,7 @@ function configFromEnv(): ScalewayConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/scw/': new ScalewayResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/scw/': new ScalewayVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== Scaleway at ${resolvedScalewayEndpoint(config)} ===`)
 

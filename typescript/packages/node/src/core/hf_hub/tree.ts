@@ -216,7 +216,7 @@ export function indexDirs(
     const row = new IndexEntry({
       id: entry.oid,
       name,
-      resourceType: isDirEntry(entry) ? 'folder' : 'file',
+      vfsType: isDirEntry(entry) ? 'folder' : 'file',
       remoteTime: entry.lastModified,
       size: isDirEntry(entry) ? null : (entry.size ?? null),
       extra,

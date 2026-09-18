@@ -29,9 +29,9 @@ nothing else:
 
 ```python
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
-ws = Workspace({"/data": RAMResource()}, mode=MountMode.EXEC)
+ws = Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC)
 await ws.execute("echo hello > /data/a.txt")
 
 # Reads a virtualized file; /etc/passwd would raise FileNotFoundError.
@@ -132,9 +132,9 @@ runtime entry (or the MIRAGE_WASI_HOME environment variable):
 ```python
 from mirage.runtime.python import WasiRuntime
 
-ws = Workspace({"/data": RAMResource()},
+ws = Workspace({"/data": RAMVFS()},
                mode=MountMode.EXEC,
-               runtimes=[WasiRuntime(config={"home": "/path/to/unzipped/build"}), "vfs"])
+               runtimes=[WasiRuntime(config={"home": "/path/to/unzipped/build"}), "workspace"])
 ```
 
 ```yaml
@@ -142,7 +142,7 @@ runtimes:
   - name: wasi
     config:
       home: /path/to/unzipped/build
-  - vfs
+  - workspace
 ```
 
 The first run compiles `python.wasm` (a few hundred milliseconds) and
@@ -158,9 +158,9 @@ CPython, host filesystem, host environment. Use it when the code needs
 stdin, third-party packages, or host files:
 
 ```python
-ws = Workspace({"/data": RAMResource()},
+ws = Workspace({"/data": RAMVFS()},
                mode=MountMode.EXEC,
-               runtimes=["local", "vfs"])
+               runtimes=["local", "workspace"])
 ```
 
 It defaults to the interpreter running mirage; point the config
@@ -173,7 +173,7 @@ runtimes:
   - name: local
     config:
       home: /path/to/venv/bin/python
-  - vfs
+  - workspace
 ```
 
 Note that `local` code does **not** see workspace mounts; it sees the real
@@ -185,8 +185,8 @@ Workspace config files take a top-level `runtimes` list: the ordered
 world of runtimes, each entry a name or a mapping with the uniform
 runtime options (`captures`, `config`, `script`). The name is a runtime
 mirage ships, one the host registered with `register_runtime`, or a
-`./file.py:Class` reference to a `Runtime` subclass, the form `resource:`
-and `cli:` take. The first entry that captures a command binds it; `vfs`
+`./file.py:Class` reference to a `Runtime` subclass, the form `vfs:`
+and `cli:` take. The first entry that captures a command binds it; `workspace`
 is the in-process catch-all:
 
 ```yaml
@@ -195,11 +195,10 @@ runtimes:
   - name: wasi    # knobs live in the entry's config block
     config:
       home: /opt/cpython-wasi
-  - vfs
-
+  - workspace
 mounts:
   /data:
-    resource: ram
+    vfs: ram
     command_limits:
       python3:
         timeout_seconds: 30

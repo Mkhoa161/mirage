@@ -14,13 +14,13 @@
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def test_memory_backend_provides_commands():
-    backend = RAMResource()
+    backend = RAMVFS()
     cmds = backend.commands()
     names = {c.name for c in cmds}
     assert "cat" in names
@@ -28,13 +28,13 @@ def test_memory_backend_provides_commands():
     assert "grep" in names
     assert "wc" in names
     for c in cmds:
-        assert c.resource == "ram"
+        assert c.vfs == "ram"
 
 
 @pytest.mark.asyncio
 async def test_registered_commands_used_for_dispatch():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/a.txt", b"hello world\n")

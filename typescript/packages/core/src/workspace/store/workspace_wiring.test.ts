@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RAMObserverStore } from '../../observe/store.ts'
 import { parseSessionProfile } from '../../policy/profile.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
@@ -46,10 +46,10 @@ afterEach(async () => {
   for (const ws of open.splice(0)) await ws.close()
 })
 
-async function mkWs(store: RAMWorkspaceStateStore, workspaceId: string, ram?: RAMResource) {
+async function mkWs(store: RAMWorkspaceStateStore, workspaceId: string, ram?: RAMVFS) {
   const parser = await getTestParser()
   const ws = new Workspace(
-    { '/data': ram ?? new RAMResource() },
+    { '/data': ram ?? new RAMVFS() },
     { mode: MountMode.EXEC, shellParser: parser, workspaceId, store },
   )
   open.push(ws)
@@ -71,12 +71,12 @@ describe('Workspace on a WorkspaceStateStore', () => {
   it('a bare workspace mints uuid7 ids', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.EXEC, shellParser: parser },
     )
     open.push(ws)
     const sibling = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.EXEC, shellParser: parser },
     )
     open.push(sibling)
@@ -105,7 +105,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
     // the writer's, whose hides the discovery record points at.
     const store = new RAMWorkspaceStateStore()
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const build = (): Workspace =>
       new Workspace(
         { '/data': [ram, MountMode.WRITE] as const },
@@ -135,7 +135,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
 
     const parser = await getTestParser()
     const wsB = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
@@ -214,7 +214,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
 
   it('concurrent attach admits a single discovery record', async () => {
     const store = new YieldingStore()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const wsA = await mkWs(store, 'ws-a', ram)
     const wsB = await mkWs(store, 'ws-a', ram)
     await Promise.all([wsA.ensureSessionsLoaded(), wsB.ensureSessionsLoaded()])
@@ -227,7 +227,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
 
   it('same workspace id shares sessions across workspaces', async () => {
     const store = new RAMWorkspaceStateStore()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const wsA = await mkWs(store, 'shared', ram)
     wsA.createSession('narrow', { mounts: { '/data': MountMode.READ } })
     await wsA.flushSessions()
@@ -250,7 +250,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
 
   it('shares history through the provider', async () => {
     const store = new RAMWorkspaceStateStore()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const wsA = await mkWs(store, 'shared', ram)
     await wsA.execute('echo one')
 
@@ -264,7 +264,7 @@ describe('Workspace on a WorkspaceStateStore', () => {
     const store = new RAMWorkspaceStateStore()
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.EXEC, shellParser: parser, workspaceId: 'ws-a', store, observe: direct },
     )
     open.push(ws)

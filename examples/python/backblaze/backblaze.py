@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.backblaze import BackblazeConfig, BackblazeResource
 from mirage.types import PathSpec
+from mirage.vfs.backblaze import BackblazeConfig, BackblazeVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = BackblazeConfig(
     access_key_id=os.environ["B2_ACCESS_KEY_ID"],  # keyID
     secret_access_key=os.environ["B2_SECRET_ACCESS_KEY"],  # applicationKey
 )
-resource = BackblazeResource(config)
-ws = Workspace({"/b2/": resource}, mode=MountMode.READ)
+vfs = BackblazeVFS(config)
+ws = Workspace({"/b2/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

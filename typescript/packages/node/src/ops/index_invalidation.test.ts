@@ -16,7 +16,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MountMode, PathSpec } from '@struktoai/mirage-core/types'
-import { DiskResource } from '../resource/disk/disk.ts'
+import { DiskVFS } from '../vfs/disk/disk.ts'
 import { tmpRoot } from '../test-utils.ts'
 import { Workspace } from '../workspace.ts'
 
@@ -32,7 +32,7 @@ function diskWorkspace(): { ws: Workspace; cleanup: () => void } {
   const { root, cleanup } = tmpRoot('mirage-index-invalidation-')
   mkdirSync(join(root, 'seed'))
   const ws = new Workspace(
-    { '/d': [new DiskResource({ root }), MountMode.WRITE] },
+    { '/d': [new DiskVFS({ root }), MountMode.WRITE] },
     { mode: MountMode.WRITE },
   )
   return { ws, cleanup }
@@ -112,7 +112,7 @@ describe('the fs facade evicts the index like the shell does', () => {
     // reason: nothing was ever cached, so nothing needed evicting.
     const { ws, cleanup } = diskWorkspace()
     try {
-      const index = ws.registry.mountFor('/d').resource.index
+      const index = ws.registry.mountFor('/d').vfs.index
       expect(index).toBeDefined()
       await ws.fs.readdir('/d')
       expect((await index?.listDir('/d'))?.entries).toEqual(['/d/seed'])

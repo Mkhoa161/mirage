@@ -29,11 +29,11 @@ import type {
   SessionContext,
 } from '../policy/index.ts'
 import { Outcome, Scope, type AskHandler } from '../policy/index.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { Runtime } from '../runtime/base.ts'
 import { LINE_EXECUTOR, type LineExecutor } from '../runtime/mixin.ts'
 import type { RunResult } from '../runtime/types.ts'
-import { MountMode, ResourceName } from '../types.ts'
+import { MountMode, VFSName } from '../types.ts'
 import { cliSpecFor } from '../commands/cli/specs.ts'
 import { parseSessionProfile, type SessionProfile } from '../policy/profile.ts'
 import { getTestParser, stdoutStr, voicedStderr } from './fixtures/workspace_fixture.ts'
@@ -53,7 +53,7 @@ class DenyOp implements Policy {
   }
 }
 
-// Ops resolve by resource kind in the workspace registry, so an
+// Ops resolve by VFS kind in the workspace registry, so an
 // overlay-backend simulation blocks registration itself.
 class NoSetattrRegistry extends OpsRegistry {
   override register(ro: RegisteredOp): void {
@@ -66,9 +66,9 @@ const open: Workspace[] = []
 
 async function makeWs(policies?: Policy[]): Promise<Workspace> {
   const parser = await getTestParser()
-  const a = new RAMResource()
+  const a = new RAMVFS()
   a.store.files.set('/x.txt', ENC.encode('public\n'))
-  const b = new RAMResource()
+  const b = new RAMVFS()
   b.store.files.set('/y.txt', ENC.encode('other\n'))
   const ws = new Workspace(
     { '/a': a, '/b': b },
@@ -224,10 +224,10 @@ describe('name-plane writes go through the door', () => {
     // A backend with no native setattr op stores attrs in the namespace
     // overlay; that write must clear the same gates as a native one.
     const parser = await getTestParser()
-    const resource = new RAMResource()
-    resource.store.files.set('/f.txt', ENC.encode('body\n'))
+    const vfs = new RAMVFS()
+    vfs.store.files.set('/f.txt', ENC.encode('body\n'))
     const ws = new Workspace(
-      { '/o': resource },
+      { '/o': vfs },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -244,10 +244,10 @@ describe('name-plane writes go through the door', () => {
 
   it('overlay setattr still lands without policies', async () => {
     const parser = await getTestParser()
-    const resource = new RAMResource()
-    resource.store.files.set('/f.txt', ENC.encode('body\n'))
+    const vfs = new RAMVFS()
+    vfs.store.files.set('/f.txt', ENC.encode('body\n'))
     const ws = new Workspace(
-      { '/o': resource },
+      { '/o': vfs },
       { mode: MountMode.WRITE, shellParser: parser, ops: new NoSetattrRegistry() },
     )
     open.push(ws)
@@ -334,7 +334,7 @@ describe('session-state writes go through the view', () => {
     const rc = new RegisteredCommand({
       name: 'envpoke',
       spec: CMD_SPEC,
-      resource: ResourceName.RAM,
+      vfs: VFSName.RAM,
       fn: (_accessor, _paths, _texts, opts) => {
         expect(opts.env).toBeDefined()
         if (opts.env !== undefined) opts.env.INJECTED = '1'
@@ -354,7 +354,7 @@ describe('session-state writes go through the view', () => {
     const rc = new RegisteredCommand({
       name: 'envread',
       spec: CMD_SPEC,
-      resource: ResourceName.RAM,
+      vfs: VFSName.RAM,
       fn: (_accessor, _paths, _texts, opts) => {
         const value = opts.sessionView?.get('MARKER') ?? 'none'
         return [ENC.encode(value), new IOResult()]
@@ -638,10 +638,10 @@ async function makeSealedWs(policies: Policy[]): Promise<Workspace> {
   // implicit /a/prod directory, then the policies join, mirroring the
   // python twin's setup order.
   const parser = await getTestParser()
-  const resource = new RAMResource()
-  resource.store.files.set('/secret.txt', ENC.encode('sealed\n'))
-  resource.store.files.set('/ok.txt', ENC.encode('has sealed word\n'))
-  const ws = new Workspace({ '/a': resource }, { mode: MountMode.WRITE, shellParser: parser })
+  const vfs = new RAMVFS()
+  vfs.store.files.set('/secret.txt', ENC.encode('sealed\n'))
+  vfs.store.files.set('/ok.txt', ENC.encode('has sealed word\n'))
+  const ws = new Workspace({ '/a': vfs }, { mode: MountMode.WRITE, shellParser: parser })
   open.push(ws)
   await ws.execute('mkdir -p /a/prod')
   await ws.fs.writeFile('/a/prod/keep.txt', ENC.encode('keep\n'))
@@ -954,7 +954,7 @@ async function makeHiddenArrayWs(): Promise<Workspace> {
 
 async function makeHiddenPathsWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const a = new RAMResource()
+  const a = new RAMVFS()
   a.store.files.set('/x.txt', ENC.encode('public\n'))
   a.store.files.set('/secrets/token.txt', ENC.encode('s3cr3t\n'))
   a.store.files.set('/note.key', ENC.encode('kkk\n'))
@@ -998,7 +998,7 @@ describe('hidden paths across the tiers', () => {
     // unseen child exists. Under hidden paths the generic must walk
     // through the guarded readdir instead.
     const parser = await getTestParser()
-    const a = new RAMResource()
+    const a = new RAMVFS()
     a.store.files.set('/x.txt', ENC.encode('public\n'))
     a.store.files.set('/vault/only.key', ENC.encode('kkk\n'))
     a.store.dirs.add('/vault')
@@ -1049,8 +1049,8 @@ describe('hidden paths across the tiers', () => {
     const io = await ws.execute('echo hi > /a/secrets/new.txt', { sessionId: 'agent' })
     expect(io.exitCode).not.toBe(0)
     const a = ws.namespace.mountFor('/a/x.txt')
-    const resource = a.resource as RAMResource
-    expect(resource.store.files.has('/secrets/new.txt')).toBe(false)
+    const vfs = a.vfs as RAMVFS
+    expect(vfs.store.files.has('/secrets/new.txt')).toBe(false)
   })
 
   it('the unscoped session sees everything', async () => {
@@ -1077,7 +1077,7 @@ describe('hidden paths across the tiers', () => {
 describe('session profiles', () => {
   it('a profile applies every narrowing field end to end', async () => {
     const parser = await getTestParser()
-    const a = new RAMResource()
+    const a = new RAMVFS()
     a.store.files.set('/x.txt', ENC.encode('public\n'))
     a.store.files.set('/secrets/token.txt', ENC.encode('s3cr3t\n'))
     a.store.dirs.add('/secrets')
@@ -1108,7 +1108,7 @@ describe('session profiles', () => {
     // narrowed from whatever the workspace gave it, never raised.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource(), '/b': new RAMResource() },
+      { '/a': new RAMVFS(), '/b': new RAMVFS() },
       { mode: MountMode.WRITE, shellParser: parser },
     )
     open.push(ws)
@@ -1132,7 +1132,7 @@ describe('session profiles', () => {
     // inheritance, so reading one is reading everything it may do.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource(), '/b': new RAMResource() },
+      { '/a': new RAMVFS(), '/b': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1198,7 +1198,7 @@ describe('session profiles', () => {
     // something the profile cannot see.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource(), '/b': new RAMResource() },
+      { '/a': new RAMVFS(), '/b': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1225,13 +1225,13 @@ describe('session profiles', () => {
       reviewer: parseSessionProfile({ mounts: { '/a': 'r' } }),
     }
     const ws = new Workspace(
-      { '/a': new RAMResource() },
+      { '/a': new RAMVFS() },
       { mode: MountMode.WRITE, shellParser: parser, profiles, profile: 'reviewer' },
     )
     open.push(ws)
     expect(ws.getSession(ws.defaultSessionId).mountModes?.get('/a')).toBe(MountMode.READ)
     expect(ws.createSession('agent').mountModes?.get('/a')).toBe(MountMode.READ)
-    expect(() => new Workspace({ '/a': new RAMResource() }, { profiles, profile: 'gone' })).toThrow(
+    expect(() => new Workspace({ '/a': new RAMVFS() }, { profiles, profile: 'gone' })).toThrow(
       'unknown profile "gone"',
     )
   })
@@ -1243,7 +1243,7 @@ describe('session profiles', () => {
     // cannot see what it hides. No default profile leaves it as it was.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/a': new RAMResource(), '/b': new RAMResource() },
+      { '/a': new RAMVFS(), '/b': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1269,7 +1269,7 @@ describe('session profiles', () => {
     // `mounts` mapping narrows, it is not an allowlist.
     expect((await ws.execute('ls /a')).exitCode).toBe(0)
     expect((await ws.execute('mkdir /b/vault')).exitCode).not.toBe(0)
-    const plain = new Workspace({ '/a': new RAMResource() }, { shellParser: parser })
+    const plain = new Workspace({ '/a': new RAMVFS() }, { shellParser: parser })
     open.push(plain)
     const own = plain.getSession(plain.defaultSessionId)
     expect(own.mountModes).toBeNull()
@@ -1280,9 +1280,9 @@ describe('session profiles', () => {
     // One document: `paths.hide` at the top and `mounts./repo`'s own,
     // compiled into the one hidden-paths spec every session carries.
     const parser = await getTestParser()
-    const repo = new RAMResource()
+    const repo = new RAMVFS()
     const ws = new Workspace(
-      { '/repo': repo, '/other': new RAMResource() },
+      { '/repo': repo, '/other': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1370,13 +1370,13 @@ describe('command permissions end to end', () => {
 
   async function commandsWs(): Promise<Workspace> {
     const parser = await getTestParser()
-    // The frozen subtree is seeded on the resource: the pure path rule
+    // The frozen subtree is seeded on the VFS: the pure path rule
     // holds at every op door, the host's `ws.fs` included.
-    const repo = new RAMResource()
+    const repo = new RAMVFS()
     repo.store.dirs.add('/locked')
     repo.store.files.set('/locked/y', ENC.encode('y\n'))
     const ws = new Workspace(
-      { '/repo': repo, '/scratch': new RAMResource() },
+      { '/repo': repo, '/scratch': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1532,7 +1532,7 @@ describe('command permissions end to end', () => {
     // that acts on the link itself (rm, lstat(2)) it is the link.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1570,7 +1570,7 @@ describe('command permissions end to end', () => {
     // write never truncates.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1609,9 +1609,9 @@ describe('command permissions end to end', () => {
     const parser = await getTestParser()
     const ws = new Workspace(
       {
-        '/scratch': new RAMResource(),
-        '/scratch/child': new RAMResource(),
-        '/elsewhere': new RAMResource(),
+        '/scratch': new RAMVFS(),
+        '/scratch/child': new RAMVFS(),
+        '/elsewhere': new RAMVFS(),
       },
       {
         mode: MountMode.WRITE,
@@ -1655,12 +1655,12 @@ describe('command permissions end to end', () => {
     const parser = await getTestParser()
     const box = new Box()
     const ws = new Workspace(
-      { '/repo': new RAMResource() },
+      { '/repo': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
         profiles: { default: COMMANDS_DOC, reviewer: REVIEWER },
-        runtimes: [box, 'vfs'],
+        runtimes: [box, 'workspace'],
       },
     )
     open.push(ws)
@@ -1694,7 +1694,7 @@ describe('command permissions end to end', () => {
     const parser = await getTestParser()
     const box = new Box()
     const ws = new Workspace(
-      { '/repo': new RAMResource() },
+      { '/repo': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1709,7 +1709,7 @@ describe('command permissions end to end', () => {
             },
           }),
         },
-        runtimes: [box, 'vfs'],
+        runtimes: [box, 'workspace'],
       },
     )
     open.push(ws)
@@ -1778,7 +1778,7 @@ describe('command permissions end to end', () => {
     // gate, so the gate supplies it itself, typed as `.`.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/repo': new RAMResource() },
+      { '/repo': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1824,7 +1824,7 @@ describe('command permissions end to end', () => {
     // the rules as usual.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/repo': new RAMResource() },
+      { '/repo': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -1929,7 +1929,7 @@ describe('ask end to end', () => {
   async function askWs(options: { onAsk?: AskHandler } = {}): Promise<Workspace> {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/repo': new RAMResource(), '/scratch': new RAMResource() },
+      { '/repo': new RAMVFS(), '/scratch': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -2154,7 +2154,7 @@ describe('a walk below the operand meets the rule guard', () => {
   async function walkWs(): Promise<Workspace> {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, shellParser: parser, profiles: { guarded: WALK_DOC } },
     )
     open.push(ws)

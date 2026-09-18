@@ -207,7 +207,7 @@ def _positional_as_paths(texts: list[str],
     """
     if isinstance(cwd, PathSpec):
         base = cwd.virtual
-        prefix = mount_prefix_of(cwd.virtual, cwd.resource_path)
+        prefix = mount_prefix_of(cwd.virtual, cwd.vfs_path)
     else:
         base = cwd or "/"
         prefix = ""
@@ -221,7 +221,7 @@ def _positional_as_paths(texts: list[str],
                 virtual=resolved,
                 directory=resolved[:slash + 1] if slash >= 0 else "/",
                 resolved=True,
-                resource_path=mount_key(resolved, prefix),
+                vfs_path=mount_key(resolved, prefix),
             ))
     return out
 

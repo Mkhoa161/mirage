@@ -55,7 +55,7 @@ async function listServices(
     new IndexEntry({
       id: service,
       name: service,
-      resourceType: 'jaeger/service',
+      vfsType: 'jaeger/service',
       vfsName: service,
     }),
   ])
@@ -76,7 +76,7 @@ async function listService(
       new IndexEntry({
         id: `${service}/operations`,
         name: OPERATIONS_FILE,
-        resourceType: 'jaeger/operations',
+        vfsType: 'jaeger/operations',
         vfsName: OPERATIONS_FILE,
         size: jsonBytes(operations).byteLength,
       }),
@@ -86,7 +86,7 @@ async function listService(
       new IndexEntry({
         id: `${service}/traces`,
         name: 'traces',
-        resourceType: 'jaeger/traces_dir',
+        vfsType: 'jaeger/traces_dir',
         vfsName: 'traces',
       }),
     ],
@@ -119,7 +119,7 @@ async function listTraces(
       new IndexEntry({
         id: traceId,
         name: traceId,
-        resourceType: 'jaeger/trace',
+        vfsType: 'jaeger/trace',
         vfsName: filename,
         size: jsonBytes(trace).byteLength,
       }),

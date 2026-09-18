@@ -19,15 +19,15 @@ import pytest
 
 from mirage import MountMode, Workspace
 from mirage.cache.index.config import RedisIndexConfig
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
 from mirage.types import ConsistencyPolicy, FileStat, FileType
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace.reconcile import Reconciler
 from tests.e2e.s3_mock import patch_s3_multi
 
 
 async def _ws_with_overlay():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/f.txt", mode=0o600)
     return ws
@@ -43,7 +43,7 @@ async def test_on_missing_evicts_and_gcs_overlay():
 
 @pytest.mark.asyncio
 async def test_on_missing_keeps_symlink():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     await ws.namespace.symlink("/data/link", "/data/t", 1.0)
     rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
@@ -77,7 +77,7 @@ async def test_on_op_missing_gcs_on_always_stat():
 
 @pytest.mark.asyncio
 async def test_may_serve_cached_trusts_cache_under_lazy():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     mount = ws.namespace.mount_for("/data/f.txt")
     rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.LAZY)
@@ -86,17 +86,17 @@ async def test_may_serve_cached_trusts_cache_under_lazy():
 
 @pytest.mark.asyncio
 async def test_may_serve_cached_no_fingerprint_forces_reread():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     mount = ws.namespace.mount_for("/data/f.txt")
-    assert mount.resource.SUPPORTS_SNAPSHOT is False
+    assert mount.vfs.SUPPORTS_SNAPSHOT is False
     rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
     assert await rec.may_serve_cached(mount, "/data/f.txt") is False
 
 
 @pytest.mark.asyncio
 async def test_reconcile_read_gcs_orphan_on_delete():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
     mount = ws.namespace.mount_for("/data/gone.txt")
@@ -107,7 +107,7 @@ async def test_reconcile_read_gcs_orphan_on_delete():
 
 @pytest.mark.asyncio
 async def test_reconcile_read_noop_without_overlay_or_cache():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     mount = ws.namespace.mount_for("/data/plain.txt")
     rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
@@ -116,7 +116,7 @@ async def test_reconcile_read_noop_without_overlay_or_cache():
 
 @pytest.mark.asyncio
 async def test_reconcile_read_skips_under_lazy():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
     mount = ws.namespace.mount_for("/data/gone.txt")
@@ -138,18 +138,18 @@ async def test_always_probes_live_s3_with_warm_index(index_type, surface,
             pytest.skip("REDIS_URL not set")
         index = RedisIndexConfig(url=url, key_prefix=f"reconcile:{uuid4()}:")
     objects = {"f.txt": b"v1"}
-    resource = S3Resource(
+    vfs = S3VFS(
         S3Config(bucket="test-bucket",
                  region="us-east-1",
                  aws_access_key_id="fake",
                  aws_secret_access_key="fake"))
     with patch_s3_multi({"test-bucket": objects}):
-        ws = Workspace({"/s3": resource},
+        ws = Workspace({"/s3": vfs},
                        index=index,
                        consistency=ConsistencyPolicy.ALWAYS)
         try:
             assert (await ws.execute("ls /s3/")).exit_code == 0
-            assert (await resource.index.get("/s3/f.txt")).entry is not None
+            assert (await vfs.index.get("/s3/f.txt")).entry is not None
             assert (await ws.execute("cat /s3/f.txt")).stdout == b"v1"
             assert await ws.cache.exists("/s3/f.txt")
             if change == "overwrite":
@@ -167,7 +167,7 @@ async def test_always_probes_live_s3_with_warm_index(index_type, surface,
                 with pytest.raises(FileNotFoundError):
                     await ws.fs.read("/s3/f.txt")
         finally:
-            await resource.index.clear()
+            await vfs.index.clear()
             await ws.close()
 
 
@@ -176,10 +176,10 @@ async def test_always_probes_live_s3_with_warm_index(index_type, surface,
 @pytest.mark.parametrize("surface", ["shell", "gate"])
 async def test_unverified_probe_cannot_serve_cached_bytes(
         monkeypatch, probe, surface):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     try:
         mount = ws.namespace.mount_for("/data/f.txt")
-        monkeypatch.setattr(mount.resource, "SUPPORTS_SNAPSHOT", True)
+        monkeypatch.setattr(mount.vfs, "SUPPORTS_SNAPSHOT", True)
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
 
         async def stat(*args, **kwargs):

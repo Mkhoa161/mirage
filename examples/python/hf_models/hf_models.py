@@ -19,8 +19,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.hf_models import HfModelsConfig, HfModelsResource
 from mirage.types import PathSpec
+from mirage.vfs.hf_models import HfModelsConfig, HfModelsVFS
 
 load_dotenv(".env.development")
 
@@ -28,8 +28,8 @@ config = HfModelsConfig(
     repo_id=os.environ.get("HF_MODEL_REPO", "sapientinc/HRM-Text-1B"),
     token=os.environ.get("HF_TOKEN"),
 )
-resource = HfModelsResource(config)
-ws = Workspace({"/m/": resource}, mode=MountMode.READ)
+vfs = HfModelsVFS(config)
+ws = Workspace({"/m/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:
@@ -46,7 +46,7 @@ def show_plan(label: str, dr) -> None:
 
 
 async def main():
-    print(f"=== mounted {resource.accessor.bucket_uri} at /m/ ===")
+    print(f"=== mounted {vfs.accessor.bucket_uri} at /m/ ===")
 
     print("\n=== not-found errors show the full virtual path ===")
     for cmd in ("cat /m/__nf_missing__.txt", "head /m/__nf_missing__.txt",

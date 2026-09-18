@@ -36,7 +36,7 @@ import { dirStatEntry, keyOf, lookup } from './lookup.ts'
  */
 function statOf(entry: IndexEntry): FileStat {
   const modified = entry.remoteTime === '' ? null : entry.remoteTime
-  if (entry.resourceType === 'folder') {
+  if (entry.vfsType === 'folder') {
     return new FileStat({ name: entry.name, type: FileType.DIRECTORY, modified })
   }
   return new FileStat({
@@ -60,7 +60,7 @@ export async function stat(
   pathSpec: PathSpec,
   index?: IndexCacheStore,
 ): Promise<FileStat> {
-  const prefix = mountPrefixOf(pathSpec.virtual, pathSpec.resourcePath)
+  const prefix = mountPrefixOf(pathSpec.virtual, pathSpec.vfsPath)
   const rel = pathSpec.mountPath.replace(/^\/+|\/+$/g, '')
   if (rel === '') return new FileStat({ name: '/', type: FileType.DIRECTORY })
   const key = keyOf(prefix, rel)

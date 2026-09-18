@@ -14,7 +14,7 @@
 
 import { invalidateAfterWrite } from '../../cache/context.ts'
 import { record, startOp } from '../../observe/context.ts'
-import { ResourceName } from '../../types.ts'
+import { VFSName } from '../../types.ts'
 import type { PathSpec } from '../../types.ts'
 import type { RedisAccessor } from '../../accessor/redis.ts'
 import { norm, nowIso } from './utils.ts'
@@ -34,6 +34,6 @@ export async function truncate(
   out.set(data.subarray(0, copyLen), 0)
   await store.setFile(p, out)
   await store.setModified(p, nowIso())
-  record('truncate', p, ResourceName.REDIS, 0, timer)
+  record('truncate', p, VFSName.REDIS, 0, timer)
   await invalidateAfterWrite(p)
 }

@@ -1,12 +1,12 @@
 import asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws() -> Workspace:
-    return Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 
 def _run(coro):

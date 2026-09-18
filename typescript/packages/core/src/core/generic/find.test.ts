@@ -58,7 +58,7 @@ function makeDeps(
   }
 }
 
-const ROOT = new PathSpec({ resourcePath: '', virtual: '/', directory: '/' })
+const ROOT = new PathSpec({ vfsPath: '', virtual: '/', directory: '/' })
 
 describe('walkFind', () => {
   it('walks recursively and sorts by codepoint', async () => {
@@ -129,7 +129,7 @@ describe('walkFind', () => {
     const root = new PathSpec({
       virtual: '/mnt/x',
       directory: '/mnt/x',
-      resourcePath: mountKey('/mnt/x', '/mnt/x'),
+      vfsPath: mountKey('/mnt/x', '/mnt/x'),
     })
     expect(await walkFind(root, deps, { name: 'x' })).toEqual(['/'])
   })
@@ -158,7 +158,7 @@ describe('walkFind', () => {
     const root = new PathSpec({
       virtual: '/mnt/x',
       directory: '/mnt/x',
-      resourcePath: mountKey('/mnt/x', '/mnt/x'),
+      vfsPath: mountKey('/mnt/x', '/mnt/x'),
     })
     expect(await walkFind(root, deps)).toEqual(['/a.txt'])
   })
@@ -282,7 +282,7 @@ describe('makeSearchBackedFind — -empty', () => {
           new RAMIndexCacheStore(),
         ),
       ).toEqual(['/api/reference'])
-      expect(new Set(deps.probes.map((p) => JSON.stringify([p.virtual, p.resourcePath])))).toEqual(
+      expect(new Set(deps.probes.map((p) => JSON.stringify([p.virtual, p.vfsPath])))).toEqual(
         new Set(
           keys.map((key) =>
             JSON.stringify([rstripSlash(prefix + key) || '/', key.replace(/^\//, '')]),

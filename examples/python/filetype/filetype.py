@@ -21,7 +21,7 @@ from mirage.commands.registry import RegisteredCommand
 from mirage.commands.spec import SPECS
 from mirage.core.ram.read import read_bytes
 from mirage.io.types import IOResult
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 MAGIC = b"TALLY1"
 
@@ -50,7 +50,7 @@ async def tally_cat(accessor, paths, *texts, **kwargs):
 
 
 async def main() -> None:
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
 
     await ws.fs.write("/data/hits.tally", encode({"alpha": 3, "beta": 11}))
     await ws.fs.write("/data/notes.txt", b"plain text\n")
@@ -59,7 +59,7 @@ async def main() -> None:
     mount.register(
         RegisteredCommand("cat",
                           spec=SPECS["cat"],
-                          resource="ram",
+                          vfs="ram",
                           filetype=".tally",
                           fn=tally_cat))
 

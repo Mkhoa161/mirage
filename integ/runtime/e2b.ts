@@ -14,8 +14,8 @@
 
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { Workspace, SSHResource, SSHRuntime } from '@struktoai/mirage-node'
-import { Limit, MountMode, RAMResource } from '@struktoai/mirage-core'
+import { Workspace, SSHVFS, SSHRuntime } from '@struktoai/mirage-node'
+import { Limit, MountMode, RAMVFS } from '@struktoai/mirage-core'
 import { E2BRuntime } from '@struktoai/mirage-core/runtime/sandbox/e2b/runtime'
 import { exerciseCancellation } from '../fixtures/runtime/e2b_cancel.ts'
 
@@ -75,10 +75,10 @@ const ssh = new SSHRuntime({ captures: ['python3'], config: sshConfig })
 try {
   await exercise(e2b, 'typescript_e2b')
   const cancelWorkspace = new Workspace(
-    { '/home/user': new RAMResource() },
+    { '/home/user': new RAMVFS() },
     {
       mode: MountMode.EXEC,
-      runtimes: [e2b, 'vfs'],
+      runtimes: [e2b, 'workspace'],
       commandLimits: { '/home/user': { exec: new Limit({ timeoutSeconds: 5 }) } },
     },
   )
@@ -90,8 +90,8 @@ try {
   }
   await exercise(ssh, 'typescript_ssh')
   const ws = new Workspace(
-    { '/home/user/work': new SSHResource({ ...sshConfig, root: '/home/user/work' }) },
-    { mode: MountMode.EXEC, runtimes: [ssh, 'vfs'] },
+    { '/home/user/work': new SSHVFS({ ...sshConfig, root: '/home/user/work' }) },
+    { mode: MountMode.EXEC, runtimes: [ssh, 'workspace'] },
   )
   try {
     let result = await ws.execute('cat > /home/user/work/ts-output.txt', {

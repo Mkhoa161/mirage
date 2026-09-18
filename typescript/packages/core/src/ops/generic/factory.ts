@@ -88,11 +88,11 @@ const expectLength = (value: unknown): number => {
  * read-only backends.
  */
 export function makeGenericOps<A extends Accessor>(
-  resource: string | readonly string[],
+  vfs: string | readonly string[],
   table: OpsTable<A>,
   options: MakeGenericOpsOptions = {},
 ): RegisteredOp[] {
-  const resources = typeof resource === 'string' ? [resource] : resource
+  const vfsNames = typeof vfs === 'string' ? [vfs] : vfs
   const skip = options.overrides ?? new Set<string>()
   const ops: RegisteredOp[] = []
 
@@ -103,8 +103,8 @@ export function makeGenericOps<A extends Accessor>(
     filetype: string | null = null,
   ): void => {
     if (skip.has(name)) return
-    for (const res of resources) {
-      ops.push({ name, resource: res, filetype, fn, write })
+    for (const res of vfsNames) {
+      ops.push({ name, vfs: res, filetype, fn, write })
     }
   }
 

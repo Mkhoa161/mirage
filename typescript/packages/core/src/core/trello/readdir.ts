@@ -91,7 +91,7 @@ async function listWorkspacesDir(
           pickString(workspace, 'displayName') ||
           pickString(workspace, 'name') ||
           pickString(workspace, 'id'),
-        resourceType: 'trello/workspace',
+        vfsType: 'trello/workspace',
         remoteTime: '',
         vfsName: dirname,
         extra: { json_size: toJsonBytes(normalizeWorkspace(workspace)).byteLength },
@@ -112,7 +112,7 @@ function listWorkspace(
       new IndexEntry({
         id: entry.id,
         name: 'workspace.json',
-        resourceType: 'trello/workspace_json',
+        vfsType: 'trello/workspace_json',
         vfsName: 'workspace.json',
         size: extraSize(entry),
       }),
@@ -122,7 +122,7 @@ function listWorkspace(
       new IndexEntry({
         id: entry.id,
         name: 'boards',
-        resourceType: 'trello/boards_dir',
+        vfsType: 'trello/boards_dir',
         vfsName: 'boards',
       }),
     ],
@@ -144,7 +144,7 @@ async function listBoards(
       new IndexEntry({
         id: pickString(board, 'id'),
         name: pickString(board, 'name') || pickString(board, 'id'),
-        resourceType: 'trello/board',
+        vfsType: 'trello/board',
         remoteTime: pickString(board, 'dateLastActivity'),
         vfsName: dirname,
         extra: { json_size: toJsonBytes(normalizeBoard(board)).byteLength },
@@ -165,7 +165,7 @@ function listBoard(
       new IndexEntry({
         id: entry.id,
         name: 'board.json',
-        resourceType: 'trello/board_json',
+        vfsType: 'trello/board_json',
         vfsName: 'board.json',
         size: extraSize(entry),
         remoteTime: entry.remoteTime,
@@ -176,7 +176,7 @@ function listBoard(
       new IndexEntry({
         id: entry.id,
         name: 'members',
-        resourceType: 'trello/members_dir',
+        vfsType: 'trello/members_dir',
         vfsName: 'members',
       }),
     ],
@@ -185,7 +185,7 @@ function listBoard(
       new IndexEntry({
         id: entry.id,
         name: 'labels',
-        resourceType: 'trello/labels_dir',
+        vfsType: 'trello/labels_dir',
         vfsName: 'labels',
       }),
     ],
@@ -194,7 +194,7 @@ function listBoard(
       new IndexEntry({
         id: entry.id,
         name: 'lists',
-        resourceType: 'trello/lists_dir',
+        vfsType: 'trello/lists_dir',
         vfsName: 'lists',
       }),
     ],
@@ -217,7 +217,7 @@ async function listMembers(
           pickString(member, 'fullName') ||
           pickString(member, 'username') ||
           pickString(member, 'id'),
-        resourceType: 'trello/member',
+        vfsType: 'trello/member',
         remoteTime: '',
         vfsName: filename,
         size: toJsonBytes(normalizeMember(member)).byteLength,
@@ -239,7 +239,7 @@ async function listLabels(
       new IndexEntry({
         id: pickString(label, 'id'),
         name: pickString(label, 'name') || pickString(label, 'color') || pickString(label, 'id'),
-        resourceType: 'trello/label',
+        vfsType: 'trello/label',
         remoteTime: '',
         vfsName: filename,
         size: toJsonBytes(normalizeLabel(label)).byteLength,
@@ -263,7 +263,7 @@ async function listLists(
       new IndexEntry({
         id: pickString(lst, 'id'),
         name: pickString(lst, 'name') || pickString(lst, 'id'),
-        resourceType: 'trello/list',
+        vfsType: 'trello/list',
         remoteTime: '',
         vfsName: dirname,
         extra: { json_size: toJsonBytes(normalizeList(lst)).byteLength },
@@ -283,7 +283,7 @@ function listList(
       new IndexEntry({
         id: entry.id,
         name: 'list.json',
-        resourceType: 'trello/list_json',
+        vfsType: 'trello/list_json',
         vfsName: 'list.json',
         size: extraSize(entry),
       }),
@@ -293,7 +293,7 @@ function listList(
       new IndexEntry({
         id: entry.id,
         name: 'cards',
-        resourceType: 'trello/cards_dir',
+        vfsType: 'trello/cards_dir',
         vfsName: 'cards',
       }),
     ],
@@ -315,7 +315,7 @@ async function listCards(
       new IndexEntry({
         id: pickString(card, 'id'),
         name: pickString(card, 'name') || pickString(card, 'id'),
-        resourceType: 'trello/card',
+        vfsType: 'trello/card',
         remoteTime: pickString(card, 'dateLastActivity'),
         vfsName: dirname,
         extra: { json_size: toJsonBytes(normalizeCard(card)).byteLength },
@@ -336,7 +336,7 @@ function listCard(
       new IndexEntry({
         id: entry.id,
         name: 'card.json',
-        resourceType: 'trello/card_json',
+        vfsType: 'trello/card_json',
         vfsName: 'card.json',
         size: extraSize(entry),
         remoteTime: entry.remoteTime,
@@ -347,7 +347,7 @@ function listCard(
       new IndexEntry({
         id: entry.id,
         name: 'comments.jsonl',
-        resourceType: 'trello/comments_jsonl',
+        vfsType: 'trello/comments_jsonl',
         vfsName: 'comments.jsonl',
         remoteTime: entry.remoteTime,
       }),

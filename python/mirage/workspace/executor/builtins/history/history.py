@@ -15,7 +15,7 @@
 from mirage.commands.config import ExecContext
 from mirage.commands.spec.types import FlagValue
 from mirage.io.types import ByteSource, IOResult
-from mirage.resource.history import HISTORY_PREFIX
+from mirage.vfs.history import HISTORY_PREFIX
 from mirage.workspace.executor.builtins.types import BuiltinCall, Result
 from mirage.workspace.mount.registry import MountRegistry
 from mirage.workspace.session.session import Session
@@ -94,7 +94,7 @@ async def handle_history(
 
     GNU lookup order: builtins resolve before mount commands, so a
     mount-local command named "history" can never shadow this one.
-    The actual semantics live on the /.bash_history view resource;
+    The actual semantics live on the /.bash_history view VFS;
     this handler only parses options and routes.
 
     Args:

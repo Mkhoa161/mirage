@@ -14,10 +14,10 @@
 
 import asyncio
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 
 ws = Workspace(
-    {"/data/": RAMResource()},
+    {"/data/": RAMVFS()},
     mode=MountMode.WRITE,
 )
 

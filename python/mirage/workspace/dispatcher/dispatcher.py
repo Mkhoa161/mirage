@@ -35,7 +35,7 @@ from mirage.ops.namespace_view import (merge_readdir, namespace_listing,
 from mirage.policy import post_ops_gate, pre_ops_gate
 from mirage.policy.errors import PolicyDenied, PolicyError
 from mirage.types import (ConsistencyPolicy, FileStat, FileType, PathSpec,
-                          ResourceName)
+                          VFSName)
 from mirage.utils.errors import MISS_ERRORS, no_mount
 from mirage.utils.hidden import move_reveals
 from mirage.utils.key_prefix import mount_key
@@ -61,7 +61,7 @@ def _memory_answered(report: OpReport | None,
     Fires at the moment a warm file-cache hit or a synthetic namespace
     answer is in hand, before the post gate and any output cap, so
     whatever those raise cannot erase the fact. The value is
-    ``ResourceName.RAM``, which is how a record says "this never
+    ``VFSName.RAM``, which is how a record says "this never
     crossed the network": ``OpRecord.is_cache`` is defined as that
     string, and every network/cache total derives from it.
 
@@ -72,7 +72,7 @@ def _memory_answered(report: OpReport | None,
             is the measure.
     """
     if report is not None:
-        report.served(ResourceName.RAM.value, moved)
+        report.served(VFSName.RAM.value, moved)
 
 
 def _visible_entries(entries: list[str], parent: str) -> list[str]:
@@ -345,7 +345,7 @@ class Dispatcher:
             await pre_ops_gate(policies, op, dst, True, mount.prefix,
                                _session_id())
         await mount.ensure_ready()
-        caches_reads = mount.resource.caches_reads
+        caches_reads = mount.vfs.caches_reads
         # The file cache is keyed on the path alone, and what a command
         # put there is the rendered read. A raw read asks for a
         # different value under the same key, so it must not be served
@@ -385,7 +385,7 @@ class Dispatcher:
             kwargs["dst"] = PathSpec(
                 virtual=dst.virtual,
                 directory=dst.virtual.rsplit("/", 1)[0] or "/",
-                resource_path=mount_key(dst.virtual, mount.prefix.rstrip("/")),
+                vfs_path=mount_key(dst.virtual, mount.prefix.rstrip("/")),
             )
         # execute_op answers Any (each op has its own shape), and the
         # setattr fork narrows the first assignment to its dict, so the
@@ -687,7 +687,7 @@ class Dispatcher:
                 raise await self._readlink_miss(path)
             target = found
             result = found
-        record(op, path.virtual, ResourceName.RAM.value,
+        record(op, path.virtual, VFSName.RAM.value,
                len(target.encode("utf-8")), timer)
         _memory_answered(report)
         bound = await post_ops_gate(policies, op, path, write, owner or "",
@@ -854,7 +854,7 @@ class Dispatcher:
             for key in SETATTR_KEYS if (value := kwargs.get(key)) is not None
         }
         await self._write_overlay(path.virtual, overlay)
-        record("setattr", path.virtual, ResourceName.RAM.value, 0, timer)
+        record("setattr", path.virtual, VFSName.RAM.value, 0, timer)
         return overlay
 
     async def _write_overlay(self, virtual: str, fields: dict[str,
@@ -878,7 +878,7 @@ class Dispatcher:
     async def stat(self, path: str) -> FileStat:
         scope = PathSpec(virtual=path,
                          directory=path,
-                         resource_path="",
+                         vfs_path="",
                          resolved=True)
         result, _ = await self.dispatch("stat", scope)
         return result
@@ -886,7 +886,7 @@ class Dispatcher:
     async def readdir(self, path: str) -> list[str]:
         scope = PathSpec(virtual=path,
                          directory=path,
-                         resource_path="",
+                         vfs_path="",
                          resolved=False)
         raw, _ = await self.dispatch("readdir", scope)
         return raw
@@ -910,7 +910,7 @@ class Dispatcher:
             original = mounts.get(prefix) if prefix is not None else None
             mount = self._namespace.try_mount_for(path)
             return (mount is not None and original is mount
-                    and not mount.retiring and mount.resource.caches_reads)
+                    and not mount.retiring and mount.vfs.caches_reads)
 
         return cacheable
 
@@ -918,7 +918,7 @@ class Dispatcher:
         mount = self._namespace.try_mount_for(path)
         if mount is None:
             return False
-        return not mount.retiring and mount.resource.caches_reads
+        return not mount.retiring and mount.vfs.caches_reads
 
     async def invalidate_all_after_remote(self) -> None:
         """Drop the file cache and every mount index wholesale.
@@ -943,8 +943,8 @@ class Dispatcher:
         """
         manager = mount.cache_manager
         if manager is None:
-            manager = CacheManager(self._cache, mount.resource.index,
-                                   mount.prefix, mount.resource.caches_reads)
+            manager = CacheManager(self._cache, mount.vfs.index, mount.prefix,
+                                   mount.vfs.caches_reads)
         return manager
 
     async def invalidate_after_write(self,

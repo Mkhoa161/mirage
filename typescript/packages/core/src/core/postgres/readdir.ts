@@ -59,16 +59,13 @@ async function listRoot(
       new IndexEntry({
         id: 'database.json',
         name: 'database.json',
-        resourceType: 'postgres/database_json',
+        vfsType: 'postgres/database_json',
         vfsName: 'database.json',
       }),
     ],
   ]
   for (const s of schemas) {
-    entries.push([
-      s,
-      new IndexEntry({ id: s, name: s, resourceType: 'postgres/schema', vfsName: s }),
-    ])
+    entries.push([s, new IndexEntry({ id: s, name: s, vfsType: 'postgres/schema', vfsName: s })])
   }
   return entries
 }
@@ -82,7 +79,7 @@ function listSchema(
   return Promise.resolve(
     KIND_DIRS.map((name) => [
       name,
-      new IndexEntry({ id: name, name, resourceType: 'postgres/kind', vfsName: name }),
+      new IndexEntry({ id: name, name, vfsType: 'postgres/kind', vfsName: name }),
     ]),
   )
 }
@@ -106,7 +103,7 @@ async function listEntities(
     new IndexEntry({
       id: n,
       name: n,
-      resourceType: `postgres/${kind.replace(/s$/, '')}`,
+      vfsType: `postgres/${kind.replace(/s$/, '')}`,
       vfsName: n,
     }),
   ])
@@ -119,7 +116,7 @@ function listEntityFiles(
   return Promise.resolve(
     ENTITY_FILES.map((name) => [
       name,
-      new IndexEntry({ id: name, name, resourceType: 'postgres/entity_file', vfsName: name }),
+      new IndexEntry({ id: name, name, vfsType: 'postgres/entity_file', vfsName: name }),
     ]),
   )
 }

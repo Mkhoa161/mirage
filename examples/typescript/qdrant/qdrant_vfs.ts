@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { QdrantClient } from '@qdrant/js-client-rest'
-import { MountMode, QdrantResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, QdrantVFS, Workspace } from '@struktoai/mirage-node'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -161,7 +161,7 @@ async function main(): Promise<void> {
     // depends on no model runtime.
     embed: (text: string): Promise<number[]> => Promise.resolve(embed(text)),
   }
-  const fashion = new QdrantResource({
+  const fashion = new QdrantVFS({
     config: {
       ...connection,
       collection: 'fashion',
@@ -176,7 +176,7 @@ async function main(): Promise<void> {
   // Chunks grouped by the document they came from: `metadata.source` is
   // a nested payload path, `basenameFields` lists it by file name, and
   // `nameField` puts the page label in front of the point id.
-  const docs = new QdrantResource({
+  const docs = new QdrantVFS({
     config: {
       ...connection,
       collection: 'company_docs',

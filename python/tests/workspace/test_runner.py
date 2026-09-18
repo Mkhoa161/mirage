@@ -18,12 +18,12 @@ import time
 import pytest
 
 from mirage import MountMode, Workspace, WorkspaceRunner
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 def _make_ws() -> Workspace:
     return Workspace(
-        {"/": (RAMResource(), MountMode.WRITE)},
+        {"/": (RAMVFS(), MountMode.WRITE)},
         mode=MountMode.WRITE,
     )
 

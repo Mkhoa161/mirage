@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../../../../ops/registry.ts'
-import { RAMResource } from '../../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../../vfs/ram/ram.ts'
 import { MountMode } from '../../../../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../../../fixtures/workspace_fixture.ts'
 import { Workspace } from '../../../workspace/workspace.ts'
@@ -24,11 +24,11 @@ import { Workspace } from '../../../workspace/workspace.ts'
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const root = new RAMResource()
-  const work = new RAMResource()
+  const root = new RAMVFS()
+  const work = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(root)
-  registry.registerResource(work)
+  registry.registerVfs(root)
+  registry.registerVfs(work)
   return new Workspace(
     { '/': root, '/work/': work },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -115,12 +115,12 @@ describe('direct path execution', () => {
     // The executed file lives in argv[0], not the operands, so the
     // admission context must carry it or a path-pattern guard never
     // fires on direct execution. Seeding runs through an unguarded
-    // workspace sharing the resource, since a command-less guard also
+    // workspace sharing the VFS, since a command-less guard also
     // seals the op layer.
     const parser = await getTestParser()
-    const prod = new RAMResource()
+    const prod = new RAMVFS()
     const seedOps = new OpsRegistry()
-    seedOps.registerResource(prod)
+    seedOps.registerVfs(prod)
     const seed = new Workspace(
       { '/data/': prod },
       { mode: MountMode.WRITE, ops: seedOps, shellParser: parser },
@@ -128,10 +128,10 @@ describe('direct path execution', () => {
     await seed.execute('mkdir -p /data/prod')
     await seed.execute("printf 'echo leaked\\n' > /data/prod/run.sh")
     await seed.execute("printf 'echo fine\\n' > /data/ok.sh")
-    const root = new RAMResource()
+    const root = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(root)
-    ops.registerResource(prod)
+    ops.registerVfs(root)
+    ops.registerVfs(prod)
     const ws = new Workspace(
       { '/': root, '/data/': prod },
       {

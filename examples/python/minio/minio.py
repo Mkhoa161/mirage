@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.minio import MinIOConfig, MinIOResource
 from mirage.types import PathSpec
+from mirage.vfs.minio import MinIOConfig, MinIOVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = MinIOConfig(
     access_key_id=os.environ.get("MINIO_ACCESS_KEY", "minioadmin"),
     secret_access_key=os.environ.get("MINIO_SECRET_KEY", "minioadmin"),
 )
-resource = MinIOResource(config)
-ws = Workspace({"/minio/": resource}, mode=MountMode.WRITE)
+vfs = MinIOVFS(config)
+ws = Workspace({"/minio/": vfs}, mode=MountMode.WRITE)
 
 
 def ops_summary() -> str:

@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  AliyunResource,
+  AliyunVFS,
   Workspace,
   resolvedAliyunEndpoint,
   type AliyunConfig,
@@ -37,7 +37,7 @@ function configFromEnv(): AliyunConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/oss/': new AliyunResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/oss/': new AliyunVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== Alibaba OSS at ${resolvedAliyunEndpoint(config)} ===`)
 

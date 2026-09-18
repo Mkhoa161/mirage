@@ -107,8 +107,7 @@ def flat_scopes(scopes: list[PathSpec]) -> list[PathSpec]:
     # Address by full virtual path so a generic sees one flat namespace;
     # the relayed primitives route each full path to its mount.
     return [
-        dataclasses.replace(s, resource_path=s.virtual.strip("/"))
-        for s in scopes
+        dataclasses.replace(s, vfs_path=s.virtual.strip("/")) for s in scopes
     ]
 
 

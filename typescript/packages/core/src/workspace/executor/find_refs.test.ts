@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { FileStat, FileType, MountMode } from '../../types.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
@@ -23,8 +23,8 @@ import { resolveNewerRefs } from './find_refs.ts'
 async function shellWs(): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const root = new RAMResource()
-  ops.registerResource(root)
+  const root = new RAMVFS()
+  ops.registerVfs(root)
   const ws = new Workspace({ '/': root }, { mode: MountMode.WRITE, ops, shellParser: parser })
   ws.createSession('s')
   return ws
@@ -46,7 +46,7 @@ function stat(virtual: string): Promise<FileStat | null> {
 
 describe('resolveNewerRefs', () => {
   it('rewrites -newer into -newermt', async () => {
-    const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const [tokens, err] = await resolveNewerRefs(
       ['-newer', 'ref', '-name', 'x', '-newer', '/w/ref'],
       ['ref', '/w/ref'],
@@ -66,7 +66,7 @@ describe('resolveNewerRefs', () => {
   })
 
   it("reports a missing reference in GNU's words", async () => {
-    const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const [tokens, err] = await resolveNewerRefs(
       ['-newer', 'nope'],
       ['nope'],

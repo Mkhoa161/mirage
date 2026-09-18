@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.aliyun import AliyunConfig, AliyunResource
 from mirage.types import PathSpec
+from mirage.vfs.aliyun import AliyunConfig, AliyunVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = AliyunConfig(
     access_key_id=os.environ["OSS_ACCESS_KEY_ID"],
     secret_access_key=os.environ["OSS_ACCESS_KEY_SECRET"],
 )
-resource = AliyunResource(config)
-ws = Workspace({"/oss/": resource}, mode=MountMode.READ)
+vfs = AliyunVFS(config)
+ws = Workspace({"/oss/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

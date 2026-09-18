@@ -15,7 +15,7 @@
 import type { LanceDBAccessor } from '../../accessor/lancedb.ts'
 import { IndexEntry } from '../../cache/index/config.ts'
 import type { IndexCacheStore } from '../../cache/index/store.ts'
-import type { LanceDBConfigResolved } from '../../resource/lancedb/config.ts'
+import type { LanceDBConfigResolved } from '../../vfs/lancedb/config.ts'
 import type { LanceRow, ValueTest } from './_driver.ts'
 import { PathSpec } from '../../types.ts'
 import { perAccessor } from '../hierarchy/bind.ts'
@@ -31,7 +31,7 @@ import { compareCodePoints } from '../../utils/sort.ts'
 const GROUP_TYPE = 'lancedb/group'
 
 function dirEntry(name: string): IndexEntry {
-  return new IndexEntry({ id: name, name, resourceType: GROUP_TYPE, vfsName: name })
+  return new IndexEntry({ id: name, name, vfsType: GROUP_TYPE, vfsName: name })
 }
 
 function rowEntries(rows: LanceRow[], config: LanceDBConfigResolved): [string, IndexEntry][] {
@@ -46,7 +46,7 @@ function rowEntries(rows: LanceRow[], config: LanceDBConfigResolved): [string, I
       new IndexEntry({
         id,
         name: `${id}.md`,
-        resourceType: 'lancedb/row_card',
+        vfsType: 'lancedb/row_card',
         vfsName: `${id}.md`,
         size: renderCard(row, config).byteLength,
       }),
@@ -58,7 +58,7 @@ function rowEntries(rows: LanceRow[], config: LanceDBConfigResolved): [string, I
         new IndexEntry({
           id,
           name: blobName,
-          resourceType: 'lancedb/row_blob',
+          vfsType: 'lancedb/row_blob',
           vfsName: blobName,
         }),
       ])

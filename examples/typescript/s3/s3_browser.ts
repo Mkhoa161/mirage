@@ -42,7 +42,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import {
   MountMode,
   PathSpec,
-  S3Resource,
+  S3VFS,
   type S3BrowserOperation,
   type S3BrowserSignOptions,
   Workspace,
@@ -129,7 +129,7 @@ async function mockBackendSign(
 }
 
 // ── "BROWSER" CODE ──────────────────────────────────────────────
-const s3 = new S3Resource({
+const s3 = new S3VFS({
   bucket: BUCKET,
   presignedUrlProvider: mockBackendSign,
 })

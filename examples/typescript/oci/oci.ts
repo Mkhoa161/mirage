@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MountMode, OCIResource, Workspace, type FileStat, type OCIConfig } from '@struktoai/mirage-node'
+import { MountMode, OCIVFS, Workspace, type FileStat, type OCIConfig } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -59,8 +59,8 @@ async function run(
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const resource = new OCIResource(config)
-  const ws = new Workspace({ '/oci/': resource }, { mode: MountMode.READ })
+  const vfs = new OCIVFS(config)
+  const ws = new Workspace({ '/oci/': vfs }, { mode: MountMode.READ })
 
   try {
     console.log('=== ls /oci/ ===')

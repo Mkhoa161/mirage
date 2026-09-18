@@ -343,7 +343,7 @@ export function apiGroups(service: GwsService): CLISpec[] {
     if (m.service !== service) continue
     let level = root
     let node: GroupNode | undefined
-    for (const word of m.resource.split(' ')) {
+    for (const word of m.vfs.split(' ')) {
       node = level.get(word)
       if (node === undefined) {
         node = { methods: [], children: new Map() }

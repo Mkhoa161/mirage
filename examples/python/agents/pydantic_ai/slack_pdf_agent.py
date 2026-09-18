@@ -22,11 +22,11 @@ from pydantic_ai_backends import create_console_toolset
 
 from mirage import MountMode, Workspace
 from mirage.agents.pydantic_ai import PydanticAIWorkspace
-from mirage.resource.slack import SlackConfig, SlackResource
+from mirage.vfs.slack import SlackConfig, SlackVFS
 
 load_dotenv(".env.development")
 
-slack = SlackResource(
+slack = SlackVFS(
     config=SlackConfig(token=os.environ["SLACK_BOT_TOKEN"],
                        search_token=os.environ.get("SLACK_USER_TOKEN")))
 ws = Workspace({"/slack": slack}, mode=MountMode.READ)

@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -52,11 +52,11 @@ afterEach(async () => {
 
 async function seeded(): Promise<Workspace> {
   const parser = await getTestParser()
-  const a = new RAMResource()
-  const b = new RAMResource()
+  const a = new RAMVFS()
+  const b = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(a)
-  registry.registerResource(b)
+  registry.registerVfs(a)
+  registry.registerVfs(b)
   const ws = new Workspace(
     {
       '/a': [a, MountMode.WRITE] as const,

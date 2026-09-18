@@ -1,7 +1,7 @@
 import asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -10,7 +10,7 @@ def _run(coro):
 
 
 async def _setup() -> Workspace:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
     await ws.execute("mkdir -p /data/sub /data/emptydir", session_id="s")
     await ws.execute("touch /data/empty.txt /data/sub/nested.txt",

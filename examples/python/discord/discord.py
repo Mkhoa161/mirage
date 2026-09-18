@@ -19,13 +19,13 @@ import re
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.discord import DiscordConfig, DiscordResource
 from mirage.types import PathSpec
+from mirage.vfs.discord import DiscordConfig, DiscordVFS
 
 load_dotenv(".env.development")
 
 config = DiscordConfig(token=os.environ["DISCORD_BOT_TOKEN"])
-resource = DiscordResource(config=config)
+vfs = DiscordVFS(config=config)
 
 
 def _assert_nonempty(text: str, msg: str) -> None:
@@ -34,7 +34,7 @@ def _assert_nonempty(text: str, msg: str) -> None:
 
 
 async def main():
-    ws = Workspace({"/discord": resource}, mode=MountMode.READ)
+    ws = Workspace({"/discord": vfs}, mode=MountMode.READ)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /discord/__nf_missing__.txt",

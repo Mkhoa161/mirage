@@ -30,7 +30,7 @@ export function makeCopy<A extends Accessor, C>(
   const { copyFile } = driver
   if (copyFile === undefined) {
     throw new Error(
-      `${driver.resource} driver has no native copy; leave copy unwired instead of building it`,
+      `${driver.vfs} driver has no native copy; leave copy unwired instead of building it`,
     )
   }
   return async function copy(accessor, src, dst) {

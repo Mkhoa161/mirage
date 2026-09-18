@@ -1,6 +1,6 @@
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.io.stream import materialize
 from mirage.workspace.executor.builtins.read import handle_read
 from mirage.workspace.session.session import Session
@@ -12,7 +12,7 @@ def make_session() -> Session:
 
 
 async def _read_ws() -> Workspace:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("mkdir -p /data")
     return ws
 

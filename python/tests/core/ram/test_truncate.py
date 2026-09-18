@@ -17,8 +17,8 @@ import pytest
 from mirage.accessor.ram import RAMAccessor
 from mirage.core.ram.truncate import truncate
 from mirage.observe.context import RecordingScope
-from mirage.resource.ram.store import RAMStore
 from mirage.types import PathSpec
+from mirage.vfs.ram.store import RAMStore
 
 
 @pytest.mark.asyncio

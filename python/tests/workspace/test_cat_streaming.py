@@ -16,8 +16,8 @@ import asyncio
 from collections.abc import AsyncIterator
 
 from mirage.commands import COMMANDS as _CMDS
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 ram_cat = _CMDS["cat"]
@@ -46,7 +46,7 @@ async def _spy_iter(source: AsyncIterator[bytes], name: str,
 
 
 def _seeded_ws() -> Workspace:
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
     async def seed():
         await ws.execute("tee /data/a.txt > /dev/null", stdin=b"a1\na2\na3\n")

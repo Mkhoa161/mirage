@@ -31,7 +31,7 @@ import { eaccesOnDenied, isFolder, resolveKey } from './resolve.ts'
  * makes before it overwrites a directory, bounded to a single entry.
  */
 async function rmdirImpl(accessor: GDriveAccessor, path: PathSpec): Promise<void> {
-  const key = path.resourcePath
+  const key = path.vfsPath
   if (key === '') return
   const node = await resolveKey(accessor, key)
   if (node === null) throw enoent(path)

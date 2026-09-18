@@ -14,7 +14,7 @@
 
 // Read-only Hugging Face Space demo against a public space repo.
 // No credentials required. Set HF_SPACE_REPO / HF_TOKEN for private repos.
-import { HfSpacesResource, Workspace, MountMode, type FileStat, type HfRepoConfig } from '@struktoai/mirage-node'
+import { HfSpacesVFS, Workspace, MountMode, type FileStat, type HfRepoConfig } from '@struktoai/mirage-node'
 
 function configFromEnv(): HfRepoConfig {
   return {
@@ -30,9 +30,9 @@ async function run(ws: Workspace, cmd: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const resource = new HfSpacesResource(configFromEnv())
-  const ws = new Workspace({ '/s/': resource }, { mode: MountMode.READ })
-  console.log(`=== mounted ${resource.accessor.bucketUri} at /s/ ===\n`)
+  const vfs = new HfSpacesVFS(configFromEnv())
+  const ws = new Workspace({ '/s/': vfs }, { mode: MountMode.READ })
+  console.log(`=== mounted ${vfs.accessor.bucketUri} at /s/ ===\n`)
 
   try {
     await run(ws, 'ls /s/')

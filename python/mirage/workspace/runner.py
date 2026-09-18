@@ -39,7 +39,7 @@ class WorkspaceRunner:
 
     Example:
 
-        ws = Workspace({"/": (RAMResource(), MountMode.WRITE)})
+        ws = Workspace({"/": (RAMVFS(), MountMode.WRITE)})
         runner = WorkspaceRunner(ws)
         try:
             result = await runner.call(runner.ws.execute("ls /"))

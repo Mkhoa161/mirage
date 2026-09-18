@@ -16,9 +16,9 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.runtime.python import LocalRuntime
 from mirage.types import FileType, MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -28,11 +28,11 @@ def _run(coro):
 
 def _ws():
     """Workspace with 3 RAM mounts: /s3/, /disk/, /ram/."""
-    s3 = RAMResource()
+    s3 = RAMVFS()
     s3.caches_reads = True
-    disk = RAMResource()
+    disk = RAMVFS()
     disk.caches_reads = True
-    ram = RAMResource()
+    ram = RAMVFS()
 
     s3._store.files["/report.csv"] = b"name,age\nalice,30\nbob,25\n"
     s3._store.files["/data.txt"] = b"hello from s3\n"
@@ -56,7 +56,7 @@ def _ws():
     ram._store.files["/nums.txt"] = b"5\n3\n1\n4\n2\n"
     ram._store.files["/words.txt"] = b"banana\napple\ncherry\napple\n"
 
-    ws = Workspace(resources={
+    ws = Workspace(mounts={
         "/s3/": (s3, MountMode.EXEC),
         "/disk/": (disk, MountMode.EXEC),
         "/ram/": (ram, MountMode.EXEC),
@@ -477,8 +477,8 @@ def test_c_style_for_readonly_aborts_with_1():
 def test_find_mtime_observed_write_fallback():
     """A write through mirage stamps an observed mtime that find sees
     even when the backend reports none; touch still overrides."""
-    ram = RAMResource()
-    ws = Workspace(resources={"/ram/": (ram, MountMode.EXEC)})
+    ram = RAMVFS()
+    ws = Workspace(mounts={"/ram/": (ram, MountMode.EXEC)})
     _exec(ws, "echo hi > /ram/probe.txt")
     ram._store.modified.clear()
     io = _exec(ws, "find /ram -name probe.txt -mtime -1")
@@ -1391,11 +1391,11 @@ def test_pipeline_sed():
     assert b"ALICE" in _stdout(io)
 
 
-# ── cache resource fallback ───────────────────
+# ── cache VFS fallback ───────────────────
 
 
 def test_cache_fallback_wc():
-    """wc uses cache resource when cwd has no mount."""
+    """wc uses cache VFS when cwd has no mount."""
     ws = _ws()
     ws.get_session(ws.default_session_id).cwd = "/mirage"
     io = _exec(ws, "cat /s3/report.csv | wc -l")
@@ -1404,7 +1404,7 @@ def test_cache_fallback_wc():
 
 
 def test_cache_fallback_head():
-    """head uses cache resource fallback."""
+    """head uses cache VFS fallback."""
     ws = _ws()
     ws.get_session(ws.default_session_id).cwd = "/nonexistent"
     io = _exec(ws, "cat /ram/notes.txt | head -n 1")
@@ -1413,7 +1413,7 @@ def test_cache_fallback_head():
 
 
 def test_cache_fallback_grep():
-    """grep uses cache resource fallback in pipeline."""
+    """grep uses cache VFS fallback in pipeline."""
     ws = _ws()
     ws.get_session(ws.default_session_id).cwd = "/mirage"
     io = _exec(ws, "cat /s3/report.csv | grep alice")
@@ -1422,7 +1422,7 @@ def test_cache_fallback_grep():
 
 
 def test_cache_fallback_sort_uniq():
-    """sort | uniq uses cache resource."""
+    """sort | uniq uses cache VFS."""
     ws = _ws()
     ws.get_session(ws.default_session_id).cwd = "/mirage"
     io = _exec(ws, "cat /ram/words.txt | sort | uniq")
@@ -1442,7 +1442,7 @@ def test_cache_fallback_multi_pipe():
     assert b"bob" in out
 
 
-# ── general commands (no resource needed) ─────
+# ── general commands (no VFS needed) ─────
 
 
 def test_seq_basic():
@@ -1501,7 +1501,7 @@ def test_echo_no_newline():
     assert _stdout(io) == b"hello"
 
 
-# ── sort as resource command ──────────────────
+# ── sort as VFS command ──────────────────
 
 
 def test_sort_file():
@@ -1939,7 +1939,7 @@ def test_cache_hit_serves_from_ram():
     assert all(s == "ram" for s in sources)
 
 
-def test_cache_miss_reads_from_resource():
+def test_cache_miss_reads_from_vfs():
     ws = _ws()
     io = _exec(ws, "cat /s3/data.txt")
     assert _stdout(io) == b"hello from s3\n"
@@ -1974,10 +1974,10 @@ def test_grep_uses_cache():
 def test_readdir_populates_index():
     """readdir stores listing in index (verified via internal dict)."""
     ws = _ws()
-    resource = ws._registry.mount_for("/s3/report.csv").resource
-    assert len(resource.index._entries) == 0
+    vfs = ws._registry.mount_for("/s3/report.csv").vfs
+    assert len(vfs.index._entries) == 0
     _exec(ws, "ls /s3")
-    assert len(resource.index._entries) > 0
+    assert len(vfs.index._entries) > 0
 
 
 # ── grep -l / -m early termination ──────────────────────────────────────
@@ -2111,7 +2111,7 @@ def test_sh_alias():
 
 def test_bash_dash_c_for_loop_over_dirs():
     """`bash -lc` with a for-loop iterating mount paths."""
-    s3 = RAMResource()
+    s3 = RAMVFS()
     s3.caches_reads = True
     s3._store.dirs.update({
         "/INBOX",
@@ -2120,7 +2120,7 @@ def test_bash_dash_c_for_loop_over_dirs():
     })
     s3._store.files["/INBOX/2026-04-28/m1.txt"] = b""
     s3._store.files["/INBOX/2026-04-29/m2.txt"] = b""
-    ws = Workspace(resources={"/gmail/": (s3, MountMode.EXEC)}, )
+    ws = Workspace(mounts={"/gmail/": (s3, MountMode.EXEC)}, )
     cmd = ('bash -lc \'for d in /gmail/INBOX/2026-04-28 '
            '/gmail/INBOX/2026-04-29; do echo "== $d =="; ls "$d"; done\'')
     io = _exec(ws, cmd)
@@ -2695,10 +2695,10 @@ def test_add_mount_refreshes_the_existing_filesystem_facade():
         try:
             await fs.write("/root.txt", b"root")
             records = list(fs.records)
-            resource = RAMResource()
-            entry = ws.add_mount("/data/nested", resource, MountMode.WRITE)
+            vfs = RAMVFS()
+            entry = ws.add_mount("/data/nested", vfs, MountMode.WRITE)
             assert entry.prefix == "/data/nested/"
-            assert entry.resource is resource
+            assert entry.vfs is vfs
             assert ws.fs is fs
             assert fs.records == records
             assert "/data/nested/" in fs.mount_prefixes()
@@ -2719,7 +2719,7 @@ def test_add_mount_refreshes_the_existing_filesystem_facade():
 
 def test_add_mount_defaults_to_read_only():
     ws = Workspace({}, mode=MountMode.WRITE)
-    entry = ws.add_mount("/data", RAMResource())
+    entry = ws.add_mount("/data", RAMVFS())
     assert entry.mode == MountMode.READ
 
     async def run():
@@ -2732,31 +2732,31 @@ def test_add_mount_defaults_to_read_only():
     asyncio.run(run())
 
 
-def test_add_mount_refuses_duplicates_invalid_resources_and_closed_workspace():
-    ws = Workspace({"/data": RAMResource()})
+def test_add_mount_refuses_duplicates_invalid_mounts_and_closed_workspace():
+    ws = Workspace({"/data": RAMVFS()})
     before = ws.mounts()
     with pytest.raises(ValueError, match="duplicate mount prefix"):
-        ws.add_mount("data/", RAMResource())
-    with pytest.raises(TypeError, match="expected a BaseResource"):
+        ws.add_mount("data/", RAMVFS())
+    with pytest.raises(TypeError, match="expected a BaseVFS"):
         ws.add_mount("/bad", None)
     assert ws.mounts() == before
     asyncio.run(ws.close())
     with pytest.raises(RuntimeError, match="Workspace is closed"):
-        ws.add_mount("/late", RAMResource())
+        ws.add_mount("/late", RAMVFS())
 
 
-def test_add_mount_keeps_a_shared_resource_open_until_its_last_unmount():
+def test_add_mount_keeps_a_shared_vfs_open_until_its_last_unmount():
     closed = []
 
-    class TrackingRAM(RAMResource):
+    class TrackingRAM(RAMVFS):
 
         async def close(self):
             closed.append("closed")
 
-    resource = TrackingRAM()
+    vfs = TrackingRAM()
     ws = Workspace({})
-    ws.add_mount("/a", resource, MountMode.WRITE)
-    ws.add_mount("/b", resource, MountMode.WRITE)
+    ws.add_mount("/a", vfs, MountMode.WRITE)
+    ws.add_mount("/b", vfs, MountMode.WRITE)
 
     async def run():
         try:
@@ -2775,10 +2775,10 @@ def test_add_mount_keeps_a_shared_resource_open_until_its_last_unmount():
 
 @pytest.mark.parametrize("explicit_root", [False, True])
 def test_unmount_preserves_root_operations(explicit_root):
-    resources = {"/data": RAMResource()}
+    mounts = {"/data": RAMVFS()}
     if explicit_root:
-        resources["/"] = RAMResource()
-    ws = Workspace(resources)
+        mounts["/"] = RAMVFS()
+    ws = Workspace(mounts)
 
     async def run():
         try:
@@ -2796,7 +2796,7 @@ def test_unmount_preserves_root_operations(explicit_root):
 
 
 def test_unmount_keeps_other_ram_instances_readable():
-    a, b = RAMResource(), RAMResource()
+    a, b = RAMVFS(), RAMVFS()
     content = b"surviving mount\n"
     b._store.files["/file.txt"] = content
     ws = Workspace({"/a": a, "/b": b})
@@ -2821,16 +2821,16 @@ def test_unmount_removes_mount():
     assert not any(m.prefix == "/s3/" for m in ws.mounts())
 
 
-def test_workspace_rejects_invalid_resource_tuple_shape():
-    with pytest.raises(TypeError, match="resource tuples must be"):
+def test_workspace_rejects_invalid_vfs_tuple_shape():
+    with pytest.raises(TypeError, match="VFS tuples must be"):
         Workspace({"/x": ()})
 
 
-def test_unmount_closes_resource_when_owned():
-    """unmount closes a resource that has open()/close() (best-effort)."""
+def test_unmount_closes_vfs_when_owned():
+    """unmount closes a VFS that has open()/close() (best-effort)."""
     closed = []
 
-    class TrackingRAM(RAMResource):
+    class TrackingRAM(RAMVFS):
 
         async def close(self):
             closed.append("yes")
@@ -2869,7 +2869,7 @@ def test_unmount_after_close_raises():
 
 
 def test_cd_nonexistent_under_mount_keeps_cwd():
-    ws = Workspace(resources={"/": (RAMResource(), MountMode.WRITE)}, )
+    ws = Workspace(mounts={"/": (RAMVFS(), MountMode.WRITE)}, )
     before = ws.get_session(ws.default_session_id).cwd
     io = _exec(ws, "cd /missing")
     assert io.exit_code != 0
@@ -2878,9 +2878,9 @@ def test_cd_nonexistent_under_mount_keeps_cwd():
 
 
 def test_cd_into_mount_root_succeeds():
-    ws = Workspace(resources={
-        "/": (RAMResource(), MountMode.WRITE),
-        "/data/": (RAMResource(), MountMode.WRITE),
+    ws = Workspace(mounts={
+        "/": (RAMVFS(), MountMode.WRITE),
+        "/data/": (RAMVFS(), MountMode.WRITE),
     }, )
     io = _exec(ws, "cd /data")
     assert io.exit_code == 0
@@ -2890,15 +2890,15 @@ def test_cd_into_mount_root_succeeds():
 # ── ls injects child mounts as virtual subdirectories ─────────────
 
 
-def _ws_for_ls(mounts: dict[str, RAMResource]) -> Workspace:
-    return Workspace(resources={
+def _ws_for_ls(mounts: dict[str, RAMVFS]) -> Workspace:
+    return Workspace(mounts={
         p: (r, MountMode.WRITE)
         for p, r in mounts.items()
     }, )
 
 
 def test_ls_root_shows_child_mount_data():
-    ws = _ws_for_ls({"/": RAMResource(), "/data/": RAMResource()})
+    ws = _ws_for_ls({"/": RAMVFS(), "/data/": RAMVFS()})
     io = _exec(ws, "ls /")
     assert io.exit_code == 0
     out = _stdout(io).decode()
@@ -2906,7 +2906,7 @@ def test_ls_root_shows_child_mount_data():
 
 
 def test_ls_classify_child_mount_with_trailing_slash():
-    ws = _ws_for_ls({"/": RAMResource(), "/data/": RAMResource()})
+    ws = _ws_for_ls({"/": RAMVFS(), "/data/": RAMVFS()})
     io = _exec(ws, "ls -F /")
     assert io.exit_code == 0
     out = _stdout(io).decode()
@@ -2914,7 +2914,7 @@ def test_ls_classify_child_mount_with_trailing_slash():
 
 
 def test_ls_hides_dot_bash_history_by_default_shows_with_a():
-    ws = _ws_for_ls({"/": RAMResource()})
+    ws = _ws_for_ls({"/": RAMVFS()})
     plain = _exec(ws, "ls /")
     assert ".bash_history" not in _stdout(plain).decode().split("\n")
     all_io = _exec(ws, "ls -a /")
@@ -2922,7 +2922,7 @@ def test_ls_hides_dot_bash_history_by_default_shows_with_a():
 
 
 def test_ls_does_not_duplicate_existing_entry():
-    ws = _ws_for_ls({"/": RAMResource(), "/data/": RAMResource()})
+    ws = _ws_for_ls({"/": RAMVFS(), "/data/": RAMVFS()})
     _exec(ws, "mkdir -p /data/sub")
     io = _exec(ws, "ls /data")
     lines = [line for line in _stdout(io).decode().split("\n") if line]
@@ -2931,16 +2931,16 @@ def test_ls_does_not_duplicate_existing_entry():
 
 def test_ls_nested_child_mount():
     ws = _ws_for_ls({
-        "/": RAMResource(),
-        "/data/": RAMResource(),
-        "/data/inner/": RAMResource(),
+        "/": RAMVFS(),
+        "/data/": RAMVFS(),
+        "/data/inner/": RAMVFS(),
     })
     io = _exec(ws, "ls /data")
     assert "inner" in _stdout(io).decode().split("\n")
 
 
 def test_ls_dash_d_does_not_inject_mounts():
-    ws = _ws_for_ls({"/": RAMResource(), "/data/": RAMResource()})
+    ws = _ws_for_ls({"/": RAMVFS(), "/data/": RAMVFS()})
     io = _exec(ws, "ls -d /")
     assert "data" not in _stdout(io).decode().split("\n")
 
@@ -2974,7 +2974,7 @@ def test_man_index_lists_commands():
 
 @pytest.mark.asyncio
 async def test_set_mount_mode_refreshes_facade_without_remounting():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
         fs = ws.fs
         mount = ws.mount("/data")
@@ -2997,7 +2997,7 @@ async def test_set_mount_mode_refreshes_facade_without_remounting():
 
 @pytest.mark.asyncio
 async def test_live_default_profile_updates_unbound_policy():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     try:
         session = ws.get_session(ws.default_session_id)
         await ws.fs.write("/data/file", b"kept")

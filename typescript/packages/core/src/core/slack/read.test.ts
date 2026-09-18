@@ -46,7 +46,7 @@ class FakeTransport implements SlackTransport {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 const decoder = new TextDecoder()
@@ -60,7 +60,7 @@ describe('read jsonl branch', () => {
         new IndexEntry({
           id: 'C1',
           name: 'general',
-          resourceType: 'slack/channel',
+          vfsType: 'slack/channel',
           vfsName: 'general__C1',
           remoteTime: '0',
         }),
@@ -100,7 +100,7 @@ describe('read jsonl branch', () => {
         new IndexEntry({
           id: 'D1',
           name: 'alice',
-          resourceType: 'slack/dm',
+          vfsType: 'slack/dm',
           vfsName: 'alice__D1',
           remoteTime: '0',
         }),
@@ -155,7 +155,7 @@ describe('read users branch', () => {
         new IndexEntry({
           id: 'U1',
           name: 'alice',
-          resourceType: 'slack/user',
+          vfsType: 'slack/user',
           vfsName: 'alice__U1.json',
         }),
       ],

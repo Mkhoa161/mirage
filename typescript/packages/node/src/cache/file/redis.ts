@@ -27,7 +27,7 @@ import {
 import type { PathSpec } from '@struktoai/mirage-core/types'
 import { registerFileCacheStore } from '@struktoai/mirage-core/workspace/workspace/cache'
 import type { RedisClientType } from 'redis'
-import { RedisResource, type RedisResourceOptions } from '../../resource/redis/redis.ts'
+import { RedisVFS, type RedisVFSOptions } from '../../vfs/redis/redis.ts'
 
 // Shipped next to this module in src and copied beside the bundle in
 // dist (tsup onSuccess); byte-identical to the Python add.lua.
@@ -37,12 +37,12 @@ function toBuffer(data: Uint8Array): Buffer {
   return Buffer.from(data.buffer, data.byteOffset, data.byteLength)
 }
 
-export interface RedisFileCacheOptions extends RedisResourceOptions {
+export interface RedisFileCacheOptions extends RedisVFSOptions {
   cacheLimit?: string | number
   maxDrainBytes?: number | null
 }
 
-export class RedisFileCacheStore extends RedisResource implements FileCache {
+export class RedisFileCacheStore extends RedisVFS implements FileCache {
   // Advisory only: unlike the RAM store there is no client-side LRU, so
   // nothing evicts on overflow. Cap memory on the Redis server instead
   // (maxmemory + maxmemory-policy allkeys-lru) to approximate the RAM

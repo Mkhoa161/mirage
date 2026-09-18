@@ -99,7 +99,7 @@ async def apply_mtime_filter(
             spec = PathSpec(virtual=virtual,
                             directory=virtual,
                             resolved=False,
-                            resource_path=mount_key(virtual, mount_prefix))
+                            vfs_path=mount_key(virtual, mount_prefix))
             s = await stat(spec)
         except (FileNotFoundError, ValueError):
             continue
@@ -115,10 +115,10 @@ async def apply_mtime_filter(
 def _matched_path(row: str, search: PathSpec) -> PathSpec:
     virtual = unrespell_raw(row, search.virtual, search.raw_path
                             or search.virtual)
-    prefix = mount_prefix_of(search.virtual, search.resource_path)
+    prefix = mount_prefix_of(search.virtual, search.vfs_path)
     return PathSpec(virtual=virtual,
                     directory=virtual.rsplit("/", 1)[0] or "/",
-                    resource_path=mount_key(virtual, prefix),
+                    vfs_path=mount_key(virtual, prefix),
                     resolved=True,
                     raw_path=row)
 
@@ -160,11 +160,11 @@ async def _backend_stat(
     stat_path: StatPath | None,
 ) -> FileStat | None:
     if stat is not None:
-        prefix = mount_prefix_of(search.virtual, search.resource_path)
+        prefix = mount_prefix_of(search.virtual, search.vfs_path)
         spec = PathSpec(virtual=virtual,
                         directory=virtual,
                         resolved=False,
-                        resource_path=mount_key(virtual, prefix))
+                        vfs_path=mount_key(virtual, prefix))
         try:
             return await stat(spec)
         except (FileNotFoundError, NotADirectoryError, ValueError):
@@ -336,7 +336,7 @@ async def resolve_start(
     # rather than reporting the entry itself.
     if search.raw_path.endswith("/"):
         return NOT_DIR_START
-    prefix = mount_prefix_of(search.virtual, search.resource_path)
+    prefix = mount_prefix_of(search.virtual, search.vfs_path)
     # `-path` matches the display path, so Path nodes carry the mount
     # prefix. Built here rather than read off args.tree: only the
     # native-op path stamps that, the walk stamps inside walk_find.
@@ -502,7 +502,7 @@ async def find(
                            mindepth=mindepth,
                            empty=empty)
     searches = paths if paths else [
-        PathSpec(virtual="/", directory="/", resource_path="")
+        PathSpec(virtual="/", directory="/", vfs_path="")
     ]
     # GNU find walks every start point in operand order — duplicates and
     # all — names each one it cannot stat, keeps going with the rest, and
@@ -584,8 +584,7 @@ async def _find_root(
             return None, "Not a directory"
         except (FileNotFoundError, ValueError):
             return None, "No such file or directory"
-    root_prefix = mount_prefix_of(search_path.virtual,
-                                  search_path.resource_path)
+    root_prefix = mount_prefix_of(search_path.virtual, search_path.vfs_path)
     # `-path` matches the display path as printed; stamp the mount
     # prefix onto Path nodes before the backend walks mount-relative
     # keys (#396). Stamped into a per-operand tree — args is shared by
@@ -691,7 +690,7 @@ async def _stat_entry(
     spec = PathSpec(virtual=path,
                     directory=path,
                     resolved=False,
-                    resource_path=mount_key(path, prefix))
+                    vfs_path=mount_key(path, prefix))
     try:
         return await stat(spec, index)
     except FileNotFoundError:
@@ -716,7 +715,7 @@ async def _is_empty_entry(
         spec = PathSpec(virtual=path,
                         directory=path,
                         resolved=False,
-                        resource_path=mount_key(path, prefix))
+                        vfs_path=mount_key(path, prefix))
         try:
             return len(await readdir(spec, index)) == 0
         except FileNotFoundError:
@@ -753,7 +752,7 @@ async def _walk_collect(
             raise
         unreadable.append(spec.virtual)
         return
-    prefix = mount_prefix_of(spec.virtual, spec.resource_path)
+    prefix = mount_prefix_of(spec.virtual, spec.vfs_path)
     for child in children:
         # Classification is stat's job (an index lookup right after the
         # readdir that populated it). The one in-band proof is a trailing
@@ -774,7 +773,7 @@ async def _walk_collect(
             child_spec = PathSpec(virtual=trimmed,
                                   directory=trimmed,
                                   resolved=False,
-                                  resource_path=mount_key(trimmed, prefix))
+                                  vfs_path=mount_key(trimmed, prefix))
             await _walk_collect(readdir, stat, child_spec, index, maxdepth,
                                 depth + 1, acc, unreadable)
 
@@ -880,7 +879,7 @@ async def walk_find(
     unreadable: list[str] | None = None,
 ) -> list[str]:
     collected: list[tuple[str, str]] = []
-    prefix = mount_prefix_of(search_path.virtual, search_path.resource_path)
+    prefix = mount_prefix_of(search_path.virtual, search_path.vfs_path)
     search_key = search_path.mount_path.strip("/")
     root_path = (search_path.virtual.rstrip("/")
                  if search_path.virtual != "/" else "/")
@@ -1053,7 +1052,7 @@ async def find_walk_generic(
     stat_path = opts.stat_path
     links = opts.ns.links if opts.ns is not None else None
     searches = paths if paths else [
-        PathSpec(virtual="/", directory="/", resource_path="")
+        PathSpec(virtual="/", directory="/", vfs_path="")
     ]
     args = parse_find_args(tuple(texts),
                            name=parsed.name,

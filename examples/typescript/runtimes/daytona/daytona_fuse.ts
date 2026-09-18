@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const sandbox = await daytona.create(
     {
       image: fuseImage(),
-      resources: { cpu: 1, memory: 1, disk: 1 },
+      mounts: { cpu: 1, memory: 1, disk: 1 },
     } as CreateSandboxFromImageParams,
     {
       timeout: 600,

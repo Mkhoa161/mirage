@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.tencent import TencentConfig, TencentResource
 from mirage.types import PathSpec
+from mirage.vfs.tencent import TencentConfig, TencentVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = TencentConfig(
     access_key_id=os.environ["COS_SECRET_ID"],
     secret_access_key=os.environ["COS_SECRET_KEY"],
 )
-resource = TencentResource(config)
-ws = Workspace({"/cos/": resource}, mode=MountMode.READ)
+vfs = TencentVFS(config)
+ws = Workspace({"/cos/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

@@ -75,7 +75,7 @@ def follow_paths(
     Non-path items and paths that resolve to themselves pass through
     untouched. A rewritten spec keeps the user-typed form in ``raw_path``
     so error messages still name the operand as typed; the mount re-stamps
-    ``resource_path`` at dispatch.
+    ``vfs_path`` at dispatch.
 
     Args:
         namespace (Namespace): addressing authority holding the link table.
@@ -108,7 +108,7 @@ def follow_paths(
                                 virtual=virtual,
                                 directory=virtual[:virtual.rfind("/") + 1]
                                 or "/",
-                                resource_path=""))
+                                vfs_path=""))
     return out
 
 

@@ -18,13 +18,13 @@ import pytest
 
 from mirage.commands.builtin.generic.patch import patch_generic
 from mirage.commands.config import CommandOpts
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws(**files):
-    mem = RAMResource()
+    mem = RAMVFS()
     for path, data in files.items():
         asyncio.run(mem.write(PathSpec.from_str_path(path), data=data))
     return Workspace(
@@ -103,13 +103,13 @@ async def test_patch_preserves_virtual_paths_for_mounted_io(prefix, source):
     seen = []
 
     async def read(path):
-        assert path.virtual == prefix + "/" + path.resource_path
-        seen.append(path.resource_path)
-        return files[path.resource_path]
+        assert path.virtual == prefix + "/" + path.vfs_path
+        seen.append(path.vfs_path)
+        return files[path.vfs_path]
 
     async def write(path, data):
-        assert path.virtual == prefix + "/" + path.resource_path
-        files[path.resource_path] = data
+        assert path.virtual == prefix + "/" + path.vfs_path
+        files[path.vfs_path] = data
 
     input_path = PathSpec.from_str_path(prefix + "/fix.diff", "fix.diff")
     flags = {"p": "1"}

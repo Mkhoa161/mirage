@@ -16,7 +16,7 @@ import asyncio
 import dataclasses
 
 from mirage import Decision, MountMode, Outcome, Scope, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 # One profile, one rule. `allow` is what the session may run at all;
 # `ask` puts one of those commands to a person before it runs.
@@ -55,7 +55,7 @@ async def run(ws: Workspace, line: str) -> None:
 
 
 async def main() -> None:
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles={"agent": ROLE},
                    on_ask=reviewer)

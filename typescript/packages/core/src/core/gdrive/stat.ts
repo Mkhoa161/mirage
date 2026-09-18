@@ -73,8 +73,8 @@ export async function stat(
   index?: IndexCacheStore,
 ): Promise<FileStat> {
   void accessor
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
-  const key = path.resourcePath
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
+  const key = path.vfsPath
   if (key === '') return new FileStat({ name: '/', type: FileType.DIRECTORY })
 
   if (index === undefined) return statFromApi(accessor, key, path.virtual)
@@ -91,13 +91,13 @@ export async function stat(
         virtual: parentVirtual,
         directory: parentVirtual,
         resolved: false,
-        resourcePath: mountKey(parentVirtual, prefix),
+        vfsPath: mountKey(parentVirtual, prefix),
       }),
       index,
     ),
   )
   if (entry === null) return statFromApi(accessor, key, path.virtual)
-  if (DIRECTORY_RESOURCE_TYPES.has(entry.resourceType)) {
+  if (DIRECTORY_RESOURCE_TYPES.has(entry.vfsType)) {
     return new FileStat({
       name: entry.vfsName !== '' ? entry.vfsName : entry.name,
       type: FileType.DIRECTORY,
@@ -114,7 +114,7 @@ export async function stat(
     fingerprint: entry.remoteTime !== '' ? entry.remoteTime : null,
     extra: {
       file_id: entry.id,
-      resource_type: entry.resourceType,
+      resource_type: entry.vfsType,
     },
   })
 }

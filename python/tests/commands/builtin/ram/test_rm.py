@@ -14,12 +14,12 @@
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 
 
 @pytest.fixture
 def workspace():
-    return Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio

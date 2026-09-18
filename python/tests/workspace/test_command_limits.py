@@ -14,13 +14,13 @@
 
 import asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import Limit, MountMode, OnExceed
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _build_ws(n_lines: int) -> Workspace:
-    r = RAMResource()
+    r = RAMVFS()
     r._store.dirs.add("/")
     body = b"".join(f"line{i}\n".encode() for i in range(n_lines))
     r._store.files["/big.txt"] = body

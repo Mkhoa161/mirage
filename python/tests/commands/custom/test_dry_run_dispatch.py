@@ -20,8 +20,8 @@ from mirage.commands.registry import RegisteredCommand
 from mirage.commands.spec import SPECS
 from mirage.io.types import IOResult
 from mirage.provision import Precision, ProvisionResult
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -32,7 +32,7 @@ def _run(coro):
 @pytest.mark.asyncio
 async def test_dry_run_dispatch_with_provision_fn():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/a.txt", b"hello world")
@@ -51,7 +51,7 @@ async def test_dry_run_dispatch_with_provision_fn():
     rc = RegisteredCommand(
         "cat",
         spec=SPECS["cat"],
-        resource="ram",
+        vfs="ram",
         filetype=None,
         fn=my_cat,
         provision_fn=my_cat_dry_run,
@@ -66,7 +66,7 @@ async def test_dry_run_dispatch_with_provision_fn():
 
 def test_dry_run_dispatch_without_provision_fn():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     asyncio.run(ws.fs.write("/tmp/a.txt", b"hello"))
@@ -77,7 +77,7 @@ def test_dry_run_dispatch_without_provision_fn():
     rc = RegisteredCommand(
         "mycmd",
         spec=SPECS["cat"],
-        resource="ram",
+        vfs="ram",
         filetype=None,
         fn=my_cmd,
     )
@@ -90,7 +90,7 @@ def test_dry_run_dispatch_without_provision_fn():
 
 def test_dry_run_command_not_found():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     result = _run(ws.execute("nonexistent /tmp/a.txt", provision=True))
@@ -101,7 +101,7 @@ def test_dry_run_command_not_found():
 @pytest.mark.asyncio
 async def test_dry_run_filetype_specific():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/data.avro", b"avro-bytes")
@@ -126,14 +126,14 @@ async def test_dry_run_filetype_specific():
     mount.register(
         RegisteredCommand("cat",
                           spec=SPECS["cat"],
-                          resource="ram",
+                          vfs="ram",
                           filetype=None,
                           fn=cat_generic,
                           provision_fn=cat_generic_dry))
     mount.register(
         RegisteredCommand("cat",
                           spec=SPECS["cat"],
-                          resource="ram",
+                          vfs="ram",
                           filetype=".avro",
                           fn=cat_avro,
                           provision_fn=cat_avro_dry))

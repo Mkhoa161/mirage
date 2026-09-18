@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
 import { IOResult } from '../../io/types.ts'
 import type { Action, CommandContext, Policy } from '../../policy/index.ts'
 import { Precision } from '../../provision/types.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { NodeKind } from '../../shell/node_kind.ts'
 import { createShellParser } from '../../shell/parse/index.ts'
 import { MountMode } from '../../types.ts'
@@ -75,7 +75,7 @@ const PLANS: Record<NodeKind, [string, string, string, string]> = {
 
 function buildWorkspace(policies: Policy[] = []): Workspace {
   return new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
@@ -154,7 +154,7 @@ describe('planner covers every statement kind', () => {
 
   it('follows symlinks and spans mounts', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource(), '/data2': new RAMResource() },
+      { '/data': new RAMVFS(), '/data2': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
@@ -180,7 +180,7 @@ describe('planner covers every statement kind', () => {
 
   it('cross-mount grep keeps parsed flags and pattern', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource(), '/data2': new RAMResource() },
+      { '/data': new RAMVFS(), '/data2': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),

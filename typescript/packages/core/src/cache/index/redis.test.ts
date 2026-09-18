@@ -27,8 +27,8 @@ describe('RedisIndexCacheStore default keyPrefix', () => {
 const REDIS_URL = process.env.REDIS_URL
 const skip = REDIS_URL === undefined
 
-function entry(id: string, name: string, resourceType = 'file'): IndexEntry {
-  return new IndexEntry({ id, name, resourceType })
+function entry(id: string, name: string, vfsType = 'file'): IndexEntry {
+  return new IndexEntry({ id, name, vfsType })
 }
 
 describe.skipIf(skip)('RedisIndexCacheStore', () => {
@@ -355,7 +355,7 @@ describe.skipIf(skip)('RedisIndexCacheStore', () => {
       new IndexEntry({
         id: '/a.txt',
         name: 'a.txt',
-        resourceType: 'file',
+        vfsType: 'file',
         remoteTime: '2026-01-01T00:00:00Z',
         indexTime: '2026-01-01T00:00:00Z',
         size: 6,
@@ -374,7 +374,7 @@ describe.skipIf(skip)('RedisIndexCacheStore', () => {
       '{"id":"/b.txt","name":"b.txt","resource_type":"file","remote_time":"","index_time":"2026-01-01T00:00:00Z","vfs_name":"","size":null,"extra":{"size_bytes":9}}',
     )
     const r = await store.get('/b.txt')
-    expect(r.entry?.resourceType).toBe('file')
+    expect(r.entry?.vfsType).toBe('file')
     expect(r.entry?.indexTime).toBe('2026-01-01T00:00:00Z')
     expect(r.entry?.size).toBeNull()
     expect(r.entry?.extra).toEqual({ size_bytes: 9 })
@@ -382,7 +382,7 @@ describe.skipIf(skip)('RedisIndexCacheStore', () => {
 
   it('put + get round-trips entry metadata', async () => {
     const extra = { drive_id: 'drive-a', nested: { slug: 'alpha', tags: ['x', 'y'] } }
-    await store.put('/a', new IndexEntry({ id: 'id-a', name: 'a', resourceType: 'file', extra }))
+    await store.put('/a', new IndexEntry({ id: 'id-a', name: 'a', vfsType: 'file', extra }))
     const r = await store.get('/a')
     expect(r.entry?.id).toBe('id-a')
     expect(r.entry?.name).toBe('a')
@@ -395,7 +395,7 @@ describe.skipIf(skip)('RedisIndexCacheStore', () => {
     await store.setDir('/dir', [
       [
         'with-extra',
-        new IndexEntry({ id: 'id-extra', name: 'with-extra', resourceType: 'file', extra }),
+        new IndexEntry({ id: 'id-extra', name: 'with-extra', vfsType: 'file', extra }),
       ],
       ['without-extra', entry('id-empty', 'without-extra')],
     ])

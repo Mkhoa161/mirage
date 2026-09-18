@@ -43,9 +43,7 @@ export async function sedGeneric(
   const scriptParts = [...eList]
   const firstPath = paths[0]
   const scriptPrefix =
-    (firstPath === undefined
-      ? undefined
-      : mountPrefixOf(firstPath.virtual, firstPath.resourcePath)) ??
+    (firstPath === undefined ? undefined : mountPrefixOf(firstPath.virtual, firstPath.vfsPath)) ??
     opts.mountPrefix ??
     ''
   for (const filePath of fList) {

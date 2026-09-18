@@ -19,8 +19,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.langfuse import LangfuseConfig, LangfuseResource
 from mirage.types import PathSpec
+from mirage.vfs.langfuse import LangfuseConfig, LangfuseVFS
 
 load_dotenv(".env.development")
 
@@ -30,7 +30,7 @@ config = LangfuseConfig(
     host=os.environ["LANGFUSE_HOST"],
     default_trace_limit=20,
 )
-resource = LangfuseResource(config=config)
+vfs = LangfuseVFS(config=config)
 
 
 async def _run(ws, cmd):
@@ -58,7 +58,7 @@ async def _timed(ws, cmd):
 
 
 async def main():
-    ws = Workspace({"/langfuse": resource}, mode=MountMode.READ)
+    ws = Workspace({"/langfuse": vfs}, mode=MountMode.READ)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /langfuse/__nf_missing__.txt",
@@ -80,7 +80,7 @@ async def main():
     await _run(ws, "ls /langfuse/datasets/")
 
     print("\n" + "=" * 60)
-    print("CAT across different resource types")
+    print("CAT across different VFS types")
     print("=" * 60)
 
     r = await ws.execute("ls /langfuse/traces/")
@@ -114,7 +114,7 @@ async def main():
         await _run(ws, f'grep "name" "{tp}"')
 
     print("\n" + "=" * 60)
-    print("JQ across different resource types")
+    print("JQ across different VFS types")
     print("=" * 60)
 
     if trace_files:

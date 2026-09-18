@@ -16,15 +16,15 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
 from mirage.utils.errors import ReadOnlyError
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.session import reset_current_session, set_current_session
 
 
-def _seed(name: str, body: bytes) -> RAMResource:
-    r = RAMResource()
+def _seed(name: str, body: bytes) -> RAMVFS:
+    r = RAMVFS()
     r._store.files[f"/{name}"] = body
     return r
 

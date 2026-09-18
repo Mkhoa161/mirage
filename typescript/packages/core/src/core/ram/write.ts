@@ -14,7 +14,7 @@
 
 import { record, startOp } from '../../observe/context.ts'
 import type { RAMAccessor } from '../../accessor/ram.ts'
-import { ResourceName, type PathSpec } from '../../types.ts'
+import { VFSName, type PathSpec } from '../../types.ts'
 import { norm, nowIso } from './utils.ts'
 import { invalidateAfterWrite } from '../../cache/context.ts'
 import { checkDestParents } from './dest.ts'
@@ -29,7 +29,7 @@ export async function writeBytes(
   checkDestParents(accessor, path, p)
   accessor.store.files.set(p, data)
   accessor.store.modified.set(p, nowIso())
-  record('write', p, ResourceName.RAM, data.byteLength, timer)
+  record('write', p, VFSName.RAM, data.byteLength, timer)
   await invalidateAfterWrite(path)
   return Promise.resolve()
 }

@@ -89,7 +89,7 @@ async function listTeamsDir(
       new IndexEntry({
         id: pickString(team, 'id'),
         name: pickString(team, 'name') || pickString(team, 'key') || pickString(team, 'id'),
-        resourceType: 'linear/team',
+        vfsType: 'linear/team',
         remoteTime: pickString(team, 'updatedAt'),
         vfsName: dirname,
         extra: {
@@ -114,7 +114,7 @@ function listTeam(
       new IndexEntry({
         id: entry.id,
         name: 'team.json',
-        resourceType: 'linear/team_json',
+        vfsType: 'linear/team_json',
         remoteTime: entry.remoteTime,
         vfsName: 'team.json',
         size: extraSize(entry),
@@ -133,7 +133,7 @@ function listTeam(
       new IndexEntry({
         id: entry.id,
         name,
-        resourceType: `linear/${name}_dir`,
+        vfsType: `linear/${name}_dir`,
         vfsName: name,
         extra,
       }),
@@ -155,7 +155,7 @@ async function listMembers(
       new IndexEntry({
         id: pickString(user, 'id'),
         name: pickString(user, 'name') || pickString(user, 'displayName') || pickString(user, 'id'),
-        resourceType: 'linear/user',
+        vfsType: 'linear/user',
         remoteTime: pickString(user, 'updatedAt'),
         vfsName: filename,
         size: toJsonBytes(normalizeUser(user)).length,
@@ -177,7 +177,7 @@ async function listIssues(
       new IndexEntry({
         id: pickString(issue, 'id'),
         name: pickString(issue, 'identifier') || pickString(issue, 'id'),
-        resourceType: 'linear/issue',
+        vfsType: 'linear/issue',
         remoteTime: pickString(issue, 'updatedAt'),
         vfsName: dirname,
         extra: {
@@ -212,7 +212,7 @@ async function listIssue(
       new IndexEntry({
         id: issueId,
         name: 'issue.json',
-        resourceType: 'linear/issue_json',
+        vfsType: 'linear/issue_json',
         remoteTime: entry.remoteTime,
         vfsName: 'issue.json',
         size: extraSize(entry),
@@ -223,7 +223,7 @@ async function listIssue(
       new IndexEntry({
         id: issueId,
         name: 'comments.jsonl',
-        resourceType: 'linear/comments',
+        vfsType: 'linear/comments',
         remoteTime: commentsTime !== '' ? commentsTime : entry.remoteTime,
         vfsName: 'comments.jsonl',
         size: jsonlBytesByCreatedAt(rows).length,
@@ -264,7 +264,7 @@ async function listProjects(
       new IndexEntry({
         id: projectId,
         name: pickString(project, 'name') || projectId,
-        resourceType: 'linear/project',
+        vfsType: 'linear/project',
         remoteTime: pickString(project, 'updatedAt'),
         vfsName: filename,
         size: toJsonBytes(rendered).length,
@@ -287,7 +287,7 @@ async function listCycles(
       new IndexEntry({
         id: pickString(cycle, 'id'),
         name: pickString(cycle, 'name') || pickString(cycle, 'id'),
-        resourceType: 'linear/cycle',
+        vfsType: 'linear/cycle',
         remoteTime: pickString(cycle, 'updatedAt'),
         vfsName: filename,
         size: toJsonBytes(normalizeCycle(cycle, teamId)).length,
@@ -309,7 +309,7 @@ async function listDocuments(
       new IndexEntry({
         id: pickString(document, 'id'),
         name: pickString(document, 'title') || pickString(document, 'id'),
-        resourceType: 'linear/document',
+        vfsType: 'linear/document',
         remoteTime: pickString(document, 'updatedAt'),
         vfsName: filename,
         size: toJsonBytes(normalizeDocument(document)).length,

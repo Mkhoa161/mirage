@@ -23,9 +23,9 @@ from claude_agent_sdk import query
 
 from mirage import Workspace
 from mirage.agents.claude_agent_sdk import build_options
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.s3 import S3Config, S3VFS
 
-ws = Workspace({"/s3": S3Resource(S3Config(bucket="my-bucket"))})
+ws = Workspace({"/s3": S3VFS(S3Config(bucket="my-bucket"))})
 
 async for msg in query(
     prompt="cat /s3/data.csv | grep error",

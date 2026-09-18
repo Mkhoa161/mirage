@@ -39,7 +39,7 @@ export async function read(
   options?: { offset?: number; size?: number },
 ): Promise<Uint8Array> {
   const window = windowFor(options?.offset ?? 0, options?.size ?? null)
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   let p = path.virtual
   if (prefix !== '' && p.startsWith(prefix)) p = p.slice(prefix.length) || '/'
   const key = stripSlash(p)
@@ -56,7 +56,7 @@ export async function read(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.resourceType === 'box/folder') throw eisdir(path.virtual)
+  if (entry.vfsType === 'box/folder') throw eisdir(path.virtual)
   return downloadFile(accessor.tokenManager, entry.id, window)
 }
 
@@ -65,7 +65,7 @@ export async function* stream(
   path: PathSpec,
   index?: IndexCacheStore,
 ): AsyncIterable<Uint8Array> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   let p = path.virtual
   if (prefix !== '' && p.startsWith(prefix)) p = p.slice(prefix.length) || '/'
   const key = stripSlash(p)
@@ -82,7 +82,7 @@ export async function* stream(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.resourceType === 'box/folder') throw eisdir(path.virtual)
+  if (entry.vfsType === 'box/folder') throw eisdir(path.virtual)
   for await (const chunk of downloadFileStream(accessor.tokenManager, entry.id)) {
     yield chunk
   }

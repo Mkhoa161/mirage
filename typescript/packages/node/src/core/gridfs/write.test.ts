@@ -23,7 +23,7 @@ vi.mock('./client.ts', async () => {
 import { runWithCacheManager } from '@struktoai/mirage-core/cache/context'
 import { PathSpec } from '@struktoai/mirage-core/types'
 import { GridFSAccessor } from '../../accessor/gridfs.ts'
-import type { GridFSConfig } from '../../resource/gridfs/config.ts'
+import type { GridFSConfig } from '../../vfs/gridfs/config.ts'
 import * as clientMod from './client.ts'
 import { write } from './write.ts'
 
@@ -74,7 +74,7 @@ async function runWrite(mountPath: string): Promise<{ manager: FakeManager; keys
     database: 'db',
   } as GridFSConfig)
   const spec = new PathSpec({
-    resourcePath: mountPath.replace(/^\//, ''),
+    vfsPath: mountPath.replace(/^\//, ''),
     virtual: `/mnt${mountPath}`,
     directory: '/mnt/',
   })

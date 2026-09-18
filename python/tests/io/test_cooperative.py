@@ -144,9 +144,9 @@ async def test_cancelled_read_chars_closes_source():
 @pytest.mark.asyncio
 async def test_aborted_execution_records_failure():
     from mirage import Workspace
-    from mirage.resource.ram import RAMResource
+    from mirage.vfs.ram import RAMVFS
     from mirage.workspace.abort import MirageAbortError
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     cancel = asyncio.Event()
 
     async def source():
@@ -296,9 +296,9 @@ async def test_line_reader_discards_cache_on_cancel(method, monkeypatch):
 @pytest.mark.asyncio
 async def test_cancel_during_cache_fill_aborts():
     from mirage import Workspace
-    from mirage.resource.ram import RAMResource
+    from mirage.vfs.ram import RAMVFS
     from mirage.workspace.abort import MirageAbortError
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     cancel = asyncio.Event()
 
     real_apply_io = ws.apply_io
@@ -326,8 +326,8 @@ async def test_cancel_during_cache_fill_aborts():
 @pytest.mark.asyncio
 async def test_cancel_reaches_a_whole_line_runtime():
     from mirage import LineExecutorMixin, Runtime, Workspace
-    from mirage.resource.ram import RAMResource
     from mirage.types import MountMode
+    from mirage.vfs.ram import RAMVFS
     from mirage.workspace.abort import MirageAbortError
 
     class Hanging(Runtime, LineExecutorMixin):
@@ -337,9 +337,9 @@ async def test_cancel_reaches_a_whole_line_runtime():
         async def run_line(self, line, stdin, env, cwd):
             await asyncio.Event().wait()
 
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[Hanging(), "vfs"])
+                   runtimes=[Hanging(), "workspace"])
     cancel = asyncio.Event()
     asyncio.get_running_loop().call_later(.01, cancel.set)
     try:

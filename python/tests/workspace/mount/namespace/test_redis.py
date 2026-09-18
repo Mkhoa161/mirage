@@ -18,8 +18,8 @@ import uuid
 import pytest
 import pytest_asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.mount.namespace.redis import RedisNamespaceStore
 from mirage.workspace.mount.namespace.store import NamespaceStore
@@ -84,8 +84,8 @@ def test_redis_store_subclasses_namespace_store():
     assert issubclass(RedisNamespaceStore, NamespaceStore)
 
 
-class _OverlayRAMResource(RAMResource):
-    """RAM resource with the native setattr op stripped, standing in for
+class _OverlayRAMVFS(RAMVFS):
+    """RAM VFS with the native setattr op stripped, standing in for
     an API backend that has no attribute slot."""
 
     def __init__(self) -> None:
@@ -95,7 +95,7 @@ class _OverlayRAMResource(RAMResource):
 
 @pytest.mark.asyncio
 async def test_namespace_survives_workspace_restart(prefix):
-    ws = Workspace({"/data": _OverlayRAMResource()},
+    ws = Workspace({"/data": _OverlayRAMVFS()},
                    mode=MountMode.WRITE,
                    namespace_store=RedisNamespaceStore(url=REDIS_URL,
                                                        key_prefix=prefix))
@@ -104,7 +104,7 @@ async def test_namespace_survives_workspace_restart(prefix):
     await ws.execute("ln -s /data/f.txt /data/link")
     await ws.close()
 
-    reborn = Workspace({"/data": _OverlayRAMResource()},
+    reborn = Workspace({"/data": _OverlayRAMVFS()},
                        mode=MountMode.WRITE,
                        namespace_store=RedisNamespaceStore(url=REDIS_URL,
                                                            key_prefix=prefix))
@@ -124,7 +124,7 @@ async def test_namespace_survives_workspace_restart(prefix):
 
 @pytest.mark.asyncio
 async def test_whoami_shared_across_workspaces(prefix):
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    agent_id="alice",
                    namespace_store=RedisNamespaceStore(url=REDIS_URL,
                                                        key_prefix=prefix))
@@ -134,7 +134,7 @@ async def test_whoami_shared_across_workspaces(prefix):
 
     # A fresh runtime attached to the same store, launched without an
     # agent_id, adopts the workspace's identity.
-    reborn = Workspace({"/data": RAMResource()},
+    reborn = Workspace({"/data": RAMVFS()},
                        namespace_store=RedisNamespaceStore(url=REDIS_URL,
                                                            key_prefix=prefix))
     result = await reborn.execute("whoami")

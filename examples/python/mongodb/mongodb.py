@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.mongodb import MongoDBConfig, MongoDBResource
 from mirage.types import PathSpec
+from mirage.vfs.mongodb import MongoDBConfig, MongoDBVFS
 
 load_dotenv(".env.development")
 
@@ -34,7 +34,7 @@ config = MongoDBConfig(
     databases=[DB],
     elide_fields={f"{DB}.{COLL_EMB}": ["vector"]},
 )
-resource = MongoDBResource(config=config)
+vfs = MongoDBVFS(config=config)
 
 
 async def _run(ws, cmd):
@@ -56,7 +56,7 @@ async def _run(ws, cmd):
 
 
 async def main():
-    ws = Workspace({"/mongodb": resource}, mode=MountMode.READ)
+    ws = Workspace({"/mongodb": vfs}, mode=MountMode.READ)
 
     coll_doc = f"/mongodb/{DB}/collections/{COLL_HET}/documents.jsonl"
     coll_schema = f"/mongodb/{DB}/collections/{COLL_HET}/schema.json"

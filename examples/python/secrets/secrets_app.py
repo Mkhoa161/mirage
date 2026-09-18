@@ -18,9 +18,9 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.slack import SlackConfig, SlackResource
 from mirage.secrets import (EnvVar, SecretRef, SecretSource,
                             resolve_config_secrets, resolve_sources)
+from mirage.vfs.slack import SlackConfig, SlackVFS
 
 load_dotenv(".env.development")
 
@@ -79,10 +79,9 @@ async def main() -> None:
     ws = Workspace(
         {
             "/remote":
-            SlackResource(config=SlackConfig(**remote)),
+            SlackVFS(config=SlackConfig(**remote)),
             "/local":
-            SlackResource(config=SlackConfig(
-                token=os.environ["SLACK_BOT_TOKEN"])),
+            SlackVFS(config=SlackConfig(token=os.environ["SLACK_BOT_TOKEN"])),
         },
         mode=MountMode.READ,
         secrets={"op": OP},

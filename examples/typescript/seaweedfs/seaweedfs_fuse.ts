@@ -23,7 +23,7 @@ import {
   Mount,
   MountBackend,
   MountMode,
-  SeaweedFSResource,
+  SeaweedFSVFS,
   Workspace,
   type SeaweedFSConfig,
 } from "@struktoai/mirage-node";
@@ -68,7 +68,7 @@ async function seed(ws: Workspace): Promise<void> {
 async function main(): Promise<void> {
   const cfg = configFromEnv();
   const ws = new Workspace({
-    "/seaweedfs/": new Mount(new SeaweedFSResource(cfg), {
+    "/seaweedfs/": new Mount(new SeaweedFSVFS(cfg), {
       mode: MountMode.WRITE,
       backend: MountBackend.FUSE,
     }),

@@ -285,7 +285,7 @@ def _requirement_met(req: str) -> bool:
 
 
 def _s3_config() -> Any:
-    from mirage.resource.s3 import S3Config
+    from mirage.vfs.s3 import S3Config
     endpoint = _ensure_s3()
     return S3Config(bucket=BUCKET,
                     region="us-east-1",
@@ -353,32 +353,32 @@ async def _ensure_mongo() -> None:
     _mongo_seeded = True
 
 
-async def _build_resource(spec: dict[str, Any], run_id: str) -> Any:
-    kind = spec["resource"]
+async def _build_vfs(spec: dict[str, Any], run_id: str) -> Any:
+    kind = spec["vfs"]
     if kind == "ram":
-        from mirage.resource.ram import RAMResource
-        resource = RAMResource()
+        from mirage.vfs.ram import RAMVFS
+        vfs = RAMVFS()
         if "generated_files" in spec:
-            resource.load_state({
+            vfs.load_state({
                 "files": {
                     f"/file-{i}.txt": b"unused"
                     for i in range(spec["generated_files"])
                 },
             })
-        return resource
+        return vfs
     if kind == "redis":
-        from mirage.resource.redis import RedisResource
-        return RedisResource(url=os.environ["REDIS_URL"],
-                             key_prefix=f"mirage-integ-runtime-{run_id}/")
+        from mirage.vfs.redis import RedisVFS
+        return RedisVFS(url=os.environ["REDIS_URL"],
+                        key_prefix=f"mirage-integ-runtime-{run_id}/")
     if kind == "s3":
-        from mirage.resource.s3 import S3Resource
-        return S3Resource(_s3_config())
+        from mirage.vfs.s3 import S3VFS
+        return S3VFS(_s3_config())
     if kind == "mongodb":
-        from mirage.resource.mongodb import MongoDBConfig, MongoDBResource
+        from mirage.vfs.mongodb import MongoDBConfig, MongoDBVFS
         await _ensure_mongo()
-        return MongoDBResource(config=MongoDBConfig(
-            uri=os.environ["MONGODB_URI"], databases=[DB]))
-    raise ValueError(f"unknown resource kind: {kind!r}")
+        return MongoDBVFS(config=MongoDBConfig(uri=os.environ["MONGODB_URI"],
+                                               databases=[DB]))
+    raise ValueError(f"unknown VFS kind: {kind!r}")
 
 
 def _build_entry(entry: Any) -> Any:
@@ -426,15 +426,14 @@ async def _build_workspace(world: dict[str, Any], run_id: str) -> Workspace:
     _register_runtimes(world.get("register_runtimes", {}))
     mounts: dict[str, Any] = {}
     seeds: list[tuple[str, str, bytes]] = []
-    mount_specs = world.get("mounts", {"/ram": {"resource": "ram"}})
+    mount_specs = world.get("mounts", {"/ram": {"vfs": "ram"}})
     for prefix, spec in mount_specs.items():
-        resource = await _build_resource(spec, run_id)
+        vfs = await _build_vfs(spec, run_id)
         guards = {
             cmd: Limit(**kwargs)
             for cmd, kwargs in spec.get("limits", {}).items()
         }
-        mounts[prefix] = (resource, MountMode.EXEC,
-                          guards) if guards else resource
+        mounts[prefix] = (vfs, MountMode.EXEC, guards) if guards else vfs
         for name, content in spec.get("files", {}).items():
             seeds.append((prefix, name, content.encode()))
     kwargs: dict[str, Any] = {}

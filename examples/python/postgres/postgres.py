@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.postgres import PostgresConfig, PostgresResource
 from mirage.types import PathSpec
+from mirage.vfs.postgres import PostgresConfig, PostgresVFS
 
 load_dotenv(".env.development")
 
@@ -28,7 +28,7 @@ config = PostgresConfig(
     max_read_rows=200,
     max_read_bytes=1024 * 1024,
 )
-resource = PostgresResource(config=config)
+vfs = PostgresVFS(config=config)
 
 
 async def _run(ws, cmd):
@@ -50,7 +50,7 @@ async def _run(ws, cmd):
 
 
 async def main():
-    ws = Workspace({"/pg": resource}, mode=MountMode.READ)
+    ws = Workspace({"/pg": vfs}, mode=MountMode.READ)
 
     print("=" * 60)
     print("LISTING (ls / tree)")
@@ -145,7 +145,7 @@ async def main():
     await _run(ws, "pwd")
     await _run(ws, "ls")
 
-    await resource.accessor.close()
+    await vfs.accessor.close()
 
 
 if __name__ == "__main__":

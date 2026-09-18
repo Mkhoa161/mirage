@@ -23,7 +23,6 @@ from mirage import Workspace
 from mirage.policy import Action, CommandContext, Deny, Policy
 from mirage.policy.match import Outcome
 from mirage.policy.types import Scope
-from mirage.resource.ram import RAMResource
 from mirage.runtime.base import Runtime
 from mirage.runtime.mixin import LineExecutorMixin
 from mirage.runtime.types import RunResult
@@ -32,6 +31,7 @@ from mirage.secrets.registry import register_secrets
 from mirage.secrets.types import ResolvedSecret
 from mirage.shell.console import JobConsole
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 
 
 class _FakeConfig(BaseModel):
@@ -94,7 +94,7 @@ DENY_CAT = {
 
 @pytest_asyncio.fixture()
 async def ws():
-    workspace = Workspace({"/data/": RAMResource()},
+    workspace = Workspace({"/data/": RAMVFS()},
                           mode=MountMode.WRITE,
                           profiles={"r": PROFILE})
     await workspace.execute("mkdir -p /data/prod")
@@ -290,7 +290,7 @@ SEALED = {
 
 @pytest_asyncio.fixture()
 async def sealed():
-    workspace = Workspace({"/data/": RAMResource()},
+    workspace = Workspace({"/data/": RAMVFS()},
                           mode=MountMode.WRITE,
                           profiles={"r": SEALED})
     await workspace.execute("mkdir -p /data/prod")
@@ -335,7 +335,7 @@ class _NoCat(Policy):
 
 @pytest_asyncio.fixture()
 async def coded():
-    workspace = Workspace({"/data/": RAMResource()},
+    workspace = Workspace({"/data/": RAMVFS()},
                           mode=MountMode.WRITE,
                           policies=[_NoCat()])
     await workspace.fs.write("/data/a.txt", b"a\n")
@@ -384,7 +384,7 @@ async def _inline_workspace(on_ask, profile=PROFILE) -> Workspace:
         on_ask (AskHandler): the host.
         profile (dict): the document session ``s`` runs under.
     """
-    workspace = Workspace({"/data/": RAMResource()},
+    workspace = Workspace({"/data/": RAMVFS()},
                           mode=MountMode.WRITE,
                           profiles={"r": profile},
                           on_ask=on_ask)
@@ -518,7 +518,7 @@ async def test_a_grant_does_not_outlive_a_line_that_fails_before_it_runs(
     monkeypatch.setattr(secrets_registry, "_CUSTOM", {})
     register_secrets("fake", _FakeConfig, _dead_fetch)
     asked: list[str] = []
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles={"r": PROFILE},
                    env={"TOKEN": {
@@ -761,10 +761,10 @@ async def test_a_whole_line_keeps_its_first_answer_while_its_second_waits():
     # every retry asked for the cat again; the answers could never
     # accumulate to a line that runs.
     box = _LineBox()
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.EXEC,
                    profiles={"r": PROFILE},
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     try:
         await ws.fs.write("/data/secret.txt", b"s\n")
         ws.create_session("s", profile="r")

@@ -163,7 +163,7 @@ async function removeEntries(
       failed.push(base)
       continue
     }
-    const spec = PathSpec.fromStrPath(node.path, rekey(src.virtual, src.resourcePath, node.path))
+    const spec = PathSpec.fromStrPath(node.path, rekey(src.virtual, src.vfsPath, node.path))
     try {
       if (node.isDir) await strategy.rmdir(spec)
       else await strategy.unlink(spec)

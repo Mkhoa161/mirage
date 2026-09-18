@@ -19,8 +19,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.github import GitHubConfig, GitHubResource
 from mirage.types import PathSpec
+from mirage.vfs.github import GitHubConfig, GitHubVFS
 
 load_dotenv(".env.development")
 
@@ -34,13 +34,13 @@ async def _timed(ws, cmd):
 
 
 async def main() -> None:
-    resource = GitHubResource(
+    vfs = GitHubVFS(
         config=config,
         owner="strukto-ai",
         repo="mirage",
         ref="main",
     )
-    ws = Workspace({"/github": resource}, mode=MountMode.READ)
+    ws = Workspace({"/github": vfs}, mode=MountMode.READ)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /github/__nf_missing__.txt",
@@ -60,8 +60,7 @@ async def main() -> None:
     r = await ws.execute("cat /github/python/pyproject.toml")
     print(await r.stdout_str())
 
-    r = await ws.execute(
-        "grep 'BaseResource' /github/python/mirage/resource/base.py")
+    r = await ws.execute("grep 'BaseVFS' /github/python/mirage/vfs/base.py")
     print(await r.stdout_str())
 
     r = await ws.execute("grep 'import' /github/python/mirage/*")
@@ -125,8 +124,7 @@ async def main() -> None:
     print(await r.stdout_str())
 
     print("=== grep -l (files with matches) ===")
-    r = await ws.execute(
-        "grep -rl 'BaseResource' /github/python/mirage/resource/")
+    r = await ws.execute("grep -rl 'BaseVFS' /github/python/mirage/vfs/")
     print(await r.stdout_str())
 
     # ── native search dispatch (GitHub code search narrows files) ──
@@ -155,9 +153,9 @@ async def main() -> None:
     # A large subdir (>100 files) is what makes the per-file fallback slow;
     # these cases narrow via GitHub code search instead of fetching each file.
     big_dir = "/github/python/mirage/"
-    print(f"\n=== grep -rln BaseResource {big_dir} "
+    print(f"\n=== grep -rln BaseVFS {big_dir} "
           "(subdir narrowing, -l short-circuit) ===")
-    ms, out = await _timed(ws, f"grep -rln BaseResource {big_dir}")
+    ms, out = await _timed(ws, f"grep -rln BaseVFS {big_dir}")
     files = out.strip().splitlines() if out.strip() else []
     print(f"  {ms:.0f}ms  files-with-matches: {len(files)}")
     for line in files[:3]:
@@ -326,7 +324,7 @@ async def main() -> None:
     print(await r.stdout_str())
 
     print("=== rg ===")
-    r = await ws.execute("rg 'BaseResource' /github/python/mirage/resource/")
+    r = await ws.execute("rg 'BaseVFS' /github/python/mirage/vfs/")
     print(await r.stdout_str())
 
     print(

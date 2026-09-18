@@ -17,7 +17,7 @@
 // Self-contained: seeds a few objects, drives them through the virtual
 // executor, then cleans up. Point it at a SeaweedFS S3 gateway (default
 // http://localhost:8333). Loads credentials from .env.development at the repo root.
-import { MountMode, SeaweedFSResource, Workspace, type SeaweedFSConfig } from '@struktoai/mirage-node'
+import { MountMode, SeaweedFSVFS, Workspace, type SeaweedFSConfig } from '@struktoai/mirage-node'
 import dotenv from 'dotenv'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,7 +37,7 @@ function configFromEnv(): SeaweedFSConfig {
 async function main(): Promise<void> {
   const cfg = configFromEnv()
   const ws = new Workspace(
-    { '/seaweedfs/': new SeaweedFSResource(cfg) },
+    { '/seaweedfs/': new SeaweedFSVFS(cfg) },
     { mode: MountMode.WRITE },
   )
 

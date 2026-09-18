@@ -41,12 +41,12 @@ Mirage ist **ein virtuelles Terminal für KI-Agenten**. Das virtuelle Dateisyste
 ```python
 ws = Workspace(
     {
-        "/tmp":   (RAMResource(), MountMode.EXEC),
-        "/redis": (RedisResource(url=redis_url), MountMode.WRITE),
-        "/slack": (SlackResource(SlackConfig(token=slack_bot_token)), MountMode.EXEC),
+        "/tmp":   (RAMVFS(), MountMode.EXEC),
+        "/redis": (RedisVFS(url=redis_url), MountMode.WRITE),
+        "/slack": (SlackVFS(SlackConfig(token=slack_bot_token)), MountMode.EXEC),
     },
     # monty fängt python ab, Skripte laufen also sandboxed im Workspace
-    runtimes=[MontyRuntime(captures=["python", "python3"]), "vfs"],
+    runtimes=[MontyRuntime(captures=["python", "python3"]), "workspace"],
 )
 
 # ein einziges grep durchsucht alle Quellen
@@ -121,12 +121,12 @@ npx @struktoai/mirage-cli
 
 ```python
 from mirage import Workspace
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3Config, S3VFS
 
 ws = Workspace({
-    "/data": RAMResource(),
-    "/s3":   S3Resource(S3Config(bucket="my-bucket")),
+    "/data": RAMVFS(),
+    "/s3":   S3VFS(S3Config(bucket="my-bucket")),
 })
 
 await ws.execute("cp /s3/report.csv /data/report.csv")
@@ -138,11 +138,11 @@ await ws.snapshot("demo.tar")
 ### TypeScript
 
 ```ts
-import { Workspace, RAMResource, S3Resource } from '@struktoai/mirage-node'
+import { Workspace, RAMVFS, S3VFS } from '@struktoai/mirage-node'
 
 const ws = new Workspace({
-  '/data': new RAMResource(),
-  '/s3':   new S3Resource({ bucket: 'my-bucket' }),
+  '/data': new RAMVFS(),
+  '/s3':   new S3VFS({ bucket: 'my-bucket' }),
 })
 
 await ws.execute('cp /s3/report.csv /data/report.csv')
@@ -163,7 +163,7 @@ mirage workspace load demo.tar --id demo-restored
 
 ## Agenten-Frameworks
 
-Mirage lässt sich in Agenten-Frameworks als Sandbox oder als Werkzeugschicht einbinden. POSIX-Operationen wie `read` sind außerdem pro Ressource und pro Dateityp anpassbar: Mirage bringt keine Renderer für Dateiformate mit, ein Format wird also so dargestellt, wie es registriert wurde, und ein für eine Ressource und eine Endung registrierter Befehl schlägt den generischen.
+Mirage lässt sich in Agenten-Frameworks als Sandbox oder als Werkzeugschicht einbinden. POSIX-Operationen wie `read` sind außerdem pro VFS und pro Dateityp anpassbar: Mirage bringt keine Renderer für Dateiformate mit, ein Format wird also so dargestellt, wie es registriert wurde, und ein für ein VFS und eine Endung registrierter Befehl schlägt den generischen.
 
 |                | Integrationen                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -181,10 +181,10 @@ Jeder `Workspace` hat einen zweistufigen Cache, damit wiederholte Arbeit gegen e
 Beide Stufen nutzen standardmäßig den Arbeitsspeicher des Prozesses, ganz ohne Konfiguration. Ein Redis-Store teilt den Cache-Zustand zwischen Workern, Prozessen und Maschinen:
 
 ```ts
-import { RedisFileCacheStore, S3Resource, Workspace } from '@struktoai/mirage-node'
+import { RedisFileCacheStore, S3VFS, Workspace } from '@struktoai/mirage-node'
 
 const ws = new Workspace(
-  { '/s3': new S3Resource({ bucket: 'my-bucket' }) },
+  { '/s3': new S3VFS({ bucket: 'my-bucket' }) },
   {
     cache: new RedisFileCacheStore({ url: 'redis://localhost:6379/0', cacheLimit: '8GB' }),
     index: { type: 'redis', url: 'redis://localhost:6379/0', ttl: 600 },

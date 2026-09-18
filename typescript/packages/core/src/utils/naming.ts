@@ -42,17 +42,17 @@ export const SEPARATOR = '__'
  * directory joins two sanitized parts with the separator itself --
  * re-sanitizing that would collapse `__` to `_` and change the name's shape.
  */
-export function fitIdName(label: string, resourceId: string, suffix = ''): string {
-  const budget = NAME_MAX_BYTES - (SEPARATOR.length + byteLength(resourceId) + byteLength(suffix))
+export function fitIdName(label: string, vfsId: string, suffix = ''): string {
+  const budget = NAME_MAX_BYTES - (SEPARATOR.length + byteLength(vfsId) + byteLength(suffix))
   const fitted =
     byteLength(label) > budget ? stripTrailingUnderscores(truncateBytes(label, budget)) : label
-  return `${fitted}${SEPARATOR}${resourceId}${suffix}`
+  return `${fitted}${SEPARATOR}${vfsId}${suffix}`
 }
 
 /**
  * Build a `<name>__<id>` segment for VFS paths.
  *
- * Used by resources that encode resource IDs in filenames for reverse lookups
+ * Used by mounts that encode resource IDs in filenames for reverse lookups
  * (Discord, Slack, gcal calendars, Linear, Trello). By default applies the
  * full `sanitizeName` transform; set `pathSafe` to preserve the original
  * spelling and only escape the path separator. Discord and Slack use
@@ -63,16 +63,16 @@ export function fitIdName(label: string, resourceId: string, suffix = ''): strin
  */
 export function makeIdName(
   displayName: string,
-  resourceId: string,
+  vfsId: string,
   pathSafe = false,
   suffix = '',
 ): string {
   const transform = pathSafe ? pathSafeName : sanitizeName
-  return fitIdName(transform(displayName), resourceId, suffix)
+  return fitIdName(transform(displayName), vfsId, suffix)
 }
 
 /**
- * Extract `[displayName, resourceId]` from `makeIdName` output, optionally
+ * Extract `[displayName, vfsId]` from `makeIdName` output, optionally
  * stripping a file extension first. Throws when `name` doesn't end with
  * `suffix` or doesn't contain `__`.
  */

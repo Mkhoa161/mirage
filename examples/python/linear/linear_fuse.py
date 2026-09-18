@@ -19,17 +19,16 @@ import subprocess
 from dotenv import load_dotenv
 
 from mirage import Mount, MountBackend, MountMode, Workspace
-from mirage.resource.linear import LinearConfig, LinearResource
+from mirage.vfs.linear import LinearConfig, LinearVFS
 
 load_dotenv(".env.development")
 
 config = LinearConfig(api_key=os.environ["LINEAR_API_KEY"])
-resource = LinearResource(config=config)
+vfs = LinearVFS(config=config)
 
-with Workspace({
-        "/linear/":
-        Mount(resource, mode=MountMode.READ, backend=MountBackend.FUSE)
-}) as ws:
+with Workspace(
+    {"/linear/": Mount(vfs, mode=MountMode.READ,
+                       backend=MountBackend.FUSE)}) as ws:
     mp = ws.fuse_mountpoint
 
     print(f"=== FUSE MODE: mounted at {mp} ===\n")

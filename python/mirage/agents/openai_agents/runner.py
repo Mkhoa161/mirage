@@ -86,7 +86,7 @@ class MirageRunner:
 
         Args:
             prompt (str): User-facing instruction text.
-            paths (list[str]): Mirage paths to attach (any resource).
+            paths (list[str]): Mirage paths to attach (any VFS).
 
         Returns:
             list[dict]: Content blocks ready to embed in a user message.

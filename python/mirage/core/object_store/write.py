@@ -58,7 +58,7 @@ def make_write_bytes(driver: ObjectStoreDriver[A, C]) -> WriteFn[A]:
         timer = start_op()
         async with driver.connect(accessor) as conn:
             await _put(driver, conn, key, data, path_spec)
-        record("write", path, driver.resource, len(data), timer)
+        record("write", path, driver.vfs, len(data), timer)
         await invalidate_after_write(path_spec)
         # A put materializes every missing level of the key at once, so
         # the listings above the immediate parent gained entries too.
@@ -80,7 +80,7 @@ def make_create(driver: ObjectStoreDriver[A, C]) -> PathFn[A]:
         timer = start_op()
         async with driver.connect(accessor) as conn:
             await _put(driver, conn, key, b"", path_spec)
-        record("create", path, driver.resource, 0, timer)
+        record("create", path, driver.vfs, 0, timer)
         await invalidate_after_write(path_spec)
         # An empty put materializes missing parents exactly like write.
         await invalidate_ancestors(path_spec)
@@ -105,7 +105,7 @@ def make_truncate(driver: ObjectStoreDriver[A, C]) -> TruncateFn[A]:
                 data = b""
             result = data[:length].ljust(length, b"\0")
             await _put(driver, conn, key, result, path_spec)
-        record("truncate", path, driver.resource, 0, timer)
+        record("truncate", path, driver.vfs, 0, timer)
         await invalidate_after_write(path_spec)
         # Truncating a missing key creates it, parents included.
         await invalidate_ancestors(path_spec)

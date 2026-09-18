@@ -12,11 +12,11 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from mirage.resource.redis.store import RedisStore
 from mirage.types import PathSpec
 from mirage.utils.errors import eexist, enoent, enotdir
 from mirage.utils.key_prefix import mounted_path
 from mirage.utils.path import ancestors
+from mirage.vfs.redis.store import RedisStore
 
 
 async def check_dest_parents(store: RedisStore, dst_spec: PathSpec,

@@ -14,7 +14,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { parseSessionProfile } from '../policy/profile.ts'
 import type { Action, OpsContext, Policy } from '../policy/index.ts'
@@ -46,7 +46,7 @@ afterEach(async () => {
 async function hiding(): Promise<Workspace> {
   const parser = await getTestParser()
   const ws = new Workspace(
-    { '/data': [new RAMResource(), MountMode.WRITE] as const },
+    { '/data': [new RAMVFS(), MountMode.WRITE] as const },
     {
       mode: MountMode.WRITE,
       shellParser: parser,
@@ -60,9 +60,9 @@ async function hiding(): Promise<Workspace> {
 
 async function seeded(mode: MountMode = MountMode.WRITE): Promise<Workspace> {
   const parser = await getTestParser()
-  const repo = new RAMResource()
+  const repo = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(repo)
+  registry.registerVfs(repo)
   const ws = new Workspace(
     { '/repo': [repo, mode] as const },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -160,7 +160,7 @@ describe('the path axis end to end', () => {
     // host's door to what the default profile hides.
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.WRITE] as const },
+      { '/data': [new RAMVFS(), MountMode.WRITE] as const },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -196,7 +196,7 @@ describe('the path axis end to end', () => {
     // kept as before.
     const parser = await getTestParser()
     const other = new Workspace(
-      { '/data': [new RAMResource(), MountMode.WRITE] as const },
+      { '/data': [new RAMVFS(), MountMode.WRITE] as const },
       { mode: MountMode.WRITE, shellParser: parser },
     )
     open.push(other)
@@ -275,9 +275,9 @@ describe('the path axis end to end', () => {
     // The mount's own mode stays the strongest answer possible: a show
     // stating rw on a READ-configured mount changes nothing.
     const parser = await getTestParser()
-    const repo = new RAMResource()
+    const repo = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(repo)
+    registry.registerVfs(repo)
     const ws = new Workspace(
       { '/repo': [repo, MountMode.READ] as const },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -434,9 +434,9 @@ describe('the path axis end to end', () => {
 
 async function boxed(profile: object): Promise<Workspace> {
   const parser = await getTestParser()
-  const repo = new RAMResource()
+  const repo = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(repo)
+  registry.registerVfs(repo)
   const ws = new Workspace(
     { '/repo': [repo, MountMode.WRITE] as const },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -576,11 +576,11 @@ describe('subtree mutations against hides', () => {
     // not-empty refusal stays instead of the cascade destroying the
     // hidden remnant and reporting success while the mount remains.
     const parser = await getTestParser()
-    const repo = new RAMResource()
-    const m = new RAMResource()
+    const repo = new RAMVFS()
+    const m = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(repo)
-    registry.registerResource(m)
+    registry.registerVfs(repo)
+    registry.registerVfs(m)
     const ws = new Workspace(
       { '/repo': [repo, MountMode.WRITE] as const, '/repo/only/m': [m, MountMode.WRITE] as const },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -605,9 +605,9 @@ describe('the ops door against hides', () => {
     // mode fence normal dispatch applies, so FUSE and ws.fs callers
     // cannot destroy a mode-protected remnant either.
     const parser = await getTestParser()
-    const repo = new RAMResource()
+    const repo = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(repo)
+    registry.registerVfs(repo)
     const ws = new Workspace(
       { '/repo': [repo, MountMode.WRITE] as const },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -636,11 +636,11 @@ describe('the ops door against hides', () => {
     // the arm destroying the hidden backend remnants and reporting a
     // successful rmdir while the mount remains.
     const parser = await getTestParser()
-    const a = new RAMResource()
-    const m = new RAMResource()
+    const a = new RAMVFS()
+    const m = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(a)
-    registry.registerResource(m)
+    registry.registerVfs(a)
+    registry.registerVfs(m)
     const ws = new Workspace(
       { '/a': [a, MountMode.WRITE] as const, '/a/d/m': [m, MountMode.WRITE] as const },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -667,9 +667,9 @@ describe('the ops door against hides', () => {
     // cascade folds the denial into the original not-empty refusal,
     // and the protected content survives.
     const parser = await getTestParser()
-    const a = new RAMResource()
+    const a = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(a)
+    registry.registerVfs(a)
     const ws = new Workspace(
       { '/a': [a, MountMode.WRITE] as const },
       {
@@ -699,9 +699,9 @@ describe('the ops door against hides', () => {
     // cannot take it; left in the node table it synthesizes /a/d right
     // back once the hide lifts, resurfacing the removed tree.
     const parser = await getTestParser()
-    const a = new RAMResource()
+    const a = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(a)
+    registry.registerVfs(a)
     const ws = new Workspace(
       { '/a': [a, MountMode.WRITE] as const },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -729,9 +729,9 @@ describe('the ops door against hides', () => {
     // refusal stands and nothing (backend remnant or node table) is
     // destroyed.
     const parser = await getTestParser()
-    const a = new RAMResource()
+    const a = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(a)
+    registry.registerVfs(a)
     const ws = new Workspace(
       { '/a': [a, MountMode.WRITE] as const },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -758,11 +758,11 @@ describe('the ops door against hides', () => {
 
 async function twoMounts(profile: object): Promise<Workspace> {
   const parser = await getTestParser()
-  const a = new RAMResource()
-  const b = new RAMResource()
+  const a = new RAMVFS()
+  const b = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(a)
-  registry.registerResource(b)
+  registry.registerVfs(a)
+  registry.registerVfs(b)
   const ws = new Workspace(
     { '/a': [a, MountMode.WRITE] as const, '/b': [b, MountMode.WRITE] as const },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },

@@ -23,7 +23,7 @@
 //     -e MINIO_ROOT_PASSWORD=minioadmin \
 //     quay.io/minio/minio server /data --console-address ':9001'
 //
-// The example exercises the full S3Resource surface: writes (tee, cp, mv,
+// The example exercises the full S3VFS surface: writes (tee, cp, mv,
 // rm, mkdir), reads (cat, head, grep, wc), find, and the du/rmR helpers.
 // At the end it clears all keys it wrote so the demo is reproducible.
 import { mkdtempSync } from 'node:fs'
@@ -33,7 +33,7 @@ import {
   ContentDriftError,
   DriftPolicy,
   MountMode,
-  S3Resource,
+  S3VFS,
   Workspace,
   type FileStat,
   type S3Config,
@@ -51,7 +51,7 @@ const config: S3Config = {
 }
 
 async function ensureBucket(): Promise<void> {
-  // The S3Resource never creates buckets — that's an administrative action.
+  // The S3VFS never creates buckets — that's an administrative action.
   // We do it inline here so the demo is self-contained.
   const sdk = await import('@aws-sdk/client-s3')
   const client = new sdk.S3Client({
@@ -144,7 +144,7 @@ async function driftAndPinDemo(): Promise<void> {
   const probeVirtual = `/s3/${probeKey}`
   await putObjectViaSdk(probeKey, 'original\n')
 
-  const ws = new Workspace({ '/s3/': new S3Resource(config) }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/s3/': new S3VFS(config) }, { mode: MountMode.WRITE })
   const tempDir = mkdtempSync(join(tmpdir(), 'mirage-drift-'))
   const snap = join(tempDir, 'pin.json')
   try {
@@ -159,7 +159,7 @@ async function driftAndPinDemo(): Promise<void> {
     const loaded = await Workspace.load(
       snap,
       { mode: MountMode.WRITE, driftPolicy: DriftPolicy.STRICT },
-      { '/s3/': new S3Resource(config) },
+      { '/s3/': new S3VFS(config) },
     )
     const pinned = Object.keys(loaded.revisions)
     console.log(`  installed pins: ${pinned.length === 0 ? '(none)' : pinned.join(', ')}`)
@@ -200,7 +200,7 @@ async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<vo
 
 async function main(): Promise<void> {
   await ensureBucket()
-  const ws = new Workspace({ '/s3/': new S3Resource(config) }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/s3/': new S3VFS(config) }, { mode: MountMode.WRITE })
   try {
     // Pre-clean any leftovers from a previous run.
     await ws.execute('rm -rf /s3/demo')

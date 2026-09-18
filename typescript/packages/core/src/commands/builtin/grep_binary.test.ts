@@ -272,7 +272,7 @@ it.each([
   [{ m: 0, A: '1' }],
   [{ m: 0, c: true, n: true, b: true }],
 ])('prints nothing and closes the unread source under -m0 with %j', async (flags) => {
-  // A source whose resources are already held before the first read.
+  // A source whose mounts are already held before the first read.
   let closed = false
   const source: AsyncIterableIterator<Uint8Array> = {
     [Symbol.asyncIterator]() {

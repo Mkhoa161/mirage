@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3VFS, S3Config
 
 load_dotenv(".env.development")
 
@@ -30,8 +30,8 @@ config = S3Config(
     aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
 )
 
-s3 = S3Resource(config)
-mem = RAMResource()
+s3 = S3VFS(config)
+mem = RAMVFS()
 ws = Workspace(
     {
         "/s3/": s3,

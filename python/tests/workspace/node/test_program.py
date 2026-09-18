@@ -14,11 +14,11 @@
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 
 
 async def _workspace() -> Workspace:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("mkdir -p /data/sub")
     await ws.execute("echo hi > /data/sub/x.txt")
     await ws.execute("cd /data")

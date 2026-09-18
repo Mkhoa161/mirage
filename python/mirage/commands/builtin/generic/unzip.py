@@ -148,9 +148,9 @@ async def unzip(
                 return b"".join(chunks), IOResult(
                     exit_code=11, stderr=_cautions(unmatched).encode())
             return b"".join(chunks), IOResult()
-        mount_prefix = mount_prefix_of(
-            archive_path.virtual, archive_path.resource_path) if isinstance(
-                archive_path, PathSpec) else ""
+        mount_prefix = mount_prefix_of(archive_path.virtual,
+                                       archive_path.vfs_path) if isinstance(
+                                           archive_path, PathSpec) else ""
         dest = extract_dest(d, cwd, relay)
         writes: dict[str, ByteSource] = {}
         made: set[str] = set()

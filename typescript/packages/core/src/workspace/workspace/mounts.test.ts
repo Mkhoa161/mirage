@@ -14,28 +14,28 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { Limit, MountMode } from '../../types.ts'
-import { normalizeResources } from './mounts.ts'
+import { normalizeMounts } from './mounts.ts'
 
-describe('normalizeResources', () => {
-  it('keeps a bare resource with no pinned mode', () => {
-    const resource = new RAMResource()
-    const normalized = normalizeResources({ '/a': resource })
-    expect(normalized.bare['/a']).toBe(resource)
+describe('normalizeMounts', () => {
+  it('keeps a bare VFS with no pinned mode', () => {
+    const vfs = new RAMVFS()
+    const normalized = normalizeMounts({ '/a': vfs })
+    expect(normalized.bare['/a']).toBe(vfs)
     expect(normalized.modes['/a']).toBeUndefined()
     expect(normalized.commandLimits['/a']).toBeUndefined()
   })
 
   it('pins the mode from a pair entry', () => {
-    const normalized = normalizeResources({ '/a': [new RAMResource(), MountMode.READ] })
+    const normalized = normalizeMounts({ '/a': [new RAMVFS(), MountMode.READ] })
     expect(normalized.modes['/a']).toBe(MountMode.READ)
   })
 
   it('carries commandLimits from a triple entry', () => {
     const guard = new Limit({ timeoutSeconds: 1 })
-    const normalized = normalizeResources({
-      '/a': [new RAMResource(), MountMode.READ, { curl: guard }],
+    const normalized = normalizeMounts({
+      '/a': [new RAMVFS(), MountMode.READ, { curl: guard }],
     })
     expect(normalized.commandLimits['/a']).toEqual({ curl: guard })
   })

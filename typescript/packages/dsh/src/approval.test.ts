@@ -14,7 +14,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { Outcome, Scope } from '@struktoai/mirage-core/policy/types'
 import { MountMode } from '@struktoai/mirage-core/types'
 import type { Workspace } from '@struktoai/mirage-node'
@@ -66,7 +66,7 @@ async function world(
   }
   await ctx
     .plugin(MirageService, {
-      mounts: { '/data': [new RAMResource(), MountMode.WRITE] },
+      mounts: { '/data': [new RAMVFS(), MountMode.WRITE] },
       profiles: { agent: role },
     })
     .await()

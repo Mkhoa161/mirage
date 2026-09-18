@@ -45,7 +45,7 @@ async function probeDir<A extends Accessor, C>(
 /** Build a prefix listing with index write-back over one driver. */
 export function makeReaddir<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>): ReaddirFn<A> {
   return async function readdir(accessor, path, index) {
-    const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+    const prefix = mountPrefixOf(path.virtual, path.vfsPath)
     // When called from resolveGlob with a pattern (e.g. *.txt), use
     // path.directory for the listing. Direct callers (ls, ops) pass
     // pattern=null so path.virtual is used.
@@ -105,7 +105,7 @@ export function makeReaddir<A extends Accessor, C>(driver: ObjectStoreDriver<A, 
     names.sort(compareCodePoints)
     if (names.length > driver.scopeError) {
       console.warn(
-        `${driver.resource} readdir: ${fullVirtualKey} returned ` +
+        `${driver.vfs} readdir: ${fullVirtualKey} returned ` +
           `${String(names.length)} entries (limit ${String(driver.scopeError)})`,
       )
     }
@@ -123,7 +123,7 @@ export function makeReaddir<A extends Accessor, C>(driver: ObjectStoreDriver<A, 
             new IndexEntry({
               id: e,
               name,
-              resourceType: ResourceType.FOLDER,
+              vfsType: ResourceType.FOLDER,
               extra: sizes.has(e) ? { object_store_collision: true } : {},
             }),
           ]
@@ -133,7 +133,7 @@ export function makeReaddir<A extends Accessor, C>(driver: ObjectStoreDriver<A, 
           new IndexEntry({
             id: e,
             name,
-            resourceType: ResourceType.FILE,
+            vfsType: ResourceType.FILE,
             size: sizes.get(e) ?? null,
             remoteTime: times.get(e) ?? '',
           }),
@@ -155,7 +155,7 @@ export async function cachedEntry(
   const parent = virtual.slice(0, virtual.lastIndexOf('/')) || '/'
   const siblings = (await index.listDir(parent)).entries
   if (siblings?.includes(virtual) === true) return entry
-  if (entry.resourceType === ResourceType.FOLDER && (await index.listDir(virtual)).entries != null)
+  if (entry.vfsType === ResourceType.FOLDER && (await index.listDir(virtual)).entries != null)
     return entry
   // A later listing must not revive metadata from an expired generation.
   await index.invalidatePrefix(virtual)
@@ -181,7 +181,7 @@ async function cachedTree(
       const { entry } = await index.get(child)
       if (entry == null || entry.extra.object_store_collision) return null
       const childKey = prefix + child.slice(child.lastIndexOf('/') + 1)
-      if (entry.resourceType === ResourceType.FOLDER) {
+      if (entry.vfsType === ResourceType.FOLDER) {
         found.push({ key: childKey + '/' })
         pending.push([child, childKey + '/'])
       } else if (entry.size == null) return null
@@ -221,7 +221,7 @@ async function cacheTree(
         new IndexEntry({
           id: child,
           name,
-          resourceType: isDir ? ResourceType.FOLDER : ResourceType.FILE,
+          vfsType: isDir ? ResourceType.FOLDER : ResourceType.FILE,
           size: isDir ? null : (row.size ?? 0),
           remoteTime: isDir ? '' : (row.modified ?? ''),
         }),
@@ -249,7 +249,7 @@ export async function readTree<A extends Accessor, C>(
   const virtual = rstripSlash(path.virtual) || '/'
   const root = await cachedEntry(index, virtual)
   const knownDirectory =
-    path.mountPath.replaceAll('/', '') === '' || root?.resourceType === ResourceType.FOLDER
+    path.mountPath.replaceAll('/', '') === '' || root?.vfsType === ResourceType.FOLDER
   const cached =
     !root?.extra.object_store_collision && (hints !== undefined || knownDirectory)
       ? await cachedTree(index, virtual, prefix)
@@ -260,7 +260,7 @@ export async function readTree<A extends Accessor, C>(
     const parent = await index.listDir(virtual.slice(0, virtual.lastIndexOf('/')) || '/')
     if (
       parent.entries?.includes(virtual) === true &&
-      entry?.resourceType === ResourceType.FILE &&
+      entry?.vfsType === ResourceType.FILE &&
       entry.size != null
     ) {
       return [[{ key: stem, size: entry.size }], false]
@@ -296,7 +296,7 @@ export async function readTree<A extends Accessor, C>(
           new IndexEntry({
             id: virtual,
             name: virtual.slice(virtual.lastIndexOf('/') + 1) || '/',
-            resourceType: ResourceType.FOLDER,
+            vfsType: ResourceType.FOLDER,
           }),
         )
     }

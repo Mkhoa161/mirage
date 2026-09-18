@@ -23,9 +23,9 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.builtin.s3 import COMMANDS as S3_COMMANDS
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
 from mirage.types import PathSpec
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace.snapshot import ContentDriftError
 
 load_dotenv(".env.development")
@@ -45,8 +45,8 @@ deep_config = S3Config(
     key_prefix="subdata/subsubdata/",
 )
 
-backend = S3Resource(config)
-deep_backend = S3Resource(deep_config)
+backend = S3VFS(config)
+deep_backend = S3VFS(deep_config)
 ws = Workspace(
     {
         "/s3/": backend,
@@ -604,8 +604,8 @@ async def main():
     print("\n=== CROSS-MOUNT MV: RAM → S3 ===\n")
     mv_ws = Workspace(
         {
-            "/local/": (RAMResource(), MountMode.WRITE),
-            "/s3/": (S3Resource(config), MountMode.WRITE),
+            "/local/": (RAMVFS(), MountMode.WRITE),
+            "/s3/": (S3VFS(config), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )
@@ -649,7 +649,7 @@ async def main():
 
     # ── persistence: save / load / copy / deepcopy ──────────────────
     # S3 with inline creds has redacted config at save time; caller must
-    # re-supply a fresh S3Resource via resources={...}.
+    # re-supply a fresh S3VFS via mounts={...}.
     print("\n=== PERSISTENCE ===\n")
     with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as f:
         snap = f.name
@@ -667,27 +667,27 @@ async def main():
         print(f"  '<REDACTED>' present in tar: "
               f"{b'<REDACTED>' in raw} (expect True)")
 
-        # Loading without resources= must fail fast
+        # Loading without mounts= must fail fast
         try:
             await Workspace.load(snap)
-            print("  ✗ load() should have raised without resources=")
+            print("  ✗ load() should have raised without mounts=")
         except ValueError as e:
-            print(f"  ✓ load() w/o resources raises: "
+            print(f"  ✓ load() w/o mounts raises: "
                   f"{str(e).splitlines()[0][:70]}…")
 
         # Load with fresh creds (both mounts were redacted)
         loaded = await Workspace.load(
             snap,
-            resources={
-                "/s3/": S3Resource(config),
-                "/deep/": S3Resource(deep_config),
+            mounts={
+                "/s3/": S3VFS(config),
+                "/deep/": S3VFS(deep_config),
             },
         )
         r = await loaded.execute("ls /s3/")
         print(f"  loaded ws ls /s3/: "
               f"{(await r.stdout_str()).strip()[:60]}…")
 
-        # copy(): in-process, reuses the same S3Resource; both copies
+        # copy(): in-process, reuses the same S3VFS; both copies
         # see the same bucket
         cp = await ws.copy()
         print(f"  copy() mounts: {[m.prefix for m in cp.mounts()]}")
@@ -707,7 +707,7 @@ async def main():
     print("  aws s3api put-bucket-versioning --bucket <bucket> "
           "--versioning-configuration Status=Enabled\n")
     probe = f"/s3/drift-probe-{uuid.uuid4().hex[:8]}.txt"
-    drift_ws = Workspace({"/s3/": (S3Resource(config), MountMode.WRITE)},
+    drift_ws = Workspace({"/s3/": (S3VFS(config), MountMode.WRITE)},
                          mode=MountMode.WRITE)
     with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as f:
         drift_snap = f.name
@@ -729,7 +729,7 @@ async def main():
         print(f"  mutated on bucket: new revision={s2.revision}")
 
         loaded = await Workspace.load(drift_snap,
-                                      resources={"/s3/": S3Resource(config)})
+                                      mounts={"/s3/": S3VFS(config)})
         loaded._cache.evict_paths([probe])
         try:
             r = await loaded.execute(f"cat {probe}")

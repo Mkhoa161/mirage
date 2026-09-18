@@ -43,7 +43,7 @@ async def rmdir(accessor: GDriveAccessor,
             unused.
     """
     virtual = path.virtual
-    key = path.resource_path
+    key = path.vfs_path
     if not key:
         return
     node = await resolve_key(accessor, key)

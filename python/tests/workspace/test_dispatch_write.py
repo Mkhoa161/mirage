@@ -16,43 +16,43 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
-def _make_ws() -> tuple[Workspace, RAMResource]:
-    resource = RAMResource()
-    resource._store.files["/file.txt"] = b"OLD"
+def _make_ws() -> tuple[Workspace, RAMVFS]:
+    vfs = RAMVFS()
+    vfs._store.files["/file.txt"] = b"OLD"
     ws = Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
     )
-    return ws, resource
+    return ws, vfs
 
 
 def test_redirect_write_overrides_cached_read():
-    ws, resource = _make_ws()
+    ws, vfs = _make_ws()
 
     async def run() -> None:
         await ws.execute("cat /data/file.txt")
         await ws.execute('echo -n "NEW" > /data/file.txt')
 
     asyncio.run(run())
-    assert resource._store.files["/file.txt"] == b"NEW", (
+    assert vfs._store.files["/file.txt"] == b"NEW", (
         "redirect-write should reach the backend even when the path was "
         "previously cached by a read")
 
 
 def test_redirect_append_after_cached_read():
-    ws, resource = _make_ws()
+    ws, vfs = _make_ws()
 
     async def run() -> None:
         await ws.execute("cat /data/file.txt")
         await ws.execute('echo -n "MORE" >> /data/file.txt')
 
     asyncio.run(run())
-    assert resource._store.files["/file.txt"] == b"OLDMORE", (
+    assert vfs._store.files["/file.txt"] == b"OLDMORE", (
         "redirect-append should reach the backend even when the path was "
         "previously cached by a read")
 
@@ -66,8 +66,8 @@ def test_dispatch_rename_addresses_dst_against_the_source_mount():
     # recorded. Neither language crosses mounts.
     ws = Workspace(
         {
-            "/a": (RAMResource(), MountMode.WRITE),
-            "/b": (RAMResource(), MountMode.WRITE),
+            "/a": (RAMVFS(), MountMode.WRITE),
+            "/b": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )

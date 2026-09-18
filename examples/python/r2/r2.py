@@ -19,8 +19,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.r2 import R2Config, R2Resource
 from mirage.types import PathSpec
+from mirage.vfs.r2 import R2VFS, R2Config
 
 load_dotenv(".env.development")
 
@@ -33,7 +33,7 @@ config = R2Config(
     region=os.environ.get("R2_REGION", "auto"),
 )
 
-backend = R2Resource(config)
+backend = R2VFS(config)
 ws = Workspace({"/r2/": backend}, mode=MountMode.READ)
 
 

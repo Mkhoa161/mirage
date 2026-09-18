@@ -28,7 +28,7 @@ import { cachedEntry } from './readdir.ts'
 export function makeStat<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>): StatFn<A> {
   return async function stat(accessor, path, index) {
     const original = path.virtual
-    const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+    const prefix = mountPrefixOf(path.virtual, path.vfsPath)
     const rawPath =
       prefix !== '' && original.startsWith(prefix) ? original.slice(prefix.length) || '/' : original
 
@@ -45,7 +45,7 @@ export function makeStat<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>)
     }
 
     // Fast path: check the index cache populated by readdir(), which
-    // stores entries with resource type "folder" or "file" and file
+    // stores entries with VFS type "folder" or "file" and file
     // sizes, so stat can return instantly for known paths.
     if (index !== undefined) {
       const virtualKey = prefix !== '' ? `${prefix}/${stripped}` : '/' + stripped
@@ -53,7 +53,7 @@ export function makeStat<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>)
       if (entry !== null) {
         // Store "folders" are synthetic prefixes with no object, so
         // readdir() records no time or size for them.
-        if (entry.resourceType === ResourceType.FOLDER) {
+        if (entry.vfsType === ResourceType.FOLDER) {
           return new FileStat({ name: entry.name, type: FileType.DIRECTORY })
         }
         return new FileStat({

@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MontyRuntime } from '../runtime/python/monty/index.ts'
 import { PrefixResolver } from '../runtime/resolver.ts'
 import type { BridgeDispatchFn } from '../runtime/types.ts'
@@ -24,12 +24,12 @@ import { getTestParser } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
 import { FILE_MODE } from '../utils/stat_view.ts'
 
-function mkWorld(): { ws: Workspace; ops: OpsRegistry; resource: RAMResource } {
-  const resource = new RAMResource()
+function mkWorld(): { ws: Workspace; ops: OpsRegistry; vfs: RAMVFS } {
+  const vfs = new RAMVFS()
   const ops = new OpsRegistry()
-  for (const op of resource.ops()) ops.register(op)
-  const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE, ops })
-  return { ws, ops, resource }
+  for (const op of vfs.ops()) ops.register(op)
+  const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, ops })
+  return { ws, ops, vfs }
 }
 
 // The door a sandboxed runtime holds, over this workspace's own bridge
@@ -66,11 +66,11 @@ describe('runtime door readdir', () => {
     // read back as a zero row; authorization failures, timeouts, and
     // backend bugs must surface, or an incomplete listing replaces a
     // healthy snapshot.
-    const { ws, ops, resource } = mkWorld()
+    const { ws, ops, vfs } = mkWorld()
     await ws.fs.writeFile('/data/a.txt', 'hi')
     ops.register({
       name: 'stat',
-      resource: resource.kind,
+      vfs: vfs.kind,
       filetype: null,
       fn: () => {
         throw new Error('401 Unauthorized')
@@ -113,11 +113,11 @@ describe('runtime door readdir', () => {
 // shell made without a readlink of its own.
 describe('a guest sees the marks the workspace wired', () => {
   it('answers is_symlink for a link the shell made', async () => {
-    const resource = new RAMResource()
+    const vfs = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const op of resource.ops()) ops.register(op)
+    for (const op of vfs.ops()) ops.register(op)
     const ws = new Workspace(
-      { '/data': resource },
+      { '/data': vfs },
       {
         mode: MountMode.EXEC,
         ops,

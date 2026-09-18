@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { Limit, MountMode, RAMResource, Workspace } from '@struktoai/mirage-browser'
+import { Limit, MountMode, RAMVFS, Workspace } from '@struktoai/mirage-browser'
 import { E2BRuntime } from '@struktoai/mirage-core/runtime/sandbox/e2b/runtime'
 
 import { exerciseCancellation } from './e2b_cancel.ts'
@@ -83,10 +83,10 @@ export async function exercise(config: { sandboxId: string; apiKey: string }): P
     checks.push('stdout, stderr, and early nonzero exit')
 
     const workspace = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
-        runtimes: [runtime, 'vfs'],
+        runtimes: [runtime, 'workspace'],
       },
     )
     try {
@@ -114,10 +114,10 @@ export async function exercise(config: { sandboxId: string; apiKey: string }): P
   }
   const cancellable = new E2BRuntime({ config })
   const cancelWorkspace = new Workspace(
-    { '/home/user': new RAMResource() },
+    { '/home/user': new RAMVFS() },
     {
       mode: MountMode.EXEC,
-      runtimes: [cancellable, 'vfs'],
+      runtimes: [cancellable, 'workspace'],
       commandLimits: { '/home/user': { exec: new Limit({ timeoutSeconds: 5 }) } },
     },
   )

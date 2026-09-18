@@ -15,8 +15,8 @@
 import asyncio
 from contextlib import ExitStack
 
-from mirage.resource.s3 import S3Config, S3Resource
 from mirage.types import ConsistencyPolicy, MountMode
+from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 from tests.e2e.s3_mock import patch_s3_multi
 
@@ -28,9 +28,9 @@ def _make_ws(consistency: ConsistencyPolicy) -> Workspace:
         aws_access_key_id="fake",
         aws_secret_access_key="fake",
     )
-    resource = S3Resource(config)
+    vfs = S3VFS(config)
     return Workspace(
-        {"/data": (resource, MountMode.WRITE)},
+        {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=consistency,
     )

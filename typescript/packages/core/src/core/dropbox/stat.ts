@@ -67,8 +67,8 @@ export async function stat(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<FileStat> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
-  const key = path.resourcePath
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
+  const key = path.vfsPath
   if (key === '') return new FileStat({ name: '/', type: FileType.DIRECTORY })
 
   if (index === undefined) return statFromApi(accessor, path)
@@ -85,7 +85,7 @@ export async function stat(
           virtual: parentVirtual,
           directory: parentVirtual,
           resolved: false,
-          resourcePath: mountKey(parentVirtual, prefix),
+          vfsPath: mountKey(parentVirtual, prefix),
         }),
         index,
       )
@@ -101,7 +101,7 @@ export async function stat(
       throw enoent(path.virtual)
     }
   }
-  if (result.entry.resourceType === 'dropbox/folder') {
+  if (result.entry.vfsType === 'dropbox/folder') {
     return new FileStat({
       name: result.entry.vfsName !== '' ? result.entry.vfsName : result.entry.name,
       type: FileType.DIRECTORY,
@@ -118,7 +118,7 @@ export async function stat(
     fingerprint: result.entry.remoteTime !== '' ? result.entry.remoteTime : null,
     extra: {
       dropbox_id: result.entry.id,
-      resource_type: result.entry.resourceType,
+      resource_type: result.entry.vfsType,
     },
   })
 }

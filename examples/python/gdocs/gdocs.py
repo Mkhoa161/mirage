@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.gws import GWS
-from mirage.resource.gdocs import GDocsConfig, GDocsResource
 from mirage.types import PathSpec
+from mirage.vfs.gdocs import GDocsConfig, GDocsVFS
 
 load_dotenv(".env.development")
 
@@ -30,11 +30,11 @@ config = GDocsConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GDocsResource(config=config)
+vfs = GDocsVFS(config=config)
 
 
 async def main() -> None:
-    ws = Workspace({"/gdocs": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/gdocs": vfs}, mode=MountMode.WRITE)
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 

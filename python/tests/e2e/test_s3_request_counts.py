@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
-from mirage.resource.s3 import S3Config, S3Resource
 from mirage.types import MountMode
+from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
 
@@ -43,7 +43,7 @@ def counted_s3():
         result.paginate = paginate
         return result
 
-    resource = S3Resource(
+    vfs = S3VFS(
         S3Config(bucket='bucket',
                  region='us-east-1',
                  aws_access_key_id='fake',
@@ -51,7 +51,7 @@ def counted_s3():
     with (patch_s3_session(session), patch.object(client, 'head_object', head),
           patch.object(client, 'list_objects_v2', listing),
           patch.object(client, 'get_paginator', paginator)):
-        yield Workspace({'/s3': (resource, MountMode.WRITE)}), counts
+        yield Workspace({'/s3': (vfs, MountMode.WRITE)}), counts
 
 
 @pytest.mark.asyncio
@@ -118,12 +118,12 @@ async def test_find_warms_du_on_a_non_root_directory(counted_s3):
 async def test_deleted_recursive_root_is_not_reported_after_expiry(warmup):
     objects = {'d/a.txt': b'old'}
     session = MultiBucketSession({'bucket': objects})
-    resource = S3Resource(
+    vfs = S3VFS(
         S3Config(bucket='bucket',
                  region='us-east-1',
                  aws_access_key_id='fake',
                  aws_secret_access_key='fake'))
-    ws = Workspace({'/s3': (resource, MountMode.WRITE)})
+    ws = Workspace({'/s3': (vfs, MountMode.WRITE)})
     with (patch_s3_session(session), patch('mirage.cache.index.ram.datetime')
           as clock):
         clock.now.return_value = datetime(2026, 1, 1, tzinfo=timezone.utc)

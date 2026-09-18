@@ -37,7 +37,7 @@ function exists(found: Found): boolean {
 
 export function isDir(found: Found): boolean {
   if (found.children !== null) return true
-  return found.entry !== null && found.entry.resourceType === 'folder'
+  return found.entry !== null && found.entry.vfsType === 'folder'
 }
 
 /**
@@ -116,6 +116,6 @@ export function dirStatEntry(key: string): IndexEntry {
   return new IndexEntry({
     id: '',
     name: (cut === -1 ? trimmed : trimmed.slice(cut + 1)) || '/',
-    resourceType: 'folder',
+    vfsType: 'folder',
   })
 }

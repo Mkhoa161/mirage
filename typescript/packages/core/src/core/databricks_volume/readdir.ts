@@ -101,7 +101,7 @@ export async function readdir(
     .map(
       (entry) =>
         [
-          virtualPath(accessor.config, entry.path, mountPrefixOf(path.virtual, path.resourcePath)),
+          virtualPath(accessor.config, entry.path, mountPrefixOf(path.virtual, path.vfsPath)),
           entry,
         ] as [string, DbxDirectoryEntry],
     )
@@ -128,7 +128,7 @@ export async function readdir(
       new IndexEntry({
         id: fullPath,
         name,
-        resourceType: isDir ? 'folder' : 'file',
+        vfsType: isDir ? 'folder' : 'file',
         size,
         remoteTime,
       }),

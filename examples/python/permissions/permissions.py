@@ -16,7 +16,7 @@ import asyncio
 import re
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 # An incident-response workspace: the service tree, the runbooks the
 # oncall works from, and the credentials nobody reads by hand.
@@ -198,9 +198,9 @@ def answer(out: bytes, err: bytes, code: int) -> str:
 async def main() -> None:
     ws = Workspace(
         {
-            "/repo/": RAMResource(),
-            "/runbook/": RAMResource(),
-            "/vault/": RAMResource(),
+            "/repo/": RAMVFS(),
+            "/runbook/": RAMVFS(),
+            "/vault/": RAMVFS(),
         },
         mode=MountMode.WRITE,
         profiles=PROFILES,

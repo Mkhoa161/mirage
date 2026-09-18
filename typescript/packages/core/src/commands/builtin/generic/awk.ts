@@ -50,9 +50,7 @@ export async function awkGeneric(
   let program: string
   if (f.programFiles.length > 0) {
     const mountPrefix =
-      (paths[0] === undefined
-        ? undefined
-        : mountPrefixOf(paths[0].virtual, paths[0].resourcePath)) ??
+      (paths[0] === undefined ? undefined : mountPrefixOf(paths[0].virtual, paths[0].vfsPath)) ??
       opts.mountPrefix ??
       ''
     const pieces: string[] = []

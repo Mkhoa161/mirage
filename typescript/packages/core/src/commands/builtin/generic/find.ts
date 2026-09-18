@@ -17,7 +17,7 @@ import { FlagView } from '../../spec/flag_view.ts'
 import { modifiedTs } from '../../../core/generic/find.ts'
 import { isEnoent } from '../../../utils/errors.ts'
 import { IOResult, type ByteSource } from '../../../io/types.ts'
-import type { FindOptions } from '../../../resource/base.ts'
+import type { FindOptions } from '../../../vfs/base.ts'
 import { FindParseError } from '../../errors.ts'
 import { parseDepth, parseFindExpression, parseMtime, parseSize } from '../find_parse.ts'
 import { FileType, PathSpec, type FileStat } from '../../../types.ts'
@@ -68,7 +68,7 @@ async function applyMtimeFilter(
       virtual: r,
       directory: r,
       resolved: false,
-      resourcePath: mountKey(r, mountPrefix),
+      vfsPath: mountKey(r, mountPrefix),
     })
     let st: FileStat
     try {
@@ -307,7 +307,7 @@ export async function findGeneric(
       ? paths
       : [
           new PathSpec({
-            resourcePath: '',
+            vfsPath: '',
             virtual: '/',
             directory: '/',
             resolved: false,
@@ -378,7 +378,7 @@ export async function findGeneric(
     // `-path` matches the display path as printed; stamp the mount
     // prefix onto path nodes before the backend walks mount-relative
     // keys (#396).
-    const prefix = mountPrefixOf(root.virtual, root.resourcePath)
+    const prefix = mountPrefixOf(root.virtual, root.vfsPath)
     const rootOptions: FindOptions = {
       ...options,
       tree: prefixPathNodes(optionsTree(options), prefix),
@@ -537,7 +537,7 @@ export async function findGeneric(
       new PathSpec({
         virtual,
         directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
-        resourcePath: mountKey(virtual, mountPrefixOf(root.virtual, root.resourcePath)),
+        vfsPath: mountKey(virtual, mountPrefixOf(root.virtual, root.vfsPath)),
         rawPath: row,
         resolved: true,
       }),
@@ -578,12 +578,12 @@ async function printfStat(
   }
   let st: FileStat | null = null
   if (stat !== undefined) {
-    const prefix = mountPrefixOf(root.virtual, root.resourcePath)
+    const prefix = mountPrefixOf(root.virtual, root.vfsPath)
     const spec = new PathSpec({
       virtual,
       directory: virtual,
       resolved: false,
-      resourcePath: mountKey(virtual, prefix),
+      vfsPath: mountKey(virtual, prefix),
     })
     try {
       st = await stat(spec)

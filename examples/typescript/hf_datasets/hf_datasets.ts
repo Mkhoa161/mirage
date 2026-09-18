@@ -15,7 +15,7 @@
 // Read-only Hugging Face dataset demo against a public dataset repo.
 // No credentials required. Set HF_DATASET_REPO / HF_TOKEN for private repos.
 import {
-  HfDatasetsResource,
+  HfDatasetsVFS,
   Workspace,
   MountMode,
   type FileStat,
@@ -36,9 +36,9 @@ async function run(ws: Workspace, cmd: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const resource = new HfDatasetsResource(configFromEnv())
-  const ws = new Workspace({ '/ds/': resource }, { mode: MountMode.READ })
-  console.log(`=== mounted ${resource.accessor.bucketUri} at /ds/ ===\n`)
+  const vfs = new HfDatasetsVFS(configFromEnv())
+  const ws = new Workspace({ '/ds/': vfs }, { mode: MountMode.READ })
+  console.log(`=== mounted ${vfs.accessor.bucketUri} at /ds/ ===\n`)
 
   try {
     await run(ws, 'ls /ds/')

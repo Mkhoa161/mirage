@@ -17,9 +17,9 @@ import { z } from 'zod'
 
 import { Option, type FlagValue } from '../../commands/spec/types.ts'
 import { CLISpec, type CLIVerbFn } from '../../commands/cli/types.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import type { Runtime } from '../../runtime/base.ts'
-import { VFSRuntime } from '../../runtime/table.ts'
+import { WorkspaceRuntime } from '../../runtime/table.ts'
 import { ScriptSource } from '../../runtime/routing/types.ts'
 import { registerSecrets } from '../../secrets/registry.ts'
 import type { EnvEntries, SecretEntries } from '../../secrets/config.ts'
@@ -85,7 +85,7 @@ async function makeWs(
 ): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/': new RAMResource() },
+    { '/': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParser: parser,
@@ -1531,7 +1531,7 @@ describe('guestBound', () => {
     const node = parser.parse('python3 -c "print()"') as unknown as TSNodeLike
     const guest = { name: 'monty' } as unknown as Runtime
     expect(guestBound([node], null, { python3: guest })).toBe(true)
-    expect(guestBound([node], null, { python3: new VFSRuntime() })).toBe(false)
+    expect(guestBound([node], null, { python3: new WorkspaceRuntime() })).toBe(false)
     expect(guestBound([node], null, { other: guest })).toBe(false)
     expect(guestBound([node], null, { '*': guest })).toBe(true)
   })
@@ -1813,7 +1813,7 @@ def pre_command(ctx):
 async function scriptedWs(env: EnvEntries, source: string): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/': new RAMResource() },
+    { '/': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParser: parser,

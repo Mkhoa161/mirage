@@ -22,8 +22,8 @@ from mirage.commands.cli.builtin.git import GIT
 from mirage.commands.cli.builtin.git.checkout import (_blocked_ancestors,
                                                       _blocked_descendants,
                                                       _conflicts)
-from mirage.resource.disk import DiskResource
 from mirage.types import MountMode
+from mirage.vfs.disk import DiskVFS
 from mirage.workspace import Workspace
 from tests.commands.cli.builtin.git.conftest import (branch_with_gitlink,
                                                      commit_gitlink,
@@ -642,8 +642,8 @@ async def test_a_mount_further_down_the_switch_stops_it_before_it_starts(
     inner.mkdir()
     with Workspace(
         {
-            "/repo/": DiskResource(root=str(repo_path)),
-            "/repo/slot/data/": DiskResource(root=str(inner)),
+            "/repo/": DiskVFS(root=str(repo_path)),
+            "/repo/slot/data/": DiskVFS(root=str(inner)),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)

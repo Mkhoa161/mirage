@@ -34,7 +34,7 @@ const DOC_MIME = 'application/vnd.google-apps.document'
 const SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
 const SLIDE_MIME = 'application/vnd.google-apps.presentation'
 
-function resourceTypeFor(mime: string): string {
+function vfsTypeFor(mime: string): string {
   if (mime === FOLDER_MIME) return 'gdrive/folder'
   if (mime === DOC_MIME) return 'gdrive/gdoc'
   if (mime === SHEET_MIME) return 'gdrive/gsheet'
@@ -58,8 +58,8 @@ export async function readdir(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<string[]> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
-  const key = (path.pattern !== null ? path.dir : path).resourcePath
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
+  const key = (path.pattern !== null ? path.dir : path).vfsPath
   const virtualKey = key !== '' ? `${prefix}/${key}` : prefix !== '' ? prefix : '/'
 
   if (index !== undefined) {
@@ -88,7 +88,7 @@ export async function readdir(
       e.code = 'ENOENT'
       throw e
     }
-    if (!DIRECTORY_RESOURCE_TYPES.has(entry.resourceType)) {
+    if (!DIRECTORY_RESOURCE_TYPES.has(entry.vfsType)) {
       // Listing a file's id answers with an empty child set rather than an
       // error, so without this the recursion above reported
       // `ls /data/a.txt/x` as ENOENT where opendir(2) says ENOTDIR. The
@@ -112,14 +112,14 @@ export async function readdir(
     const sizeRaw = f.size ?? f.quotaBytesUsed ?? '0'
     const sizeNum = Number.parseInt(sizeRaw, 10)
     const sourceSize = Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : null
-    const resourceType = resourceTypeFor(mime)
+    const vfsType = vfsTypeFor(mime)
     // Binary files download raw, so Drive's size is the rendered byte length
     // and stays. Google-apps files (gdoc/gsheet/gslide) render to JSON, so
     // Drive's source size must not become FileStat.size (render-derived or
     // null, see the CLAUDE.md FUSE rules); it lives in extra instead.
     const extra: Record<string, unknown> = f.driveId !== undefined ? { drive_id: f.driveId } : {}
     let size: number | null = null
-    if (resourceType === 'gdrive/file') {
+    if (vfsType === 'gdrive/file') {
       size = sourceSize
     } else if (sourceSize !== null) {
       extra.source_size = sourceSize
@@ -127,7 +127,7 @@ export async function readdir(
     const entry = new IndexEntry({
       id: f.id,
       name: f.name,
-      resourceType,
+      vfsType,
       remoteTime: f.modifiedTime ?? '',
       vfsName: filename,
       size,
@@ -156,7 +156,7 @@ export async function readdir(
       const entry = new IndexEntry({
         id: d.id,
         name: d.name,
-        resourceType: 'gdrive/shared_drive',
+        vfsType: 'gdrive/shared_drive',
         vfsName: filename,
         extra: { drive_id: d.id },
       })

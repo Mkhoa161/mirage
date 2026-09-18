@@ -18,9 +18,9 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gdrive import GoogleDriveConfig, GoogleDriveResource
-from mirage.resource.github import GitHubConfig, GitHubResource
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.gdrive import GoogleDriveConfig, GoogleDriveVFS
+from mirage.vfs.github import GitHubConfig, GitHubVFS
+from mirage.vfs.s3 import S3VFS, S3Config
 
 load_dotenv(".env.development")
 
@@ -39,13 +39,13 @@ github_config = GitHubConfig(token=os.environ["GITHUB_TOKEN"])
 
 # GitHub fetches the repo tree on first read, so building the mount is an
 # ordinary call like every other one here.
-github_resource = GitHubResource(github_config, owner="strukto", repo="mirage")
+github_vfs = GitHubVFS(github_config, owner="strukto", repo="mirage")
 
 ws = Workspace(
     {
-        "/s3/": S3Resource(s3_config),
-        "/gdrive/": GoogleDriveResource(gdrive_config),
-        "/github/": github_resource,
+        "/s3/": S3VFS(s3_config),
+        "/gdrive/": GoogleDriveVFS(gdrive_config),
+        "/github/": github_vfs,
     },
     mode=MountMode.READ,
 )
@@ -62,7 +62,7 @@ async def main():
     await ws.execute("ls /gdrive/")
     await ws.execute("ls /gdrive/mirage/")
 
-    # ── plan: directory scans across resources ──
+    # ── plan: directory scans across mounts ──
     print("=== PLAN: DIRECTORY SCANS ===\n")
 
     dr = await ws.execute("grep mirage /s3/data/example.jsonl", provision=True)
@@ -125,8 +125,8 @@ async def main():
 
     print(f"Stats: {ops_summary()}")
 
-    # ── cross-resource consistency ──
-    print("\n=== CROSS-RESOURCE: SAME DATA ===\n")
+    # ── cross-VFS consistency ──
+    print("\n=== CROSS-VFS: SAME DATA ===\n")
 
     r1 = await ws.execute("wc -l /s3/data/example.jsonl")
     r2 = await ws.execute("wc -l /gdrive/mirage/example.jsonl")

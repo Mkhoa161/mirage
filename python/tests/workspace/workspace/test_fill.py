@@ -27,7 +27,6 @@ from mirage.io import IOResult
 from mirage.policy import Ask
 from mirage.policy.match import Outcome
 from mirage.policy.types import Decision, Scope
-from mirage.resource.ram import RAMResource
 from mirage.runtime.base import Runtime
 from mirage.runtime.mixin import LineExecutorMixin
 from mirage.runtime.types import RunResult, ScriptSource
@@ -38,6 +37,7 @@ from mirage.secrets.types import ResolvedSecret
 from mirage.shell.parse import parse
 from mirage.shell.variable import ManagedRef, ShellVar, VarAttr
 from mirage.types import HiddenVars
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.snapshot.state import to_state_dict
 
 FetchFn = Callable[[Any, str], Coroutine[Any, Any, ResolvedSecret]]
@@ -71,7 +71,7 @@ def dead_source() -> FetchFn:
 
 
 def _ws(env, **kw) -> Workspace:
-    return Workspace({"/": RAMResource()},
+    return Workspace({"/": RAMVFS()},
                      mode=kw.pop("mode", MountMode.WRITE),
                      env=env,
                      **kw)
@@ -939,7 +939,7 @@ class DenyNamed(Policy):
 
 
 def _policed_ws(deny: str, env) -> Workspace:
-    return Workspace({"/": RAMResource()},
+    return Workspace({"/": RAMVFS()},
                      mode=MountMode.WRITE,
                      env=env,
                      policies=[DenyNamed(deny)])
@@ -994,7 +994,7 @@ class AskNamed(Policy):
 
 
 def _asking_ws(name: str, env, on_ask=None) -> Workspace:
-    return Workspace({"/": RAMResource()},
+    return Workspace({"/": RAMVFS()},
                      mode=MountMode.WRITE,
                      env=env,
                      policies=[AskNamed(name)],
@@ -1799,9 +1799,9 @@ async def test_a_whole_line_with_nothing_pending_resolves_nothing():
     register_secrets("env", FakeConfig, await slow_bootstrap(calls))
     register_secrets("acct-whole", AccountConfig, account_source())
     ws = Workspace(
-        {"/ram": RAMResource()},
+        {"/ram": RAMVFS()},
         mode=MountMode.EXEC,
-        runtimes=[LineBox(), "vfs"],
+        runtimes=[LineBox(), "workspace"],
         secrets={
             "prod": {
                 "source": "acct-whole",
@@ -1836,7 +1836,7 @@ async def test_a_denied_line_never_resolves_the_block():
     register_secrets("env", FakeConfig, await slow_bootstrap(calls))
     register_secrets("acct-denied", AccountConfig, account_source())
     ws = Workspace(
-        {"/": RAMResource()},
+        {"/": RAMVFS()},
         mode=MountMode.WRITE,
         policies=[DenyNamed("printenv")],
         secrets={
@@ -2029,7 +2029,7 @@ async def test_from_state_takes_the_block_the_deployment_supplies():
     finally:
         await ws.close()
     restored = await Workspace.from_state(state,
-                                          resources={"/": RAMResource()},
+                                          mounts={"/": RAMVFS()},
                                           secrets={
                                               "prod": {
                                                   "source": "acct-state",

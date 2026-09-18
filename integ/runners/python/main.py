@@ -303,7 +303,7 @@ async def main() -> None:
         if HOST not in target["hosts"]:
             print(f"skip [{target_id}]: not a {HOST} host", file=sys.stderr)
             continue
-        if target["mounts"][0]["resource"] not in adapters.BUILDERS:
+        if target["mounts"][0]["vfs"] not in adapters.BUILDERS:
             print(f"skip [{target_id}]: no {HOST} adapter", file=sys.stderr)
             continue
         missing = harness.missing_env(services, target, HOST)

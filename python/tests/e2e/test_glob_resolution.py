@@ -14,9 +14,9 @@
 
 import pytest
 
-from mirage.resource.gcs import GCSConfig, GCSResource
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.gcs import GCSVFS, GCSConfig
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 from .conftest import make_s3_ws, patch_async_session
@@ -42,9 +42,9 @@ def gcs_ws():
         access_key_id="GOOG_FAKE",
         secret_access_key="fake_secret",
     )
-    resource = GCSResource(config)
+    vfs = GCSVFS(config)
     return Workspace(
-        {"/gcs": (resource, MountMode.WRITE)},
+        {"/gcs": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
     )
 
@@ -58,8 +58,8 @@ def multi_ws():
     )
     return Workspace(
         {
-            "/gcs": (GCSResource(config), MountMode.WRITE),
-            "/tmp": (RAMResource(), MountMode.WRITE),
+            "/gcs": (GCSVFS(config), MountMode.WRITE),
+            "/tmp": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )

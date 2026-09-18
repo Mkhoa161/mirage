@@ -16,7 +16,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import {
-  DatabricksVolumeResource,
+  DatabricksVolumeVFS,
   MountMode,
   Workspace,
   type FileStat,
@@ -60,8 +60,8 @@ async function main(): Promise<void> {
       ? { profile: process.env.DATABRICKS_CONFIG_PROFILE }
       : {}),
   })
-  const resource = await DatabricksVolumeResource.create(config)
-  const ws = new Workspace({ '/dbx/': resource }, { mode: MountMode.READ })
+  const vfs = await DatabricksVolumeVFS.create(config)
+  const ws = new Workspace({ '/dbx/': vfs }, { mode: MountMode.READ })
   try {
     console.log('=== not-found errors show the full virtual path ===')
     for (const cmd of ['cat /dbx/__nf_missing__.txt', 'head /dbx/__nf_missing__.txt', 'stat /dbx/__nf_missing__.txt']) {

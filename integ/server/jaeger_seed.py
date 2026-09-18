@@ -86,9 +86,9 @@ def span(trace: str,
 
 
 PAYLOAD = {
-    "resourceSpans": [
+    "vfsSpans": [
         {
-            "resource": {
+            "vfs": {
                 "attributes": [attr("service.name", "checkout-api")]
             },
             "scopeSpans": [{
@@ -112,7 +112,7 @@ PAYLOAD = {
             }],
         },
         {
-            "resource": {
+            "vfs": {
                 "attributes": [attr("service.name", "web-frontend")]
             },
             "scopeSpans": [{
@@ -126,7 +126,7 @@ PAYLOAD = {
             }],
         },
         {
-            "resource": {
+            "vfs": {
                 "attributes": [attr("service.name", "orders-api")]
             },
             "scopeSpans": [{
@@ -152,7 +152,7 @@ PAYLOAD = {
             }],
         },
         {
-            "resource": {
+            "vfs": {
                 "attributes": [attr("service.name", "search-api")]
             },
             "scopeSpans": [{

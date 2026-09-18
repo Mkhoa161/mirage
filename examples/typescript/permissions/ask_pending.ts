@@ -16,7 +16,7 @@
 import {
   MountMode,
   Outcome,
-  RAMResource,
+  RAMVFS,
   Scope,
   Workspace,
   parseSessionProfile,
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   // now and its question waits in the ledger under an id the agent is
   // told to quote.
   const ws = new Workspace(
-    { "/data/": new RAMResource() },
+    { "/data/": new RAMVFS() },
     { mode: MountMode.WRITE, profiles: { agent: ROLE } },
   );
   ws.createSession("agent", { profile: "agent" });

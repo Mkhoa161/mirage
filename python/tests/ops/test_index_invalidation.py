@@ -17,8 +17,8 @@ import os
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.disk import DiskResource
 from mirage.types import PathSpec
+from mirage.vfs.disk import DiskVFS
 
 # The ops factory forwards the index cache store into read/readdir/stat for
 # every backend. Disk carries a 60s index TTL, so a cached listing would hide
@@ -30,7 +30,7 @@ from mirage.types import PathSpec
 
 
 def _spec(virtual: str, rel: str) -> PathSpec:
-    return PathSpec(virtual=virtual, directory=virtual, resource_path=rel)
+    return PathSpec(virtual=virtual, directory=virtual, vfs_path=rel)
 
 
 def _names(entries: list[str]) -> list[str]:
@@ -40,7 +40,7 @@ def _names(entries: list[str]) -> list[str]:
 @pytest.fixture
 def disk_ws(tmp_path):
     os.mkdir(tmp_path / "seed")
-    return Workspace({"/d/": DiskResource(root=str(tmp_path))},
+    return Workspace({"/d/": DiskVFS(root=str(tmp_path))},
                      mode=MountMode.WRITE)
 
 

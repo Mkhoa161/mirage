@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MountMode, R2Resource, Workspace, type R2Config } from '@struktoai/mirage-node'
+import { MountMode, R2VFS, Workspace, type R2Config } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -54,8 +54,8 @@ async function run(ws: Workspace, cmd: string): Promise<void> {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const resource = new R2Resource(config)
-  const ws = new Workspace({ '/r2/': resource }, { mode: MountMode.READ })
+  const vfs = new R2VFS(config)
+  const ws = new Workspace({ '/r2/': vfs }, { mode: MountMode.READ })
   try {
     await run(ws, 'find /r2/Review -maxdepth 3 -type f')
     await run(ws, 'echo ---')

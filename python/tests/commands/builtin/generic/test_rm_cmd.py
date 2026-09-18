@@ -38,7 +38,7 @@ def _make_rm(files: set[str], calls: list[tuple]):
             raise FileNotFoundError(path.virtual)
         files.remove(path.virtual)
 
-    return make_rm(resource="gdocs", glob_fn=resolve_glob, unlink=unlink)
+    return make_rm(vfs="gdocs", glob_fn=resolve_glob, unlink=unlink)
 
 
 @pytest.mark.asyncio

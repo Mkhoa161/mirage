@@ -20,7 +20,7 @@ import type {
   DiscordResponse,
   DiscordTransport,
 } from '../../../core/discord/client.ts'
-import type { Resource } from '../../../resource/base.ts'
+import type { VFS } from '../../../vfs/base.ts'
 
 export interface FakeCall {
   method: DiscordMethod
@@ -54,9 +54,9 @@ export class FakeDiscordTransport implements DiscordTransport {
   }
 }
 
-export function makeFakeResource(transport: DiscordTransport): DiscordResourceLike {
+export function makeFakeVfs(transport: DiscordTransport): DiscordResourceLike {
   const accessor = new DiscordAccessor(transport)
-  const resource: Resource & { accessor: DiscordAccessor } = {
+  const vfs: VFS & { accessor: DiscordAccessor } = {
     kind: 'discord',
     accessor,
     open: () => Promise.resolve(),
@@ -66,7 +66,7 @@ export function makeFakeResource(transport: DiscordTransport): DiscordResourceLi
       // Nothing to take back.
     },
   }
-  return resource as DiscordResourceLike
+  return vfs as DiscordResourceLike
 }
 
 export async function seedGuild(
@@ -81,7 +81,7 @@ export async function seedGuild(
       new IndexEntry({
         id: guildId,
         name: guildDirname.split('__')[0] ?? guildDirname,
-        resourceType: 'discord/guild',
+        vfsType: 'discord/guild',
         vfsName: guildDirname,
       }),
     ],
@@ -103,7 +103,7 @@ export async function seedChannel(
       new IndexEntry({
         id: channelId,
         name: channelDirname.split('__')[0] ?? channelDirname,
-        resourceType: 'discord/channel',
+        vfsType: 'discord/channel',
         vfsName: channelDirname,
         remoteTime: options.remoteTime ?? '',
       }),
@@ -117,7 +117,7 @@ export async function seedChannel(
       new IndexEntry({
         id: `${channelId}:${d}`,
         name: d,
-        resourceType: 'discord/history',
+        vfsType: 'discord/history',
         vfsName: d,
       }),
     ])
@@ -131,7 +131,7 @@ export async function seedChannel(
           new IndexEntry({
             id: `${channelId}:${d}:chat`,
             name: 'chat.jsonl',
-            resourceType: 'discord/chat_jsonl',
+            vfsType: 'discord/chat_jsonl',
             vfsName: 'chat.jsonl',
           }),
         ],
@@ -140,7 +140,7 @@ export async function seedChannel(
           new IndexEntry({
             id: `${channelId}:${d}:files`,
             name: 'files',
-            resourceType: 'discord/files_dir',
+            vfsType: 'discord/files_dir',
             vfsName: 'files',
             extra: { channel_id: channelId, date: d },
           }),

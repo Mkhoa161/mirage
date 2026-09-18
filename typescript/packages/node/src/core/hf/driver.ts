@@ -209,7 +209,7 @@ async function probePrefix(op: Operator, pfx: string): Promise<boolean> {
 }
 
 export const DRIVER: ObjectStoreDriver<HfAccessor, Operator> = {
-  resource: 'hf',
+  vfs: 'hf',
   scopeError: SCOPE_ERROR,
   keyPrefixOf,
   connect,

@@ -17,14 +17,14 @@ import type { BoxAccessor } from '../../accessor/box.ts'
 import type { IndexCacheStore } from '../../cache/index/store.ts'
 import { FileStat, FileType, PathSpec } from '../../types.ts'
 import { absentOn404, getFolderInfo, type BoxItem } from './api.ts'
-import { readdir as coreReaddir, resourceTypeFor } from './readdir.ts'
+import { readdir as coreReaddir, vfsTypeFor } from './readdir.ts'
 import { pathParts, resolveItem } from './resolve.ts'
 import { enoent } from '../../utils/errors.ts'
 import { contentTypeForPath } from '../../utils/filetype.ts'
 
 function statFromItem(item: BoxItem): FileStat {
   const vfsName = item.name
-  const rt = resourceTypeFor(item)
+  const rt = vfsTypeFor(item)
   if (rt === 'box/folder') {
     return new FileStat({
       name: vfsName,
@@ -56,8 +56,8 @@ export async function stat(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<FileStat> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
-  const key = path.resourcePath
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
+  const key = path.vfsPath
   if (key === '') {
     // The mount root has no parent listing to inherit an mtime from; fetch
     // the folder's own metadata so find -mtime and ls -ld see a real
@@ -95,7 +95,7 @@ export async function stat(
           virtual: parentVirtual,
           directory: parentVirtual,
           resolved: false,
-          resourcePath: mountKey(parentVirtual, prefix),
+          vfsPath: mountKey(parentVirtual, prefix),
         }),
         index,
       )
@@ -109,7 +109,7 @@ export async function stat(
       return statFromItem(item)
     }
   }
-  if (result.entry.resourceType === 'box/folder') {
+  if (result.entry.vfsType === 'box/folder') {
     return new FileStat({
       name: result.entry.vfsName !== '' ? result.entry.vfsName : result.entry.name,
       type: FileType.DIRECTORY,
@@ -128,7 +128,7 @@ export async function stat(
     fingerprint: sha1 ?? (result.entry.remoteTime !== '' ? result.entry.remoteTime : null),
     extra: {
       box_id: result.entry.id,
-      resource_type: result.entry.resourceType,
+      resource_type: result.entry.vfsType,
       ...(sha1 === null ? {} : { sha1 }),
     },
   })

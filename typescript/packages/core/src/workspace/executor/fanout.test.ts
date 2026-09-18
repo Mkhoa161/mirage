@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { IOResult, materialize } from '../../io/types.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { FileStat, FileType, MountMode, PathSpec } from '../../types.ts'
 import { MountRegistry } from '../mount/registry.ts'
 import type { MountEntry } from '../mount/mount.ts'
@@ -46,11 +46,11 @@ const STAT_ONLY_DISPATCH: DispatchFn = ((op: string, path: PathSpec) => {
 }) as unknown as DispatchFn
 
 function wireMount(mount: MountEntry): void {
-  const cmds = mount.resource.commands?.()
+  const cmds = mount.vfs.commands?.()
   if (cmds !== undefined) {
     for (const cmd of cmds) {
       if (cmd.filetype !== null) mount.register(cmd)
-      else if (cmd.resource === null) mount.registerGeneral(cmd)
+      else if (cmd.vfs === null) mount.registerGeneral(cmd)
       else mount.register(cmd)
     }
   }
@@ -63,7 +63,7 @@ function wireRegistry(reg: MountRegistry): void {
 describe('fanOutTraversal glob matching', () => {
   it('find -name with a lone [ does not throw', async () => {
     const reg = new MountRegistry(
-      { '/data/': new RAMResource(), '/data/sub/': new RAMResource() },
+      { '/data/': new RAMVFS(), '/data/sub/': new RAMVFS() },
       MountMode.WRITE,
     )
     wireRegistry(reg)
@@ -80,7 +80,7 @@ describe('fanOutTraversal glob matching', () => {
 
   it('find -name matches descendant mount names with [...] classes like Python', async () => {
     const reg = new MountRegistry(
-      { '/data/': new RAMResource(), '/data/sub1/': new RAMResource() },
+      { '/data/': new RAMVFS(), '/data/sub1/': new RAMVFS() },
       MountMode.WRITE,
     )
     wireRegistry(reg)
@@ -102,9 +102,9 @@ describe('fanOutTraversal mount-entry synthesis honors the expression tree', () 
   async function runFind(argv: string[]): Promise<string> {
     const reg = new MountRegistry(
       {
-        '/data/': new RAMResource(),
-        '/data/ram/': new RAMResource(),
-        '/data/disk/': new RAMResource(),
+        '/data/': new RAMVFS(),
+        '/data/ram/': new RAMVFS(),
+        '/data/disk/': new RAMVFS(),
       },
       MountMode.WRITE,
     )
@@ -135,9 +135,9 @@ describe('fanOutTraversal mount-entry synthesis honors the expression tree', () 
 
 describe('find actions on structural rows', () => {
   function nestedGhostRegistry(): MountRegistry {
-    const parent = new RAMResource()
+    const parent = new RAMVFS()
     parent.store.files.set('/top.txt', new TextEncoder().encode('hello\n'))
-    const deep = new RAMResource()
+    const deep = new RAMVFS()
     deep.store.files.set('/leaf.txt', new TextEncoder().encode('deep\n'))
     const reg = new MountRegistry({ '/': parent, '/ghost/very/deep/': deep }, MountMode.WRITE)
     wireRegistry(reg)
@@ -187,10 +187,10 @@ describe('find actions on structural rows', () => {
 
 describe('fanOutTraversal -maxdepth applies to child-mount depth', () => {
   it('a deeper child entry beyond the budget is excluded', async () => {
-    const child = new RAMResource()
+    const child = new RAMVFS()
     child.store.dirs.add('/a')
     child.store.files.set('/a/b.txt', new TextEncoder().encode('deep\n'))
-    const reg = new MountRegistry({ '/': new RAMResource(), '/data/': child }, MountMode.WRITE)
+    const reg = new MountRegistry({ '/': new RAMVFS(), '/data/': child }, MountMode.WRITE)
     wireRegistry(reg)
     const s = new Session({ sessionId: 'test', cwd: '/' })
     const [out] = await handleCommand(
@@ -237,15 +237,15 @@ describe('filterUnderPrefixes', () => {
 describe('fanOutTraversal du at a descendant mount boundary', () => {
   async function runLines(cmds: string[], top = 10, real = 7): Promise<string> {
     const parser = await getTestParser()
-    const parent = new RAMResource()
+    const parent = new RAMVFS()
     parent.store.files.set('/top.txt', new Uint8Array(top))
     parent.store.dirs.add('/inner')
     parent.store.files.set('/inner/leftover.txt', new Uint8Array(1000))
-    const child = new RAMResource()
+    const child = new RAMVFS()
     child.store.files.set('/real.txt', new Uint8Array(real))
     const registry = new OpsRegistry()
-    registry.registerResource(parent)
-    registry.registerResource(child)
+    registry.registerVfs(parent)
+    registry.registerVfs(child)
     const ws = new Workspace(
       { '/base': parent, '/base/inner': child },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -367,18 +367,18 @@ describe('fanOutTraversal du at a descendant mount boundary', () => {
 describe('fanOutTraversal operands spanning mounts', () => {
   async function runLine(cmd: string): Promise<string> {
     const parser = await getTestParser()
-    const parent = new RAMResource()
+    const parent = new RAMVFS()
     parent.store.files.set('/top.txt', new Uint8Array(10))
     parent.store.dirs.add('/inner')
     parent.store.files.set('/inner/leftover.txt', new Uint8Array(1000))
-    const child = new RAMResource()
+    const child = new RAMVFS()
     child.store.files.set('/real.txt', new TextEncoder().encode('hit here\n'))
-    const other = new RAMResource()
+    const other = new RAMVFS()
     other.store.files.set('/o.txt', new TextEncoder().encode('hit there\n'))
     const registry = new OpsRegistry()
-    registry.registerResource(parent)
-    registry.registerResource(child)
-    registry.registerResource(other)
+    registry.registerVfs(parent)
+    registry.registerVfs(child)
+    registry.registerVfs(other)
     const ws = new Workspace(
       { '/base': parent, '/base/inner': child, '/other': other },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -452,10 +452,10 @@ describe('fanOutTraversal operands spanning mounts', () => {
 // a mount root is an ordinary directory entry of its parent, listed by
 // the walk but never descended by it.
 describe('ls -R across a mount boundary', () => {
-  async function runLine(mounts: Record<string, RAMResource>, cmd: string): Promise<string> {
+  async function runLine(mounts: Record<string, RAMVFS>, cmd: string): Promise<string> {
     const parser = await getTestParser()
     const registry = new OpsRegistry()
-    for (const resource of Object.values(mounts)) registry.registerResource(resource)
+    for (const vfs of Object.values(mounts)) registry.registerVfs(vfs)
     const ws = new Workspace(mounts, { mode: MountMode.WRITE, ops: registry, shellParser: parser })
     try {
       return stdoutStr(await ws.execute(cmd))
@@ -464,13 +464,13 @@ describe('ls -R across a mount boundary', () => {
     }
   }
 
-  function ram(files: Record<string, string>, dirs: string[] = []): RAMResource {
-    const resource = new RAMResource()
-    for (const dir of dirs) resource.store.dirs.add(dir)
+  function ram(files: Record<string, string>, dirs: string[] = []): RAMVFS {
+    const vfs = new RAMVFS()
+    for (const dir of dirs) vfs.store.dirs.add(dir)
     for (const [key, text] of Object.entries(files)) {
-      resource.store.files.set(key, new TextEncoder().encode(text))
+      vfs.store.files.set(key, new TextEncoder().encode(text))
     }
-    return resource
+    return vfs
   }
 
   // Pinned on coreutils 9.7 over a tmpfs mounted at `base/nested`:
@@ -558,9 +558,9 @@ describe('traversal cancellation', () => {
   ])('forwards cancellation through %j', async (...parts) => {
     for (const source of ['caller', 'session'] as const) {
       for (const checksSignal of [false, true]) {
-        const parent = new RAMResource()
-        const child = new RAMResource()
-        const other = new RAMResource()
+        const parent = new RAMVFS()
+        const child = new RAMVFS()
+        const other = new RAMVFS()
         parent.store.files.set('/parent', new Uint8Array([1]))
         child.store.files.set('/child', new Uint8Array([2]))
         other.store.files.set('/other', new Uint8Array([3]))

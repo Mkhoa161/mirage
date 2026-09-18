@@ -28,8 +28,6 @@ from mirage.cache.file.config import CacheConfig, RedisCacheConfig
 from mirage.cache.index.config import IndexConfig, RedisIndexConfig
 from mirage.commands.cli.types import CLISpec
 from mirage.policy.profile import SessionProfile
-from mirage.resource.loader import load_attr
-from mirage.resource.registry import build_resource
 from mirage.runtime.base import Runtime
 from mirage.runtime.table import build_runtime
 from mirage.runtime.types import Language, ScriptSource
@@ -41,6 +39,8 @@ from mirage.shell.console import JobConsole
 from mirage.shell.job_table import ConsoleFactory
 from mirage.types import (KERNEL_BACKENDS, ConsistencyPolicy, Limit,
                           MountBackend, MountMode, parse_mount_mode)
+from mirage.vfs.loader import load_attr
+from mirage.vfs.registry import build_vfs
 from mirage.workspace.mount.spec import Mount
 from mirage.workspace.store import (DEFAULT_STATE_ROOT,
                                     DiskWorkspaceStateStore,
@@ -330,13 +330,13 @@ class CLIBlock(BaseModel):
 class MountBlock(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    resource: str
+    vfs: str
     mode: MountMode | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     command_limits: dict[str, Limit] = Field(default_factory=dict)
-    # How the mount is exposed: vfs (default, mirage's own filesystem only),
-    # fuse, or fskit. mountpoint is honored by the kernel backends.
-    backend: MountBackend = MountBackend.VFS
+    # How the mount is exposed: workspace (default, mirage's own filesystem
+    # only), fuse, or fskit. mountpoint is honored by the kernel backends.
+    backend: MountBackend = MountBackend.WORKSPACE
     mountpoint: str | None = None
 
     @field_validator("mode", mode="before")
@@ -437,7 +437,7 @@ def _absolutize_scripts(raw: dict[str, Any], base: Path) -> None:
     if isinstance(mounts, dict):
         for block in mounts.values():
             if isinstance(block, dict):
-                _absolutize_code_ref(block, "resource", base)
+                _absolutize_code_ref(block, "vfs", base)
     profiles = raw.get("profiles")
     if isinstance(profiles, dict):
         for block in profiles.values():
@@ -465,7 +465,7 @@ def _absolutize_script_key(entry: dict[str, Any], base: Path) -> None:
 def _absolutize_code_ref(entry: dict[str, Any], key: str, base: Path) -> None:
     """Rebase a path-form colon reference under ``key``.
 
-    ``cli: ./tool.py:TREE``, ``resource: ./wiki.py:WikiResource`` and a
+    ``cli: ./tool.py:TREE``, ``vfs: ./wiki.py:WikiVFS`` and a
     runtime entry's ``name: ./box.py:EchoBox`` all mean "next to the
     config file", the same build-context rule ``script:`` follows;
     without this the pointer reaches ``load_attr`` relative and resolves
@@ -478,7 +478,7 @@ def _absolutize_code_ref(entry: dict[str, Any], key: str, base: Path) -> None:
         entry (dict[str, Any]): a ``clis``, ``mounts`` or ``runtimes``
             mapping entry, mutated in place.
         key (str): the field holding the reference, ``cli``,
-            ``resource`` or ``name``.
+            ``vfs`` or ``name``.
         base (Path): directory containing the config file.
     """
     ref = entry.get(key)
@@ -511,7 +511,7 @@ def _rebase_code_ref(ref: str, base: Path) -> str:
 def _runtime_class(ref: str) -> type[Runtime]:
     """Load the ``Runtime`` subclass a ``source:Class`` reference names.
 
-    The runtime twin of the ``resource:`` and ``cli:`` reference forms:
+    The runtime twin of the ``vfs:`` and ``cli:`` reference forms:
     a deployment ships a runtime as a file and names it from yaml with no
     host program calling ``register_runtime``. The class is constructed
     with the uniform ``(captures, config, script)`` options like a
@@ -654,28 +654,28 @@ class WorkspaceConfig(BaseModel):
         """Produce kwargs ready to splat into ``Workspace(**kwargs)``.
 
         Synchronous, and must stay that way: this is the YAML door, and
-        :func:`mirage.resource.registry.build_resource` behind it is the
+        :func:`mirage.vfs.registry.build_vfs` behind it is the
         one every embedder calls. A backend needing I/O hydrates lazily
         instead of moving that cost into construction; see
-        ``build_resource`` for the full rule. Deliberately diverges from
+        ``build_vfs`` for the full rule. Deliberately diverges from
         the TypeScript ``configToWorkspaceArgs``, which is async.
 
         Returns:
-            dict[str, Any]: resource instances, cache config, and
+            dict[str, Any]: VFS instances, cache config, and
                 workspace-level settings, in the shape the
                 ``Workspace`` constructor expects.
         """
-        resources: dict[str, Mount] = {}
+        mounts: dict[str, Mount] = {}
         for prefix, block in self.mounts.items():
-            prov = build_resource(block.resource, block.config)
+            prov = build_vfs(block.vfs, block.config)
             mode = block.mode if block.mode is not None else self.mode
-            resources[prefix] = Mount(
-                resource=prov,
+            mounts[prefix] = Mount(
+                vfs=prov,
                 mode=mode,
                 command_limits=block.command_limits,
             )
         kwargs: dict[str, Any] = {
-            "resources": resources,
+            "mounts": mounts,
             "mode": self.mode,
             "consistency": self.consistency,
             "session_id": self.default_session_id,
@@ -722,7 +722,7 @@ class WorkspaceConfig(BaseModel):
     def kernel_mounts(self) -> dict[str, tuple[MountBackend, str | None]]:
         """Declarative kernel mounts keyed by mount prefix.
 
-        Mounts left on the default ``vfs`` backend are absent: they are
+        Mounts left on the default ``workspace`` backend are absent: they are
         served inside mirage's own filesystem and register nothing with the
         kernel.
 
@@ -842,8 +842,8 @@ async def resolve_secrets(config: "WorkspaceConfig") -> "WorkspaceConfig":
     The async half of the YAML door, and the reason
     :meth:`WorkspaceConfig.to_workspace_kwargs` can stay sync: a
     `{from, ref, key}` in `mounts.*.config` or `clis.*.config` is
-    fetched here, so `build_resource` receives the credential itself
-    and no resource config, client or backend learns that this plane
+    fetched here, so `build_vfs` receives the credential itself
+    and no VFS config, client or backend learns that this plane
     exists. Mirrors the TypeScript `configToWorkspaceArgs`, which does
     the same thing inline because it is async already.
 

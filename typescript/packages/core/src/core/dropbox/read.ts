@@ -46,7 +46,7 @@ export async function read(
   options?: { offset?: number; size?: number },
 ): Promise<Uint8Array> {
   const window = windowFor(options?.offset ?? 0, options?.size ?? null)
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   let p = path.virtual
   if (prefix !== '' && p.startsWith(prefix)) p = p.slice(prefix.length) || '/'
   const key = stripSlash(p)
@@ -73,7 +73,7 @@ export async function read(
       : null,
   )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.resourceType === 'dropbox/folder') throw eisdir(path.virtual)
+  if (entry.vfsType === 'dropbox/folder') throw eisdir(path.virtual)
   return dropboxDownload(accessor.tokenManager, dropboxPath, window)
 }
 
@@ -82,7 +82,7 @@ export async function* stream(
   path: PathSpec,
   index?: IndexCacheStore,
 ): AsyncIterable<Uint8Array> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   let p = path.virtual
   if (prefix !== '' && p.startsWith(prefix)) p = p.slice(prefix.length) || '/'
   const key = stripSlash(p)
@@ -106,7 +106,7 @@ export async function* stream(
             : null,
         )
   if (entry === null) throw enoent(path.virtual)
-  if (entry.resourceType === 'dropbox/folder') throw eisdir(path.virtual)
+  if (entry.vfsType === 'dropbox/folder') throw eisdir(path.virtual)
   const dropboxPath = dropboxPathFromVirtual(accessor.rootPath, virtualKey, prefix)
   for await (const chunk of dropboxDownloadStream(accessor.tokenManager, dropboxPath)) {
     yield chunk

@@ -14,8 +14,8 @@
 
 import { toIsoZ } from '../../utils/dates.ts'
 import type { S3Accessor } from '../../accessor/s3.ts'
-import type { S3Config } from '../../resource/s3/config.ts'
-import { ResourceName } from '../../types.ts'
+import type { S3Config } from '../../vfs/s3/config.ts'
+import { VFSName } from '../../types.ts'
 import { eaccesRefused } from '../../utils/errors.ts'
 import { rstripSlash } from '../../utils/slash.ts'
 import type {
@@ -294,7 +294,7 @@ async function probePrefix(conn: S3Conn, pfx: string): Promise<boolean> {
 }
 
 export const DRIVER: ObjectStoreDriver<S3Accessor, S3Conn> = {
-  resource: ResourceName.S3,
+  vfs: VFSName.S3,
   scopeError: SCOPE_ERROR,
   keyPrefixOf,
   connect,

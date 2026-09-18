@@ -20,17 +20,17 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.linear import LINEAR
-from mirage.resource.linear import LinearConfig, LinearResource
 from mirage.types import PathSpec
+from mirage.vfs.linear import LinearConfig, LinearVFS
 
 load_dotenv(".env.development")
 
 config = LinearConfig(api_key=os.environ["LINEAR_API_KEY"])
-resource = LinearResource(config=config)
+vfs = LinearVFS(config=config)
 
 
 async def main() -> None:
-    ws = Workspace({"/linear": resource}, mode=MountMode.READ)
+    ws = Workspace({"/linear": vfs}, mode=MountMode.READ)
     ws.register_cli("linear", LINEAR, config.model_dump())
 
     print("=== not-found errors show the full virtual path ===")

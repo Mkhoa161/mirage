@@ -19,8 +19,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.trello import TrelloConfig, TrelloResource
 from mirage.types import PathSpec
+from mirage.vfs.trello import TrelloConfig, TrelloVFS
 
 load_dotenv(".env.development")
 
@@ -28,11 +28,11 @@ config = TrelloConfig(
     api_key=os.environ["TRELLO_API_KEY"],
     api_token=os.environ["TRELLO_API_TOKEN"],
 )
-resource = TrelloResource(config=config)
+vfs = TrelloVFS(config=config)
 
 
 async def main() -> None:
-    ws = Workspace({"/trello": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/trello": vfs}, mode=MountMode.WRITE)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /trello/__nf_missing__.txt",

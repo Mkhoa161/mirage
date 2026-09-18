@@ -15,7 +15,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { DropboxResource, MountMode, Workspace, type FileStat, type DropboxConfig } from '@struktoai/mirage-node'
+import { DropboxVFS, MountMode, Workspace, type FileStat, type DropboxConfig } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../.env.development'), override: true })
@@ -50,8 +50,8 @@ function quote(p: string): string {
 }
 
 async function main(): Promise<void> {
-  const resource = new DropboxResource(buildConfig())
-  const ws = new Workspace({ '/dropbox': resource }, { mode: MountMode.READ })
+  const vfs = new DropboxVFS(buildConfig())
+  const ws = new Workspace({ '/dropbox': vfs }, { mode: MountMode.READ })
   try {
     console.log('=== not-found errors show the full virtual path ===')
     for (const cmd of ['cat /dropbox/__nf_missing__.txt', 'head /dropbox/__nf_missing__.txt', 'stat /dropbox/__nf_missing__.txt']) {

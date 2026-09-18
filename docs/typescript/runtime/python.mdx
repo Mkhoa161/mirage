@@ -22,9 +22,9 @@ workspace's existing mounts through Pyodide's filesystem adapter.
 Installed Python script CLIs receive bare `argv` (including the installed name at index 0) and `stdin` (bytes, or `None` when absent), on both Monty and Pyodide. Pyodide also keeps `sys.argv` and `sys.stdin`. Ordinary `python3` commands retain their interpreter's existing globals.
 
 ```ts
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
-const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.EXEC })
+const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.EXEC })
 await ws.execute('echo hello > /data/a.txt')
 const io = await ws.execute(`python3 -c "print(open('/data/a.txt').read().strip())"`)
 ```
@@ -58,7 +58,7 @@ export default defineConfig({
 When workers or shared memory are unavailable, or a worker cannot start,
 Pyodide falls back to collecting mounted files before execution and
 replaying writes afterward. That fallback reads whole mounts into memory;
-use narrow mount prefixes for large resources. Neither mode requires JSPI.
+use narrow mount prefixes for large mounts. Neither mode requires JSPI.
 
 Mount workspace files under a non-root prefix such as `/data`. A mount at
 `/` cannot replace Pyodide's own filesystem, which contains its standard
@@ -79,8 +79,8 @@ either way Python spells it (`os.getenv` or `os.environ`):
 
 ```ts
 const ws = new Workspace(
-  { '/data': new RAMResource() },
-  { mode: MountMode.EXEC, runtimes: ['monty', 'vfs'] },
+  { '/data': new RAMVFS() },
+  { mode: MountMode.EXEC, runtimes: ['monty', 'workspace'] },
 )
 const io = await ws.execute(
   `python3 -c "from pathlib import Path; print(Path('/data/a.txt').read_text())"`,
@@ -132,7 +132,7 @@ Server workspace config files take a top-level `runtimes` list. Each
 entry is a name or a mapping with the uniform options (`captures`,
 `config`, `script`); the name is a runtime mirage ships, one the host
 registered with `registerRuntime`, or a `./file.mjs:Class` reference to a
-`Runtime` subclass, the form `resource:` and `cli:` take:
+`Runtime` subclass, the form `vfs:` and `cli:` take:
 
 ```yaml
 runtimes:
@@ -140,11 +140,10 @@ runtimes:
   - name: pyodide # knobs live in the entry's config block
     config:
       home: https://assets.example.com/pyodide/
-  - vfs
-
+  - workspace
 mounts:
   /data:
-    resource: ram
+    vfs: ram
     command_limits:
       python3:
         timeout_seconds: 30
@@ -164,8 +163,8 @@ entries are the `runtimes` workspace option, instances carrying their
 own options:
 
 ```ts
-const ws = new Workspace(resources, {
-  runtimes: [new PyodideRuntime({ config: { home: 'https://assets.example.com/pyodide/' } }), 'vfs'],
+const ws = new Workspace(mounts, {
+  runtimes: [new PyodideRuntime({ config: { home: 'https://assets.example.com/pyodide/' } }), 'workspace'],
 })
 ```
 

@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.gws import GWS
-from mirage.resource.gmail import GmailConfig, GmailResource
+from mirage.vfs.gmail import GmailConfig, GmailVFS
 
 load_dotenv(".env.development")
 
@@ -28,11 +28,11 @@ config = GmailConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GmailResource(config=config)
+vfs = GmailVFS(config=config)
 
 
 async def main():
-    ws = Workspace({"/gmail": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/gmail": vfs}, mode=MountMode.WRITE)
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 
@@ -66,7 +66,7 @@ async def main():
     r = await ws.execute(
         'gws gmail send --to "zechengzhang97@gmail.com"'
         ' --subject "Hello from MIRAGE"'
-        ' --body "This email was sent via the MIRAGE Gmail resource."')
+        ' --body "This email was sent via the MIRAGE Gmail VFS."')
     print((await r.stdout_str())[:200])
 
 

@@ -15,7 +15,7 @@ export async function stat(
   path: PathSpec,
   index?: IndexCacheStore,
 ): Promise<FileStat> {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   const raw = rawPathOf(path)
   const key = stripSlash(raw)
   if (key === '') return new FileStat({ name: '/', type: FileType.DIRECTORY })
@@ -24,7 +24,7 @@ export async function stat(
     const lookup = await index.get(virtualKey)
     if (lookup.entry !== undefined && lookup.entry !== null) {
       const entry = lookup.entry
-      if (entry.resourceType === ResourceType.FOLDER) {
+      if (entry.vfsType === ResourceType.FOLDER) {
         return new FileStat({
           name: entry.name,
           type: FileType.DIRECTORY,

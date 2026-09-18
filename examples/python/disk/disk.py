@@ -20,7 +20,7 @@ import tempfile
 from pathlib import Path
 
 from mirage import MountMode, Workspace
-from mirage.resource.disk import DiskResource
+from mirage.vfs.disk import DiskVFS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = REPO_ROOT / "data"
@@ -28,11 +28,11 @@ DATA_DIR = REPO_ROOT / "data"
 tmp = tempfile.mkdtemp()
 shutil.copytree(DATA_DIR, Path(tmp) / "files", dirs_exist_ok=True)
 
-resource = DiskResource(root=tmp + "/files")
+vfs = DiskVFS(root=tmp + "/files")
 
 
 async def main() -> None:
-    ws = Workspace({"/data/": resource}, mode=MountMode.READ)
+    ws = Workspace({"/data/": vfs}, mode=MountMode.READ)
 
     print("=== ls /data/ ===")
     result = await ws.execute("ls /data/")
@@ -129,7 +129,7 @@ async def main() -> None:
     # ── persistence: save / load / copy / deepcopy ──────────────────
     # Disk has no redacted config: full file tree is in the snapshot.
     # Default load behavior creates a fresh tmpdir. Caller can override
-    # by supplying DiskResource(root=...) in resources={...}.
+    # by supplying DiskVFS(root=...) in mounts={...}.
     print("\n=== PERSISTENCE ===\n")
     with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as f:
         snap = f.name
@@ -146,7 +146,7 @@ async def main() -> None:
 
         # Load with caller-supplied root — files written into custom_root
         loaded_custom = await Workspace.load(
-            snap, resources={"/data": DiskResource(root=custom_root)})
+            snap, mounts={"/data": DiskVFS(root=custom_root)})
         r = await loaded_custom.execute("ls /data/")
         print(f"  loaded (root={custom_root[:40]}…) ls: "
               f"{(await r.stdout_str()).strip()[:80]}…")

@@ -21,7 +21,7 @@ import {
   eventTitle,
   makeCalendarDirname,
   makeEventFilename,
-} from '../../resource/gcal/event_entry.ts'
+} from '../../vfs/gcal/event_entry.ts'
 import type { JsonValue, PathSpec } from '../../types.ts'
 import { enoent } from '../../utils/errors.ts'
 import { mountPrefixOf } from '../../utils/key_prefix.ts'
@@ -66,8 +66,8 @@ export function calendarPayload(entry: CalendarEntryRow, tz: string): Uint8Array
 
 /** Split a path into `[mount prefix, mount-relative key, virtual key]`. */
 export function normalize(path: PathSpec): [string, string, string] {
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
-  const key = (path.pattern !== null ? path.dir : path).resourcePath
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
+  const key = (path.pattern !== null ? path.dir : path).vfsPath
   const virtualKey = key !== '' ? `${prefix}/${key}` : prefix !== '' ? prefix : '/'
   return [prefix, key, virtualKey]
 }
@@ -161,7 +161,7 @@ function eventEntries(
       new IndexEntry({
         id: eventId,
         name: title,
-        resourceType: EVENT,
+        vfsType: EVENT,
         remoteTime: typeof updated === 'string' ? updated : '',
         vfsName: name,
         size: compactJsonBytes(event).length,
@@ -196,7 +196,7 @@ export async function readdir(
         new IndexEntry({
           id: typeof entry.id === 'string' && entry.id !== '' ? entry.id : name,
           name,
-          resourceType: CALENDAR_DIR,
+          vfsType: CALENDAR_DIR,
           vfsName: name,
         }),
       ])
@@ -227,7 +227,7 @@ export async function readdir(
         new IndexEntry({
           id: `${calId}:calendar`,
           name: CALENDAR_FILE,
-          resourceType: CALENDAR_JSON,
+          vfsType: CALENDAR_JSON,
           vfsName: CALENDAR_FILE,
           size: calendarPayload(entry, tz).length,
         }),
@@ -239,7 +239,7 @@ export async function readdir(
         new IndexEntry({
           id: `${calId}:${day}`,
           name: day,
-          resourceType: DAY_DIR,
+          vfsType: DAY_DIR,
           vfsName: day,
         }),
       ])

@@ -16,15 +16,15 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 @pytest.fixture
 def ws():
-    mem = RAMResource()
-    w = Workspace(resources={"/mnt/data": (mem, MountMode.WRITE)})
+    mem = RAMVFS()
+    w = Workspace(mounts={"/mnt/data": (mem, MountMode.WRITE)})
     asyncio.run(w.execute("mkdir /mnt/data/dir"))
     asyncio.run(w.execute("echo -n a > /mnt/data/dir/a.txt"))
     asyncio.run(w.execute("echo -n b > /mnt/data/dir/b.txt"))

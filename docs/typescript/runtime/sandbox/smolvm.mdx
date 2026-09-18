@@ -31,8 +31,8 @@ const runtime = new SmolvmRuntime({
   config: { machine: 'mirage-box' },
 })
 const ws = new Workspace(
-  { '/data': resource },
-  { mode: MountMode.EXEC, runtimes: [runtime, 'vfs'] },
+  { '/data': vfs },
+  { mode: MountMode.EXEC, runtimes: [runtime, 'workspace'] },
 )
 await ws.execute('python3 job.py', { cwd: '/data' })
 ```

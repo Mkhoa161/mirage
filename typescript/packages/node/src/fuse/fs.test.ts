@@ -14,7 +14,7 @@
 
 import { constants as fsConstants } from 'node:fs'
 import type { Action, OpsResultContext, Policy } from '@struktoai/mirage-core/policy/index'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { ContentType, FileStat, FileType, MountMode } from '@struktoai/mirage-core/types'
 import { describe, expect, it, vi } from 'vitest'
 import { Workspace } from '../workspace.ts'
@@ -44,7 +44,7 @@ async function callOp<T extends unknown[] = [number, unknown?]>(
 
 async function mkWs(): Promise<Workspace> {
   const ws = new Workspace(
-    { '/data/': new RAMResource(), '/extra/': new RAMResource() },
+    { '/data/': new RAMVFS(), '/extra/': new RAMVFS() },
     { mode: MountMode.WRITE },
   )
   await ws.execute("echo 'hello world' | tee /data/greeting.txt")
@@ -152,11 +152,11 @@ describe('MirageFS — rmdir maps non-empty to ENOTEMPTY', () => {
 
 describe('MirageFS — read-only mount write consistency', () => {
   it('rejects create and buffered flush through the same mount-mode gate', async () => {
-    const resource = new RAMResource()
-    const seedWs = new Workspace({ '/data/': resource }, { mode: MountMode.WRITE })
+    const vfs = new RAMVFS()
+    const seedWs = new Workspace({ '/data/': vfs }, { mode: MountMode.WRITE })
     await seedWs.fs.writeFile('/data/existing.txt', 'seed')
 
-    const readonlyWs = new Workspace({ '/data/': resource }, { mode: MountMode.READ })
+    const readonlyWs = new Workspace({ '/data/': vfs }, { mode: MountMode.READ })
     const mfs = new MirageFS(readonlyWs.fs)
 
     const [createCode] = await callOp<[number]>(mfs, 'create', '/data/new.txt', 0o100644)
@@ -237,7 +237,7 @@ describe('MirageFS — ops() registers access', () => {
   })
 })
 
-describe('MirageFS — size=null resources (API-backed)', () => {
+describe('MirageFS — size=null mounts (API-backed)', () => {
   // Simulates Trello/Linear/Slack: stat() returns size=null because the bytes
   // aren't known until the API is called. getattr reports 0 pre-open (never a
   // fake size); the mount's direct_io makes the kernel read to EOF anyway,
@@ -246,7 +246,7 @@ describe('MirageFS — size=null resources (API-backed)', () => {
   // `ls` issue an API call per directory entry.
 
   function mkSizeNullWs(): Workspace {
-    return new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    return new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
   }
 
   it('getattr reports size 0 (no API fetch) when stat returns size=null', async () => {
@@ -707,10 +707,10 @@ describe('MirageFS — session binding', () => {
 
 describe('MirageFS — a policy deny on read surfaces EACCES', () => {
   it('postOps deny reports EACCES instead of an empty read', async () => {
-    const resource = new RAMResource()
-    resource.store.dirs.add('/')
-    resource.store.files.set('/secret.txt', new TextEncoder().encode('TOPSECRET plans\n'))
-    resource.store.files.set('/clean.txt', new TextEncoder().encode('hello\n'))
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/')
+    vfs.store.files.set('/secret.txt', new TextEncoder().encode('TOPSECRET plans\n'))
+    vfs.store.files.set('/clean.txt', new TextEncoder().encode('hello\n'))
     const redact: Policy = {
       postOps(ctx: OpsResultContext): Action | null {
         const data = ctx.result instanceof Uint8Array ? new TextDecoder().decode(ctx.result) : null
@@ -720,7 +720,7 @@ describe('MirageFS — a policy deny on read surfaces EACCES', () => {
         return null
       },
     }
-    const ws = new Workspace({ '/data/': resource }, { mode: MountMode.READ, policies: [redact] })
+    const ws = new Workspace({ '/data/': vfs }, { mode: MountMode.READ, policies: [redact] })
     const mfs = new MirageFS(ws.fs)
 
     const [openCode, fd] = await callOp<[number, number]>(mfs, 'open', '/data/secret.txt', 0)

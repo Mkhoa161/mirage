@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -31,12 +31,12 @@ const ENC = new TextEncoder()
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   r.store.dirs.add('/src')
   r.store.files.set('/src/a.js', ENC.encode('legacyFetch("/api");\n'))
   const registry = new OpsRegistry()
-  registry.registerResource(r)
+  registry.registerVfs(r)
   return new Workspace({ '/': r }, { mode: MountMode.WRITE, ops: registry, shellParser: parser })
 }
 
@@ -95,14 +95,14 @@ describe('grep -r recursive exit code (issue #43)', () => {
 })
 
 it('keeps binary-only matches through nested mount fan-out', async () => {
-  const outer = new RAMResource()
-  const inner = new RAMResource()
+  const outer = new RAMVFS()
+  const inner = new RAMVFS()
   outer.store.dirs.add('/')
   outer.store.dirs.add('/work')
   inner.store.files.set('/paper.pdf', ENC.encode('needle\0tail\n'))
   const registry = new OpsRegistry()
-  registry.registerResource(outer)
-  registry.registerResource(inner)
+  registry.registerVfs(outer)
+  registry.registerVfs(inner)
   const ws = new Workspace(
     { '/': outer, '/work/remote': inner },
     { mode: MountMode.WRITE, ops: registry, shellParser: await getTestParser() },

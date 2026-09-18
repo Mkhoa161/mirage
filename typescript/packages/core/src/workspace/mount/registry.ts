@@ -15,12 +15,12 @@
 import { isNoMount, noMount } from '../../utils/errors.ts'
 import { mountKey } from '../../utils/key_prefix.ts'
 import type { Runtime } from '../../runtime/base.ts'
-import type { VFSRuntime } from '../../runtime/table.ts'
+import type { WorkspaceRuntime } from '../../runtime/table.ts'
 import type { FileCache } from '../../cache/file/mixin.ts'
 import { CacheManager } from '../../cache/manager.ts'
 import { GENERAL_COMMANDS } from '../../commands/builtin/general/index.ts'
-import { cachesReads, type Resource } from '../../resource/base.ts'
-import { DevResource } from '../../resource/dev/dev.ts'
+import { cachesReads, type VFS } from '../../vfs/base.ts'
+import { DevVFS } from '../../vfs/dev/dev.ts'
 import { Decisions, MountRootPolicy, OutputCapPolicy, Policies } from '../../policy/index.ts'
 import { type Limit, ConsistencyPolicy, MountMode, PathSpec } from '../../types.ts'
 import { CLIRegistry } from '../cli/registry.ts'
@@ -59,22 +59,22 @@ export class MountCommandUnsupported extends Error {
 
 export interface OpsMountInfo {
   prefix: string
-  resourceType: string
+  vfsType: string
   mode: MountMode
 }
 
 export class MountRegistry {
   private readonly mountList: MountEntry[]
-  readonly retiringResources = new Map<Resource, Promise<void>>()
-  readonly retiredResources = new WeakSet<Resource>()
+  readonly retiringMounts = new Map<VFS, Promise<void>>()
+  readonly retiredMounts = new WeakSet<VFS>()
   private rootRef: MountEntry | null = null
   private consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
   private cacheStore: FileCache | null = null
   private reconciler: ReadReconciler | null = null
-  // The world's vfs runtime, set by Workspace after construction.
+  // The world's workspace runtime, set by Workspace after construction.
   // Catch-all when its captures are empty; explicit captures make
   // unclaimed commands an admission failure (126).
-  vfsRuntime: VFSRuntime | null = null
+  workspaceRuntime: WorkspaceRuntime | null = null
   // The ordered runtime world, set by Runtimes at construction (the
   // live array, so add() keeps it fresh). The CLI script arm selects
   // an interpreter from it (a runtime: pin or the script's language),
@@ -85,7 +85,7 @@ export class MountRegistry {
   // the registry seeds the POSIX mount-root rule (mount-root semantics
   // are mount semantics) and the document's deny rules, then user
   // policies (Workspace policies option), follow it. Registry-hosted
-  // like vfsRuntime so the
+  // like workspaceRuntime so the
   // executor reaches them without new threading.
   readonly policies = new Policies([
     new MountRootPolicy(),
@@ -105,8 +105,8 @@ export class MountRegistry {
   async invalidateAfterExternal(): Promise<void> {
     await this.cacheStore?.clear()
     for (const mount of this.allMounts()) {
-      if (mount.cacheManager !== null) await mount.cacheManager.clearIndex(mount.resource.index)
-      else await mount.use(() => mount.resource.index?.clear() ?? Promise.resolve())
+      if (mount.cacheManager !== null) await mount.cacheManager.clearIndex(mount.vfs.index)
+      else await mount.use(() => mount.vfs.index?.clear() ?? Promise.resolve())
     }
   }
 
@@ -128,45 +128,42 @@ export class MountRegistry {
   private attachManager(m: MountEntry): void {
     m.cacheManager = new CacheManager(
       this.cacheStore,
-      m.resource.index ?? null,
+      m.vfs.index ?? null,
       m.prefix,
-      cachesReads(m.resource),
+      cachesReads(m.vfs),
       (path) => !m.retiring && this.tryMountFor(path) === m,
     )
   }
 
   constructor(
-    resources: Record<string, Resource>,
+    mounts: Record<string, VFS>,
     defaultMode: MountMode,
     modeOverrides: Record<string, MountMode> = {},
   ) {
-    const mounts: MountEntry[] = []
+    const list: MountEntry[] = []
     const seen = new Set<string>()
     const overrides: Record<string, MountMode> = {}
     for (const [k, v] of Object.entries(modeOverrides)) {
       overrides[normalizePrefix(k)] = v
     }
-    mounts.push(
-      new MountEntry({ prefix: DEV_PREFIX, resource: new DevResource(), mode: MountMode.WRITE }),
-    )
+    list.push(new MountEntry({ prefix: DEV_PREFIX, vfs: new DevVFS(), mode: MountMode.WRITE }))
     seen.add(DEV_PREFIX)
-    for (const [rawPrefix, resource] of Object.entries(resources)) {
+    for (const [rawPrefix, vfs] of Object.entries(mounts)) {
       const prefix = normalizePrefix(rawPrefix)
       if (seen.has(prefix)) {
         throw new Error(`duplicate mount prefix: ${prefix}`)
       }
-      if (resource.isClosed === true)
-        throw new Error('resource is closed; create a new resource instance')
+      if (vfs.isClosed === true) throw new Error('VFS is closed; create a new VFS instance')
       seen.add(prefix)
       const mode = overrides[prefix] ?? defaultMode
-      const entry = new MountEntry({ prefix, resource, mode })
-      const alias = mounts.find((existing) => existing.resource === resource)
+      const entry = new MountEntry({ prefix, vfs, mode })
+      const alias = list.find((existing) => existing.vfs === vfs)
       if (alias !== undefined) entry.activity = alias.activity
-      mounts.push(entry)
+      list.push(entry)
     }
-    mounts.sort((a, b) => b.prefix.length - a.prefix.length)
-    this.mountList = mounts
-    this.rootRef = mounts.find((m) => m.prefix === '/') ?? null
+    list.sort((a, b) => b.prefix.length - a.prefix.length)
+    this.mountList = list
+    this.rootRef = list.find((m) => m.prefix === '/') ?? null
   }
 
   setConsistency(consistency: ConsistencyPolicy): void {
@@ -177,55 +174,52 @@ export class MountRegistry {
     return this.consistency
   }
 
-  /** A removed resource instance cannot start a second lifecycle. */
-  checkResourceAvailable(resource: Resource): void {
-    if (
-      this.retiringResources.has(resource) ||
-      this.mountList.some((m) => m.resource === resource && m.retiring)
-    ) {
-      throw new Error('resource is being unmounted')
+  /** A removed VFS instance cannot start a second lifecycle. */
+  checkVfsAvailable(vfs: VFS): void {
+    if (this.retiringMounts.has(vfs) || this.mountList.some((m) => m.vfs === vfs && m.retiring)) {
+      throw new Error('VFS is being unmounted')
     }
-    if (resource.isClosed === true || this.retiredResources.has(resource)) {
-      throw new Error('resource is closed; create a new resource instance')
+    if (vfs.isClosed === true || this.retiredMounts.has(vfs)) {
+      throw new Error('VFS is closed; create a new VFS instance')
     }
   }
 
   /**
    * Add a mount dynamically. Mirrors Python's `registry.mount(...)`.
-   * Registers the resource's commands and ops on the new mount and
+   * Registers the VFS's commands and ops on the new mount and
    * re-sorts mounts by prefix length (longest first).
    */
   mount(
     prefix: string,
-    resource: Resource,
+    vfs: VFS,
     mode: MountMode = MountMode.READ,
     consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
   ): MountEntry {
-    this.checkResourceAvailable(resource)
+    this.checkVfsAvailable(vfs)
     const norm = normalizePrefix(prefix)
     for (const existing of this.mountList) {
       if (existing.prefix === norm) {
         throw new Error(`duplicate mount prefix: ${norm}`)
       }
     }
-    const m = new MountEntry({ prefix: norm, resource, mode, consistency })
-    const alias = this.mountList.find((existing) => existing.resource === resource)
+    const m = new MountEntry({ prefix: norm, vfs, mode, consistency })
+    const alias = this.mountList.find((existing) => existing.vfs === vfs)
     if (alias !== undefined) m.activity = alias.activity
-    const cmds = resource.commands?.()
+    const cmds = vfs.commands?.()
     if (cmds !== undefined) {
       for (const cmd of cmds) {
         if (cmd.filetype !== null) m.register(cmd)
-        else if (cmd.resource === null) m.registerGeneral(cmd)
+        else if (cmd.vfs === null) m.registerGeneral(cmd)
         else m.register(cmd)
       }
     }
     for (const cmd of GENERAL_COMMANDS) {
       m.registerGeneral(cmd)
     }
-    const ops = resource.ops?.()
+    const ops = vfs.ops?.()
     if (ops !== undefined) {
       for (const op of ops) {
-        if (op.resource === null) m.registerGeneralOp(op)
+        if (op.vfs === null) m.registerGeneralOp(op)
         else m.registerOp(op)
       }
     }
@@ -313,15 +307,15 @@ export class MountRegistry {
   opsMounts(): OpsMountInfo[] {
     return this.mountList.map((m) => ({
       prefix: m.prefix,
-      resourceType: m.resource.kind,
+      vfsType: m.vfs.kind,
       mode: m.mode,
     }))
   }
 
-  findResourceByName(resourceName: string | null): Resource | null {
-    if (resourceName === null) return null
+  findVfsByName(vfsName: string | null): VFS | null {
+    if (vfsName === null) return null
     for (const m of this.mountList) {
-      if (m.resource.kind === resourceName) return m.resource
+      if (m.vfs.kind === vfsName) return m.vfs
     }
     return null
   }
@@ -329,8 +323,8 @@ export class MountRegistry {
   getResourceType(path: string | null): string | null {
     if (path === null) return null
     try {
-      const [resource] = this.resolve(path)
-      return resource.kind
+      const [vfs] = this.resolve(path)
+      return vfs.kind
     } catch (err) {
       if (isNoMount(err)) return null
       throw err
@@ -360,13 +354,13 @@ export class MountRegistry {
     return this.cacheStore
   }
 
-  resolve(path: string): [Resource, PathSpec, MountMode] {
+  resolve(path: string): [VFS, PathSpec, MountMode] {
     const m = this.mountFor(path)
     const hadTrailing = path.endsWith('/')
     const norm = `/${stripSlash(path)}`
     const mountPrefix = rstripSlash(m.prefix)
     return [
-      m.resource,
+      m.vfs,
       PathSpec.fromStrPath(
         hadTrailing ? `${norm}/` : norm,
         mountKey(hadTrailing ? `${norm}/` : norm, mountPrefix),
@@ -470,7 +464,7 @@ export class MountRegistry {
     const mountPath = pathScopes.length > 0 ? (pathScopes[0]?.virtual ?? cwd) : cwd
     let mount = this.tryMountFor(mountPath)
     if (mount !== null && mount.resolveCommand(cmdName) == null && pathScopes.length > 0) {
-      throw new MountCommandUnsupported(cmdName, mount.resource.kind, pathScopes[0]?.rawPath ?? cwd)
+      throw new MountCommandUnsupported(cmdName, mount.vfs.kind, pathScopes[0]?.rawPath ?? cwd)
     }
     if (mount?.resolveCommand(cmdName) == null) {
       mount = this.mountForCommand(cmdName)
@@ -486,7 +480,7 @@ export class MountRegistry {
     if (
       this.reconciler !== null &&
       pathScopes.length > 0 &&
-      cachesReads(mount.resource) &&
+      cachesReads(mount.vfs) &&
       baseCmd?.write !== true &&
       this.consistency === ConsistencyPolicy.ALWAYS
     ) {

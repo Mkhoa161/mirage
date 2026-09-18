@@ -18,7 +18,7 @@ import { DriftPolicy } from '../../types.ts'
 import type { MountEntry } from '../mount/mount.ts'
 
 /**
- * Raised at load time when a remote resource's live fingerprint differs
+ * Raised at load time when a remote VFS's live fingerprint differs
  * from what was recorded in the snapshot.
  *
  * Indicates the underlying source has been modified since the snapshot
@@ -189,7 +189,7 @@ export function captureFingerprints(
     const mount = registry.tryMountFor(rec.path)
     if (mount === null || (rec.mountId !== null && rec.mountId !== mount.mountId)) continue
     seen.add(rec.path)
-    if (mount.resource.supportsSnapshot !== true) continue
+    if (mount.vfs.supportsSnapshot !== true) continue
     const entry: FingerprintEntry = { path: rec.path, mount_prefix: mount.prefix }
     if (rec.fingerprint !== null) entry.fingerprint = rec.fingerprint
     if (rec.revision !== null) entry.revision = rec.revision
@@ -199,7 +199,7 @@ export function captureFingerprints(
 }
 
 /**
- * Return mount prefixes whose resource opts out of snapshot replay.
+ * Return mount prefixes whose VFS opts out of snapshot replay.
  *
  * These mounts will serve current state at load time with no drift
  * detection. Surfaced in the snapshot manifest so the load layer can
@@ -209,7 +209,7 @@ export function liveOnlyMountPrefixes(registry: RegistryLike): string[] {
   const out: string[] = []
   for (const m of registry.allMounts()) {
     if (m.prefix === '/dev/' || m.prefix === '/.bash_history/') continue
-    if (m.resource.supportsSnapshot !== true) out.push(m.prefix)
+    if (m.vfs.supportsSnapshot !== true) out.push(m.prefix)
   }
   return out
 }
@@ -217,7 +217,7 @@ export function liveOnlyMountPrefixes(registry: RegistryLike): string[] {
 /**
  * Stat `path` and throw {@link ContentDriftError} if the live fingerprint
  * does not match `recorded`. No-op if the mount cannot be resolved or the
- * resource cannot fingerprint.
+ * VFS cannot fingerprint.
  *
  * The caller provides `statFn` (typically a thin wrapper over
  * {@link Workspace.dispatch}) so that drift.ts stays decoupled from the
@@ -232,7 +232,7 @@ export async function checkDrift(
 ): Promise<void> {
   const mount = registry.tryMountFor(path)
   if (mount === null || (mountId !== null && mount.mountId !== mountId)) return
-  if (mount.resource.supportsSnapshot !== true) return
+  if (mount.vfs.supportsSnapshot !== true) return
   let stat: FileStat
   try {
     stat = (await statFn(path)) as FileStat

@@ -33,9 +33,9 @@ function makeState(): WorkspaceStateDict {
         index: 0,
         prefix: '/m',
         mode: 'write',
-        resource_class: 'ram',
-        resource_ref: './wiki.mjs:WikiResource',
-        resource_state: {
+        vfs_class: 'ram',
+        vfs_ref: './wiki.mjs:WikiVFS',
+        vfs_state: {
           type: 'ram',
           files: { '/a.txt': enc('hi'), '/sub/b.txt': enc('bee') },
           dirs: ['/'],
@@ -79,10 +79,10 @@ describe('stateTree', () => {
       'm/sub/b.txt',
     ])
     expect(entries['m/a.txt']).toEqual(enc('hi'))
-    expect(meta.mounts[0]?.resourceState).not.toHaveProperty('files')
+    expect(meta.mounts[0]?.vfsState).not.toHaveProperty('files')
     // The ref is the only locator that rebuilds a class loaded from a
     // script file, so a commit carries it beside the class name.
-    expect(meta.mounts[0]?.resourceRef).toBe('./wiki.mjs:WikiResource')
+    expect(meta.mounts[0]?.vfsRef).toBe('./wiki.mjs:WikiVFS')
     // Cache is the one exclusion: derived and rebuildable.
     expect(meta.cache.entries).toEqual([])
     for (const data of Object.values(entries)) {
@@ -94,9 +94,9 @@ describe('stateTree', () => {
     const { entries, meta } = treeInputsFromState(makeState())
     const back = toState(entries, blobToMeta(metaToBlob(meta)))
     const mounts = back.mounts as unknown as {
-      resource_state: { files: Record<string, Uint8Array> }
+      vfs_state: { files: Record<string, Uint8Array> }
     }[]
-    const rs = mounts[0]?.resource_state
+    const rs = mounts[0]?.vfs_state
     expect(rs?.files['/a.txt']).toEqual(enc('hi'))
     expect(rs?.files['/sub/b.txt']).toEqual(enc('bee'))
     expect(Object.keys(rs?.files ?? {}).every((p) => !p.startsWith('/.mirage'))).toBe(true)
@@ -111,13 +111,13 @@ describe('stateTree', () => {
     ])
     expect(back.default_session_id).toBe('agent_a')
     expect(back.cache.entries).toEqual([])
-    expect(back.mounts[0]?.resource_ref).toBe('./wiki.mjs:WikiResource')
+    expect(back.mounts[0]?.vfs_ref).toBe('./wiki.mjs:WikiVFS')
   })
 
   it('a meta committed before the ref was recorded reads as constructed in code', () => {
     const { entries, meta } = treeInputsFromState(makeState())
-    for (const mount of meta.mounts) delete mount.resourceRef
+    for (const mount of meta.mounts) delete mount.vfsRef
     const back = toState(entries, blobToMeta(metaToBlob(meta)))
-    expect(back.mounts[0]?.resource_ref).toBeNull()
+    expect(back.mounts[0]?.vfs_ref).toBeNull()
   })
 })

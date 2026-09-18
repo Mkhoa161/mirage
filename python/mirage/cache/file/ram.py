@@ -23,11 +23,11 @@ from mirage.cache.file.mixin import FileCacheMixin, validate_max_drain_bytes
 from mirage.cache.file.utils import default_fingerprint_async, parse_limit
 from mirage.cache.invalidation import Invalidation
 from mirage.cache.lock import KeyLockMixin
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
-class RAMFileCacheStore(RAMResource, FileCacheMixin, KeyLockMixin):
-    """RAMResource with LRU cache tracking.
+class RAMFileCacheStore(RAMVFS, FileCacheMixin, KeyLockMixin):
+    """RAMVFS with LRU cache tracking.
 
     Data lives in inherited _store.files (RAMStore).
     _entries tracks LRU metadata only.

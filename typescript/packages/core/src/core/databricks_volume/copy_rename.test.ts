@@ -232,7 +232,7 @@ describe('resolveGlob', () => {
       directory: '/volume/',
       pattern: '*.md',
       resolved: false,
-      resourcePath: mountKey('/volume/*.md', '/volume'),
+      vfsPath: mountKey('/volume/*.md', '/volume'),
     })
     const resolved = await resolveGlob(makeAccessor(), [pattern])
     expect(resolved.map((p) => p.virtual)).toEqual(['/volume/a.md', '/volume/c.md'])

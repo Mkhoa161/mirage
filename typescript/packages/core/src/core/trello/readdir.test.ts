@@ -37,7 +37,7 @@ class FakeTransport implements TrelloTransport {
 }
 
 function spec(virtual: string, prefix = ''): PathSpec {
-  return new PathSpec({ virtual, directory: virtual, resourcePath: mountKey(virtual, prefix) })
+  return new PathSpec({ virtual, directory: virtual, vfsPath: mountKey(virtual, prefix) })
 }
 
 describe('trello readdir root', () => {
@@ -69,7 +69,7 @@ describe('trello readdir /workspaces', () => {
     expect(out).toEqual(['/mnt/trello/workspaces/Acme__w1', '/mnt/trello/workspaces/beta__w2'])
     const lookup = await idx.get('/mnt/trello/workspaces/Acme__w1')
     expect(lookup.entry?.id).toBe('w1')
-    expect(lookup.entry?.resourceType).toBe('trello/workspace')
+    expect(lookup.entry?.vfsType).toBe('trello/workspace')
   })
 
   it('lists a workspace dir with a sized workspace.json', async () => {

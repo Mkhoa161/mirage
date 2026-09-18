@@ -200,7 +200,7 @@ const listRepos: Handler = async (ctx) => {
 
 const createRepo: Handler = async (ctx) => {
   if (!(await createReposAllowed(ctx.db, ctx.tenant))) {
-    return fail(403, 'Resource not accessible by personal access token')
+    return fail(403, 'VFS not accessible by personal access token')
   }
   const body = jsonBodyOf(ctx)
   const name = str(body, 'name').trim()

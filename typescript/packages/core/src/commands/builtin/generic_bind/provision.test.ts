@@ -56,7 +56,7 @@ function spec(path: string): PathSpec {
   return new PathSpec({
     virtual: path,
     directory: path,
-    resourcePath: mountKey(path, '/data'),
+    vfsPath: mountKey(path, '/data'),
   })
 }
 
@@ -87,7 +87,7 @@ const resolveGlob = (_accessor: Accessor, paths: readonly PathSpec[]): Promise<P
             new PathSpec({
               virtual: e,
               directory: e.slice(0, e.lastIndexOf('/') + 1),
-              resourcePath: mountKey(e, '/data'),
+              vfsPath: mountKey(e, '/data'),
               resolved: true,
             }),
           )
@@ -105,7 +105,7 @@ function pattern(virtual: string, dir: string, glob: string): PathSpec {
     virtual,
     directory: dir,
     pattern: glob,
-    resourcePath: mountKey(virtual, '/data'),
+    vfsPath: mountKey(virtual, '/data'),
   })
 }
 
@@ -332,10 +332,7 @@ describe('chat/KB provision helpers', () => {
 
   it('indexHitReadProvision counts cached operands', async () => {
     const index = new RAMIndexCacheStore()
-    await index.put(
-      '/chat/a.jsonl',
-      new IndexEntry({ id: 'a', name: 'a.jsonl', resourceType: 'file' }),
-    )
+    await index.put('/chat/a.jsonl', new IndexEntry({ id: 'a', name: 'a.jsonl', vfsType: 'file' }))
     const paths = [
       PathSpec.fromStrPath('/chat/a.jsonl'),
       PathSpec.fromStrPath('/chat/missing.jsonl'),

@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { getTestParser } from '../../workspace/fixtures/workspace_fixture.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { Limit, MountMode } from '../../types.ts'
 import { Workspace } from '../../workspace/workspace/workspace.ts'
 import { RemoteSandbox } from './base.ts'
@@ -52,11 +52,11 @@ class RecordingSandbox extends RemoteSandbox {
 async function sandboxWorkspace(box: RecordingSandbox): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     {
       mode: MountMode.EXEC,
       shellParser: parser,
-      runtimes: [box, 'vfs'],
+      runtimes: [box, 'workspace'],
     },
   )
 }
@@ -168,8 +168,8 @@ describe('RemoteSandbox', () => {
     const parser = await getTestParser()
     const guards = { python3: new Limit({ timeoutSeconds: 0.05 }) }
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.EXEC, guards] },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/data': [new RAMVFS(), MountMode.EXEC, guards] },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     try {
       // A captured line obeys the same command limits as any
@@ -192,8 +192,8 @@ describe('RemoteSandbox', () => {
     const parser = await getTestParser()
     const guards = { python3: new Limit({ maxLines: 2 }) }
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.EXEC, guards] },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/data': [new RAMVFS(), MountMode.EXEC, guards] },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     try {
       const io = await ws.execute('python3 train.py')

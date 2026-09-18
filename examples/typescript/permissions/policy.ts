@@ -14,7 +14,7 @@
 
 import {
   MountMode,
-  RAMResource,
+  RAMVFS,
   ScriptSource,
   Workspace,
   parseSessionProfile,
@@ -107,7 +107,7 @@ function pad(text: string, width: number): string {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/repo/': new RAMResource(), '/scratch/': new RAMResource() },
+    { '/repo/': new RAMVFS(), '/scratch/': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       policies: [operatorOwnsCredentials],

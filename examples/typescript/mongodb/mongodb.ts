@@ -16,7 +16,7 @@ import { setServers } from 'node:dns'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { MongoDBResource, MountMode, Workspace, type FileStat } from '@struktoai/mirage-node'
+import { MongoDBVFS, MountMode, Workspace, type FileStat } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 setServers(['8.8.8.8', '1.1.1.1'])
@@ -34,12 +34,12 @@ const COLL_EMB = 'embeddings'
 const COLL_TXT = 'text_indexed'
 const VIEW = 'high_rated_films'
 
-const resource = new MongoDBResource({
+const vfs = new MongoDBVFS({
   uri,
   databases: [DB],
   elideFields: { [`${DB}.${COLL_EMB}`]: ['vector'] },
 })
-const ws = new Workspace({ '/mongodb': resource }, { mode: MountMode.READ })
+const ws = new Workspace({ '/mongodb': vfs }, { mode: MountMode.READ })
 
 const DEC = new TextDecoder()
 
@@ -151,5 +151,5 @@ try {
   await run('head -n 1 documents.jsonl')
 } finally {
   await ws.close()
-  await resource.close()
+  await vfs.close()
 }

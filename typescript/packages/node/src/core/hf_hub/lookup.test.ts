@@ -32,7 +32,7 @@ function ps(path: string, prefix = ''): PathSpec {
   const virtual =
     stem === '' ? (rel === '' ? '/' : `/${rel}`) : rel === '' ? stem : `${stem}/${rel}`
   const parent = virtual.slice(0, virtual.lastIndexOf('/')) || '/'
-  return new PathSpec({ virtual, directory: parent, resourcePath: rel })
+  return new PathSpec({ virtual, directory: parent, vfsPath: rel })
 }
 
 /** The errno an fs op refused with, which is what a backend test pins. */
@@ -107,7 +107,7 @@ describe('dirStatEntry', () => {
   it('names the last segment', () => {
     const entry = dirStatEntry('/m/deep/dir')
     expect(entry.name).toBe('dir')
-    expect(entry.resourceType).toBe('folder')
+    expect(entry.vfsType).toBe('folder')
   })
 })
 
@@ -245,7 +245,7 @@ for (const backend of ['ram', 'redis']) {
               try {
                 await seedIndex(accessor, index, '/m')
                 await index.setDir('/other', [
-                  ['keep', new IndexEntry({ id: 'keep', name: 'keep', resourceType: 'file' })],
+                  ['keep', new IndexEntry({ id: 'keep', name: 'keep', vfsType: 'file' })],
                 ])
                 await index.invalidate()
                 expect((await index.get(`/m/${changed}`)).entry).toBeDefined()
@@ -293,7 +293,7 @@ for (const backend of ['ram', 'redis']) {
           await seedIndex(accessor, index, '')
           await index.setDir(
             '/d',
-            [['b.txt', new IndexEntry({ id: 'old', name: 'b.txt', resourceType: 'file' })]],
+            [['b.txt', new IndexEntry({ id: 'old', name: 'b.txt', vfsType: 'file' })]],
             new Date(0),
           )
           await expect(stat(accessor, ps('d/b.txt'), index)).rejects.toMatchObject({

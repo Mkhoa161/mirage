@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { Limit, MountMode, OnExceed } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -34,9 +34,9 @@ beforeAll(async () => {
 })
 
 function buildWs(nLines: number): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   const body = Array.from({ length: nLines }, (_, i) => `line${String(i)}\n`).join('')
   ram.store.files.set('/big.txt', ENC.encode(body))
   return new Workspace({ '/': ram }, { mode: MountMode.WRITE, ops: registry, shellParser: parser })
@@ -95,9 +95,9 @@ describe('Workspace command limit', () => {
   })
 
   it('commandLimits constructor option caps below default', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     ram.store.files.set('/big.txt', ENC.encode('line0\nline1\nline2\nline3\nline4\n'))
     const ws = new Workspace(
       { '/': ram },
@@ -115,9 +115,9 @@ describe('Workspace command limit', () => {
   })
 
   it('commandLimits constructor option rejects an unknown prefix', () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     expect(
       () =>
         new Workspace(

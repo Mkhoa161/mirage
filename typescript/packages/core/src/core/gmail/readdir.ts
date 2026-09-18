@@ -71,7 +71,7 @@ function attachmentEntries(raw: GmailMessageRaw): [string, IndexEntry][] {
         new IndexEntry({
           id: att.attachmentId,
           name: att.filename,
-          resourceType: 'gmail/attachment',
+          vfsType: 'gmail/attachment',
           vfsName: att.filename,
           size: att.size,
         }),
@@ -99,7 +99,7 @@ function dateChildren(raws: readonly GmailMessageRaw[]): {
       new IndexEntry({
         id: mid,
         name: subject,
-        resourceType: 'gmail/message',
+        vfsType: 'gmail/message',
         vfsName: filename,
         size: messageJsonBytes(raw).byteLength,
         extra: raw.sizeEstimate != null ? { size_estimate: raw.sizeEstimate } : {},
@@ -113,7 +113,7 @@ function dateChildren(raws: readonly GmailMessageRaw[]): {
         new IndexEntry({
           id: mid,
           name: attDirName,
-          resourceType: 'gmail/attachment_dir',
+          vfsType: 'gmail/attachment_dir',
           vfsName: attDirName,
         }),
       ])
@@ -150,7 +150,7 @@ async function listRoot(accessor: GmailAccessor, _match: ScopeMatch): Promise<Li
       new IndexEntry({
         id: lb.id,
         name,
-        resourceType: 'gmail/label',
+        vfsType: 'gmail/label',
         vfsName: name,
       }),
     ] as [string, IndexEntry]
@@ -182,7 +182,7 @@ async function listLabel(
       new IndexEntry({
         id: dateStr,
         name: dateStr,
-        resourceType: 'gmail/date',
+        vfsType: 'gmail/date',
         vfsName: dateStr,
         extra: { label_id: own.id },
       }),

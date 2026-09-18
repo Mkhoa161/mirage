@@ -68,7 +68,7 @@ export function buildDirEntries(
     const entry = new IndexEntry({
       id: stripSlash(directory),
       name: gnuBasename(directory),
-      resourceType: 'folder',
+      vfsType: 'folder',
     })
     dirEntries.get(virtualPath(parent(directory), prefix))?.push([entry.name, entry])
   }
@@ -78,7 +78,7 @@ export function buildDirEntries(
     const entry = new IndexEntry({
       id: scalarString(document.id) ?? '',
       name: gnuBasename(path),
-      resourceType: 'file',
+      vfsType: 'file',
       size: extractDocumentSize(document),
       remoteTime: timestampToIso(document.created_at),
       extra: {

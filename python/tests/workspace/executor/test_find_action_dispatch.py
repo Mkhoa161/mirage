@@ -13,7 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 """Tests for find's action flags (-delete, -print0, -ls).
 
-Per-resource find handlers only emit matched paths. The dispatcher
+Per-VFS find handlers only emit matched paths. The dispatcher
 (`mirage/workspace/executor/find_action_dispatch.py:_apply_find_actions`)
 reads the parsed action flags and applies the corresponding side
 effect or output reformat.
@@ -24,20 +24,20 @@ import re
 import pytest
 
 from mirage.policy import Deny, Policy
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.find_action_dispatch import depth_first_key
 
 
 def _ws() -> Workspace:
-    return Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 
 def _ws_two_mounts() -> Workspace:
     return Workspace({
-        "/a": (RAMResource(), MountMode.WRITE),
-        "/b": (RAMResource(), MountMode.WRITE),
+        "/a": (RAMVFS(), MountMode.WRITE),
+        "/b": (RAMVFS(), MountMode.WRITE),
     })
 
 
@@ -514,9 +514,9 @@ async def test_find_refuses_a_test_after_an_action_before_side_effects(action):
                          ["-exec rm {} \\;", "-exec rm {} +", "-delete"])
 async def test_actions_preserve_newline_paths_and_unrelated_files(
         nested, action):
-    mounts = {"/": RAMResource()}
+    mounts = {"/": RAMVFS()}
     if nested:
-        mounts["/d/nested\nmount"] = RAMResource()
+        mounts["/d/nested\nmount"] = RAMVFS()
     ws = Workspace(mounts, mode=MountMode.WRITE)
     root = "d/nested\nmount" if nested else "d"
     await ws.execute(f'mkdir -p "{root}"; touch "{root}/a\nb" b')
@@ -530,8 +530,8 @@ async def test_actions_preserve_newline_paths_and_unrelated_files(
 @pytest.mark.asyncio
 async def test_print0_preserves_newlines_through_mount_fanout():
     ws = Workspace({
-        "/": RAMResource(),
-        "/d/nested\nmount": RAMResource()
+        "/": RAMVFS(),
+        "/d/nested\nmount": RAMVFS()
     },
                    mode=MountMode.WRITE)
     await ws.execute('touch "/d/nested\nmount/a\nb"')
@@ -753,7 +753,7 @@ class _NoRmdir(Policy):
 async def test_delete_admits_a_directory_as_rmdir():
     # A rule that refuses rmdir and allows unlink judges `find emptydir
     # -delete` as it judges `rmdir emptydir`.
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[_NoRmdir()])
     try:

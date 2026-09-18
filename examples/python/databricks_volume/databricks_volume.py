@@ -18,9 +18,9 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.databricks_volume import (DatabricksVolumeConfig,
-                                               DatabricksVolumeResource)
 from mirage.types import PathSpec
+from mirage.vfs.databricks_volume import (DatabricksVolumeConfig,
+                                          DatabricksVolumeVFS)
 
 load_dotenv(".env.development")
 
@@ -33,7 +33,7 @@ config = DatabricksVolumeConfig(
     token=os.environ.get("DATABRICKS_TOKEN"),
     profile=os.environ.get("DATABRICKS_CONFIG_PROFILE"),
 )
-resource = DatabricksVolumeResource(config=config)
+vfs = DatabricksVolumeVFS(config=config)
 
 
 async def _run(ws, cmd):
@@ -54,7 +54,7 @@ async def _run(ws, cmd):
 
 
 async def main():
-    ws = Workspace({"/dbx/": resource}, mode=MountMode.READ)
+    ws = Workspace({"/dbx/": vfs}, mode=MountMode.READ)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /dbx/__nf_missing__.txt", "head /dbx/__nf_missing__.txt",

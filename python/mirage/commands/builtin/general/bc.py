@@ -1933,7 +1933,7 @@ def error_line(statement: BcStatement, error: BcParseError) -> int:
     return statement.lines[0]
 
 
-@command("bc", resource=None, spec=SPECS["bc"], provision=pure_provision)
+@command("bc", vfs=None, spec=SPECS["bc"], provision=pure_provision)
 async def bc(
     accessor: Accessor,
     paths: list[PathSpec],
