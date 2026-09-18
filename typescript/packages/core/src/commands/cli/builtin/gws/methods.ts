@@ -34,7 +34,7 @@ export type GwsService = 'drive' | 'docs' | 'sheets' | 'slides' | 'gmail' | 'cal
 
 export interface GwsMethod {
   service: GwsService
-  vfs: string
+  resource: string
   method: string
   http: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   path: string
@@ -53,14 +53,14 @@ export interface GwsMethod {
 export const GWS_METHODS: readonly GwsMethod[] = [
   {
     service: 'docs',
-    vfs: 'documents',
+    resource: 'documents',
     method: 'get',
     http: 'GET',
     path: '/documents/{documentId}',
   },
   {
     service: 'docs',
-    vfs: 'documents',
+    resource: 'documents',
     method: 'create',
     http: 'POST',
     path: '/documents',
@@ -70,7 +70,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'docs',
-    vfs: 'documents',
+    resource: 'documents',
     method: 'batchUpdate',
     http: 'POST',
     path: '/documents/{documentId}:batchUpdate',
@@ -78,14 +78,14 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'sheets',
-    vfs: 'spreadsheets',
+    resource: 'spreadsheets',
     method: 'get',
     http: 'GET',
     path: '/spreadsheets/{spreadsheetId}',
   },
   {
     service: 'sheets',
-    vfs: 'spreadsheets',
+    resource: 'spreadsheets',
     method: 'create',
     http: 'POST',
     path: '/spreadsheets',
@@ -95,7 +95,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'sheets',
-    vfs: 'spreadsheets',
+    resource: 'spreadsheets',
     method: 'batchUpdate',
     http: 'POST',
     path: '/spreadsheets/{spreadsheetId}:batchUpdate',
@@ -103,14 +103,14 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'slides',
-    vfs: 'presentations',
+    resource: 'presentations',
     method: 'get',
     http: 'GET',
     path: '/presentations/{presentationId}',
   },
   {
     service: 'slides',
-    vfs: 'presentations',
+    resource: 'presentations',
     method: 'create',
     http: 'POST',
     path: '/presentations',
@@ -120,17 +120,17 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'slides',
-    vfs: 'presentations',
+    resource: 'presentations',
     method: 'batchUpdate',
     http: 'POST',
     path: '/presentations/{presentationId}:batchUpdate',
     needsBody: true,
   },
-  { service: 'drive', vfs: 'files', method: 'list', http: 'GET', path: '/files' },
-  { service: 'drive', vfs: 'files', method: 'get', http: 'GET', path: '/files/{fileId}' },
+  { service: 'drive', resource: 'files', method: 'list', http: 'GET', path: '/files' },
+  { service: 'drive', resource: 'files', method: 'get', http: 'GET', path: '/files/{fileId}' },
   {
     service: 'drive',
-    vfs: 'files',
+    resource: 'files',
     method: 'create',
     http: 'POST',
     path: '/files',
@@ -139,7 +139,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'drive',
-    vfs: 'files',
+    resource: 'files',
     method: 'update',
     http: 'PATCH',
     path: '/files/{fileId}',
@@ -147,7 +147,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'drive',
-    vfs: 'files',
+    resource: 'files',
     method: 'copy',
     http: 'POST',
     path: '/files/{fileId}/copy',
@@ -155,14 +155,14 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'drive',
-    vfs: 'files',
+    resource: 'files',
     method: 'delete',
     http: 'DELETE',
     path: '/files/{fileId}',
   },
   {
     service: 'drive',
-    vfs: 'files',
+    resource: 'files',
     method: 'export',
     http: 'GET',
     path: '/files/{fileId}/export',
@@ -170,7 +170,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'drive',
-    vfs: 'permissions',
+    resource: 'permissions',
     method: 'create',
     http: 'POST',
     path: '/files/{fileId}/permissions',
@@ -178,42 +178,42 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'drive',
-    vfs: 'permissions',
+    resource: 'permissions',
     method: 'list',
     http: 'GET',
     path: '/files/{fileId}/permissions',
   },
   {
     service: 'drive',
-    vfs: 'permissions',
+    resource: 'permissions',
     method: 'delete',
     http: 'DELETE',
     path: '/files/{fileId}/permissions/{permissionId}',
   },
   {
     service: 'gmail',
-    vfs: 'users labels',
+    resource: 'users labels',
     method: 'list',
     http: 'GET',
     path: '/users/{userId}/labels',
   },
   {
     service: 'gmail',
-    vfs: 'users messages',
+    resource: 'users messages',
     method: 'list',
     http: 'GET',
     path: '/users/{userId}/messages',
   },
   {
     service: 'gmail',
-    vfs: 'users messages',
+    resource: 'users messages',
     method: 'get',
     http: 'GET',
     path: '/users/{userId}/messages/{id}',
   },
   {
     service: 'gmail',
-    vfs: 'users messages',
+    resource: 'users messages',
     method: 'send',
     http: 'POST',
     path: '/users/{userId}/messages/send',
@@ -221,49 +221,49 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'gmail',
-    vfs: 'users messages',
+    resource: 'users messages',
     method: 'trash',
     http: 'POST',
     path: '/users/{userId}/messages/{id}/trash',
   },
   {
     service: 'gmail',
-    vfs: 'users messages attachments',
+    resource: 'users messages attachments',
     method: 'get',
     http: 'GET',
     path: '/users/{userId}/messages/{messageId}/attachments/{id}',
   },
   {
     service: 'calendar',
-    vfs: 'calendarList',
+    resource: 'calendarList',
     method: 'list',
     http: 'GET',
     path: '/users/me/calendarList',
   },
   {
     service: 'calendar',
-    vfs: 'calendars',
+    resource: 'calendars',
     method: 'get',
     http: 'GET',
     path: '/calendars/{calendarId}',
   },
   {
     service: 'calendar',
-    vfs: 'events',
+    resource: 'events',
     method: 'list',
     http: 'GET',
     path: '/calendars/{calendarId}/events',
   },
   {
     service: 'calendar',
-    vfs: 'events',
+    resource: 'events',
     method: 'get',
     http: 'GET',
     path: '/calendars/{calendarId}/events/{eventId}',
   },
   {
     service: 'calendar',
-    vfs: 'events',
+    resource: 'events',
     method: 'insert',
     http: 'POST',
     path: '/calendars/{calendarId}/events',
@@ -271,7 +271,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'calendar',
-    vfs: 'events',
+    resource: 'events',
     method: 'patch',
     http: 'PATCH',
     path: '/calendars/{calendarId}/events/{eventId}',
@@ -279,14 +279,14 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'calendar',
-    vfs: 'events',
+    resource: 'events',
     method: 'delete',
     http: 'DELETE',
     path: '/calendars/{calendarId}/events/{eventId}',
   },
   {
     service: 'calendar',
-    vfs: 'freebusy',
+    resource: 'freebusy',
     method: 'query',
     http: 'POST',
     path: '/freeBusy',
@@ -294,7 +294,7 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'forms',
-    vfs: 'forms',
+    resource: 'forms',
     method: 'create',
     http: 'POST',
     path: '/forms',
@@ -304,14 +304,14 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'forms',
-    vfs: 'forms',
+    resource: 'forms',
     method: 'get',
     http: 'GET',
     path: '/forms/{formId}',
   },
   {
     service: 'forms',
-    vfs: 'forms',
+    resource: 'forms',
     method: 'batchUpdate',
     http: 'POST',
     path: '/forms/{formId}:batchUpdate',
@@ -319,14 +319,14 @@ export const GWS_METHODS: readonly GwsMethod[] = [
   },
   {
     service: 'forms',
-    vfs: 'forms responses',
+    resource: 'forms responses',
     method: 'list',
     http: 'GET',
     path: '/forms/{formId}/responses',
   },
   {
     service: 'forms',
-    vfs: 'forms responses',
+    resource: 'forms responses',
     method: 'get',
     http: 'GET',
     path: '/forms/{formId}/responses/{responseId}',

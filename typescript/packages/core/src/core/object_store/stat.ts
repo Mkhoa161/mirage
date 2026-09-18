@@ -45,7 +45,7 @@ export function makeStat<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>)
     }
 
     // Fast path: check the index cache populated by readdir(), which
-    // stores entries with VFS type "folder" or "file" and file
+    // stores entries with resource type "folder" or "file" and file
     // sizes, so stat can return instantly for known paths.
     if (index !== undefined) {
       const virtualKey = prefix !== '' ? `${prefix}/${stripped}` : '/' + stripped

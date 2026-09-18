@@ -30,7 +30,7 @@ from mirage.core.google.client import (TokenManager, calendar_base, docs_base,
 @dataclass(frozen=True, slots=True)
 class GwsMethod:
     service: str
-    vfs: str
+    resource: str
     method: str
     http: str
     path: str

@@ -38,7 +38,7 @@ import { GWS_METHODS } from './methods.ts'
 
 const DEC = new TextDecoder()
 
-const METHODS = new Map(GWS_METHODS.map((m) => [`${m.service}.${m.vfs}.${m.method}`, m]))
+const METHODS = new Map(GWS_METHODS.map((m) => [`${m.service}.${m.resource}.${m.method}`, m]))
 
 const CONFIG: GoogleConfig = { clientId: 'cid', refreshToken: 'rt' }
 
@@ -76,7 +76,7 @@ describe('gws tree', () => {
     expect(cliSpecFor('gws')).toBe(GWS)
   })
 
-  it('nests passthroughs by discovery VFS', () => {
+  it('nests passthroughs by discovery resource', () => {
     expect(leaf('drive', 'files').subcommands.map((v) => v.name)).toEqual([
       'list',
       'get',
@@ -130,7 +130,7 @@ describe('gws tree', () => {
     expect(leaf('gmail', 'users', 'messages', 'trash').write).toBe(true)
   })
 
-  it('nests calendar passthroughs by discovery VFS', () => {
+  it('nests calendar passthroughs by discovery resource', () => {
     expect(leaf('calendar').subcommands.map((v) => v.name)).toEqual([
       'calendarList',
       'calendars',
@@ -152,7 +152,7 @@ describe('gws tree', () => {
     expect(leaf('calendar', 'freebusy', 'query').write).toBe(true)
   })
 
-  it('nests forms passthroughs by discovery VFS', () => {
+  it('nests forms passthroughs by discovery resource', () => {
     expect(leaf('forms').subcommands.map((v) => v.name)).toEqual(['forms'])
     expect(leaf('forms', 'forms').subcommands.map((v) => v.name)).toEqual([
       'create',

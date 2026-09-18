@@ -80,7 +80,7 @@ async def main():
     await _run(ws, "ls /langfuse/datasets/")
 
     print("\n" + "=" * 60)
-    print("CAT across different VFS types")
+    print("CAT across different resource types")
     print("=" * 60)
 
     r = await ws.execute("ls /langfuse/traces/")
@@ -114,7 +114,7 @@ async def main():
         await _run(ws, f'grep "name" "{tp}"')
 
     print("\n" + "=" * 60)
-    print("JQ across different VFS types")
+    print("JQ across different resource types")
     print("=" * 60)
 
     if trace_files:

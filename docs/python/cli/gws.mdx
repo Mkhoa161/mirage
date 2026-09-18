@@ -36,7 +36,7 @@ The syntax mirrors the upstream Google Workspace CLI: one passthrough leaf per
 Discovery method, plus hand-written helpers under each service.
 
 ```bash
-gws <service> <vfs> <method> [--params JSON] [--json JSON]   # API passthrough
+gws <service> <resource> <method> [--params JSON] [--json JSON]   # API passthrough
 gws <service> <helper> [flags]                                    # ergonomic helper
 ```
 
@@ -45,7 +45,7 @@ surface is discoverable from the shell:
 
 ```bash
 gws --help                # services
-gws drive files --help    # methods on a Discovery vfs
+gws drive files --help    # methods on a Discovery resource
 gws gmail send --help     # helper flags
 ```
 
