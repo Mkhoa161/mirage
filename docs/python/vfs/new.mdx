@@ -75,7 +75,7 @@ register_vfs("jira", JiraVFS, JiraConfig)
 or ship it as a normal package with an entry point — discovered automatically at registry-build time:
 
 ```toml
-[project.entry-points."mirage.mounts"]
+[project.entry-points."mirage.vfs"]
 jira = "mypackage.backends:JiraVFS"
 ```
 

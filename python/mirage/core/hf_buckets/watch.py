@@ -28,6 +28,6 @@ def build_delta_hook(accessor: _HfAccessor) -> DeltaHook:
 
     Args:
         accessor (_HfAccessor): Backend handle for any of the four hf
-            mounts.
+            VFS classes.
     """
     return ListingDeltaHook(OpendalWalk(accessor))

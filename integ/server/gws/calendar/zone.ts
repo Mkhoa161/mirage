@@ -14,7 +14,7 @@
 
 import type { CalendarEvent, EventTime } from '../store/types.ts'
 
-// The two spellings the Event VFS allows. `date` is yyyy-mm-dd and
+// The two spellings the Event resource allows. `date` is yyyy-mm-dd and
 // `dateTime` an RFC3339 date-time whose offset, when present, is `Z` or
 // ±hh:mm. A match is then checked as a calendar date, since a regex cannot
 // know how long February is.
@@ -158,7 +158,7 @@ export function eventEndMs(ev: CalendarEvent, tz: string): number {
   return slotMs(ev.end, tz) ?? eventStartMs(ev, tz)
 }
 
-// One slot as the Event VFS renders it back.
+// One slot as the Event resource renders it back.
 //
 // Probed against the live API on 2026-09-15, because every clause here is a
 // choice the docs do not make for you. Google answers a `dateTime` with an

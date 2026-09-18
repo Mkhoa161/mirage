@@ -21,7 +21,7 @@ export function newSlide(st: GwsState, objectId?: string): SlidePage {
   return { objectId: objectId ?? st.nextId('slide'), texts: new Map() }
 }
 
-// One Page VFS, shared by presentations.get and presentations.pages.get
+// One Page resource, shared by presentations.get and presentations.pages.get
 // so the two can never render the same slide differently.
 export function fmtPage(slide: SlidePage): JsonObj {
   return {

@@ -37,7 +37,7 @@ def _multistatus(paths: list[tuple[str, bool]]) -> bytes:
             prop, _qname(_DAV_NAMESPACE, "displayname"))
         displayname.text = href_value.rstrip("/").rsplit("/", 1)[-1]
         resource_type = ElementTree.SubElement(
-            prop, _qname(_DAV_NAMESPACE, "vfstype"))
+            prop, _qname(_DAV_NAMESPACE, "resourcetype"))
         if is_dir:
             ElementTree.SubElement(resource_type,
                                    _qname(_DAV_NAMESPACE, "collection"))

@@ -124,7 +124,7 @@ function tokenRoutes(): KitRoute<C>[] {
 // Faithful behaviours that matter to the backends, so they are not
 // simplifications to "fix": Drive allows duplicate sibling names, folder
 // deletes are recursive, creating a file with a google-apps MIME type
-// auto-creates the linked Docs/Sheets/Slides VFS (and vice versa), every
+// auto-creates the linked Docs/Sheets/Slides resource (and vice versa), every
 // content write records a revision that /revisions can list and serve, Gmail
 // messages.insert honors internalDateSource=dateHeader, messages.trash swaps
 // INBOX for TRASH, Sheets keeps a declared grid per tab beside the sparse cell

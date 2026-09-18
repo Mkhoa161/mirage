@@ -171,7 +171,7 @@ function readSlot(
 }
 
 // The refusal one slot earns, or null when it is a well-formed event time.
-// The Event VFS takes `date` as yyyy-mm-dd, `dateTime` as RFC3339 with
+// The Event resource takes `date` as yyyy-mm-dd, `dateTime` as RFC3339 with
 // an offset unless the slot names its own `timeZone`, and never both in
 // one slot. Checked here, before anything is stored, because a value that
 // gets through is one the read side turns into NaN: a bounded list drops

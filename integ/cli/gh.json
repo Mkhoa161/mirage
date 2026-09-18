@@ -335,7 +335,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "gh api: VFS not accessible by personal access token\n"
+        "stderr": "gh api: Resource not accessible by personal access token\n"
       }
     },
     {
@@ -634,7 +634,7 @@
       "expect": {
         "exit": 1,
         "stdout": "",
-        "stderr": "gh repo create: VFS not accessible by personal access token\n"
+        "stderr": "gh repo create: Resource not accessible by personal access token\n"
       }
     },
     {

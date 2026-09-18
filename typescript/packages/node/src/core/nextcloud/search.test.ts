@@ -17,7 +17,7 @@ function multistatus(paths: { href: string; directory?: boolean }[]): string {
     .map(({ href, directory }) => {
       const name = href.replace(/\/+$/, '').split('/').pop() ?? ''
       const resourceType = directory === true ? '<d:collection/>' : ''
-      return `<d:response><d:href>${href}</d:href><d:propstat><d:prop><d:displayname>${name}</d:displayname><d:vfstype>${resourceType}</d:vfstype><d:getcontentlength>42</d:getcontentlength><oc:size>42</oc:size><d:getlastmodified>Sat, 11 Jul 2026 12:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
+      return `<d:response><d:href>${href}</d:href><d:propstat><d:prop><d:displayname>${name}</d:displayname><d:resourcetype>${resourceType}</d:resourcetype><d:getcontentlength>42</d:getcontentlength><oc:size>42</oc:size><d:getlastmodified>Sat, 11 Jul 2026 12:00:00 GMT</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
     })
     .join('')
   return `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">${responses}</d:multistatus>`
