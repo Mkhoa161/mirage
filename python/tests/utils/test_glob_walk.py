@@ -29,7 +29,7 @@ from mirage.utils.glob_walk import (DEFAULT_MAX_GLOB_MATCHES, expand_pattern,
                                     make_resolve_glob, mark_escaped_globs,
                                     mark_globs, resolve_glob_with, spell_match,
                                     unmark_globs)
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 
 TREE = {
     "/notion": ["/notion/pages", "/notion/databases"],
@@ -394,8 +394,8 @@ async def test_make_resolve_glob_index_defaults_to_null():
 
 @pytest.mark.asyncio
 async def test_resolve_glob_with_drops_hidden_matches():
-    sess = Session(session_id="narrowed",
-                   hidden_paths=HiddenPaths(patterns=("*.json", )))
+    sess = SessionState(session_id="narrowed",
+                        hidden_paths=HiddenPaths(patterns=("*.json", )))
     token = set_current_session(sess)
     try:
         spec = glob_spec("/notion/pages/Demo_page__uuid1/page.*", "/notion")
@@ -409,8 +409,8 @@ async def test_resolve_glob_with_drops_hidden_matches():
 
 @pytest.mark.asyncio
 async def test_resolve_glob_with_all_hidden_falls_back_to_literal():
-    sess = Session(session_id="narrowed",
-                   hidden_paths=HiddenPaths(patterns=("*.json", )))
+    sess = SessionState(session_id="narrowed",
+                        hidden_paths=HiddenPaths(patterns=("*.json", )))
     token = set_current_session(sess)
     try:
         spec = glob_spec("/notion/pages/Roadmap__uuid2/page.*", "/notion")

@@ -214,7 +214,7 @@ describe('MirageFS — drainOps()', () => {
   })
 
   it('accounts for writes too, not only reads', async () => {
-    // The mount runs every op through the fs facade, which is what
+    // The mount runs every op through the op facade, which is what
     // records them; a write issued straight at the dispatcher would
     // mutate the mount and leave drainOps reporting nothing.
     const ws = await mkWs()

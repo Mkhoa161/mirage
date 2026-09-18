@@ -25,7 +25,7 @@ from mirage.policy.profile import ProfilePolicy, SessionProfile
 from mirage.runtime.types import ScriptSource
 from mirage.types import Limit, MountMode, OnExceed, Refusal
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import SessionHandle
+from mirage.workspace import Session
 
 from mirage.policy.profile import (  # isort: skip
     CommandsBlock, PathsBlock)
@@ -784,8 +784,7 @@ async def test_profile_hides_bind_every_session_including_the_default():
                                                             "*.key"))))
     # The facade runs as the default session too, so the seed goes
     # through a session with an explicit empty profile, the host's door.
-    host = SessionHandle(ws,
-                         ws.create_session("host", profile={}).session_id).vfs
+    host = Session(ws, ws.create_session("host", profile={}).session_id).vfs
     try:
         await ws.shell("mkdir -p /data/finance /data/pub")
         await host.write("/data/pub/a.txt", b"a\n")
@@ -828,8 +827,7 @@ async def test_a_mount_sections_hides_are_written_in_full():
                 }
             }
         })
-    host = SessionHandle(ws,
-                         ws.create_session("host", profile={}).session_id).vfs
+    host = Session(ws, ws.create_session("host", profile={}).session_id).vfs
     try:
         await ws.shell("mkdir -p /repo/certs /other")
         await host.write("/repo/.env", b"S=1\n")

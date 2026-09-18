@@ -33,7 +33,7 @@ import { rstripSlash, stripSlash } from '../../utils/slash.ts'
 import { compareCodePoints } from '../../utils/sort.ts'
 import { ExitSignal } from '../../shell/errors.ts'
 import { SHOPT_DEFAULTS } from '../../shell/constants.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 
 // How deep a `**` descends. bash has no cap, but every level here is
 // one listing per directory, so an accidental `**` over a large tree is
@@ -55,7 +55,7 @@ export function globNeedsShell(opts: GlobOptions): boolean {
   return opts.nullglob || opts.failglob || opts.globstar
 }
 
-export function globOptions(session: Session): GlobOptions {
+export function globOptions(session: SessionState): GlobOptions {
   return {
     nullglob: session.shopts.nullglob ?? SHOPT_DEFAULTS.get('nullglob') ?? false,
     failglob: session.shopts.failglob ?? SHOPT_DEFAULTS.get('failglob') ?? false,

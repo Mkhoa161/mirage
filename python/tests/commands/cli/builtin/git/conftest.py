@@ -31,7 +31,7 @@ from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.links import path_stat
 from mirage.workspace.executor.command.run import (mount_root_of,
                                                    namespace_view_of)
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.state import session_view
 
 AUTHOR = b"Test Author <test@example.com>"
@@ -316,7 +316,7 @@ def repo_doors(ws) -> CLIDoors:
                     stat_path=functools.partial(path_stat, ws.dispatch),
                     ns=namespace_view_of(ws._registry, ws._namespace,
                                          ws.dispatch),
-                    session_view=session_view(Session(session_id="test")))
+                    session_view=session_view(SessionState(session_id="test")))
 
 
 @pytest.fixture

@@ -36,7 +36,7 @@ from mirage.vfs.secrets import (has_redacted_secret, redacted_config_dump,
                                 revealed_config_dump)
 from mirage.workspace.mount.namespace import NodeMeta
 from mirage.workspace.session.resolve import narrow
-from mirage.workspace.session.session import (Session, vars_from_fields,
+from mirage.workspace.session.session import (SessionState, vars_from_fields,
                                               vars_to_fields)
 from mirage.workspace.session.shell_dirs import set_cwd
 from mirage.workspace.session.state import gate_restored_vars
@@ -59,7 +59,7 @@ CLIOverrides = dict[str, dict[str, Any]
 # What a snapshot restores into the env plane, once the gate has passed
 # it: the parsed session tables and the env template (None when the
 # snapshot carries none).
-RestoredEnv = tuple[list[Session], dict[str, ShellVar] | None]
+RestoredEnv = tuple[list[SessionState], dict[str, ShellVar] | None]
 
 
 def cli_config_dump(config: BaseModel | dict[str, JsonValue] | None,
@@ -409,7 +409,7 @@ async def _gate_restored_state(ws, state: dict[str, Any]) -> RestoredEnv:
         the snapshot carries none.
     """
     sessions = [
-        Session.from_dict(s_data)
+        SessionState.from_dict(s_data)
         for s_data in state.get(StateKey.SESSIONS, [])
     ]
     for fields in sessions:
@@ -427,7 +427,7 @@ async def _gate_restored_state(ws, state: dict[str, Any]) -> RestoredEnv:
 
 
 async def _restore_sessions(ws, state: dict[str, Any],
-                            tables: list[Session]) -> None:
+                            tables: list[SessionState]) -> None:
     default_sid = state.get(StateKey.DEFAULT_SESSION_ID)
     if default_sid is not None:
         # The snapshot's default session identity wins over the live

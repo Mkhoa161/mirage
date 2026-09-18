@@ -81,7 +81,7 @@ import {
   followsLastComponent,
 } from '../lookup/index.ts'
 import { Admitted, admit } from './admission.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 import { ensureVarVisible, sessionView } from '../session/state.ts'
 import { preSessionGate } from '../../policy/index.ts'
 import { ExecutionNode } from '../types.ts'
@@ -91,7 +91,7 @@ type Result = [ByteSource | null, IOResult, ExecutionNode]
 export async function executeCommand(
   recurse: (
     n: TSNodeLike,
-    s: Session,
+    s: SessionState,
     i: ByteSource | null,
     cs: CallStack | null,
     opts?: ExecuteNodeOpts,
@@ -101,7 +101,7 @@ export async function executeCommand(
   namespace: Namespace,
   executeFn: ExecuteFn,
   node: TSNodeLike,
-  session: Session,
+  session: SessionState,
   stdinIn: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
@@ -303,7 +303,7 @@ export async function executeCommand(
 async function runCommandBody(
   recurse: (
     n: TSNodeLike,
-    s: Session,
+    s: SessionState,
     i: ByteSource | null,
     cs: CallStack | null,
   ) => Promise<Result>,
@@ -314,7 +314,7 @@ async function runCommandBody(
   node: TSNodeLike,
   parts: TSNodeLike[],
   name: string,
-  session: Session,
+  session: SessionState,
   stdinIn: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
@@ -474,7 +474,7 @@ function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
 async function runArgv(
   recurse: (
     n: TSNodeLike,
-    s: Session,
+    s: SessionState,
     i: ByteSource | null,
     cs: CallStack | null,
   ) => Promise<Result>,
@@ -483,7 +483,7 @@ async function runArgv(
   namespace: Namespace,
   executeFn: ExecuteFn,
   argv: Argv,
-  session: Session,
+  session: SessionState,
   stdin: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
@@ -627,7 +627,7 @@ export function unsaid(lines: readonly string[], said: Uint8Array): string[] {
 async function routeArgv(
   recurse: (
     n: TSNodeLike,
-    s: Session,
+    s: SessionState,
     i: ByteSource | null,
     cs: CallStack | null,
   ) => Promise<Result>,
@@ -636,7 +636,7 @@ async function routeArgv(
   namespace: Namespace,
   executeFn: ExecuteFn,
   argv: Argv,
-  session: Session,
+  session: SessionState,
   stdin: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,

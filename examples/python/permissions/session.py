@@ -17,15 +17,15 @@ import errno
 
 from mirage import MountMode, Workspace
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import SessionHandle
+from mirage.workspace import Session
 
-# One agent, one handle. `ws.session(id, profile=...)` creates a session
+# One agent, one session. `ws.session(id, profile=...)` creates a session
 # under a role and hands back its two doors bound together: `shell`
 # runs a shell line as the session and `vfs` is the op facade run as it.
 # Whichever door an agent's tools use, the same profile answers.
 #
 # Two roles read one world and see two filesystems. The reviewer's
-# profile hides /repo/secrets and its handle caps /repo at read, so the
+# profile hides /repo/secrets and its session caps /repo at read, so the
 # directory does not exist for it on either door and a write is a
 # read-only file system on either door. The editor may write, and a
 # deny rule keeps it out of the secrets by name, so the same file is
@@ -75,7 +75,7 @@ def show(role: str, door: str, call: str, answer: str, note: str) -> None:
     """Print one probe as the truth file records it.
 
     Args:
-        role (str): whose handle answered.
+        role (str): whose session answered.
         door (str): which of its doors.
         call (str): what was asked.
         answer (str): what came back.
@@ -85,13 +85,13 @@ def show(role: str, door: str, call: str, answer: str, note: str) -> None:
     print(f"{'':9} {'':9} {'':34} {note}")
 
 
-async def line(role: str, handle: SessionHandle | Workspace, cmd: str,
+async def line(role: str, handle: Session | Workspace, cmd: str,
                note: str) -> None:
-    """Run one shell line through a handle's shell door and print it.
+    """Run one shell line through a session's shell door and print it.
 
     Args:
-        role (str): whose handle.
-        handle (SessionHandle | Workspace): the doors; the workspace's
+        role (str): whose session.
+        handle (Session | Workspace): the doors; the workspace's
             own are the host's.
         cmd (str): the shell line.
         note (str): why it matters.
@@ -102,15 +102,15 @@ async def line(role: str, handle: SessionHandle | Workspace, cmd: str,
 
 
 async def read(role: str,
-               handle: SessionHandle | Workspace,
+               handle: Session | Workspace,
                path: str,
                note: str,
                session_id: str | None = None) -> None:
-    """Read one path through a handle's op door and print the answer.
+    """Read one path through a session's op door and print the answer.
 
     Args:
-        role (str): whose handle.
-        handle (SessionHandle | Workspace): the doors.
+        role (str): whose session.
+        handle (Session | Workspace): the doors.
         path (str): the virtual path.
         note (str): why it matters.
         session_id (str | None): name one session for this call alone,
@@ -125,13 +125,13 @@ async def read(role: str,
         show(role, "vfs.read", call, data.decode().strip(), note)
 
 
-async def write(role: str, handle: SessionHandle | Workspace, path: str,
+async def write(role: str, handle: Session | Workspace, path: str,
                 note: str) -> None:
-    """Write one path through a handle's op door and print the answer.
+    """Write one path through a session's op door and print the answer.
 
     Args:
-        role (str): whose handle.
-        handle (SessionHandle | Workspace): the doors.
+        role (str): whose session.
+        handle (Session | Workspace): the doors.
         path (str): the virtual path.
         note (str): why it matters.
     """

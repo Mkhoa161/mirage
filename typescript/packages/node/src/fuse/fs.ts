@@ -15,7 +15,7 @@
 import { runWithSession } from '@struktoai/mirage-core/context/session_context'
 import type { OpRecord } from '@struktoai/mirage-core/observe/record'
 import type { Ops } from '@struktoai/mirage-core/ops/ops'
-import type { Session } from '@struktoai/mirage-core/workspace/session/session'
+import type { SessionState } from '@struktoai/mirage-core/workspace/session/session'
 import { type FuseAttr, MountCore } from './core.ts'
 import { classifyError } from './errors.ts'
 
@@ -31,7 +31,7 @@ export interface MirageFSOptions {
    * travels with it. Enforcement happens inside dispatch/Ops via the
    * session context, so binding at the op entry point is sufficient.
    */
-  session?: Session
+  session?: SessionState
 }
 
 /**

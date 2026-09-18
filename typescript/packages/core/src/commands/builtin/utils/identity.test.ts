@@ -3,7 +3,7 @@ import { parseSessionProfile } from '../../../policy/profile.ts'
 import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { MountMode } from '../../../types.ts'
 import { getTestParser } from '../../../workspace/fixtures/workspace_fixture.ts'
-import { Session } from '../../../workspace/session/session.ts'
+import { SessionState } from '../../../workspace/session/session.ts'
 import { sessionView } from '../../../workspace/session/state.ts'
 import type { WorkspaceOptions } from '../../../workspace/workspace/types.ts'
 import { Workspace } from '../../../workspace/workspace/workspace.ts'
@@ -23,7 +23,7 @@ describe('identity', () => {
   })
 
   it('reads the name plane and the session plane', () => {
-    const session = new Session({ sessionId: 's', profile: 'admin' })
+    const session = new SessionState({ sessionId: 's', profile: 'admin' })
     const view = sessionView(session)
     const ns = { user: 'alice' }
     expect(identityFrom(ns, view)).toEqual({ user: 'alice', profile: 'admin' })

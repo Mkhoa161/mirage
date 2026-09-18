@@ -29,7 +29,7 @@ import { makeStorageKey } from '../mount/storage.ts'
 import { Consumer, JOB_BUILTINS, dereferences, lookup } from '../lookup/index.ts'
 import { type Runtime } from '../../runtime/base.ts'
 import type { RouteDecision } from '../../runtime/routing/index.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 import { abortable, mergeSignals } from '../abort.ts'
 import { ExecutionNode } from '../types.ts'
 import { strategyFor } from '../../commands/builtin/generic/crossmount/detect.ts'
@@ -80,7 +80,7 @@ const JOB_HANDLERS: Record<
   (
     jobTable: JobTable,
     textParts: string[],
-    session: Session | null,
+    session: SessionState | null,
     view: SessionView | null,
     signal?: AbortSignal,
   ) => JobHandlerResult | Promise<JobHandlerResult>
@@ -106,7 +106,7 @@ async function finishFind(
   io: IOResult,
   texts: readonly string[],
   registry: MountRegistry,
-  session: Session,
+  session: SessionState,
   executeFn: ExecuteFn | undefined,
   ns: NamespaceView | undefined,
   statPath: StatPath,
@@ -148,7 +148,7 @@ export async function handleCommand(
   dispatch: DispatchFn,
   registry: MountRegistry,
   parts: readonly (string | PathSpec)[],
-  session: Session,
+  session: SessionState,
   stdin: ByteSource | null = null,
   callStack: CallStack | null = null,
   jobTable: JobTable | null = null,

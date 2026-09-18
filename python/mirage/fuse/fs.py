@@ -22,7 +22,7 @@ from mirage.fuse.darwin import rename_flags_check
 from mirage.fuse.errors import classify_error
 from mirage.ops import Ops
 from mirage.types import JsonValue
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ class MirageFS:
     Args:
         ops (Ops): the workspace op facade every callback routes to.
         root_prefix (str): mount root; non-empty scopes the tree to one mount.
-        session (Session | None): bind every op to this session's mount grants.
+        session (SessionState | None): bind every op to this
+            session's mount grants.
     """
 
     use_ns = True
@@ -46,7 +47,7 @@ class MirageFS:
     def __init__(self,
                  ops: Ops,
                  root_prefix: str = "",
-                 session: Session | None = None) -> None:
+                 session: SessionState | None = None) -> None:
         self.core = MountCore(ops, root_prefix=root_prefix, session=session)
 
     def _call(self, fn: Callable[..., Any], *args: Any) -> Any:

@@ -39,7 +39,7 @@ import {
 import type { Policy } from '../../../policy/base.ts'
 import { Policies } from '../../../policy/policies.ts'
 import type { Action, OpsContext } from '../../../policy/types.ts'
-import { Session } from '../../../workspace/session/session.ts'
+import { SessionState } from '../../../workspace/session/session.ts'
 
 const accessor = {} as never
 // No namespace facts, which is what a command bound outside a workspace
@@ -682,7 +682,7 @@ describe('withHiddenGuard rmdir under namespace children', () => {
     const ops = withHiddenGuard(base)
     const rmdir = ops.rmdir
     if (rmdir === undefined) throw new Error('rmdir slot missing')
-    const sess = new Session({ sessionId: 'narrowed' })
+    const sess = new SessionState({ sessionId: 'narrowed' })
     sess.hiddenPaths = { paths: ['/m/d/h'] }
     const spec = new PathSpec({ virtual: '/m/d', directory: '/m', vfsPath: 'd' })
     await runWithSession(sess, async () => {
@@ -718,7 +718,7 @@ describe('withHiddenGuard rmdir under namespace children', () => {
     const ops = withHiddenGuard(base)
     const rmdir = ops.rmdir
     if (rmdir === undefined) throw new Error('rmdir slot missing')
-    const sess = new Session({ sessionId: 'narrowed' })
+    const sess = new SessionState({ sessionId: 'narrowed' })
     sess.hiddenPaths = { paths: ['/m/d/h'] }
     const spec = new PathSpec({ virtual: '/m/d', directory: '/m', vfsPath: 'd' })
     await runWithSession(sess, async () => {

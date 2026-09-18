@@ -57,7 +57,7 @@ import {
 import { ConsistencyPolicy, MountMode } from '../../types.ts'
 import { VERSION } from '../../version.ts'
 import type { NodeMeta } from '../mount/namespace/namespace.ts'
-import { Session, varsFromFields, varsToFields } from '../session/session.ts'
+import { SessionState, varsFromFields, varsToFields } from '../session/session.ts'
 import type { Workspace } from '../workspace/workspace.ts'
 import type { MountArgs } from './config.ts'
 import { captureFingerprints, liveOnlyMountPrefixes } from './drift.ts'
@@ -492,8 +492,8 @@ async function restoreNodes(ws: Workspace, state: WorkspaceStateDict): Promise<v
 async function gateRestoredState(
   ws: Workspace,
   state: WorkspaceStateDict,
-): Promise<[Session[], Record<string, ShellVar> | null]> {
-  const sessions = state.sessions.map((s) => Session.fromJSON(s))
+): Promise<[SessionState[], Record<string, ShellVar> | null]> {
+  const sessions = state.sessions.map((s) => SessionState.fromJSON(s))
   for (const fields of sessions) {
     await gateRestoredVars(ws.registry.policies, fields.sessionId, fields.vars)
   }
@@ -510,7 +510,7 @@ async function gateRestoredState(
 async function restoreSessions(
   ws: Workspace,
   state: WorkspaceStateDict,
-  tables: readonly Session[],
+  tables: readonly SessionState[],
 ): Promise<void> {
   // The snapshot's default session identity wins over the live one,
   // and the discovery record's pointer follows it. A state without the
@@ -519,7 +519,7 @@ async function restoreSessions(
   if (state.default_session_id != null) {
     await ws.adoptDefaultSession(state.default_session_id)
   }
-  const restored: Session[] = []
+  const restored: SessionState[] = []
   for (const fields of tables) {
     const exists = ws.sessionManager.list().some((x) => x.sessionId === fields.sessionId)
     const session = exists

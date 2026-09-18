@@ -55,7 +55,7 @@ class Ops:
     bound when the op arrives (a command's own runtime, a kernel mount
     serving one session) is kept, so the facade never widens the
     caller's view, and the record names the session that judged the
-    op. ``SessionHandle`` derives a facade for another session over
+    op. ``Session`` derives a facade for another session over
     the same ledger.
 
     Every op also takes ``session_id`` for the one-call case, the way
@@ -94,9 +94,9 @@ class Ops:
     def _for_session(self, session_id: str) -> "Ops":
         """The same facade run as another session.
 
-        The mechanism behind ``SessionHandle.vfs``, not a door of its
+        The mechanism behind ``Session.vfs``, not a door of its
         own: a host binds a session with ``ws.session(id)`` (creating
-        it when the id is new) or ``SessionHandle(ws, id)`` (adopting
+        it when the id is new) or ``Session(ws, id)`` (adopting
         one that exists), so there is one way to say it rather than
         two. Shares the mount table and the op ledger with this one, so
         the workspace-wide account stays one list and a later mount is

@@ -146,7 +146,7 @@ describe('name-plane writes go through the door', () => {
     expect(voicedStderr(io)).toBe("ln: failed to create symbolic link '/b': Permission denied\n")
   })
 
-  it('symlink and readlink answer on the fs facade', async () => {
+  it('symlink and readlink answer on the op facade', async () => {
     // readlink is the read twin: guests and CLIs ask through the same
     // door instead of a bespoke channel.
     const ws = await makeWs()
@@ -657,7 +657,7 @@ describe('op hooks bind at the op doors and the command tier', () => {
     // the boundary is loud.
     const ws = await makeSealedWs([new SealedPaths()])
 
-    // The doors hold: the fs facade, and a dispatcher-routed redirect
+    // The doors hold: the op facade, and a dispatcher-routed redirect
     // write.
     await expect(ws.vfs.readFile('/a/secret.txt')).rejects.toThrow('secret is sealed')
     const redirect = await ws.shell('echo hi > /a/prod/new.txt')
@@ -1061,7 +1061,7 @@ describe('hidden paths across the tiers', () => {
     expect(out).toContain('note.key')
   })
 
-  it('the fs facade agrees with the shell', async () => {
+  it('the op facade agrees with the shell', async () => {
     const ws = await makeHiddenPathsWs()
     const sess = ws.getSession('agent')
     await runWithSession(sess, async () => {

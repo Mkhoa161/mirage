@@ -22,7 +22,7 @@ import type { Action, OpsContext, OpsResultContext } from '../policy/types.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import { FileType, Limit, MountMode, OnExceed } from '../types.ts'
 import { enoent, enotdir } from '../utils/errors.ts'
-import { SessionHandle } from '../workspace/workspace/handle.ts'
+import { Session } from '../workspace/workspace/handle.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
 
 const DEC = new TextDecoder()
@@ -172,7 +172,7 @@ describe('Ops existence probes', () => {
   })
 })
 
-// The fs facade is an op door like the dispatcher: FUSE and programmatic
+// The op facade is an op door like the dispatcher: FUSE and programmatic
 // access read through it, so policy hooks must fire here too.
 describe('Ops policy door', () => {
   class SealReads implements Policy {
@@ -823,7 +823,7 @@ describe('Ops per-call sessionId', () => {
 
   it("falls back to the facade's own session when none is named", async () => {
     const ws = await splitWs()
-    expect(await new SessionHandle(ws, 'blind').vfs.exists('/data/secret.txt')).toBe(false)
+    expect(await new Session(ws, 'blind').vfs.exists('/data/secret.txt')).toBe(false)
     expect(await ws.vfs.exists('/data/secret.txt')).toBe(true)
   })
 })

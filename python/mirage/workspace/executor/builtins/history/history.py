@@ -18,7 +18,7 @@ from mirage.io.types import ByteSource, IOResult
 from mirage.vfs.history import HISTORY_PREFIX
 from mirage.workspace.executor.builtins.types import BuiltinCall, Result
 from mirage.workspace.mount.registry import MountRegistry
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 from mirage.workspace.types import ExecutionNode
 
 # bash 5.2.21's own string, letters in ITS order (`history -anrw`, not
@@ -88,7 +88,7 @@ def _parse_args(
 async def handle_history(
     registry: MountRegistry,
     args: list[str],
-    session: Session,
+    session: SessionState,
 ) -> tuple[ByteSource | None, IOResult, ExecutionNode]:
     """Dispatch the history shell builtin to the view mount.
 
@@ -100,7 +100,7 @@ async def handle_history(
     Args:
         registry (MountRegistry): The workspace's mount registry.
         args (list[str]): Raw builtin args (flags and counts).
-        session (Session): Calling session.
+        session (SessionState): Calling session.
     """
     flags, texts, error = _parse_args(args)
     if error is not None:

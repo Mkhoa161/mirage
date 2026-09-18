@@ -30,7 +30,7 @@ from mirage.ops import Ops
 from mirage.runtime.handles import FileTable, merge_writes
 from mirage.types import FileStat, FileType
 from mirage.utils.stat_view import DIR_MODE, FILE_MODE, LINK_MODE, mtime_ns
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 
 # How long prefetched bytes for size-unknown files outlive their handle, so a
 # release-then-stat burst (ls right after cat) neither refetches nor reports
@@ -67,7 +67,7 @@ class MountCore:
     Args:
         ops (Ops): the workspace op facade every filesystem call routes to.
         root_prefix (str): mount root; non-empty scopes the tree to one mount.
-        session (Session | None): bind every op to this session's mount
+        session (SessionState | None): bind every op to this session's mount
             grants, exactly as a shell command in that session would run.
             None means unrestricted.
     """
@@ -75,7 +75,7 @@ class MountCore:
     def __init__(self,
                  ops: Ops,
                  root_prefix: str = "",
-                 session: Session | None = None) -> None:
+                 session: SessionState | None = None) -> None:
         self._ops = ops
         self._session = session
         self._now = time.time_ns()

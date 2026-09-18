@@ -19,7 +19,7 @@ import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { RAMSessionStore } from '../session/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser, stdoutStr } from '../fixtures/workspace_fixture.ts'
-import { SessionHandle, type SessionExecuteOptions } from './handle.ts'
+import { Session, type SessionExecuteOptions } from './handle.ts'
 import type { ExecuteOptions, ExecuteResult } from './types.ts'
 import type { ProvisionResult } from '../../provision/types.ts'
 import { Workspace } from './workspace.ts'
@@ -47,14 +47,14 @@ async function seeded(): Promise<Workspace> {
   return ws
 }
 
-describe('SessionHandle', () => {
+describe('Session', () => {
   it('binds both doors to one session', async () => {
     // One object per agent: the shell door and the op door answer
     // under the same profile, so a hide the shell honors is a hide the
     // file tool honors too.
     const ws = await seeded()
     const reviewer = await ws.session('reviewer', { profile: 'reviewer' })
-    expect(reviewer).toBeInstanceOf(SessionHandle)
+    expect(reviewer).toBeInstanceOf(Session)
     expect(reviewer.sessionId).toBe('reviewer')
     expect(reviewer.state).toBe(ws.getSession('reviewer'))
     expect(stdoutStr(await reviewer.shell('cat /repo/README.md'))).toBe('hello\n')
@@ -125,12 +125,12 @@ describe('SessionHandle', () => {
 
 describe('handle parity with the workspace door', () => {
   it('forwards every option the workspace takes but the bound one', () => {
-    // `SessionHandle.shell` is `Workspace.shell` with the session fixed,
+    // `Session.shell` is `Workspace.shell` with the session fixed,
     // so an option added to one has to reach the other. Checked at
     // compile time: a TS interface has no fields to enumerate at
-    // runtime, so an option the handle's type does not carry fails to
+    // runtime, so an option the `Session` type does not carry fails to
     // index, and one whose type drifted fails to assign. The bound
-    // field is the one exception -- a handle *is* the session, so
+    // field is the one exception -- the object *is* the session, so
     // naming one per call would be a second, contradictory source.
     // The python twin hand-copies nine parameters and is pinned by
     // tests/workspace/workspace/test_handle_signature.py.
@@ -144,10 +144,10 @@ describe('handle parity with the workspace door', () => {
     // Each overload answers a different return type, and the handle
     // dropped the widening one, so `shell(line, opts)` with an unknown
     // `provision` type-checked on the workspace and not on a handle.
-    expectTypeOf<Parameters<SessionHandle['shell']>>().toEqualTypeOf<
+    expectTypeOf<Parameters<Session['shell']>>().toEqualTypeOf<
       [command: string, options: SessionExecuteOptions]
     >()
-    expectTypeOf<ReturnType<SessionHandle['shell']>>().toEqualTypeOf<
+    expectTypeOf<ReturnType<Session['shell']>>().toEqualTypeOf<
       Promise<ExecuteResult | ProvisionResult>
     >()
   })

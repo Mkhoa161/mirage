@@ -92,7 +92,7 @@ import type { ResolvedSource } from '../../secrets/types.ts'
 import { DEFAULT_PROFILE } from '../session/constants.ts'
 import { SessionManager } from '../session/manager.ts'
 import type { WorkspaceFields, WorkspaceStateStore } from '../store/base.ts'
-import { varsFromEntries, type Session } from '../session/session.ts'
+import { varsFromEntries, type SessionState } from '../session/session.ts'
 import {
   parseProfileMounts,
   parseProfilePolicy,
@@ -109,7 +109,7 @@ import { WorkspaceMeta } from './meta.ts'
 import { normalizeMounts, prepareAddedMount, unmountPrefix } from './mounts.ts'
 import { Router } from './routing.ts'
 import { Runtimes } from './runtimes.ts'
-import { SessionHandle } from './handle.ts'
+import { Session } from './handle.ts'
 import type { ExecuteResult } from './types.ts'
 import { type ExecuteOptions, type MountSpec, type WorkspaceOptions } from './types.ts'
 import { commandName, forkForCall } from './utils.ts'
@@ -717,7 +717,7 @@ export class Workspace {
       profile?: string | SessionProfile | null
       permissions?: SessionProfile | null
     } = {},
-  ): Session {
+  ): SessionState {
     const base = this.baseProfile(options.profile ?? null)
     let inline: SessionProfile | null = options.permissions ?? null
     if (options.mounts != null) {
@@ -745,7 +745,7 @@ export class Workspace {
    * Creates the session under the given profile when the id is new (the
    * same call as `createSession`), and adopts it as is when it exists.
    * Options for an existing session are refused rather than ignored: a
-   * profile is set once, at creation, and a handle must not look like
+   * profile is set once, at creation, and the object it returns must not look like
    * it narrowed a session it merely adopted. The session store is
    * hydrated first, so a session a previous process persisted is
    * adopted with its stored profile rather than recreated over it; that
@@ -754,16 +754,16 @@ export class Workspace {
   async session(
     sessionId: string,
     options: Parameters<Workspace['createSession']>[1] = {},
-  ): Promise<SessionHandle> {
+  ): Promise<Session> {
     await this.ensureSessionsLoaded()
     if (this.sessionManager.list().some((s) => s.sessionId === sessionId)) {
       if (options.mounts != null || options.profile != null || options.permissions != null) {
         throw new Error(`session '${sessionId}' exists; its profile was set when it was created`)
       }
-      return new SessionHandle(this, sessionId)
+      return new Session(this, sessionId)
     }
     this.createSession(sessionId, options)
-    return new SessionHandle(this, sessionId)
+    return new Session(this, sessionId)
   }
 
   private cliVerbs(): ReadonlyMap<string, ReadonlySet<string>> {
@@ -774,7 +774,7 @@ export class Workspace {
     return out
   }
 
-  getSession(sessionId: string): Session {
+  getSession(sessionId: string): SessionState {
     return this.sessionManager.get(sessionId)
   }
 
@@ -788,7 +788,7 @@ export class Workspace {
   async setSessionProfile(
     sessionId: string,
     profile: string | SessionProfile | null,
-  ): Promise<Session> {
+  ): Promise<SessionState> {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
     const compiled = compileProfile(this.baseProfile(profile), this.profileName(profile))
     checkCliVerbs(compiled.commands, this.cliVerbs())
@@ -799,7 +799,7 @@ export class Workspace {
     return this.sessionManager.setProfile(sessionId, compiled)
   }
 
-  listSessions(): Session[] {
+  listSessions(): SessionState[] {
     return this.sessionManager.list()
   }
 
@@ -1074,7 +1074,7 @@ export class Workspace {
   }
 
   /** The ambient session the op door keeps for a facade, or null. */
-  private ambientFor(sessionId: string | null): Session | null {
+  private ambientFor(sessionId: string | null): SessionState | null {
     const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
     if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return ambient
     return null
@@ -1092,7 +1092,7 @@ export class Workspace {
    * @param sessionId the facade's session, or null for the default.
    * @returns the session an op through that facade runs as.
    */
-  sessionForOps(sessionId: string | null): Session {
+  sessionForOps(sessionId: string | null): SessionState {
     return (
       this.ambientFor(sessionId) ??
       this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)

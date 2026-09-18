@@ -15,7 +15,7 @@
 import { IOResult } from '../../../../io/types.ts'
 import { HISTORY_PREFIX } from '../../../../vfs/history/history.ts'
 import type { MountRegistry } from '../../../mount/registry.ts'
-import type { Session } from '../../../session/session.ts'
+import type { SessionState } from '../../../session/session.ts'
 import { ExecutionNode } from '../../../types.ts'
 import type { FlagValue } from '../../../../commands/spec/types.ts'
 import type { BuiltinCall, Result } from '../types.ts'
@@ -93,7 +93,7 @@ function parseArgs(args: string[]): ParsedArgs {
 export async function handleHistory(
   registry: MountRegistry,
   args: string[],
-  session: Session,
+  session: SessionState,
 ): Promise<Result> {
   const { flags, texts, error } = parseArgs(args)
   if (error !== null) return usageError(error)

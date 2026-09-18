@@ -20,7 +20,7 @@ import { parseSessionProfile } from '../policy/profile.ts'
 import type { Action, OpsContext, Policy } from '../policy/index.ts'
 import { runWithSession } from '../context/session_context.ts'
 import { getTestParser, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
-import { SessionHandle } from './workspace/handle.ts'
+import { Session } from './workspace/handle.ts'
 import { Workspace } from './workspace/workspace.ts'
 
 /** Refuse the unlink of one exact path, whatever door asked. */
@@ -171,7 +171,7 @@ describe('the path axis end to end', () => {
     )
     open.push(ws)
     const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-    const door = new SessionHandle(ws, host.sessionId).vfs
+    const door = new Session(ws, host.sessionId).vfs
     expect(door.records).toBe(ws.vfs.records)
     await door.mkdir('/data/vault')
     await door.writeFile('/data/vault/secret', 'top\n')
@@ -204,7 +204,7 @@ describe('the path axis end to end', () => {
     const wide = other.createSession('wide', { profile: parseSessionProfile({}) })
     const ws = await hiding()
     const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-    const door = new SessionHandle(ws, host.sessionId).vfs
+    const door = new Session(ws, host.sessionId).vfs
     await door.mkdir('/data/vault')
     await door.writeFile('/data/vault/secret', 'top\n')
     await runWithSession(
@@ -231,7 +231,7 @@ describe('the path axis end to end', () => {
     // path it can see, so the link reads as absent.
     const ws = await hiding()
     const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-    const door = new SessionHandle(ws, host.sessionId).vfs
+    const door = new Session(ws, host.sessionId).vfs
     await door.writeFile('/data/pub.txt', 'pub\n')
     await door.mkdir('/data/vault')
     await door.symlink('/data/vault/lk', '/data/pub.txt')

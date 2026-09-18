@@ -19,7 +19,7 @@ import { makeWorkspace, stdoutStr } from './fixtures/workspace_fixture.ts'
 // `targetSession.fork({...})`. fork() must propagate hiddenPaths so the
 // per-call override session cannot see past the parent's hides. Without
 // fork() (or without manually copying hiddenPaths in the old inline
-// `new Session({...})` ctor) this test would fail because the override
+// `new SessionState({...})` ctor) this test would fail because the override
 // session would have hiddenPaths === null and the hide filter would
 // short-circuit in context/session_context.ts.
 describe('per-call cwd/env override preserves hiddenPaths', () => {

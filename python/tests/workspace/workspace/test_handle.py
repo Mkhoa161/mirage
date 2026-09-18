@@ -17,7 +17,7 @@ import pytest
 from mirage.context import reset_current_session, set_current_session
 from mirage.types import MountMode
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import SessionHandle, Workspace
+from mirage.workspace import Session, Workspace
 from mirage.workspace.session import RAMSessionStore
 
 PROFILES = {"reviewer": {"paths": {"hide": ["/repo/secrets"]}}}
@@ -44,7 +44,7 @@ async def test_a_handle_binds_both_doors_to_one_session():
     try:
         await _seed(ws)
         reviewer = await ws.session("reviewer", profile="reviewer")
-        assert isinstance(reviewer, SessionHandle)
+        assert isinstance(reviewer, Session)
         assert reviewer.session_id == "reviewer"
         assert reviewer.state is ws.get_session("reviewer")
         shown = await reviewer.shell("cat /repo/README.md")

@@ -28,7 +28,7 @@ from mirage.types import MountMode, PathSpec
 from mirage.workspace.cli.registry import CLIRegistry
 from mirage.workspace.mount.namespace import Namespace
 from mirage.workspace.node.execute_node import execute_node as _execute_node
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.session import vars_from_env
 
 
@@ -38,7 +38,9 @@ def execute_node(dispatch, registry, *args, **kwargs):
 
 
 def _session(cwd="/", env=None):
-    return Session(session_id="test", cwd=cwd, vars=vars_from_env(env or {}))
+    return SessionState(session_id="test",
+                        cwd=cwd,
+                        vars=vars_from_env(env or {}))
 
 
 def _mock_dispatch():

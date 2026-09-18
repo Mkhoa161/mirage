@@ -23,8 +23,8 @@ from mirage.policy import (Action, Deny, OpsContext, OpsResultContext, Policy,
                            PolicyDenied)
 from mirage.types import FileType, HiddenPaths, MountMode
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import SessionHandle
-from mirage.workspace.session import Session
+from mirage.workspace import Session
+from mirage.workspace.session import SessionState
 
 from .conftest import make_ops, run
 
@@ -178,8 +178,8 @@ class UngrantedRemote(RAMVFS):
 @pytest.fixture
 def deep_only_session():
     """Bind a session whose role hides the parent mount's own content."""
-    session = Session(session_id="agent",
-                      hidden_paths=HiddenPaths(patterns=("/m/*.txt", )))
+    session = SessionState(session_id="agent",
+                           hidden_paths=HiddenPaths(patterns=("/m/*.txt", )))
     token = set_current_session(session)
     yield session
     reset_current_session(token)
@@ -408,9 +408,9 @@ def _granted_child_ops() -> Ops:
 def deep_scoped_session():
     """Bind a session whose role hides everything /data holds itself,
     leaving the nested mount below it reachable."""
-    session = Session(session_id="agent",
-                      hidden_paths=HiddenPaths(paths=("/data/other",
-                                                      "/data/f.txt")))
+    session = SessionState(session_id="agent",
+                           hidden_paths=HiddenPaths(paths=("/data/other",
+                                                           "/data/f.txt")))
     token = set_current_session(session)
     yield session
     reset_current_session(token)
@@ -627,7 +627,7 @@ class TestPerCallSession:
         # The door never widens a caller's view: a command running for
         # a confined session cannot read as a wider one by naming it.
         ws = self._split_ws()
-        session = Session(
+        session = SessionState(
             session_id="blind",
             hidden_paths=HiddenPaths(paths=("/data/secret.txt", )))
         token = set_current_session(session)
@@ -641,7 +641,7 @@ class TestPerCallSession:
     def test_no_session_named_is_the_facade_s_own(self):
         ws = self._split_ws()
         try:
-            door = SessionHandle(ws, "blind").vfs
+            door = Session(ws, "blind").vfs
             assert run(door.exists("/data/secret.txt")) is False
             assert run(ws.vfs.exists("/data/secret.txt")) is True
         finally:

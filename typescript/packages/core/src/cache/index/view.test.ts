@@ -26,7 +26,7 @@ import { IndexView } from './view.ts'
 import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { runWithSession } from '../../context/session_context.ts'
 import { FileStat, FileType, MountMode, PathSpec } from '../../types.ts'
-import { Session } from '../../workspace/session/session.ts'
+import { SessionState } from '../../workspace/session/session.ts'
 import { Workspace } from '../../workspace/workspace/workspace.ts'
 
 const cases = ['backend', 'store'].flatMap((phase) =>
@@ -80,7 +80,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
             })
           },
         })
-        const session = new Session({
+        const session = new SessionState({
           sessionId: 'agent',
           hiddenPaths: { paths: ['/data/source/private'] },
         })

@@ -230,7 +230,7 @@ async def test_background_sees_parent_env(ws):
     assert b"yes" in io.stdout
 
 
-# --- Session: cd + env ---
+# --- SessionState: cd + env ---
 
 
 @pytest.mark.asyncio

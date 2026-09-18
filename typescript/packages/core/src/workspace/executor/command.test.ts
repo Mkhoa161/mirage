@@ -20,7 +20,7 @@ import { JobTable } from '../../shell/job_table/index.ts'
 import { BaseVFS, type VFS } from '../../vfs/base.ts'
 import { MountMode, PathSpec } from '../../types.ts'
 import { MountRegistry } from '../mount/registry.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import type { ExecuteNodeFn } from './jobs.ts'
 import type { DispatchFn } from './cross_mount.ts'
 import { handleCommand } from './command.ts'
@@ -58,7 +58,7 @@ describe('handleCommand — command not found', () => {
       NEVER_DISPATCH,
       reg,
       ['nope'],
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(io.exitCode).toBe(127)
     expect(exec.exitCode).toBe(127)
@@ -87,7 +87,7 @@ describe('handleCommand — dispatches to mount that has the command', () => {
       NEVER_DISPATCH,
       reg,
       ['cat', PathSpec.fromStrPath('/ram/x')],
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(io.exitCode).toBe(0)
     expect(exec.exitCode).toBe(0)
@@ -120,7 +120,7 @@ describe('handleCommand — dispatches to mount that has the command', () => {
       NEVER_DISPATCH,
       reg,
       ['head', '-n', '5', PathSpec.fromStrPath('/ram/x')],
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(seenFlags.n).toBe('5')
   })
@@ -146,7 +146,7 @@ describe('handleCommand — cross-mount', () => {
       NEVER_DISPATCH,
       reg,
       ['mycmd', PathSpec.fromStrPath('/ram/a'), PathSpec.fromStrPath('/disk/b')],
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(io.exitCode).toBe(1)
     expect(exec.exitCode).toBe(1)
@@ -163,7 +163,7 @@ describe('handleCommand — job builtins', () => {
       NEVER_DISPATCH,
       reg,
       ['jobs'],
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
       null,
       null,
       jt,
@@ -179,7 +179,7 @@ describe('handleCommand — job builtins', () => {
       NEVER_DISPATCH,
       reg,
       ['kill', '999'],
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
       null,
       null,
       jt,

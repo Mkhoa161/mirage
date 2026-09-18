@@ -3,12 +3,12 @@ import pytest
 from mirage import RAMVFS, MountMode, Workspace
 from mirage.io.stream import materialize
 from mirage.workspace.executor.builtins.read import handle_read
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 from mirage.workspace.session.state import session_view
 
 
-def make_session() -> Session:
-    return Session(session_id="s1")
+def make_session() -> SessionState:
+    return SessionState(session_id="s1")
 
 
 async def _read_ws() -> Workspace:

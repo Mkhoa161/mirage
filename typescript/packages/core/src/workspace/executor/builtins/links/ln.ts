@@ -42,7 +42,7 @@ import { PolicyDenied } from '../../../../policy/index.ts'
 import { pathAllowed } from '../../../../context/session_context.ts'
 import type { DispatchFn } from '../../../../runtime/types.ts'
 import type { Namespace } from '../../../mount/namespace/namespace.ts'
-import type { Session } from '../../../session/session.ts'
+import type { SessionState } from '../../../session/session.ts'
 import { absPath, fail, readOnlyError, result } from '../shared.ts'
 import { posixRelative } from './links.ts'
 import { pathReaddir, resolvePathStat } from './probe.ts'
@@ -550,7 +550,7 @@ export async function makeLink(
 export async function handleLn(
   namespace: Namespace,
   dispatch: DispatchFn,
-  session: Session,
+  session: SessionState,
   args: (string | PathSpec)[],
 ): Promise<Result> {
   const spec = specOf('ln')

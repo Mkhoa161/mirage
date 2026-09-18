@@ -19,13 +19,13 @@ from mirage.io import IOResult
 from mirage.io.types import ByteSource
 from mirage.ops.ops import Ops
 from mirage.provision import ProvisionResult
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 if TYPE_CHECKING:
     from mirage.workspace.workspace.workspace import Workspace
 
 
-class SessionHandle:
+class Session:
     """One session's two doors, bound together.
 
     ``shell`` runs a line as the session and ``vfs`` is the op facade
@@ -45,7 +45,7 @@ class SessionHandle:
         return self._id
 
     @property
-    def state(self) -> Session:
+    def state(self) -> SessionState:
         """The session record: cwd, env, modes, hides, decisions."""
         return self._ws.get_session(self._id)
 

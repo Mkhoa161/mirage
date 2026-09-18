@@ -25,7 +25,7 @@ import type { TSNodeLike } from '../../shell/types.ts'
 import type { DispatchFn } from '../executor/cross_mount.ts'
 import { Namespace } from '../mount/namespace/namespace.ts'
 import { MountRegistry } from '../mount/registry.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import { type ExecuteNodeDeps } from './execute_node.ts'
 import { runCommandTree } from './run_tree.ts'
 
@@ -71,7 +71,7 @@ describe('runCommandTree', () => {
     const [stdout, io] = await runCommandTree(
       buildDeps(registry()),
       parse('echo hello'),
-      new Session({ sessionId: 'test', cwd: '/' }),
+      new SessionState({ sessionId: 'test', cwd: '/' }),
     )
     expect(io.exitCode).toBe(0)
     expect(new TextDecoder().decode(await materialize(stdout))).toContain('hello')
@@ -81,7 +81,7 @@ describe('runCommandTree', () => {
     const [, io] = await runCommandTree(
       buildDeps(registry()),
       parse('false'),
-      new Session({ sessionId: 'test', cwd: '/' }),
+      new SessionState({ sessionId: 'test', cwd: '/' }),
     )
     expect(io.exitCode).not.toBe(0)
   })

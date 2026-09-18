@@ -14,11 +14,11 @@
 
 import type { Ops } from '../../ops/ops.ts'
 import type { ProvisionResult } from '../../provision/types.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 import type { ExecuteOptions, ExecuteResult } from './types.ts'
 import type { Workspace } from './workspace.ts'
 
-/** `ExecuteOptions` with the session fixed by the handle. */
+/** `ExecuteOptions` with the session already fixed. */
 export type SessionExecuteOptions = Omit<ExecuteOptions, 'sessionId'>
 
 /**
@@ -31,7 +31,7 @@ export type SessionExecuteOptions = Omit<ExecuteOptions, 'sessionId'>
  * session manager and `state` reads it. Obtained from
  * `Workspace.session`, which creates the session or adopts it.
  */
-export class SessionHandle {
+export class Session {
   private readonly ws: Workspace
   readonly sessionId: string
 
@@ -41,7 +41,7 @@ export class SessionHandle {
   }
 
   /** The session record: cwd, env, modes, hides, decisions. */
-  get state(): Session {
+  get state(): SessionState {
     return this.ws.getSession(this.sessionId)
   }
 

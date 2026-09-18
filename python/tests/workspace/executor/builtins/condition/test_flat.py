@@ -5,7 +5,7 @@ import pytest
 from mirage.workspace.executor.builtins.condition import (CondContext,
                                                           CondError, eval_flat)
 from mirage.workspace.mount.namespace import Namespace
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 class _StubNamespace:
@@ -27,7 +27,7 @@ class _StubSession:
 def _ctx() -> CondContext:
     return CondContext(dispatch=None,
                        namespace=cast(Namespace, _StubNamespace()),
-                       session=cast(Session, _StubSession()),
+                       session=cast(SessionState, _StubSession()),
                        name="test")
 
 

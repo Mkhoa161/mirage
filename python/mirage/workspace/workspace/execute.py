@@ -40,7 +40,7 @@ from mirage.workspace.node.admission import (admit_line, is_pending,
                                              is_pending_refusal)
 from mirage.workspace.node.explain import prejudge_line, unrefused_nodes
 from mirage.workspace.node.occurrence import evaluated_from
-from mirage.workspace.session import (Session, get_current_session_for,
+from mirage.workspace.session import (SessionState, get_current_session_for,
                                       reset_current_session,
                                       set_current_session)
 from mirage.workspace.snapshot import ContentDriftError
@@ -192,13 +192,13 @@ class LineFrame:
     each keep their own.
 
     Attributes:
-        session (Session | None): the shell the line stamps on.
+        session (SessionState | None): the shell the line stamps on.
         status_before (StatusSnapshot | None): ``$?`` and
             ``${PIPESTATUS[@]}`` as the line found them.
         writer (StatusWriter): the line's identity, so a restore undoes
             only the stamps this line made.
     """
-    session: Session | None = None
+    session: SessionState | None = None
     status_before: StatusSnapshot | None = None
     writer: StatusWriter = field(default_factory=StatusWriter)
 

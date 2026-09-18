@@ -21,12 +21,12 @@ from mirage.workspace import Workspace
 from mirage.workspace.lookup import (SHELL_CONSUMERS, Consumer,
                                      command_visible, lookup, lookup_all,
                                      verb_visible)
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
-def _fixture() -> tuple[Session, Workspace]:
+def _fixture() -> tuple[SessionState, Workspace]:
     ws = Workspace(mounts={"/ram": (RAMVFS(), MountMode.WRITE)})
-    return Session(session_id="t"), ws
+    return SessionState(session_id="t"), ws
 
 
 async def _noop(config, paths, *texts, **flags):

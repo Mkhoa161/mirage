@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { varsFromEnv } from '../session/session.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 
 /** First word of a command line, the name diagnostics report ('' when blank). */
 export function commandName(command: string): string {
@@ -29,10 +29,10 @@ export function commandName(command: string): string {
  * as is.
  */
 export function forkForCall(
-  session: Session,
+  session: SessionState,
   cwd: string | undefined,
   env: Record<string, string> | undefined,
-): Session {
+): SessionState {
   if (cwd === undefined && env === undefined) return session
   return session.fork({
     ...(cwd !== undefined ? { cwd } : {}),

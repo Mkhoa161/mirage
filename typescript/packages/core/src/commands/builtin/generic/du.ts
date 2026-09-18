@@ -184,7 +184,7 @@ async function duHasContent(computeEntries: ComputeEntries, path: PathSpec): Pro
  * mount nested below it and a symlink below it are both namespace state, held
  * in another VFS or in no VFS at all. `statPath` is the channel that
  * knows, because it resolves through the dispatcher rather than one accessor,
- * and it is the same probe `find` classifies its start point with. Session
+ * and it is the same probe `find` classifies its start point with. SessionState
  * filtering rides along with it: a mount the session may not see contributes
  * no directory here, so absence stays the answer for it.
  *

@@ -33,7 +33,7 @@ import { resolvePath } from '../../utils/path.ts'
 import { makeAbortError } from '../abort.ts'
 import type { MountRegistry } from '../mount/registry.ts'
 import type { Namespace } from '../mount/namespace/namespace.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 import { homeDir } from '../session/shell_dirs.ts'
 import {
   Admitted,
@@ -78,7 +78,7 @@ const FORK_SCOPES: ReadonlySet<string> = new Set([
 interface Walked {
   readonly words: Word[]
   readonly redirects: Word[]
-  readonly session: Session
+  readonly session: SessionState
   readonly occurrence: Occurrence
 }
 
@@ -107,7 +107,7 @@ interface Judged {
  * which is how a `cd` reaches the commands after it without escaping the
  * child shell it ran in.
  */
-type Walk = Generator<Walked, Session>
+type Walk = Generator<Walked, SessionState>
 
 function unreadableWord(raw: string): Explanation {
   const reason = `cannot read ${raw} before the runtime expands it`
@@ -156,7 +156,7 @@ function fromRefusal(name: string, args: readonly string[], refusal: Refused): E
  */
 async function explained(
   ctx: CommandContext,
-  session: Session,
+  session: SessionState,
   registry: MountRegistry,
   asked: Deny | Ask | null,
 ): Promise<Explanation> {
@@ -211,7 +211,7 @@ async function explained(
 async function judgeWords(
   words: readonly Word[],
   occurrence: Occurrence,
-  session: Session,
+  session: SessionState,
   registry: MountRegistry,
   namespace: Namespace | null,
   agentId: string,
@@ -308,7 +308,7 @@ function wordsOf(node: TSNodeLike, home: string | null): Word[] {
  */
 function* walkNode(
   node: TSNodeLike,
-  session: Session,
+  session: SessionState,
   home: string | null,
   frame: Frame,
   reparse: (line: string) => TSNodeLike,
@@ -361,7 +361,7 @@ function* walkNode(
  */
 function* walkChildren(
   node: TSNodeLike,
-  session: Session,
+  session: SessionState,
   home: string | null,
   frame: Frame,
   reparse: (line: string) => TSNodeLike,
@@ -388,7 +388,7 @@ function* walkChildren(
  * gate cannot read (`cd "$d"`) leaves the cwd where it was, and the
  * per-command gate judges that command in the real one.
  */
-function afterCd(words: readonly Word[], session: Session): Session {
+function afterCd(words: readonly Word[], session: SessionState): SessionState {
   const head = words[0]
   const arg = words[1]
   if (words.length !== 2 || head === undefined || arg === undefined) return session
@@ -410,7 +410,7 @@ function afterCd(words: readonly Word[], session: Session): Session {
  */
 function* walkedLine(
   root: TSNodeLike,
-  session: Session,
+  session: SessionState,
   reparse: (line: string) => TSNodeLike,
   frame: Frame | null = null,
 ): Generator<Walked> {
@@ -538,7 +538,7 @@ function isVerdict(expl: Explanation): boolean {
  */
 export async function prejudgeLine(
   root: TSNodeLike,
-  session: Session,
+  session: SessionState,
   registry: MountRegistry,
   namespace: Namespace | null,
   agentId: string,
@@ -625,7 +625,7 @@ export async function prejudgeLine(
 async function verdictRefuses(
   judged: Judged,
   redirects: readonly PathSpec[],
-  walked: Session,
+  walked: SessionState,
   registry: MountRegistry,
   namespace: Namespace | null,
   agentId: string,
@@ -695,7 +695,7 @@ function definesFunction(node: TSNodeLike): boolean {
  */
 function soleLiteralCommand(
   node: TSNodeLike,
-  session: Session,
+  session: SessionState,
   frame: Frame,
   reparse: (line: string) => TSNodeLike,
 ): Walked | null {
@@ -787,7 +787,7 @@ async function commandRefused(
  */
 export async function unrefusedNodes(
   nodes: readonly TSNodeLike[],
-  session: Session,
+  session: SessionState,
   registry: MountRegistry,
   namespace: Namespace | null,
   agentId: string,
@@ -835,7 +835,7 @@ export async function unrefusedNodes(
  */
 export async function explainLine(
   root: TSNodeLike,
-  session: Session,
+  session: SessionState,
   registry: MountRegistry,
   namespace: Namespace | null,
   agentId: string,
@@ -861,7 +861,7 @@ export async function explainLine(
  */
 async function judgeLine(
   root: TSNodeLike,
-  session: Session,
+  session: SessionState,
   registry: MountRegistry,
   namespace: Namespace | null,
   agentId: string,

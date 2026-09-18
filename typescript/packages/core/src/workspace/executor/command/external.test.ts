@@ -35,7 +35,7 @@ import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { Limit, MountMode } from '../../../types.ts'
 import * as globs from '../../expand/globs.ts'
 import { Consumer, SHELL_NAMES, lookup, lookupAll } from '../../lookup/index.ts'
-import { Session } from '../../session/session.ts'
+import { SessionState } from '../../session/session.ts'
 import { sleep } from '../../abort.ts'
 import { Workspace } from '../../workspace/workspace.ts'
 import { getTestParser } from '../../fixtures/workspace_fixture.ts'
@@ -488,7 +488,7 @@ describe.each(['process', 'shell'] as const)('native %s builtin precedence', (ki
     const probe = kind === 'process' ? new ProcessProbe(options) : new ShellProbe(options)
     const ws = await workspace(probe)
     try {
-      const session = new Session({ sessionId: 'lookup' })
+      const session = new SessionState({ sessionId: 'lookup' })
       for (const name of SHELL_NAMES) {
         if (['python', 'python3', 'node', 'js'].includes(name)) continue
         expect(lookup(name, session, ws.registry), name).toBe(Consumer.SESSION)

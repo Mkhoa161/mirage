@@ -22,7 +22,7 @@ from mirage.commands.cli.builtin.git.commit import DEFAULT_EMAIL, identity
 from mirage.commands.spec.flag_view import FlagView
 from mirage.ops.types import SessionView
 from mirage.types import HiddenVars
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.state import seed_var, session_view
 
 SUMMARY = re.compile(rb"^\[main [0-9a-f]{7,}\] (.+)$", re.M)
@@ -34,7 +34,7 @@ def env_view(env: dict[str, str]) -> SessionView:
     Args:
         env (dict[str, str]): the variables the session holds.
     """
-    session = Session(session_id="s")
+    session = SessionState(session_id="s")
     for name, value in env.items():
         seed_var(session, name, value)
     return session_view(session)
@@ -193,8 +193,8 @@ def test_no_environment_leaves_the_stated_default():
 def test_a_hidden_variable_is_not_read_as_an_identity():
     # The door filters hidden names, so a hidden GIT_AUTHOR_NAME reads
     # as unset rather than leaking into a commit the session can see.
-    session = Session(session_id="s",
-                      hidden_vars=HiddenVars(patterns=("GIT_AUTHOR_*", )))
+    session = SessionState(session_id="s",
+                           hidden_vars=HiddenVars(patterns=("GIT_AUTHOR_*", )))
     seed_var(session, "GIT_AUTHOR_NAME", "Secret")
     seed_var(session, "GIT_AUTHOR_EMAIL", "s@x")
     assert identity(FlagView({}),

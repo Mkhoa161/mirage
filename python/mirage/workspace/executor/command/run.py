@@ -39,7 +39,7 @@ from mirage.workspace.mount import (MountCommandUnsupported, MountEntry,
                                     MountRegistry)
 from mirage.workspace.mount.namespace import Namespace
 from mirage.workspace.mount.namespace.overlay import merge_overlay_stat
-from mirage.workspace.session import Session, env_snapshot, session_view
+from mirage.workspace.session import SessionState, env_snapshot, session_view
 from mirage.workspace.types import ExecutionNode
 
 
@@ -337,7 +337,7 @@ def namespace_stat_overlay(namespace: Namespace, virtual: str,
 
 async def run_on_mount(
     registry: MountRegistry,
-    session: Session,
+    session: SessionState,
     dispatch: DispatchFn,
     namespace: Namespace | None,
     cmd_name: str,
@@ -360,7 +360,7 @@ async def run_on_mount(
 
     Args:
         registry (MountRegistry): Mount registry.
-        session (Session): Session providing cwd/env/session_id.
+        session (SessionState): Session providing cwd/env/session_id.
         dispatch (Callable): Workspace operation dispatcher.
         namespace (Namespace | None): Addressing authority for ls symlinks.
         cmd_name (str): Command name.

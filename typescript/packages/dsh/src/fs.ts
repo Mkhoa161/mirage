@@ -29,8 +29,8 @@ import type {
 import { DiskVFS } from '@struktoai/mirage-node'
 import { sessionPathAllowed } from '@struktoai/mirage-core/context/session_context'
 import type { MountEntry } from '@struktoai/mirage-core/workspace/mount/mount'
-import type { Session } from '@struktoai/mirage-core/workspace/session/session'
-import { SessionHandle } from '@struktoai/mirage-core/workspace/workspace/handle'
+import type { SessionState } from '@struktoai/mirage-core/workspace/session/session'
+import { Session } from '@struktoai/mirage-core/workspace/workspace/handle'
 import type { Ops } from '@struktoai/mirage-core/ops/ops'
 import { FileType } from '@struktoai/mirage-core/types'
 import type { FileStat } from '@struktoai/mirage-core/types'
@@ -217,8 +217,7 @@ export class MirageFileSystem extends FileSystem {
       await host.ensureSessionsLoaded()
       await host.namespace.ensureLoaded()
       this.host = host
-      this.fsOps =
-        this.sessionId === undefined ? host.vfs : new SessionHandle(host, this.sessionId).vfs
+      this.fsOps = this.sessionId === undefined ? host.vfs : new Session(host, this.sessionId).vfs
     }
     assertNotAborted(signal, operation)
     return this.fsOps
@@ -237,7 +236,7 @@ export class MirageFileSystem extends FileSystem {
    * the configured session, unless an ambient one of this workspace is
    * kept (a callback reaching `ctx.fs` from inside its `shell`).
    */
-  private session(): Session {
+  private session(): SessionState {
     if (this.host === null) {
       throw new Error('mirage: filesystem used before the workspace is ready')
     }

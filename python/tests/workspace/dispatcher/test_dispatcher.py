@@ -30,7 +30,7 @@ from mirage.workspace import Workspace
 from mirage.workspace.dispatcher import Dispatcher
 from mirage.workspace.dispatcher.dispatcher import _MountChannel
 from mirage.workspace.mount.mount import MountEntry
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 class DenyLocked(Policy):
@@ -204,9 +204,10 @@ async def test_structure_fallback_serves_when_no_policy_objects():
 def scoped_session():
     """Bind a session whose profile hides the parent mount's own content,
     leaving the mount nested below it reachable."""
-    session = Session(session_id="agent",
-                      hidden_paths=HiddenPaths(paths=("/data/locked/other",
-                                                      "/data/locked/f.txt")))
+    session = SessionState(
+        session_id="agent",
+        hidden_paths=HiddenPaths(paths=("/data/locked/other",
+                                        "/data/locked/f.txt")))
     token = set_current_session(session)
     yield session
     reset_current_session(token)

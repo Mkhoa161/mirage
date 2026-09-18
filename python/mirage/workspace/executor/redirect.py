@@ -37,7 +37,7 @@ from mirage.workspace.executor.builtins.exec.constants import (
     CLOSED, OPEN_FOR_READING, TO_STDERR, TO_STDIN, TO_STDOUT)
 from mirage.workspace.executor.builtins.exec.exec import read_open_source
 from mirage.workspace.executor.create import create_file
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.types import ExecutionNode
 
 logger = logging.getLogger(__name__)
@@ -68,12 +68,12 @@ class _Unreadable(Enum):
     TOKEN = auto()
 
 
-def _persistently_closed(session: Session) -> set[int]:
+def _persistently_closed(session: SessionState) -> set[int]:
     """The descriptors an ``exec`` closed for the shell, which a line's
     dup from refuses before the command runs.
 
     Args:
-        session (Session): shell session state.
+        session (SessionState): shell session state.
     """
     closed: set[int] = set()
     if session.exec_stdin_identity == CLOSED:
@@ -85,7 +85,7 @@ def _persistently_closed(session: Session) -> set[int]:
     return closed
 
 
-def _stdin_dest(session: Session) -> _Fd | str:
+def _stdin_dest(session: SessionState) -> _Fd | str:
     """Where a write through fd 0 lands, read off the shell's bindings.
 
     Its own read end, a closed descriptor and a file's read end take
@@ -95,7 +95,7 @@ def _stdin_dest(session: Session) -> _Fd | str:
     (`exec 0>f`) is the file.
 
     Args:
-        session (Session): shell session state.
+        session (SessionState): shell session state.
     """
     identity = session.exec_stdin_identity
     if (identity is None or identity == CLOSED
@@ -113,7 +113,7 @@ async def handle_redirect(
     dispatch,
     command: TSNodeLike | None,
     redirects: list[Redirect],
-    session: Session,
+    session: SessionState,
     stdin: ByteSource | None = None,
     call_stack: CallStack | None = None,
 ) -> tuple[ByteSource | None, IOResult, ExecutionNode]:
@@ -473,7 +473,7 @@ def _shell_failure(line: bytes) -> tuple[None, IOResult, ExecutionNode]:
 
 async def _noclobber_refusal(
     dispatch: DispatchFn,
-    session: Session,
+    session: SessionState,
     redirects: list[Redirect],
 ) -> tuple[None, IOResult, ExecutionNode] | None:
     """Refuse the whole statement when `set -C` bars one of its opens.
@@ -514,7 +514,7 @@ async def _noclobber_refusal(
 
     Args:
         dispatch (DispatchFn): op dispatcher.
-        session (Session): the session holding the shell options.
+        session (SessionState): the session holding the shell options.
         redirects (list[Redirect]): the statement's redirects, in the
             order they were written.
 

@@ -20,7 +20,7 @@ from mirage.types import MountMode
 from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.pipes import handle_pipe, handle_subshell
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.types import ExecutionNode
 
 
@@ -54,7 +54,7 @@ async def test_handle_pipe_passes_empty_stdin_when_left_returns_none():
         execute_node,
         [FakeNode("left"), FakeNode("right")],
         [False],
-        Session(session_id="t"),
+        SessionState(session_id="t"),
         None,
     )
     right = next(c for c in calls if c["text"] == "right")
@@ -75,7 +75,7 @@ async def test_handle_pipe_threads_stdout_to_next_stdin():
         execute_node,
         [FakeNode("a"), FakeNode("b")],
         [False],
-        Session(session_id="t"),
+        SessionState(session_id="t"),
         None,
     )
     assert seen[0] == b""
@@ -84,7 +84,7 @@ async def test_handle_pipe_threads_stdout_to_next_stdin():
 
 @pytest.mark.asyncio
 async def test_handle_subshell_seeds_last_exit_code_between_children():
-    session = Session(session_id="t")
+    session = SessionState(session_id="t")
     session.last_exit_code = 0
     seen: list[int] = []
 
@@ -106,7 +106,7 @@ async def test_handle_subshell_seeds_last_exit_code_between_children():
 
 @pytest.mark.asyncio
 async def test_each_segment_sees_the_status_the_pipeline_started_with():
-    session = Session(session_id="t")
+    session = SessionState(session_id="t")
     session.last_exit_code = 1
     seen: list[int] = []
 

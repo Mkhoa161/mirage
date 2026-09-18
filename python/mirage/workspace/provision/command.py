@@ -24,7 +24,7 @@ from mirage.types import PathSpec
 from mirage.utils.key_prefix import mount_key
 from mirage.workspace.mount import MountRegistry
 from mirage.workspace.mount.namespace import Namespace
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 async def _check_cache_hits(
@@ -82,7 +82,7 @@ def _mount_groups(registry: MountRegistry,
 async def handle_command_provision(
     registry: MountRegistry,
     parts: list[str | PathSpec],
-    session: Session,
+    session: SessionState,
     namespace: Namespace | None = None,
 ) -> ProvisionResult:
     """Estimate cost of a simple command.

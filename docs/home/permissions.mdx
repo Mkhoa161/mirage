@@ -65,7 +65,7 @@ creates the session when the id is new and adopts it as is otherwise;
 a profile for an existing session is refused, since a profile is set
 once. A session that names an explicit empty profile (`profile={}`)
 hides nothing, which is how a host seeds what the default profile
-hides. `SessionHandle(ws, "agent_a")` is the same pair for a session
+hides. `Session(ws, "agent_a")` is the same pair for a session
 that already exists, since it adopts rather than creates.
 
 Naming a session per call is the other half, and one rule decides

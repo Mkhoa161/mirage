@@ -21,16 +21,16 @@ import {
 import type {
   Ops,
   SessionExecuteOptions,
-  SessionHandle,
+  Session,
 } from "@struktoai/mirage-node";
 
-// One agent, one handle. `ws.session(id, { profile })` creates a session
+// One agent, one session. `ws.session(id, { profile })` creates a session
 // under a role and hands back its two doors bound together: `shell`
 // runs a shell line as the session and `vfs` is the op facade run as it.
 // Whichever door an agent's tools use, the same profile answers.
 //
 // Two roles read one world and see two filesystems. The reviewer's
-// profile hides /repo/secrets and its handle caps /repo at read, so the
+// profile hides /repo/secrets and its session caps /repo at read, so the
 // directory does not exist for it on either door and a write is a
 // read-only file system on either door. The editor may write, and a
 // deny rule keeps it out of the secrets by name, so the same file is
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
   );
   for (const seed of SEED) await ws.shell(seed);
 
-  const reviewer: SessionHandle = await ws.session("reviewer", {
+  const reviewer: Session = await ws.session("reviewer", {
     profile: "reviewer",
     mounts: { "/repo": "read" },
   });

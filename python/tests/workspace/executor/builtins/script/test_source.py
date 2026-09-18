@@ -5,13 +5,13 @@ from mirage.types import MountMode
 from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.script import handle_source
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 
 
 @pytest.mark.asyncio
 async def test_source_without_a_filename_is_a_usage_error():
     out, io, node = await handle_source(None, None, "",
-                                        Session(session_id="s1"))
+                                        SessionState(session_id="s1"))
     assert out is None
     assert io.exit_code == 2
     assert b"filename argument required" in (await materialize(io.stderr))

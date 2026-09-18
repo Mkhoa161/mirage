@@ -22,7 +22,7 @@ import { Precision, ProvisionResult } from '../../provision/types.ts'
 import { PathSpec } from '../../types.ts'
 import type { MountRegistry } from '../mount/registry.ts'
 import type { Namespace } from '../mount/namespace/namespace.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 import type { Accessor } from '../../accessor/base.ts'
 import type { VFS } from '../../vfs/base.ts'
 import type { CommandOpts } from '../../commands/config.ts'
@@ -95,7 +95,7 @@ function mountGroups(registry: MountRegistry, parts: readonly (string | PathSpec
 export async function handleCommandProvision(
   registry: MountRegistry,
   parts: readonly (string | PathSpec)[],
-  session: Session,
+  session: SessionState,
   namespace: Namespace | null = null,
 ): Promise<ProvisionResult> {
   if (parts.length === 0) return new ProvisionResult({ precision: Precision.EXACT })

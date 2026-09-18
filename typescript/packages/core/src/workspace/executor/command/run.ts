@@ -35,7 +35,7 @@ import { MountCommandUnsupported, type MountRegistry } from '../../mount/registr
 import type { Runtime } from '../../../runtime/base.ts'
 import { WorkspaceRuntime } from '../../../runtime/table.ts'
 import type { RouteDecision } from '../../../runtime/routing/index.ts'
-import type { Session } from '../../session/session.ts'
+import type { SessionState } from '../../session/session.ts'
 import type { DispatchFn } from '../../../runtime/types.ts'
 import { pathAllowed } from '../../../context/session_context.ts'
 import { CommandTimeoutError } from '../../../commands/errors.ts'
@@ -51,7 +51,7 @@ import type { CommandSpec } from '../../../commands/spec/types.ts'
 
 export interface RunOnMountCtx {
   registry: MountRegistry
-  session: Session
+  session: SessionState
   dispatch: DispatchFn
   namespace?: Namespace
   ensureOpen?: (vfs: VFS) => Promise<void>

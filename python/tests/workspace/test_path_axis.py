@@ -20,7 +20,7 @@ import pytest
 from mirage.context import reset_current_session, set_current_session
 from mirage.types import MountMode, PathSpec
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import SessionHandle, Workspace
+from mirage.workspace import Session, Workspace
 
 CARVE_PROFILE = {
     "mounts": {
@@ -150,7 +150,7 @@ def test_the_op_door_runs_as_the_default_session():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = SessionHandle(ws, host.session_id).vfs
+        door = Session(ws, host.session_id).vfs
         assert door.records is ws.vfs.records
         await door.mkdir("/data/vault")
         await door.write("/data/vault/secret", b"top\n")
@@ -197,7 +197,7 @@ def test_the_op_door_does_not_adopt_another_workspaces_session():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = SessionHandle(ws, host.session_id).vfs
+        door = Session(ws, host.session_id).vfs
         await door.mkdir("/data/vault")
         await door.write("/data/vault/secret", b"top\n")
         token = set_current_session(wide, other._session_mgr)
@@ -227,7 +227,7 @@ def test_the_op_door_does_not_follow_a_link_the_session_cannot_see():
     host = ws.create_session("host", profile={})
 
     async def run():
-        door = SessionHandle(ws, host.session_id).vfs
+        door = Session(ws, host.session_id).vfs
         await door.write("/data/pub.txt", b"pub\n")
         await door.mkdir("/data/vault")
         await door.symlink("/data/vault/lk", "/data/pub.txt")

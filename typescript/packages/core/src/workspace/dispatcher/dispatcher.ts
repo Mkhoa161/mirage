@@ -146,7 +146,7 @@ export class Dispatcher {
   private readonly policies: Policies
   // The snapshot drift queue rides along because this is the one door:
   // a strict restore's pending fingerprint checks must run before ANY
-  // op can touch a mount, and FUSE and the fs facade reach here
+  // op can touch a mount, and FUSE and the op facade reach here
   // without passing Workspace.dispatch.
   private readonly drift: DriftQueue | null
   readonly reconciler: Reconciler
@@ -193,7 +193,7 @@ export class Dispatcher {
     await this.namespace.ensureLoaded()
     // Pending fingerprint checks from a strict snapshot restore run
     // before the op can touch a mount, whichever surface called: FUSE
-    // and the fs facade come straight here, so a drain that lived any
+    // and the op facade come straight here, so a drain that lived any
     // higher would let a first write clobber drifted state. drain()
     // clears pending before it stats, so its own probes cannot recurse
     // into it.
@@ -324,7 +324,7 @@ export class Dispatcher {
     // return below: a cached read must be refused exactly like a cold
     // one, or the cache becomes a policy bypass. This dispatcher is the
     // one door in TypeScript: shell internals, programmatic access, the
-    // fs facade, and FUSE all end up here.
+    // op facade, and FUSE all end up here.
     const opWrite = POLICY_WRITE_OPS.has(opName)
     await preOpsGate(this.policies, opName, p, opWrite, mountPrefix, sessionId(), issuer)
     // A rename's destination is a create there: it passes the same gate

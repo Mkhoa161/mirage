@@ -84,7 +84,7 @@ export function weakerMode(a: MountMode, b: MountMode): MountMode {
 /**
  * What the data door treats as nonexistent for one session.
  *
- * A sibling of `Session.mountModes`: per-session narrowing that the
+ * A sibling of `SessionState.mountModes`: per-session narrowing that the
  * doors enforce, null-on-the-session means unrestricted. Hiding is
  * "does not exist", never "forbidden" — matching paths answer ENOENT
  * and drop out of listings, which is what makes a hide the way a profile
