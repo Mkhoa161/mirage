@@ -97,7 +97,7 @@ async def line(role: str, handle: SessionHandle | Workspace, cmd: str,
         note (str): why it matters.
     """
     res = await handle.shell(cmd)
-    show(role, "execute", cmd,
+    show(role, "shell", cmd,
          shell(res.stdout or b"", res.stderr or b"", res.exit_code), note)
 
 

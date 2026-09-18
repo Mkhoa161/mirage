@@ -155,7 +155,7 @@ async function startRestFront(token: string): Promise<{ url: string; close: () =
 // ── BROWSER CODE ────────────────────────────────────────────────
 
 interface Shell {
-  execute: (cmd: string) => Promise<{ stdoutText: string; stderrText: string; exitCode: number }>
+  shell: (cmd: string) => Promise<{ stdoutText: string; stderrText: string; exitCode: number }>
 }
 
 async function run(ws: Shell, cmd: string): Promise<void> {

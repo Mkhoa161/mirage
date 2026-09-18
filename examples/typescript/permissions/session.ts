@@ -86,7 +86,7 @@ function codeOf(err: unknown): string {
 type PlainExecute = SessionExecuteOptions & { provision?: false };
 
 interface Doors {
-  execute(
+  shell(
     cmd: string,
     options?: PlainExecute,
   ): Promise<{
@@ -107,7 +107,7 @@ async function line(
   const res = await handle.shell(cmd, options);
   const out = res.stdout === null ? "" : dec.decode(res.stdout);
   const err = res.stderr === null ? "" : dec.decode(res.stderr);
-  show(role, "execute", cmd, shell(out, err, res.exitCode), note);
+  show(role, "shell", cmd, shell(out, err, res.exitCode), note);
 }
 
 async function read(
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
   });
   const editor = await ws.session("editor", { profile: "editor" });
   const host: Doors = {
-    execute: (cmd, options) => ws.shell(cmd, options),
+    shell: (cmd, options) => ws.shell(cmd, options),
     fs: ws.fs,
   };
 
