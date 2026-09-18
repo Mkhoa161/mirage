@@ -118,9 +118,9 @@ def test_ops_blocks_a_programmatic_read_of_a_hidden_mount():
     async def run():
         token = set_current_session(sess)
         try:
-            assert await ws.fs.read("/a/x.txt") == b"public"
+            assert await ws.vfs.read("/a/x.txt") == b"public"
             with pytest.raises(FileNotFoundError):
-                await ws.fs.read("/b/secret.txt")
+                await ws.vfs.read("/b/secret.txt")
         finally:
             reset_current_session(token)
 
@@ -431,11 +431,11 @@ def test_ops_facade_respects_read_grant():
     async def run():
         token = set_current_session(sess)
         try:
-            assert await ws.fs.read("/a/x.txt") == b"hi"
+            assert await ws.vfs.read("/a/x.txt") == b"hi"
             with pytest.raises(ReadOnlyError, match="Read-only"):
-                await ws.fs.write("/a/y.txt", b"leaked")
+                await ws.vfs.write("/a/y.txt", b"leaked")
             with pytest.raises(ReadOnlyError, match="Read-only"):
-                await ws.fs.rename("/a/x.txt", "/a/z.txt")
+                await ws.vfs.rename("/a/x.txt", "/a/z.txt")
         finally:
             reset_current_session(token)
 

@@ -123,7 +123,7 @@ describe('character device commands', () => {
   it('does not apply the device safeguard to adjacent regular files', async () => {
     const ws = await makeWs()
     const size = (8 << 20) + 1
-    await ws.fs.writeFile('/data/large.bin', new Uint8Array(size))
+    await ws.vfs.writeFile('/data/large.bin', new Uint8Array(size))
     const result = await ws.shell('cat /dev/null /data/large.bin | wc -c')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText).toBe(`${String(size)}\n`)

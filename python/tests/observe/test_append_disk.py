@@ -23,7 +23,7 @@ from mirage.vfs.disk import DiskVFS
 def _make_ops(tmp_path: Path) -> tuple[Ops, DiskVFS]:
     disk = DiskVFS(root=tmp_path)
     ws = Workspace({"/disk/": disk}, mode=MountMode.WRITE)
-    return ws.fs, disk
+    return ws.vfs, disk
 
 
 def test_append_creates_file(tmp_path):

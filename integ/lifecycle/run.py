@@ -160,13 +160,13 @@ async def action(ws: Workspace, step: dict[str, Any],
         policy = policies.pop(step["id"], None)
         return ws.policies.remove(policy) if policy is not None else False
     elif op == "write":
-        await ws.fs.write(step["path"], step["data"].encode())
+        await ws.vfs.write(step["path"], step["data"].encode())
     elif op == "read":
-        return (await ws.fs.read(step["path"])).decode()
+        return (await ws.vfs.read(step["path"])).decode()
     elif op == "readdir":
-        return sorted(await ws.fs.readdir(step["path"]))
+        return sorted(await ws.vfs.readdir(step["path"]))
     elif op == "stat":
-        row = await ws.fs.stat(step["path"])
+        row = await ws.vfs.stat(step["path"])
         return {"type": row.type.value, "size": row.size}
     elif op == "exec":
         result = await ws.shell(step["command"],

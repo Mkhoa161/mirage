@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   for (const e of seedEntries) {
     const raw = readFileSync(join(DATA_DIR, e.name))
     const bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
-    await seedWs.fs.writeFile('/data/' + e.name, bytes)
+    await seedWs.vfs.writeFile('/data/' + e.name, bytes)
   }
   await seedWs.close()
 

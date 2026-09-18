@@ -26,7 +26,7 @@ from mirage.utils.key_prefix import mount_key
 from mirage.utils.path import CycleError
 from mirage.workspace.mount import MountRegistry
 from mirage.workspace.mount.mount import MountEntry
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 # How deep a `**` descends. bash has no cap, but every level here is one
 # listing per directory, so an accidental `**` over a large tree is
@@ -60,11 +60,11 @@ class GlobOptions:
         return self.nullglob or self.failglob or self.globstar
 
 
-def glob_options(session: Session) -> GlobOptions:
+def glob_options(session: SessionState) -> GlobOptions:
     """The session's pathname-expansion options.
 
     Args:
-        session (Session): the session holding the `shopt` table.
+        session (SessionState): the session holding the `shopt` table.
     """
     return GlobOptions(nullglob=session.shopts.get("nullglob",
                                                    SHOPT_DEFAULTS["nullglob"]),

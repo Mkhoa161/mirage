@@ -29,15 +29,15 @@ import {
   verbVisible,
   walksMounts,
 } from './index.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import { Workspace } from '../workspace/workspace.ts'
 
-function fixture(): { session: Session; ws: Workspace } {
+function fixture(): { session: SessionState; ws: Workspace } {
   const ram = new RAMVFS()
   const registry = new OpsRegistry()
   registry.registerVfs(ram)
   const ws = new Workspace({ '/ram': ram }, { mode: MountMode.WRITE, ops: registry })
-  return { session: new Session({ sessionId: 't' }), ws }
+  return { session: new SessionState({ sessionId: 't' }), ws }
 }
 
 function noopVerb(): [null, IOResult] {

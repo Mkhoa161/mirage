@@ -48,12 +48,12 @@ function shQuote(value: string): string {
 async function ensureParents(ws: Workspace, path: string): Promise<void> {
   const parent = gnuDirname(path)
   if (parent === '/' || parent === '' || parent === '.') return
-  if (await ws.fs.exists(parent)) return
+  if (await ws.vfs.exists(parent)) return
   await ensureParents(ws, parent)
   try {
-    await ws.fs.mkdir(parent)
+    await ws.vfs.mkdir(parent)
   } catch (err) {
-    if (!(await ws.fs.exists(parent))) throw err
+    if (!(await ws.vfs.exists(parent))) throw err
   }
 }
 
@@ -80,7 +80,7 @@ export class MirageToolOperations {
     try {
       data = await this.versions.read(path)
     } catch (err) {
-      if (!(await this.ws.fs.exists(path))) {
+      if (!(await this.ws.vfs.exists(path))) {
         return errorResult(`Error: file '${path}' not found`)
       }
       return errorResult(`Error: ${errorMessage(err)}`)
@@ -94,7 +94,7 @@ export class MirageToolOperations {
   }
 
   async write(path: string, content: string): Promise<ToolResult> {
-    if (await this.ws.fs.exists(path)) {
+    if (await this.ws.vfs.exists(path)) {
       return errorResult(`Error: file '${path}' already exists`)
     }
     await ensureParents(this.ws, path)
@@ -113,7 +113,7 @@ export class MirageToolOperations {
       content = (await this.versions.readForEdit(path)).toString('utf8')
     } catch (err) {
       if (err instanceof StaleMirageFileError) return errorResult(`Error: ${err.message}`)
-      if (!(await this.ws.fs.exists(path))) {
+      if (!(await this.ws.vfs.exists(path))) {
         return errorResult(`Error: file '${path}' not found`)
       }
       return errorResult(`Error: ${errorMessage(err)}`)

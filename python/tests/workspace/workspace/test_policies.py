@@ -25,7 +25,7 @@ from mirage.policy.profile import ProfilePolicy, SessionProfile
 from mirage.runtime.types import ScriptSource
 from mirage.types import Limit, MountMode, OnExceed, Refusal
 from mirage.vfs.ram import RAMVFS
-from mirage.workspace import SessionHandle
+from mirage.workspace import Session
 
 from mirage.policy.profile import (  # isort: skip
     CommandsBlock, PathsBlock)
@@ -61,7 +61,7 @@ async def test_workspace_guards_refuse_before_backend_io():
     )
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"keep\n")
+        await ws.vfs.write("/data/prod/x.txt", b"keep\n")
         result = await ws.shell("rm /data/prod/x.txt")
         assert result.exit_code == 1
         assert result.stderr == (b"rm: /data/prod/x.txt: "
@@ -171,7 +171,7 @@ class ReadOnlyProd(Policy):
 
 @pytest.mark.asyncio
 async def test_path_guards_hold_at_the_programmatic_door():
-    # ws.fs is the same seam FUSE comes through; a path-only guard
+    # ws.vfs is the same seam FUSE comes through; a path-only guard
     # must refuse it, not just shell commands (#675).
     ws = Workspace(
         {"/data/": RAMVFS()},
@@ -182,13 +182,13 @@ async def test_path_guards_hold_at_the_programmatic_door():
     )
     try:
         await ws.shell("mkdir -p /data/other")
-        await ws.fs.write("/data/other/ok.txt", b"fine\n")
+        await ws.vfs.write("/data/other/ok.txt", b"fine\n")
         with pytest.raises(PermissionError) as excinfo:
-            await ws.fs.write("/data/prod/x.txt", b"nope\n")
+            await ws.vfs.write("/data/prod/x.txt", b"nope\n")
         assert excinfo.value.errno == errno.EACCES
         assert "prod is protected" in str(excinfo.value)
         with pytest.raises(PermissionError):
-            await ws.fs.read("/data/prod/x.txt")
+            await ws.vfs.read("/data/prod/x.txt")
     finally:
         await ws.close()
 
@@ -208,7 +208,7 @@ async def test_touch_on_an_existing_file_is_a_write_at_the_op_door():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"keep\n")
+        await ws.vfs.write("/data/prod/x.txt", b"keep\n")
         ws.policies.add(ReadOnlyProd())
         result = await ws.shell("touch /data/prod/x.txt")
         assert result.exit_code != 0
@@ -226,9 +226,9 @@ async def test_post_ops_deny_still_records_the_completed_write():
         await ws.shell("mkdir -p /data/prod")
         ws.policies.add(SuppressProdWrites())
         with pytest.raises(PermissionError):
-            await ws.fs.write("/data/prod/x.txt", b"data\n")
-        assert any(r.op == "write" for r in ws.fs.records)
-        assert await ws.fs.read("/data/prod/x.txt") == b"data\n"
+            await ws.vfs.write("/data/prod/x.txt", b"data\n")
+        assert any(r.op == "write" for r in ws.vfs.records)
+        assert await ws.vfs.read("/data/prod/x.txt") == b"data\n"
     finally:
         await ws.close()
 
@@ -249,12 +249,12 @@ async def test_post_ops_deny_records_the_bytes_a_denied_read_moved():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"0123456789")
-        ws.fs.records.clear()
+        await ws.vfs.write("/data/prod/x.txt", b"0123456789")
+        ws.vfs.records.clear()
         ws.policies.add(SuppressProdReads())
         with pytest.raises(PermissionError):
-            await ws.fs.read("/data/prod/x.txt")
-        reads = [r for r in ws.fs.records if r.op == "read"]
+            await ws.vfs.read("/data/prod/x.txt")
+        reads = [r for r in ws.vfs.records if r.op == "read"]
         assert len(reads) == 1
         assert reads[0].bytes == 10
     finally:
@@ -282,11 +282,11 @@ async def test_a_capped_read_records_what_the_backend_moved():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"0123456789")
-        ws.fs.records.clear()
+        await ws.vfs.write("/data/prod/x.txt", b"0123456789")
+        ws.vfs.records.clear()
         ws.policies.add(CapProdReads())
-        assert await ws.fs.read("/data/prod/x.txt") == b"012"
-        reads = [r for r in ws.fs.records if r.op == "read"]
+        assert await ws.vfs.read("/data/prod/x.txt") == b"012"
+        reads = [r for r in ws.vfs.records if r.op == "read"]
         assert [r.bytes for r in reads] == [10]
     finally:
         await ws.close()
@@ -300,18 +300,18 @@ async def test_a_denied_warm_read_is_not_counted_as_network_traffic():
     ws = Workspace({"/data/": CachingRAM()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"0123456789")
+        await ws.vfs.write("/data/prod/x.txt", b"0123456789")
         await ws.apply_io(
             IOResult(reads={"/data/prod/x.txt": b"0123456789"},
                      cache=["/data/prod/x.txt"]))
-        ws.fs.records.clear()
+        ws.vfs.records.clear()
         ws.policies.add(SuppressProdReads())
         with pytest.raises(PermissionError):
-            await ws.fs.read("/data/prod/x.txt")
-        rec = ws.fs.records[-1]
+            await ws.vfs.read("/data/prod/x.txt")
+        rec = ws.vfs.records[-1]
         assert rec.source == "ram"
         assert rec.is_cache is True
-        assert ws.fs.network_bytes == 0
+        assert ws.vfs.network_bytes == 0
     finally:
         await ws.close()
 
@@ -337,14 +337,14 @@ async def test_a_hard_capped_read_records_what_the_backend_moved():
     ws = Workspace({"/data/": ColdRemote()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"0123456789")
-        ws.fs.records.clear()
+        await ws.vfs.write("/data/prod/x.txt", b"0123456789")
+        ws.vfs.records.clear()
         ws.policies.add(HardCapProdReads())
         with pytest.raises(LimitExceededError):
-            await ws.fs.read("/data/prod/x.txt")
-        reads = [r for r in ws.fs.records if r.op == "read"]
+            await ws.vfs.read("/data/prod/x.txt")
+        reads = [r for r in ws.vfs.records if r.op == "read"]
         assert [(r.source, r.bytes) for r in reads] == [("s3", 10)]
-        assert ws.fs.network_bytes == 10
+        assert ws.vfs.network_bytes == 10
     finally:
         await ws.close()
 
@@ -356,18 +356,18 @@ async def test_a_hard_capped_warm_read_is_not_network_traffic():
     ws = Workspace({"/data/": CachingRAM()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/x.txt", b"0123456789")
+        await ws.vfs.write("/data/prod/x.txt", b"0123456789")
         await ws.apply_io(
             IOResult(reads={"/data/prod/x.txt": b"0123456789"},
                      cache=["/data/prod/x.txt"]))
-        ws.fs.records.clear()
+        ws.vfs.records.clear()
         ws.policies.add(HardCapProdReads())
         with pytest.raises(LimitExceededError):
-            await ws.fs.read("/data/prod/x.txt")
-        rec = ws.fs.records[-1]
+            await ws.vfs.read("/data/prod/x.txt")
+        rec = ws.vfs.records[-1]
         assert rec.source == "ram"
         assert rec.is_cache is True
-        assert ws.fs.network_bytes == 0
+        assert ws.vfs.network_bytes == 0
     finally:
         await ws.close()
 
@@ -390,14 +390,14 @@ async def test_a_committed_write_is_recorded_when_bookkeeping_fails():
     ws = Workspace({"/data/": ColdRemote()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        ws.fs.records.clear()
+        ws.vfs.records.clear()
         ws.policies.add(BrokenPostOps())
         with pytest.raises(PolicyError):
-            await ws.fs.write("/data/prod/x.txt", b"123456")
-        assert await ws.fs.read("/data/prod/x.txt") == b"123456"
-        writes = [r for r in ws.fs.records if r.op == "write"]
+            await ws.vfs.write("/data/prod/x.txt", b"123456")
+        assert await ws.vfs.read("/data/prod/x.txt") == b"123456"
+        writes = [r for r in ws.vfs.records if r.op == "write"]
         assert [(r.source, r.bytes) for r in writes] == [("s3", 6)]
-        assert ws.fs.network_bytes >= 6
+        assert ws.vfs.network_bytes >= 6
     finally:
         await ws.close()
 
@@ -442,14 +442,14 @@ async def test_pre_ops_binds_op_doors_and_command_tier_io():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/secret.txt", b"sealed\n")
-        await ws.fs.write("/data/prod/keep.txt", b"keep\n")
+        await ws.vfs.write("/data/secret.txt", b"sealed\n")
+        await ws.vfs.write("/data/prod/keep.txt", b"keep\n")
         ws.policies.add(SealedPaths())
 
         # The doors hold: the ops facade, and a dispatcher-routed
         # redirect write.
         with pytest.raises(PermissionError):
-            await ws.fs.read("/data/secret.txt")
+            await ws.vfs.read("/data/secret.txt")
         redirect = await ws.shell("echo hi > /data/prod/new.txt")
         assert redirect.exit_code != 0
 
@@ -477,8 +477,8 @@ async def test_pre_ops_holds_walks_and_lazy_readers():
     # stream) still answers through the wrap-time capture.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.fs.write("/data/secret.txt", b"sealed\n")
-        await ws.fs.write("/data/ok.txt", b"has sealed word\n")
+        await ws.vfs.write("/data/secret.txt", b"sealed\n")
+        await ws.vfs.write("/data/ok.txt", b"has sealed word\n")
         ws.policies.add(SealedPaths())
 
         walked = await ws.shell("grep -r sealed /data")
@@ -505,7 +505,7 @@ async def test_pre_ops_denied_entries_still_list_and_stat():
     # what fails.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.fs.write("/data/secret.txt", b"sealed\n")
+        await ws.vfs.write("/data/secret.txt", b"sealed\n")
         ws.policies.add(SealedPaths())
         listing = await ws.shell("ls -l /data")
         assert listing.exit_code == 0
@@ -536,8 +536,8 @@ async def test_shell_rm_r_admits_through_pre_ops():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod/sub")
-        await ws.fs.write("/data/prod/a.txt", b"a\n")
-        await ws.fs.write("/data/prod/sub/b.txt", b"b\n")
+        await ws.vfs.write("/data/prod/a.txt", b"a\n")
+        await ws.vfs.write("/data/prod/sub/b.txt", b"b\n")
         rec = OpRecorder()
         ws.policies.add(rec)
         removed = await ws.shell("rm -r /data/prod")
@@ -550,7 +550,7 @@ async def test_shell_rm_r_admits_through_pre_ops():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/prod")
-        await ws.fs.write("/data/prod/a.txt", b"a\n")
+        await ws.vfs.write("/data/prod/a.txt", b"a\n")
         ws.policies.add(SealedPaths())
         refused = await ws.shell("rm -r /data/prod")
         assert refused.exit_code != 0
@@ -568,7 +568,7 @@ async def test_find_delete_admits_each_deletion_exactly_once():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.shell("mkdir -p /data/d")
-        await ws.fs.write("/data/d/x.txt", b"x\n")
+        await ws.vfs.write("/data/d/x.txt", b"x\n")
         rec = OpRecorder()
         ws.policies.add(rec)
         removed = await ws.shell("find /data/d -name x.txt -delete")
@@ -589,7 +589,7 @@ async def test_pre_ops_sees_the_session_on_the_command_tier():
     # both.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
-        await ws.fs.write("/data/ok.txt", b"fine\n")
+        await ws.vfs.write("/data/ok.txt", b"fine\n")
         rec = SessionRecorder()
         ws.policies.add(rec)
         assert (await ws.shell("cat /data/ok.txt")).exit_code == 0
@@ -633,7 +633,7 @@ async def test_user_limit_policy_caps_line_output():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapLines())
-        await ws.fs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
+        await ws.vfs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
         r = await ws.shell("cat /data/big.txt")
         assert (await r.stdout_str()).count("\n") == 2
         assert "output truncated" in (await r.stderr_str())
@@ -643,13 +643,13 @@ async def test_user_limit_policy_caps_line_output():
 
 @pytest.mark.asyncio
 async def test_user_limit_policy_caps_op_reads():
-    # A post_ops Limit bounds the programmatic door too: ws.fs (and
+    # A post_ops Limit bounds the programmatic door too: ws.vfs (and
     # FUSE behind it) serve capped bytes.
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapReadBytes())
-        await ws.fs.write("/data/f.txt", b"hello world")
-        assert await ws.fs.read("/data/f.txt") == b"hell"
+        await ws.vfs.write("/data/f.txt", b"hello world")
+        assert await ws.vfs.read("/data/f.txt") == b"hell"
     finally:
         await ws.close()
 
@@ -690,7 +690,7 @@ async def test_two_limit_policies_merge_to_the_tightest_end_to_end():
     try:
         ws.policies.add(CapLines())
         ws.policies.add(SuppressNothingCapThree())
-        await ws.fs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
+        await ws.vfs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
         r = await ws.shell("cat /data/big.txt")
         # CapLines says 2, SuppressNothingCapThree says 3: tightest wins.
         assert (await r.stdout_str()).count("\n") == 2
@@ -711,7 +711,7 @@ async def test_error_mode_limit_fails_the_line():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapBytesHard())
-        await ws.fs.write("/data/f.txt", b"hello world\n")
+        await ws.vfs.write("/data/f.txt", b"hello world\n")
         r = await ws.shell("cat /data/f.txt")
         assert r.exit_code == 1
         assert r.stdout is None or await r.stdout_str() == ""
@@ -730,9 +730,9 @@ async def test_a_post_ops_deny_beats_a_limit():
     try:
         ws.policies.add(CapReadBytes())
         ws.policies.add(DenyReads())
-        await ws.fs.write("/data/f.txt", b"hello world")
+        await ws.vfs.write("/data/f.txt", b"hello world")
         with pytest.raises(PermissionError) as excinfo:
-            await ws.fs.read("/data/f.txt")
+            await ws.vfs.read("/data/f.txt")
         assert "reads are suppressed" in str(excinfo.value)
     finally:
         await ws.close()
@@ -763,7 +763,7 @@ async def test_post_execute_sees_the_rightmost_producer():
     try:
         spy = SeeProducer()
         ws.policies.add(spy)
-        await ws.fs.write("/data/f.txt", b"a\nb\n")
+        await ws.vfs.write("/data/f.txt", b"a\nb\n")
         await ws.shell("cat /data/f.txt | wc -l")
         await ws.shell("cat /data/f.txt ; head -n 1 /data/f.txt")
         await ws.shell("false || cat /data/f.txt")
@@ -784,8 +784,7 @@ async def test_profile_hides_bind_every_session_including_the_default():
                                                             "*.key"))))
     # The facade runs as the default session too, so the seed goes
     # through a session with an explicit empty profile, the host's door.
-    host = SessionHandle(ws,
-                         ws.create_session("host", profile={}).session_id).fs
+    host = Session(ws, ws.create_session("host", profile={}).session_id).vfs
     try:
         await ws.shell("mkdir -p /data/finance /data/pub")
         await host.write("/data/pub/a.txt", b"a\n")
@@ -828,8 +827,7 @@ async def test_a_mount_sections_hides_are_written_in_full():
                 }
             }
         })
-    host = SessionHandle(ws,
-                         ws.create_session("host", profile={}).session_id).fs
+    host = Session(ws, ws.create_session("host", profile={}).session_id).vfs
     try:
         await ws.shell("mkdir -p /repo/certs /other")
         await host.write("/repo/.env", b"S=1\n")

@@ -72,7 +72,7 @@ def test_fuse_symlink_on_hidden_turf_is_refused():
     # namespace table directly, at a layer no session view covers.
     ws = _two_mounts()
     sess = ws.create_session("agent", profile={"paths": {"hide": ["/b"]}})
-    core = MountCore(ws.fs, session=sess)
+    core = MountCore(ws.vfs, session=sess)
     with pytest.raises(FileNotFoundError):
         core.symlink("/b/lk", "/a/x.txt")
     assert not ws.namespace.is_link("/b/lk")
@@ -81,7 +81,7 @@ def test_fuse_symlink_on_hidden_turf_is_refused():
 def test_fuse_symlink_on_visible_turf_still_works():
     ws = _two_mounts()
     sess = ws.create_session("agent")
-    core = MountCore(ws.fs, session=sess)
+    core = MountCore(ws.vfs, session=sess)
     core.symlink("/a/lk", "x.txt")
     assert ws.namespace.readlink("/a/lk") == "x.txt"
 
@@ -108,7 +108,7 @@ def test_ln_leaves_an_op_record():
 
     io = asyncio.run(run())
     assert io.exit_code == 0
-    assert any(r.op == "symlink" and r.path == "/a/lk" for r in ws.fs.records)
+    assert any(r.op == "symlink" and r.path == "/a/lk" for r in ws.vfs.records)
 
 
 def test_scoped_shell_ln_onto_hidden_turf_is_refused():
@@ -182,8 +182,8 @@ def test_symlink_and_readlink_answer_on_the_ops_facade():
     ws = _two_mounts()
 
     async def run():
-        await ws.fs.symlink("/a/lk", "x.txt")
-        return await ws.fs.readlink("/a/lk")
+        await ws.vfs.symlink("/a/lk", "x.txt")
+        return await ws.vfs.readlink("/a/lk")
 
     assert asyncio.run(run()) == "x.txt"
     assert ws.namespace.readlink("/a/lk") == "x.txt"
@@ -239,7 +239,7 @@ def test_readlink_on_a_non_link_raises_einval():
     ws = _two_mounts()
 
     async def run():
-        return await ws.fs.readlink("/a/x.txt")
+        return await ws.vfs.readlink("/a/x.txt")
 
     with pytest.raises(OSError):
         asyncio.run(run())
@@ -422,13 +422,13 @@ def test_facade_symlink_respects_the_sessions_view():
     async def run():
         token = set_current_session(sess)
         try:
-            await ws.fs.symlink("/a/lk", "x.txt")
+            await ws.vfs.symlink("/a/lk", "x.txt")
             # The hidden mount does not exist for the session, so a
             # create under it answers ENOENT as every read does; only a
             # create at a hidden name inside a visible directory is
             # EACCES.
             with pytest.raises(FileNotFoundError):
-                await ws.fs.symlink("/b/lk", "y.txt")
+                await ws.vfs.symlink("/b/lk", "y.txt")
         finally:
             reset_current_session(token)
 
@@ -1147,11 +1147,11 @@ def test_ops_read_of_a_hidden_path_is_enoent():
         token = set_current_session(sess)
         try:
             with pytest.raises(FileNotFoundError):
-                await ws.fs.read("/a/secrets/token.txt")
+                await ws.vfs.read("/a/secrets/token.txt")
             with pytest.raises(FileNotFoundError):
-                await ws.fs.stat("/a/secrets")
+                await ws.vfs.stat("/a/secrets")
             with pytest.raises(FileNotFoundError):
-                await ws.fs.read("/a/note.key")
+                await ws.vfs.read("/a/note.key")
         finally:
             reset_current_session(token)
 
@@ -1165,7 +1165,7 @@ def test_ops_readdir_drops_hidden_names():
     async def run():
         token = set_current_session(sess)
         try:
-            return await ws.fs.readdir("/a")
+            return await ws.vfs.readdir("/a")
         finally:
             reset_current_session(token)
 
@@ -1182,7 +1182,7 @@ def test_ops_exists_says_a_hidden_path_does_not():
     async def run():
         token = set_current_session(sess)
         try:
-            return await ws.fs.exists("/a/secrets/token.txt")
+            return await ws.vfs.exists("/a/secrets/token.txt")
         finally:
             reset_current_session(token)
 
@@ -1201,11 +1201,11 @@ def test_ops_create_into_hidden_space_never_lands():
         token = set_current_session(sess)
         try:
             with pytest.raises(FileNotFoundError):
-                await ws.fs.write("/a/secrets/new.txt", b"x")
+                await ws.vfs.write("/a/secrets/new.txt", b"x")
             with pytest.raises(FileNotFoundError):
-                await ws.fs.mkdir("/a/secrets/sub")
+                await ws.vfs.mkdir("/a/secrets/sub")
             with pytest.raises(PermissionError):
-                await ws.fs.write("/a/new.key", b"x")
+                await ws.vfs.write("/a/new.key", b"x")
         finally:
             reset_current_session(token)
 
@@ -1219,8 +1219,8 @@ def test_unscoped_session_sees_everything():
     ws = _hidden_paths_ws()
 
     async def run():
-        listing = await ws.fs.readdir("/a")
-        body = await ws.fs.read("/a/secrets/token.txt")
+        listing = await ws.vfs.readdir("/a")
+        body = await ws.vfs.read("/a/secrets/token.txt")
         return listing, body
 
     listing, body = asyncio.run(run())
@@ -1234,7 +1234,7 @@ def test_fuse_hides_hidden_paths():
     # scoped shell about what exists.
     ws = _hidden_paths_ws()
     sess = ws.get_session("agent")
-    core = MountCore(ws.fs, session=sess)
+    core = MountCore(ws.vfs, session=sess)
     with pytest.raises(FileNotFoundError):
         core.getattr("/a/secrets/token.txt")
     names = core.readdir("/a")

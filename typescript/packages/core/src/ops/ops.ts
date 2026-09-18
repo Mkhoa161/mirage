@@ -62,7 +62,7 @@ function payloadBytes(result: unknown, args: readonly unknown[]): number {
 /**
  * The typed op facade FUSE and programmatic embedders call.
  *
- * Every op delegates to the workspace dispatcher, so `ws.fs` walks the
+ * Every op delegates to the workspace dispatcher, so `ws.vfs` walks the
  * same pipeline as a shell command: link follow, session grants,
  * admission policies, cache read-through, namespace structure, and
  * post-write invalidation all fire once, at that one door. The facade
@@ -75,12 +75,12 @@ function payloadBytes(result: unknown, args: readonly unknown[]): number {
  * The facade runs as one session, `sessionId`, through `bind`: every
  * op is judged under that session's profile (hides, mount modes,
  * grants) exactly as a shell line in it would be, so an agent whose
- * file tool reads through `ws.fs` is confined the way its shell is.
+ * file tool reads through `ws.vfs` is confined the way its shell is.
  * null names the workspace's default session as it is when the op
  * runs, since a snapshot load can rename it. A session already bound
  * when the op arrives (a command's own runtime, a kernel mount serving
  * one session) is kept, so the facade never widens the caller's view,
- * and the record names the session that judged the op. `SessionHandle`
+ * and the record names the session that judged the op. `Session`
  * derives a facade for another session over the same ledger.
  *
  * Every op also takes a trailing `sessionId` for the one-call case,
@@ -127,9 +127,9 @@ export class Ops {
    * The same facade run as another session, over the same ledger, so
    * the workspace-wide account stays one list.
    *
-   * @internal The mechanism behind `SessionHandle.fs`, not a door of
+   * @internal The mechanism behind `Session.vfs`, not a door of
    * its own: a host binds a session with `ws.session(id)` (creating it
-   * when the id is new) or `new SessionHandle(ws, id)` (adopting one
+   * when the id is new) or `new Session(ws, id)` (adopting one
    * that exists), so there is one way to say it rather than two.
    * TypeScript has no package-private, so this stays reachable; it is
    * not part of the supported surface. Python spells it

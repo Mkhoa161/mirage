@@ -21,7 +21,7 @@ from mirage import RAMVFS, MountMode, Workspace
 from mirage.shell.node_kind import pipeline_transparent
 from mirage.shell.parse import parse
 from mirage.workspace.executor.statement import record_status
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 _SRC = pathlib.Path(__file__).resolve().parents[3] / "mirage"
 
@@ -40,7 +40,7 @@ def test_every_status_write_goes_through_the_door():
 
 
 def test_record_status_claims_a_parked_pipeline():
-    s = Session(session_id="s")
+    s = SessionState(session_id="s")
     s._pipe_status_pending = (1, 0)
     record_status(s, 0)
     assert (s.last_exit_code, s.pipe_status) == (0, (1, 0))
@@ -50,7 +50,7 @@ def test_record_status_claims_a_parked_pipeline():
 
 
 def test_transparent_statement_keeps_the_inner_record():
-    s = Session(session_id="s")
+    s = SessionState(session_id="s")
     record_status(s, 1)
     s._pipe_status_pending = (1, 0)
     record_status(s, 0, transparent=True)

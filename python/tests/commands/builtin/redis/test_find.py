@@ -37,8 +37,8 @@ async def workspace():
 
 @pytest.mark.asyncio
 async def test_find_name_glob(workspace):
-    await workspace.fs.write("/hello.txt", b"hi")
-    await workspace.fs.write("/world.py", b"hi")
+    await workspace.vfs.write("/hello.txt", b"hi")
+    await workspace.vfs.write("/world.py", b"hi")
     io = await workspace.shell("find / -name '*.txt'")
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -48,9 +48,9 @@ async def test_find_name_glob(workspace):
 
 @pytest.mark.asyncio
 async def test_find_type_f(workspace):
-    await workspace.fs.mkdir("/sub")
-    await workspace.fs.write("/a.txt", b"a")
-    await workspace.fs.write("/sub/b.txt", b"b")
+    await workspace.vfs.mkdir("/sub")
+    await workspace.vfs.write("/a.txt", b"a")
+    await workspace.vfs.write("/sub/b.txt", b"b")
     io = await workspace.shell("find / -type f")
     assert io.exit_code == 0
     out = io.stdout.decode()
@@ -60,8 +60,8 @@ async def test_find_type_f(workspace):
 
 @pytest.mark.asyncio
 async def test_find_size_lower_bound(workspace):
-    await workspace.fs.write("/big.txt", b"x" * 1000)
-    await workspace.fs.write("/small.txt", b"x")
+    await workspace.vfs.write("/big.txt", b"x" * 1000)
+    await workspace.vfs.write("/small.txt", b"x")
     io = await workspace.shell("find / -size +500c -type f")
     assert io.exit_code == 0
     out = io.stdout.decode()

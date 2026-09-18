@@ -103,7 +103,7 @@ describe('Workspace.close', () => {
       ws.dispatch('readdir', '/data'),
       ws.stat('/data'),
       ws.readdir('/data'),
-      ws.fs.stat('/data'),
+      ws.vfs.stat('/data'),
     ])
 
     watch.allowClose.resolve()

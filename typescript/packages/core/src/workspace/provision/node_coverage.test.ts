@@ -26,7 +26,7 @@ import {} from '../expand/variable.ts'
 import type { TSNodeLike } from '../../shell/types.ts'
 import { MountRegistry } from '../mount/registry.ts'
 import { provisionNode } from '../node/provision_node.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import type { ExecuteResult } from '../workspace/workspace.ts'
 import { Workspace } from '../workspace/workspace.ts'
 
@@ -121,7 +121,7 @@ describe('planner covers every statement kind', () => {
         executeFn: () => Promise.resolve(new IOResult()),
       },
       fake as unknown as TSNodeLike,
-      new Session({ sessionId: 't' }),
+      new SessionState({ sessionId: 't' }),
     )
     expect(result.precision).toBe(Precision.UNKNOWN)
     expect(result.networkRead).toBe('0')

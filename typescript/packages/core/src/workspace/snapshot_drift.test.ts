@@ -276,8 +276,8 @@ describe('Workspace snapshot: capture and replay drift detection', () => {
     },
   )
 
-  it('STRICT load checks drift on the fs facade too, not only Workspace.dispatch', async () => {
-    // The fs facade (the FUSE path) reaches the dispatcher without
+  it('STRICT load checks drift on the op facade too, not only Workspace.dispatch', async () => {
+    // The op facade (the FUSE path) reaches the dispatcher without
     // passing Workspace.dispatch, so the pending fingerprint checks
     // must run at the door itself or a first op through FUSE touches
     // drifted state unchecked.
@@ -306,7 +306,7 @@ describe('Workspace snapshot: capture and replay drift detection', () => {
       { mode: MountMode.WRITE, ops, shellParser: parser, driftPolicy: DriftPolicy.STRICT },
       { '/remote/': new FakeRemoteVFS(accessor) },
     )
-    await expect(loaded.fs.readFile('/remote/a.txt')).rejects.toBeInstanceOf(ContentDriftError)
+    await expect(loaded.vfs.readFile('/remote/a.txt')).rejects.toBeInstanceOf(ContentDriftError)
     await ws.close()
     await loaded.close()
   })

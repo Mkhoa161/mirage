@@ -86,14 +86,14 @@ async def test_late_index_write_cannot_cross_mount_ownership(
                      vfs="ram",
                      filetype=None,
                      fn=delayed_readdir))
-    reading = asyncio.create_task(ws.fs.readdir("/data"))
+    reading = asyncio.create_task(ws.vfs.readdir("/data"))
     changing = None
     replacement = RAMVFS()
     try:
         await asyncio.wait_for(entered.wait(), timeout=5)
         if shadow:
             ws.add_mount("/data", replacement)
-            changing = asyncio.create_task(ws.fs.readdir("/data"))
+            changing = asyncio.create_task(ws.vfs.readdir("/data"))
         else:
             changing = asyncio.create_task(ws.unmount("/data"))
         await asyncio.sleep(0)
@@ -103,7 +103,7 @@ async def test_late_index_write_cannot_cross_mount_ownership(
         await asyncio.wait_for(changing, timeout=5)
         if not shadow:
             ws.add_mount("/data", replacement)
-            await ws.fs.readdir("/data")
+            await ws.vfs.readdir("/data")
         fresh = IndexEntry(id="new", name="fresh", resource_type="file")
         await replacement.index.put("/data/fresh", fresh)
         release.set()

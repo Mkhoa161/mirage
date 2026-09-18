@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { makeWorkspace, stdoutStr } from '../fixtures/workspace_fixture.ts'
 
 describe("background jobs respect the session's hides (regression)", () => {
-  // This passes both before and after the Session.fork() migration: the
+  // This passes both before and after the SessionState.fork() migration: the
   // bg-job promise is created inside the parent's runWithSession() scope,
   // so AsyncLocalStorage propagates the *parent* session to the hide
   // filter even though the bgSession object itself does not carry the

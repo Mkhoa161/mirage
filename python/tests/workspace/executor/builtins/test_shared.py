@@ -30,7 +30,7 @@ from mirage.workspace.executor.builtins.shared import (  # yapf: disable
     refusal, require_view, split_flags, split_value_flags)
 from mirage.workspace.mount.namespace import Namespace
 from mirage.workspace.mount.registry import MountRegistry
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.state import session_view
 
 
@@ -134,7 +134,7 @@ async def test_expand_operands_globs():
 
 
 def test_require_view_returns_the_threaded_view():
-    session = Session(session_id="s1")
+    session = SessionState(session_id="s1")
     view = session_view(session)
     assert require_view(view) is view
 

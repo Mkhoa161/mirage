@@ -35,8 +35,8 @@ async function main(): Promise<void> {
 
   const ram = new RAMVFS()
   const ws = new Workspace({ '/': ram }, { mode: MountMode.WRITE })
-  await ws.fs.writeFile('/chart.png', new Uint8Array(readFileSync(PNG_PATH)))
-  await ws.fs.writeFile('/paper.pdf', new Uint8Array(readFileSync(PDF_PATH)))
+  await ws.vfs.writeFile('/chart.png', new Uint8Array(readFileSync(PNG_PATH)))
+  await ws.vfs.writeFile('/paper.pdf', new Uint8Array(readFileSync(PDF_PATH)))
 
   console.log(`=== Vercel multimodal test (model=${MODEL}) ===\n`)
   console.log(`Files in workspace:`)

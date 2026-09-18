@@ -43,7 +43,7 @@ describe('mirageExecuteTool', () => {
   it('can mutate the workspace', async () => {
     const ws = mkWs()
     await invokeExecute(ws, "printf 'hello' > /hello.txt")
-    await expect(ws.fs.readFileText('/hello.txt')).resolves.toBe('hello')
+    await expect(ws.vfs.readFileText('/hello.txt')).resolves.toBe('hello')
   })
 
   it('returns stderr and a nonzero exit code', async () => {

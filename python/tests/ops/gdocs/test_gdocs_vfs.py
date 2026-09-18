@@ -24,7 +24,7 @@ from mirage.vfs.gdocs import GDocsConfig, GDocsVFS
 
 def _make_gdocs_ops() -> Ops:
     vfs = GDocsVFS(config=GDocsConfig(client_id="x", refresh_token="y"))
-    return Workspace({"/gdocs/": vfs}, mode=MountMode.READ).fs
+    return Workspace({"/gdocs/": vfs}, mode=MountMode.READ).vfs
 
 
 @pytest.mark.asyncio

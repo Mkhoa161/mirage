@@ -63,9 +63,9 @@ describe('buildWorkspaceFromConfig', () => {
     writeFileSync(path, 'mounts:\n  /:\n    vfs: ram\n')
 
     const workspace = await buildWorkspaceFromConfig(path)
-    await workspace.fs.writeFile('/hello.txt', 'hello')
+    await workspace.vfs.writeFile('/hello.txt', 'hello')
 
-    expect(await workspace.fs.readFileText('/hello.txt')).toBe('hello')
+    expect(await workspace.vfs.readFileText('/hello.txt')).toBe('hello')
     await workspace.close()
 
     // 30s, not vitest's 5s default: `buildWorkspaceFromConfig` loads the

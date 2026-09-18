@@ -18,7 +18,7 @@ import { Redirect, RedirectKind } from '../../shell/types.ts'
 import { PathSpec } from '../../types.ts'
 import type { TSNodeLike } from '../../shell/types.ts'
 import { makeIntegrationWS, run, runExit, runResult } from '../fixtures/integration_fixture.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import { ExecutionNode } from '../types.ts'
 import type { DispatchFn } from './cross_mount.ts'
 import type { ExecuteNodeFn } from './jobs.ts'
@@ -57,7 +57,7 @@ describe('handleRedirect > / >>', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(stdout).toBeNull()
     expect(io.exitCode).toBe(0)
@@ -85,7 +85,7 @@ describe('handleRedirect > / >>', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(decode(writes[0]?.data ?? null)).toBe('pre-new')
   })
@@ -109,7 +109,7 @@ describe('handleRedirect < (stdin)', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(receivedStdin).not.toBeNull()
     expect(decode(receivedStdin)).toBe('file-contents')
@@ -134,7 +134,7 @@ describe('handleRedirect <<< (herestring)', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(decode(receivedStdin)).toBe('hello world\n')
   })
@@ -163,7 +163,7 @@ describe('handleRedirect 2>&1', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(decode(writes[0]?.data ?? null)).toBe('out-err-')
   })
@@ -191,7 +191,7 @@ describe('handleRedirect 2>&1', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(decode(writes[0]?.data ?? null)).toBe('out-')
     expect(decode((stdout as Uint8Array | null) ?? null)).toBe('err-')
@@ -213,7 +213,7 @@ describe('handleRedirect &> (both to file)', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(writes[0]?.path).toBe('/ram/all.log')
     expect(decode(writes[0]?.data ?? null)).toBe('OUTERR')
@@ -236,7 +236,7 @@ describe('handleRedirect accepts PathSpec targets', () => {
       dispatch,
       STUB_NODE,
       redirects,
-      new Session({ sessionId: 'test' }),
+      new SessionState({ sessionId: 'test' }),
     )
     expect(decode(writes[0]?.data ?? null)).toBe('ok')
   })
@@ -471,7 +471,7 @@ describe('handleRedirect missing < source', () => {
         dispatch,
         STUB_NODE,
         redirects,
-        new Session({ sessionId: 'test' }),
+        new SessionState({ sessionId: 'test' }),
         null,
         null,
       ),
@@ -576,7 +576,13 @@ describe('handleRedirect unwritable > target', () => {
       new Redirect({ fd: 1, target: '/ram/out.txt', kind: RedirectKind.STDOUT, append: true }),
     ]
     await expect(
-      handleRedirect(execute, dispatch, STUB_NODE, redirects, new Session({ sessionId: 'test' })),
+      handleRedirect(
+        execute,
+        dispatch,
+        STUB_NODE,
+        redirects,
+        new SessionState({ sessionId: 'test' }),
+      ),
     ).rejects.toThrow('backend exploded')
   })
 
@@ -589,7 +595,13 @@ describe('handleRedirect unwritable > target', () => {
       Promise.resolve([encode('hi'), new IOResult(), new ExecutionNode()])
     const redirects = [new Redirect({ fd: 1, target: '/ram/out.txt', kind: RedirectKind.STDOUT })]
     await expect(
-      handleRedirect(execute, dispatch, STUB_NODE, redirects, new Session({ sessionId: 'test' })),
+      handleRedirect(
+        execute,
+        dispatch,
+        STUB_NODE,
+        redirects,
+        new SessionState({ sessionId: 'test' }),
+      ),
     ).rejects.toThrow('backend exploded')
   })
 })

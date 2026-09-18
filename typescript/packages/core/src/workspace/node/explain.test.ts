@@ -211,7 +211,7 @@ describe('explain', () => {
     expect(w.decisions.pending()).toEqual([])
     expect(w.getSession('s').decisions).toEqual([])
     await w.explain('rm /data/prod/x.txt', 's')
-    expect((await w.fs.readdir('/data')).sort()).toEqual([
+    expect((await w.vfs.readdir('/data')).sort()).toEqual([
       '/data/a.txt',
       '/data/prod',
       '/data/secret.txt',
@@ -227,7 +227,7 @@ describe('explain', () => {
     const ran = await w.shell('rm /data/a.txt && rm /data/prod/x.txt', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).toBe('rm: /data/prod/x.txt: production data is protected\n')
-    expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).toContain('/data/a.txt')
   })
 
   it('leaves a line alone when a word is simply not installed', async () => {
@@ -238,7 +238,7 @@ describe('explain', () => {
     const ran = await w.shell('rm /data/a.txt && gerp x', { sessionId: 's' })
     expect(ran.exitCode).toBe(127)
     expect(DEC.decode(ran.stderr)).toBe('gerp: command not found\n')
-    expect(await w.fs.readdir('/data')).not.toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).not.toContain('/data/a.txt')
   })
 
   it('holds a line with an asked command until it is answered', async () => {
@@ -246,7 +246,7 @@ describe('explain', () => {
     const line = 'rm /data/a.txt && cat /data/secret.txt'
     const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(126)
-    expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).toContain('/data/a.txt')
     // Exactly one request, from the one pass that judged the line.
     const [pending] = w.decisions.pending()
     expect(w.decisions.pending()).toHaveLength(1)
@@ -256,7 +256,7 @@ describe('explain', () => {
     // though two passes now read it.
     const again = await w.shell(line, { sessionId: 's' })
     expect(again.exitCode).toBe(0)
-    expect(await w.fs.readdir('/data')).not.toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).not.toContain('/data/a.txt')
     expect(w.decisions.pending()).toEqual([])
   })
 
@@ -295,7 +295,7 @@ describe('explain', () => {
       sessionId: 's',
     })
     expect(ran.exitCode).toBe(126)
-    expect(await w.fs.readdir('/data')).not.toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).not.toContain('/data/a.txt')
     expect(w.decisions.pending()).toHaveLength(1)
   })
 
@@ -306,7 +306,7 @@ describe('explain', () => {
     const ran = await w.shell('(cd /data/prod && ls) && rm x.txt', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).not.toContain('production data is protected')
-    expect(await w.fs.readdir('/data/prod')).toContain('/data/prod/x.txt')
+    expect(await w.vfs.readdir('/data/prod')).toContain('/data/prod/x.txt')
   })
 
   it('shows a line running once the session holds a grant', async () => {
@@ -372,7 +372,7 @@ describe('prejudge', () => {
     const ran = await w.shell('rm /data/a.txt && echo x > /data/prod/x.txt', { sessionId: 's' })
     expect(ran.exitCode).not.toBe(0)
     expect(DEC.decode(ran.stderr)).toContain('sealed until review')
-    expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).toContain('/data/a.txt')
   })
 
   it('holds the line for a coded policy with no document', async () => {
@@ -393,7 +393,7 @@ describe('prejudge', () => {
     expect(ran.exitCode).not.toBe(0)
     expect(DEC.decode(ran.stderr)).toBe('cat: Permission denied\n')
     expect(ran.refusal?.reason).toBe('cat is refused by policy')
-    expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).toContain('/data/a.txt')
   })
 
   it('does not end the scan when an ask is answered inline', async () => {
@@ -407,7 +407,7 @@ describe('prejudge', () => {
     expect(ran.exitCode).not.toBe(0)
     expect(DEC.decode(ran.stderr)).toContain('production data is protected')
     expect(DEC.decode(ran.stdout)).not.toContain('s')
-    expect(await w.fs.readdir('/data/prod')).toContain('/data/prod/x.txt')
+    expect(await w.vfs.readdir('/data/prod')).toContain('/data/prod/x.txt')
   })
 
   it('asks once for a compound line answered inline, and again for the next', async () => {
@@ -444,7 +444,7 @@ describe('prejudge', () => {
       expect(ran.exitCode).toBe(126)
       expect(asked).toHaveLength(expected)
     }
-    expect(await w.fs.readdir('/data')).toContain('/data/a.txt')
+    expect(await w.vfs.readdir('/data')).toContain('/data/a.txt')
   })
 
   it('spends a grant handed to a line it then refuses', async () => {
@@ -558,7 +558,7 @@ describe('prejudge', () => {
     expect(elsewhere[0]?.outcome).toBe(Outcome.ASK)
     const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
-    expect(await w.fs.readFileText('/data/read.txt')).toBe('s\n')
+    expect(await w.vfs.readFileText('/data/read.txt')).toBe('s\n')
     expect(w.decisions.list('s')).toEqual([])
   })
 
@@ -758,7 +758,7 @@ describe('prejudge scope', () => {
     const ran = await w.shell('(cd /data/prod && rm x.txt)', { sessionId: 's' })
     expect(ran.exitCode).toBe(1)
     expect(DEC.decode(ran.stderr)).toBe('rm: x.txt: production data is protected\n')
-    expect(await w.fs.readdir('/data/prod')).toContain('/data/prod/x.txt')
+    expect(await w.vfs.readdir('/data/prod')).toContain('/data/prod/x.txt')
   })
 
   it('refuses a one-command line from inside the shell', async () => {
@@ -934,7 +934,7 @@ describe('prejudge scope', () => {
     const line = 'for i in 1 2; do touch /data/mark.txt; cat /data/secret.txt; done'
     const first = await w.shell(line, { sessionId: 's' })
     expect(first.exitCode).toBe(126)
-    expect(await w.fs.readdir('/data')).not.toContain('/data/mark.txt')
+    expect(await w.vfs.readdir('/data')).not.toContain('/data/mark.txt')
     const [pending] = w.decisions.pending()
     expect(w.decisions.pending()).toHaveLength(1)
     await w.decisions.answer(pending?.id ?? '', Outcome.ALLOW)
@@ -979,7 +979,7 @@ describe('prejudge scope', () => {
     const ran = await w.shell(line, { sessionId: 's' })
     expect(ran.exitCode).toBe(126)
     expect(DEC.decode(ran.stderr)).toBe('cat: Permission denied\n')
-    expect(await w.fs.readdir('/data')).not.toContain('/data/mark.txt')
+    expect(await w.vfs.readdir('/data')).not.toContain('/data/mark.txt')
   })
 
   it('runs every batch xargs hands on on one nod', async () => {
@@ -1028,7 +1028,7 @@ describe('prejudge scope', () => {
     expect(w.decisions.list('s')).toHaveLength(1)
     const waited = await w.shell('wait', { sessionId: 's' })
     expect(waited.exitCode).toBe(0)
-    expect(await w.fs.readFileText('/data/read.txt')).toBe('s\ns\n')
+    expect(await w.vfs.readFileText('/data/read.txt')).toBe('s\ns\n')
     expect(asked).toHaveLength(1)
     expect(w.decisions.list('s')).toEqual([])
   })

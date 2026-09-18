@@ -20,7 +20,7 @@ import { parseSessionProfile } from '../policy/profile.ts'
 import type { Action, OpsContext, Policy } from '../policy/index.ts'
 import { runWithSession } from '../context/session_context.ts'
 import { getTestParser, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
-import { SessionHandle } from './workspace/handle.ts'
+import { Session } from './workspace/handle.ts'
 import { Workspace } from './workspace/workspace.ts'
 
 /** Refuse the unlink of one exact path, whatever door asked. */
@@ -152,7 +152,7 @@ describe('the path axis end to end', () => {
   })
 
   it('the op door runs as the default session', async () => {
-    // `ws.fs`, `ws.dispatch`, `ws.stat` and `ws.readdir` are judged
+    // `ws.vfs`, `ws.dispatch`, `ws.stat` and `ws.readdir` are judged
     // under the default session's profile, the way a bare `shell`
     // is, so an agent whose file tool reads through the facade is
     // confined like its shell. A session already bound is kept, and
@@ -171,20 +171,20 @@ describe('the path axis end to end', () => {
     )
     open.push(ws)
     const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-    const door = new SessionHandle(ws, host.sessionId).fs
-    expect(door.records).toBe(ws.fs.records)
+    const door = new Session(ws, host.sessionId).vfs
+    expect(door.records).toBe(ws.vfs.records)
     await door.mkdir('/data/vault')
     await door.writeFile('/data/vault/secret', 'top\n')
     expect(await door.readFileText('/data/vault/secret')).toBe('top\n')
-    await expect(ws.fs.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(ws.vfs.readFile('/data/vault/secret')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(ws.stat('/data/vault')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(ws.dispatch('read', '/data/vault/secret')).rejects.toMatchObject({
       code: 'ENOENT',
     })
     expect(await ws.readdir('/data')).toEqual([])
-    expect(await ws.fs.readdir('/data')).toEqual([])
+    expect(await ws.vfs.readdir('/data')).toEqual([])
     await runWithSession(host, async () => {
-      expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
+      expect(await ws.vfs.readFileText('/data/vault/secret')).toBe('top\n')
     })
   })
 
@@ -204,13 +204,13 @@ describe('the path axis end to end', () => {
     const wide = other.createSession('wide', { profile: parseSessionProfile({}) })
     const ws = await hiding()
     const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-    const door = new SessionHandle(ws, host.sessionId).fs
+    const door = new Session(ws, host.sessionId).vfs
     await door.mkdir('/data/vault')
     await door.writeFile('/data/vault/secret', 'top\n')
     await runWithSession(
       wide,
       async () => {
-        await expect(ws.fs.readFile('/data/vault/secret')).rejects.toMatchObject({
+        await expect(ws.vfs.readFile('/data/vault/secret')).rejects.toMatchObject({
           code: 'ENOENT',
         })
         expect(await door.readFileText('/data/vault/secret')).toBe('top\n')
@@ -218,7 +218,7 @@ describe('the path axis end to end', () => {
       other.sessionManager,
     )
     await runWithSession(wide, async () => {
-      expect(await ws.fs.readFileText('/data/vault/secret')).toBe('top\n')
+      expect(await ws.vfs.readFileText('/data/vault/secret')).toBe('top\n')
     })
   })
 
@@ -231,13 +231,13 @@ describe('the path axis end to end', () => {
     // path it can see, so the link reads as absent.
     const ws = await hiding()
     const host = ws.createSession('host', { profile: parseSessionProfile({}) })
-    const door = new SessionHandle(ws, host.sessionId).fs
+    const door = new Session(ws, host.sessionId).vfs
     await door.writeFile('/data/pub.txt', 'pub\n')
     await door.mkdir('/data/vault')
     await door.symlink('/data/vault/lk', '/data/pub.txt')
     expect(await door.readFileText('/data/vault/lk')).toBe('pub\n')
-    await expect(ws.fs.readFile('/data/vault/lk')).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(ws.fs.writeFile('/data/vault/lk', 'x\n')).rejects.toMatchObject({
+    await expect(ws.vfs.readFile('/data/vault/lk')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(ws.vfs.writeFile('/data/vault/lk', 'x\n')).rejects.toMatchObject({
       code: 'ENOENT',
     })
     expect(await door.readFileText('/data/pub.txt')).toBe('pub\n')
@@ -603,7 +603,7 @@ describe('subtree mutations against hides', () => {
 describe('the ops door against hides', () => {
   it('leaves a read-only hidden remnant intact and keeps the refusal', async () => {
     // The dispatcher's cascade routes every deletion through the same
-    // mode fence normal dispatch applies, so FUSE and ws.fs callers
+    // mode fence normal dispatch applies, so FUSE and ws.vfs callers
     // cannot destroy a mode-protected remnant either.
     const parser = await getTestParser()
     const repo = new RAMVFS()

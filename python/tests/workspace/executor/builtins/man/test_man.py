@@ -23,7 +23,7 @@ from mirage.workspace.cli.registry import CLIRegistry
 from mirage.workspace.executor.builtins.man import (ManEntry, _command_entry,
                                                     _render_man_index,
                                                     _render_page, handle_man)
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 def _mk_cmd(name, spec, filetype=None, vfs="ram"):
@@ -71,7 +71,7 @@ def _mk_mount(prefix, kind, cmds=None, general=None):
     return mount
 
 
-_SESSION = Session(session_id="s")
+_SESSION = SessionState(session_id="s")
 
 
 def _mk_registry(mounts):
@@ -206,8 +206,8 @@ def _cli_tree() -> CLISpec:
     )
 
 
-def _scoped(*allow: str) -> Session:
-    session = Session(session_id="scoped")
+def _scoped(*allow: str) -> SessionState:
+    session = SessionState(session_id="scoped")
     session.commands = AdmissionRules(allow=allow)
     return session
 

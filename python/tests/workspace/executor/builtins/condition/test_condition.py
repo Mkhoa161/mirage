@@ -21,7 +21,7 @@ from mirage.io import IOResult
 from mirage.types import ContentType, FileStat, FileType, PathSpec
 from mirage.workspace.executor.builtins.condition import CondContext, eval_flat
 from mirage.workspace.mount.namespace import Namespace
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 class _StubNamespace:
@@ -95,7 +95,7 @@ def _stub_ctx(dispatch: Any) -> CondContext:
     """
     return CondContext(dispatch=dispatch,
                        namespace=cast(Namespace, _StubNamespace()),
-                       session=cast(Session, _StubSession()),
+                       session=cast(SessionState, _StubSession()),
                        name="test")
 
 

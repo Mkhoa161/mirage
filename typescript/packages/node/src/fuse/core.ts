@@ -23,7 +23,7 @@ import { isMissingOp } from '@struktoai/mirage-core/utils/errors'
 import { rstripSlash } from '@struktoai/mirage-core/utils/slash'
 import { compareCodePoints } from '@struktoai/mirage-core/utils/sort'
 import { DIR_MODE, FILE_MODE, mtimeMs } from '@struktoai/mirage-core/utils/stat_view'
-import type { Session } from '@struktoai/mirage-core/workspace/session/session'
+import type { SessionState } from '@struktoai/mirage-core/workspace/session/session'
 import { errnoError } from './errors.ts'
 import { isMacosMetadata } from './platform/macos.ts'
 
@@ -61,7 +61,7 @@ export interface MountCoreOptions {
    * travels with it. Enforcement happens inside dispatch/Ops via the
    * session context, so binding at the op entry point is sufficient.
    */
-  session?: Session
+  session?: SessionState
 }
 
 /**
@@ -76,7 +76,7 @@ export interface MountCoreOptions {
  * interface. Adapters translate the errors thrown here into their own
  * error codes with `classifyErrno`. Mirrors Python's `MountCore`.
  *
- * Every op goes through `ws.fs`, which delegates to the dispatcher, so
+ * Every op goes through `ws.vfs`, which delegates to the dispatcher, so
  * a mount walks the same door as a shell line (mount modes, policies,
  * cache, invalidation) and every op it runs lands in `ws.records` for
  * `drainOps`. Reaching `ws.dispatch` from here instead would skip the
@@ -84,7 +84,7 @@ export interface MountCoreOptions {
  */
 export class MountCore {
   readonly ops: Ops
-  readonly session: Session | null
+  readonly session: SessionState | null
   private readonly now: Date
   private readonly root: string
   readonly handles = new FileTable<Handle>()
@@ -332,7 +332,7 @@ export class MountCore {
     if (isMacosMetadata(name)) {
       throw errnoError('ENOENT', `no such file or directory: ${path}`)
     }
-    // Link check must precede the workspace stat: the fs facade follows
+    // Link check must precede the workspace stat: the op facade follows
     // namespace links, so stat on a link path reports the target.
     const target = this.linkTarget(path)
     if (target !== null) return this.linkStat(target, this.resolve(path))

@@ -92,7 +92,7 @@ import type { ResolvedSource } from '../../secrets/types.ts'
 import { DEFAULT_PROFILE } from '../session/constants.ts'
 import { SessionManager } from '../session/manager.ts'
 import type { WorkspaceFields, WorkspaceStateStore } from '../store/base.ts'
-import { varsFromEntries, type Session } from '../session/session.ts'
+import { varsFromEntries, type SessionState } from '../session/session.ts'
 import {
   parseProfileMounts,
   parseProfilePolicy,
@@ -109,7 +109,7 @@ import { WorkspaceMeta } from './meta.ts'
 import { normalizeMounts, prepareAddedMount, unmountPrefix } from './mounts.ts'
 import { Router } from './routing.ts'
 import { Runtimes } from './runtimes.ts'
-import { SessionHandle } from './handle.ts'
+import { Session } from './handle.ts'
 import type { ExecuteResult } from './types.ts'
 import { type ExecuteOptions, type MountSpec, type WorkspaceOptions } from './types.ts'
 import { commandName, forkForCall } from './utils.ts'
@@ -129,7 +129,7 @@ export class Workspace {
   private readonly meta: WorkspaceMeta
   /**
    * The op table every mount's ops are registered on. Not the op
-   * facade: `fs` is the door a caller reads and writes through, this
+   * facade: `vfs` is the door a caller reads and writes through, this
    * is the registry it dispatches into.
    */
   readonly opsRegistry: OpsRegistry
@@ -145,7 +145,7 @@ export class Workspace {
   readonly namespace: Namespace
   private readonly dispatcher: Dispatcher
   readonly observer: Observer
-  readonly fs: Ops
+  readonly vfs: Ops
   private closed = false
   private readonly closers: (() => Promise<void>)[] = []
   private closing: Promise<void> | null = null
@@ -390,12 +390,12 @@ export class Workspace {
       }
     }
     // The facade delegates every op to the dispatcher, so FUSE and
-    // programmatic ws.fs walk the same pipeline as a shell command and
+    // programmatic ws.vfs walk the same pipeline as a shell command and
     // the policy gates fire exactly once, at that door. It keeps the
     // ledger, which is its own; the sink is only the observer's copy.
     // It runs as the default session, as a bare `shell` does, so the
     // default profile confines it too.
-    this.fs = new Ops(
+    this.vfs = new Ops(
       (op, path, args, kwargs, report) => {
         if (this.isShuttingDown()) throw new Error('Workspace is closed')
         return this.dispatcher.dispatch(op, path, args, kwargs, report)
@@ -717,7 +717,7 @@ export class Workspace {
       profile?: string | SessionProfile | null
       permissions?: SessionProfile | null
     } = {},
-  ): Session {
+  ): SessionState {
     const base = this.baseProfile(options.profile ?? null)
     let inline: SessionProfile | null = options.permissions ?? null
     if (options.mounts != null) {
@@ -740,12 +740,12 @@ export class Workspace {
    * registered on the workspace after it is built.
    */
   /**
-   * One session's two doors: `shell` and `fs` bound to it.
+   * One session's two doors: `shell` and `vfs` bound to it.
    *
    * Creates the session under the given profile when the id is new (the
    * same call as `createSession`), and adopts it as is when it exists.
    * Options for an existing session are refused rather than ignored: a
-   * profile is set once, at creation, and a handle must not look like
+   * profile is set once, at creation, and the object it returns must not look like
    * it narrowed a session it merely adopted. The session store is
    * hydrated first, so a session a previous process persisted is
    * adopted with its stored profile rather than recreated over it; that
@@ -754,16 +754,16 @@ export class Workspace {
   async session(
     sessionId: string,
     options: Parameters<Workspace['createSession']>[1] = {},
-  ): Promise<SessionHandle> {
+  ): Promise<Session> {
     await this.ensureSessionsLoaded()
     if (this.sessionManager.list().some((s) => s.sessionId === sessionId)) {
       if (options.mounts != null || options.profile != null || options.permissions != null) {
         throw new Error(`session '${sessionId}' exists; its profile was set when it was created`)
       }
-      return new SessionHandle(this, sessionId)
+      return new Session(this, sessionId)
     }
     this.createSession(sessionId, options)
-    return new SessionHandle(this, sessionId)
+    return new Session(this, sessionId)
   }
 
   private cliVerbs(): ReadonlyMap<string, ReadonlySet<string>> {
@@ -774,7 +774,7 @@ export class Workspace {
     return out
   }
 
-  getSession(sessionId: string): Session {
+  getSession(sessionId: string): SessionState {
     return this.sessionManager.get(sessionId)
   }
 
@@ -788,7 +788,7 @@ export class Workspace {
   async setSessionProfile(
     sessionId: string,
     profile: string | SessionProfile | null,
-  ): Promise<Session> {
+  ): Promise<SessionState> {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
     const compiled = compileProfile(this.baseProfile(profile), this.profileName(profile))
     checkCliVerbs(compiled.commands, this.cliVerbs())
@@ -799,7 +799,7 @@ export class Workspace {
     return this.sessionManager.setProfile(sessionId, compiled)
   }
 
-  listSessions(): Session[] {
+  listSessions(): SessionState[] {
     return this.sessionManager.list()
   }
 
@@ -983,27 +983,27 @@ export class Workspace {
    * are thin delegates so the public workspace API keeps reading.
    */
   get records(): OpRecord[] {
-    return this.fs.records
+    return this.vfs.records
   }
 
   /** Records that hit a remote VFS (not cache). */
   get networkRecords(): OpRecord[] {
-    return this.fs.networkRecords
+    return this.vfs.networkRecords
   }
 
   /** Total bytes transferred over the network. */
   get networkBytes(): number {
-    return this.fs.networkBytes
+    return this.vfs.networkBytes
   }
 
   /** Records served from in-memory cache. */
   get cacheRecords(): OpRecord[] {
-    return this.fs.cacheRecords
+    return this.vfs.cacheRecords
   }
 
   /** Total bytes served from cache. */
   get cacheBytes(): number {
-    return this.fs.cacheBytes
+    return this.vfs.cacheBytes
   }
 
   get filePrompt(): string {
@@ -1036,18 +1036,18 @@ export class Workspace {
   }
 
   async stat(path: string): Promise<unknown> {
-    return this.fs.stat(path)
+    return this.vfs.stat(path)
   }
 
   async readdir(path: string): Promise<string[]> {
-    return this.fs.readdir(path)
+    return this.vfs.readdir(path)
   }
 
   /**
    * Run one op door call as `sessionId`.
    *
    * A session already bound in this context is kept: a command's
-   * runtime reaching `ws.fs` stays in its own session, and a kernel
+   * runtime reaching `ws.vfs` stays in its own session, and a kernel
    * mount serving one session keeps that one, so the door never widens
    * a caller's view. A session another workspace bound is the
    * exception: its hides and grants describe that workspace, so an
@@ -1058,7 +1058,7 @@ export class Workspace {
    *
    * On the fallback storage (no task isolation) the newest live frame
    * may be another task's, so a facade that names its session binds it
-   * rather than trusting an ambient one; only the unnamed door (`ws.fs`,
+   * rather than trusting an ambient one; only the unnamed door (`ws.vfs`,
    * `ws.dispatch`) keeps whatever is bound there, which is what a
    * command's runtime reaching it relies on.
    */
@@ -1074,7 +1074,7 @@ export class Workspace {
   }
 
   /** The ambient session the op door keeps for a facade, or null. */
-  private ambientFor(sessionId: string | null): Session | null {
+  private ambientFor(sessionId: string | null): SessionState | null {
     const ambient = getCurrentSessionUnlessForeign(this.sessionManager)
     if (ambient !== null && (sessionId === null || asyncContextIsolatesTasks)) return ambient
     return null
@@ -1092,7 +1092,7 @@ export class Workspace {
    * @param sessionId the facade's session, or null for the default.
    * @returns the session an op through that facade runs as.
    */
-  sessionForOps(sessionId: string | null): Session {
+  sessionForOps(sessionId: string | null): SessionState {
     return (
       this.ambientFor(sessionId) ??
       this.sessionManager.get(sessionId ?? this.sessionManager.defaultId)
@@ -1106,7 +1106,7 @@ export class Workspace {
     kwargs: OpKwargs = {},
   ): Promise<unknown> {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
-    // Runs as the default session unless one is bound, like `ws.fs`.
+    // Runs as the default session unless one is bound, like `ws.vfs`.
     return this.bindSession(null, () => this.dispatchInternal(opName, path, args, kwargs))
   }
 

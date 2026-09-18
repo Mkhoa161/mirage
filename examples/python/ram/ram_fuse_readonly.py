@@ -56,6 +56,6 @@ with Workspace({"/data/": Mount(vfs, backend=MountBackend.FUSE)},
     print(">>> Press Enter to unmount and exit...")
     input()
 
-    records = ws.fs.records
+    records = ws.vfs.records
     total = sum(r.bytes for r in records)
     print(f"\nStats: {len(records)} ops, {total} bytes transferred")

@@ -90,7 +90,7 @@ def main() -> None:
     ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
     with tempfile.TemporaryDirectory() as mountpoint:
-        fs = MirageFS(ws.fs)
+        fs = MirageFS(ws.vfs)
         t = mount_background(ws, mountpoint)
         print(f"Mounted memory workspace at {mountpoint}")
         print(f"Prompt: {args.prompt}\n")

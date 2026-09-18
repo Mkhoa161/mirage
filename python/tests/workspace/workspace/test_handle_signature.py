@@ -14,9 +14,9 @@
 
 import inspect
 
-from mirage.workspace import SessionHandle, Workspace
+from mirage.workspace import Session, Workspace
 
-# The one argument a handle answers for itself: it *is* the session, so
+# The one argument a `Session` answers for itself: it *is* the session, so
 # naming one per call would be a second, contradictory source.
 BOUND = "session_id"
 
@@ -35,14 +35,14 @@ def _params(fn) -> list[inspect.Parameter]:
 
 
 def test_the_handle_forwards_every_argument_the_workspace_takes():
-    """``SessionHandle.shell`` is ``Workspace.shell`` with the session
+    """``Session.shell`` is ``Workspace.shell`` with the session
     fixed, and the forwarding is hand-copied, so a parameter added to
     one has to reach the other. Without this, a new argument would be
-    invisible from a handle and nothing would fail.
+    invisible from a `Session` and nothing would fail.
     """
     skip = (BOUND, *INTERNAL)
     wide = [p for p in _params(Workspace.shell) if p.name not in skip]
-    bound = _params(SessionHandle.shell)
+    bound = _params(Session.shell)
     assert [p.name for p in bound] == [p.name for p in wide]
     for got, want in zip(bound, wide):
         assert got.annotation == want.annotation, got.name
@@ -52,14 +52,14 @@ def test_the_handle_forwards_every_argument_the_workspace_takes():
 
 def test_the_handle_answers_for_the_session_itself():
     assert BOUND in inspect.signature(Workspace.shell).parameters
-    assert BOUND not in inspect.signature(SessionHandle.shell).parameters
+    assert BOUND not in inspect.signature(Session.shell).parameters
 
 
 def test_every_exemption_says_it_is_internal():
-    """An argument the handle may omit has to declare why in the
+    """An argument a `Session` may omit has to declare why in the
     docstring, so the allowlist cannot grow by edit alone.
     """
     doc = Workspace.shell.__doc__ or ""
     for name in INTERNAL:
         assert f"{name}: Internal." in doc, name
-        assert name not in inspect.signature(SessionHandle.shell).parameters
+        assert name not in inspect.signature(Session.shell).parameters

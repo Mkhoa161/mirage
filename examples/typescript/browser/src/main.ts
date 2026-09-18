@@ -102,9 +102,9 @@ function buildVfs(backend: BackendName): VFS {
 async function demoOpfs(ws: Workspace): Promise<void> {
   line('')
   line('━━━ OPFS (/) — full shell demo ━━━', 'prompt')
-  await ws.fs.writeFile('/hello.txt', 'hello from OPFS\n')
-  await ws.fs.mkdir('/notes')
-  await ws.fs.writeFile('/notes/q1.csv', 'revenue,100\nexpense,80\nprofit,20\n')
+  await ws.vfs.writeFile('/hello.txt', 'hello from OPFS\n')
+  await ws.vfs.mkdir('/notes')
+  await ws.vfs.writeFile('/notes/q1.csv', 'revenue,100\nexpense,80\nprofit,20\n')
   await run(ws, 'ls /')
   await run(ws, 'cat /hello.txt')
   await run(ws, 'head -n 2 /notes/q1.csv')

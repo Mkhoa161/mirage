@@ -39,7 +39,7 @@ from mirage.workspace.executor.builtins.shared import (abs_path, fail,
                                                        read_only_error, result)
 from mirage.workspace.executor.builtins.types import Result
 from mirage.workspace.mount.namespace import Namespace
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 _TARGET_DIR_LONG = "--target-directory"
 _SUFFIX_LONG = "--suffix"
@@ -567,7 +567,7 @@ async def make_link(
 async def handle_ln(
     namespace: Namespace,
     dispatch: DispatchFn,
-    session: Session,
+    session: SessionState,
     args: list[str | PathSpec],
 ) -> Result:
     """ln [OPTION]... TARGET... : GNU ln over the namespace and the op door.
@@ -591,7 +591,7 @@ async def handle_ln(
     Args:
         namespace (Namespace): addressing authority holding the link table.
         dispatch (DispatchFn): op dispatcher.
-        session (Session): session whose cwd resolves relative operands.
+        session (SessionState): session whose cwd resolves relative operands.
         args (list[str | PathSpec]): args after the command name.
     """
     parsed = parse_command(SPECS["ln"], [word_text(a) for a in args],

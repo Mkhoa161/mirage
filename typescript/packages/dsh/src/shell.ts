@@ -374,7 +374,7 @@ export class MirageShellExecutor extends ShellExecutor {
   private async worldWorkdir(spec: ShellExecSpec): Promise<string> {
     if (spec.workdir === '') return ''
     const ws = await this.workspace()
-    if (await ws.fs.isDir(spec.workdir)) return spec.workdir
+    if (await ws.vfs.isDir(spec.workdir)) return spec.workdir
     return this.sessionId === undefined ? this.workdir : ''
   }
 
@@ -387,15 +387,15 @@ export class MirageShellExecutor extends ShellExecutor {
     const target: SpillTarget = {
       ensureDir: async (d) => {
         const ws = await this.workspace()
-        await ensureDirPath({ exists: (p) => ws.fs.exists(p), mkdir: (p) => ws.fs.mkdir(p) }, d)
+        await ensureDirPath({ exists: (p) => ws.vfs.exists(p), mkdir: (p) => ws.vfs.mkdir(p) }, d)
       },
       write: async (p, bytes) => {
         const ws = await this.workspace()
-        await ws.fs.writeFile(p, bytes)
+        await ws.vfs.writeFile(p, bytes)
       },
       append: async (p, bytes) => {
         const ws = await this.workspace()
-        await ws.fs.append(p, bytes)
+        await ws.vfs.append(p, bytes)
       },
     }
     spillCounter += 1

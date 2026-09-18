@@ -23,9 +23,9 @@ def workspace():
 
 
 async def _seed(workspace):
-    await workspace.fs.mkdir("/sub")
-    await workspace.fs.write("/a.txt", b"hello\n")
-    await workspace.fs.write("/sub/b.txt", b"hello\n")
+    await workspace.vfs.mkdir("/sub")
+    await workspace.vfs.write("/a.txt", b"hello\n")
+    await workspace.vfs.write("/sub/b.txt", b"hello\n")
     return workspace
 
 

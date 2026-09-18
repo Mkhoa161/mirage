@@ -18,7 +18,7 @@ import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { FileStat, FileType, MountMode, PathSpec } from '../../types.ts'
 import { MountRegistry } from '../mount/registry.ts'
 import type { MountEntry } from '../mount/mount.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import type { ExecuteNodeFn } from './jobs.ts'
 import type { DispatchFn } from './cross_mount.ts'
 import { handleCommand } from './command.ts'
@@ -67,7 +67,7 @@ describe('fanOutTraversal glob matching', () => {
       MountMode.WRITE,
     )
     wireRegistry(reg)
-    const s = new Session({ sessionId: 'test', cwd: '/' })
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
     const [, io] = await handleCommand(
       NEVER_EXECUTE,
       STAT_ONLY_DISPATCH,
@@ -84,7 +84,7 @@ describe('fanOutTraversal glob matching', () => {
       MountMode.WRITE,
     )
     wireRegistry(reg)
-    const s = new Session({ sessionId: 'test', cwd: '/' })
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
     const [out, io] = await handleCommand(
       NEVER_EXECUTE,
       STAT_ONLY_DISPATCH,
@@ -109,7 +109,7 @@ describe('fanOutTraversal mount-entry synthesis honors the expression tree', () 
       MountMode.WRITE,
     )
     wireRegistry(reg)
-    const s = new Session({ sessionId: 'test', cwd: '/' })
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
     const [out] = await handleCommand(NEVER_EXECUTE, STAT_ONLY_DISPATCH, reg, argv, s)
     return out === null ? '' : new TextDecoder().decode(await materialize(out))
   }
@@ -146,7 +146,7 @@ describe('find actions on structural rows', () => {
 
   it('-ls renders namespace-only ancestor rows', async () => {
     const reg = nestedGhostRegistry()
-    const s = new Session({ sessionId: 'test', cwd: '/' })
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
     const [out, io] = await handleCommand(
       NEVER_EXECUTE,
       STAT_ONLY_DISPATCH,
@@ -167,7 +167,7 @@ describe('find actions on structural rows', () => {
 
   it('-delete skips structural rows and exits 0', async () => {
     const reg = nestedGhostRegistry()
-    const s = new Session({ sessionId: 'test', cwd: '/' })
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
     const [, io] = await handleCommand(
       NEVER_EXECUTE,
       STAT_ONLY_DISPATCH,
@@ -192,7 +192,7 @@ describe('fanOutTraversal -maxdepth applies to child-mount depth', () => {
     child.store.files.set('/a/b.txt', new TextEncoder().encode('deep\n'))
     const reg = new MountRegistry({ '/': new RAMVFS(), '/data/': child }, MountMode.WRITE)
     wireRegistry(reg)
-    const s = new Session({ sessionId: 'test', cwd: '/' })
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
     const [out] = await handleCommand(
       NEVER_EXECUTE,
       STAT_ONLY_DISPATCH,
@@ -585,7 +585,7 @@ describe('traversal cancellation', () => {
             return Promise.resolve([null, new IOResult()])
           }
         }
-        const session = new Session({ sessionId: 'test', cwd: '/' })
+        const session = new SessionState({ sessionId: 'test', cwd: '/' })
         if (source === 'session') session.abortSignal = controller.signal
         await expect(
           handleCommand(

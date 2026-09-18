@@ -30,7 +30,7 @@ from mirage.workspace import Workspace
 from mirage.workspace.dispatcher import Dispatcher
 from mirage.workspace.dispatcher.dispatcher import _MountChannel
 from mirage.workspace.mount.mount import MountEntry
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 class DenyLocked(Policy):
@@ -204,9 +204,10 @@ async def test_structure_fallback_serves_when_no_policy_objects():
 def scoped_session():
     """Bind a session whose profile hides the parent mount's own content,
     leaving the mount nested below it reachable."""
-    session = Session(session_id="agent",
-                      hidden_paths=HiddenPaths(paths=("/data/locked/other",
-                                                      "/data/locked/f.txt")))
+    session = SessionState(
+        session_id="agent",
+        hidden_paths=HiddenPaths(paths=("/data/locked/other",
+                                        "/data/locked/f.txt")))
     token = set_current_session(session)
     yield session
     reset_current_session(token)
@@ -556,7 +557,7 @@ async def test_the_remnant_channel_invalidates_each_deletion():
 
 @pytest.mark.asyncio
 async def test_ops_rmdir_cascade_invalidates_each_remnant(monkeypatch):
-    # A direct dispatcher caller (FUSE, ws.fs) establishes no
+    # A direct dispatcher caller (FUSE, ws.vfs) establishes no
     # cache-manager context, so the cores' own invalidation cannot land
     # during the remnant cascade; every deletion must reach the
     # dispatcher's write invalidation, not only the rmdir target, or
@@ -576,7 +577,7 @@ async def test_ops_rmdir_cascade_invalidates_each_remnant(monkeypatch):
     monkeypatch.setattr(Dispatcher, "invalidate_after_write", spy)
     token = set_current_session(sess)
     try:
-        await ws.fs.rmdir("/a/d")
+        await ws.vfs.rmdir("/a/d")
     finally:
         reset_current_session(token)
     assert "/a/d/sec/k" in recorded
@@ -602,7 +603,7 @@ async def test_a_policy_denied_remnant_keeps_the_refusal():
     token = set_current_session(sess)
     try:
         with pytest.raises(OSError) as exc:
-            await ws.fs.rmdir("/a/d")
+            await ws.vfs.rmdir("/a/d")
     finally:
         reset_current_session(token)
     assert exc.value.errno in (errno.ENOTEMPTY, errno.EEXIST)
@@ -625,7 +626,7 @@ async def test_ops_rmdir_takes_hidden_namespace_links_with_it():
         }})
     token = set_current_session(sess)
     try:
-        await ws.fs.rmdir("/a/d")
+        await ws.vfs.rmdir("/a/d")
     finally:
         reset_current_session(token)
     # No session, no hides: the tree must be gone, link included.
@@ -648,7 +649,7 @@ async def test_a_visible_link_below_keeps_the_rmdir_refusal():
     token = set_current_session(sess)
     try:
         with pytest.raises(OSError) as exc:
-            await ws.fs.rmdir("/a/d")
+            await ws.vfs.rmdir("/a/d")
     finally:
         reset_current_session(token)
     assert exc.value.errno in (errno.ENOTEMPTY, errno.EEXIST)
@@ -678,7 +679,7 @@ async def test_a_non_oserror_cascade_failure_keeps_the_refusal(monkeypatch):
     token = set_current_session(sess)
     try:
         with pytest.raises(OSError) as exc:
-            await ws.fs.rmdir("/a/d")
+            await ws.vfs.rmdir("/a/d")
     finally:
         reset_current_session(token)
     assert exc.value.errno in (errno.ENOTEMPTY, errno.EEXIST)

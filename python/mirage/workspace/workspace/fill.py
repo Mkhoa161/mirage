@@ -33,7 +33,7 @@ from mirage.utils.hidden import var_hidden
 from mirage.workspace.lookup.lookup import lookup
 from mirage.workspace.lookup.types import Consumer
 from mirage.workspace.mount import MountRegistry
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.state import deref
 
 # Appended to an alias value before parsing it for the read walk: the
@@ -70,7 +70,7 @@ def _defined_bodies(node: TSNodeLike) -> dict[str, list[TSNodeLike]]:
     return out
 
 
-def line_nodes(node: TSNodeLike, session: Session) -> list[TSNodeLike]:
+def line_nodes(node: TSNodeLike, session: SessionState) -> list[TSNodeLike]:
     """The line's tree plus every body its command words can run.
 
     A body runs at invocation, not where it is defined, so the read
@@ -87,7 +87,7 @@ def line_nodes(node: TSNodeLike, session: Session) -> list[TSNodeLike]:
 
     Args:
         node (TSNodeLike): the parsed line.
-        session (Session): the session the line runs in (stored
+        session (SessionState): the session the line runs in (stored
             functions, aliases, shopts).
     """
     defined = _defined_bodies(node)
@@ -151,7 +151,7 @@ def guest_bound(nodes: Sequence[TSNodeLike], decision: RouteDecision | None,
     return False
 
 
-def cli_env_names(nodes: Sequence[TSNodeLike], session: Session,
+def cli_env_names(nodes: Sequence[TSNodeLike], session: SessionState,
                   registry: MountRegistry) -> frozenset[str]:
     """Env names the line's installed CLIs are about to read.
 
@@ -169,7 +169,7 @@ def cli_env_names(nodes: Sequence[TSNodeLike], session: Session,
     Args:
         nodes (Sequence[TSNodeLike]): the line's walked set
             (``line_nodes``).
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
         registry (MountRegistry): the registry holding the installs.
     """
     out: set[str] = set()
@@ -310,7 +310,7 @@ def _unset_masks(stmt: TSNodeLike) -> frozenset[str] | None:
 
 
 def masked_names(node: TSNodeLike,
-                 session: Session,
+                 session: SessionState,
                  writes_gated: bool,
                  in_body: bool = False,
                  before: TSNodeLike | None = None) -> frozenset[str]:
@@ -341,7 +341,7 @@ def masked_names(node: TSNodeLike,
         node (TSNodeLike): the unit's parsed tree -- the line's
             own, one defined body's, or a stored statement's parent
             container (with ``before`` naming the statement).
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
         writes_gated (bool): a policy hooks ``pre_session``.
         in_body (bool): the unit is a function body, where ``local``
             assigns.
@@ -391,7 +391,7 @@ def masked_names(node: TSNodeLike,
 _BODY_CONTAINERS = frozenset({"compound_statement", "subshell"})
 
 
-def _own_masks(node: TSNodeLike, session: Session,
+def _own_masks(node: TSNodeLike, session: SessionState,
                writes_gated: bool) -> frozenset[str]:
     """A walked unit's own leading masks, discounting its own reads.
 
@@ -409,7 +409,7 @@ def _own_masks(node: TSNodeLike, session: Session,
 
     Args:
         node (TSNodeLike): one walked unit past the line itself.
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
         writes_gated (bool): a policy hooks ``pre_session``.
     """
     own: frozenset[str] = frozenset()
@@ -451,7 +451,7 @@ def _assigned_reach(
 
 
 def _arith_targets(
-        session: Session, names: frozenset[str],
+        session: SessionState, names: frozenset[str],
         assigned: Mapping[str, tuple[set[str], set[str]]]) -> frozenset[str]:
     """Every name an arithmetic read may reach through stored values.
 
@@ -467,7 +467,7 @@ def _arith_targets(
     reached on the next pass.
 
     Args:
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
         names (frozenset[str]): the unit's arithmetic reads.
         assigned (Mapping[str, tuple[set[str], set[str]]]): the line's
             assignment candidates per target.
@@ -503,7 +503,7 @@ def _arith_targets(
     return frozenset(out)
 
 
-def _wanted(session: Session, nodes: Sequence[TSNodeLike],
+def _wanted(session: SessionState, nodes: Sequence[TSNodeLike],
             pending: Mapping[str, ManagedRef], cli_env_names: frozenset[str],
             masked: frozenset[str], writes_gated: bool) -> frozenset[str]:
     """The pending names the line's walked set is about to read.
@@ -529,7 +529,7 @@ def _wanted(session: Session, nodes: Sequence[TSNodeLike],
     notwithstanding.
 
     Args:
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
         nodes (Sequence[TSNodeLike]): the line's walked set.
         pending (Mapping[str, ManagedRef]): unfetched managed vars.
         cli_env_names (frozenset[str]): env names the line's installed
@@ -575,14 +575,14 @@ def _wanted(session: Session, nodes: Sequence[TSNodeLike],
     return frozenset((wanted & pending.keys()) - masked)
 
 
-def _pending(session: Session) -> dict[str, ManagedRef]:
+def _pending(session: SessionState) -> dict[str, ManagedRef]:
     """The session's unfetched managed names, hidden ones excluded.
 
     A hidden name never fetches at all: the snapshot filters it and
     expansion reads it as unset, so no fetch could ever be visible.
 
     Args:
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
     """
     out: dict[str, ManagedRef] = {}
     for name, var in session.vars.items():
@@ -594,7 +594,7 @@ def _pending(session: Session) -> dict[str, ManagedRef]:
     return out
 
 
-def fill_names(session: Session,
+def fill_names(session: SessionState,
                nodes: Sequence[TSNodeLike],
                *,
                whole: bool,
@@ -611,7 +611,7 @@ def fill_names(session: Session,
     and a defined body's masks only that body's reads (``_own_masks``).
 
     Args:
-        session (Session): the session the line runs in.
+        session (SessionState): the session the line runs in.
         nodes (Sequence[TSNodeLike]): the line's walked set
             (``line_nodes``).
         whole (bool): the line runs as one opaque program (a whole-line
@@ -633,7 +633,7 @@ def fill_names(session: Session,
 
 
 async def fill_env(
-        session: Session,
+        session: SessionState,
         names: frozenset[str],
         sources: Mapping[str, ResolvedSource] | None = None) -> None:
     """Fetch the named managed values into the session.
@@ -656,7 +656,7 @@ async def fill_env(
     commands that need it.
 
     Args:
-        session (Session): the session the line runs in, written here.
+        session (SessionState): the session the line runs in, written here.
         names (frozenset[str]): the fetch set (``fill_names``).
         sources (Mapping[str, ResolvedSource] | None): the workspace's
             declared instances. A pointer naming one fetches through

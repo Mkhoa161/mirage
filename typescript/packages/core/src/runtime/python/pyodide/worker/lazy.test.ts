@@ -29,7 +29,7 @@ import { RAMVFS } from '../../../../vfs/ram/ram.ts'
 
 import { getCurrentSession, runWithSession } from '../../../../context/session_context.ts'
 import { record, runWithRecording, startOp } from '../../../../observe/context.ts'
-import { Session } from '../../../../workspace/session/session.ts'
+import { SessionState } from '../../../../workspace/session/session.ts'
 import type * as asyncContextModule from '../../../../utils/async_context.ts'
 
 vi.mock('../../../../utils/async_context.ts', async (importOriginal) => {
@@ -317,8 +317,8 @@ describe('Pyodide lazy VFS', { timeout: 60_000 }, () => {
         new PrefixResolver(() => ['/data/']),
       ),
     )
-    const one = new Session({ sessionId: 'one' })
-    const two = new Session({ sessionId: 'two' })
+    const one = new SessionState({ sessionId: 'one' })
+    const two = new SessionState({ sessionId: 'two' })
     try {
       const first = runWithSession(one, () =>
         runWithRecording(() => rt.run(runArgs("print(open('/data/one').read())"))),

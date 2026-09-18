@@ -37,7 +37,7 @@ async def run():
         print("\n--- grep -c mirage /s3/data/example.jsonl ---")
         print((await r.stdout_str()).rstrip())
 
-        records = ws.fs.records
+        records = ws.vfs.records
         total = sum(rec.bytes for rec in records)
         print(f"\nremote stats: {len(records)} ops, {total} bytes")
 

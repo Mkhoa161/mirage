@@ -56,7 +56,7 @@ task = ("Read the PDF at /s3/data/example.pdf."
 result = agent.run_sync(task, deps=Deps(backend=backend))
 print(result.output)
 
-records = ws.fs.records
+records = ws.vfs.records
 if records:
     total = sum(r.bytes for r in records)
     print(f"\n--- {len(records)} ops, {total:,} bytes ---")

@@ -10,7 +10,7 @@ from mirage.policy.profile import SessionProfile
 from mirage.types import MountMode
 from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 from mirage.workspace.session.state import session_view
 
 
@@ -27,7 +27,7 @@ def test_owner_and_group_prefer_the_entry_then_the_identity_then_dash():
 
 
 def test_identity_reads_the_name_plane_and_the_session_plane():
-    session = Session(session_id="s", profile="admin")
+    session = SessionState(session_id="s", profile="admin")
     view = session_view(session)
     ns = NamespaceView(user="alice")
     assert identity_from(ns, view) == Identity(user="alice", profile="admin")

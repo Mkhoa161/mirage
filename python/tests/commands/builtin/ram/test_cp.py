@@ -24,8 +24,8 @@ def workspace():
 
 @pytest.mark.asyncio
 async def test_cp_recursive_into_itself_refused(workspace):
-    await workspace.fs.mkdir("/d")
-    await workspace.fs.write("/d/a.txt", b"a")
+    await workspace.vfs.mkdir("/d")
+    await workspace.vfs.write("/d/a.txt", b"a")
     io = await workspace.shell("cp -r /d /d")
     assert io.exit_code != 0
     assert b"into itself" in io.stderr
@@ -35,26 +35,26 @@ async def test_cp_recursive_into_itself_refused(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_onto_same_path_errors(workspace):
-    await workspace.fs.write("/a.txt", b"keep")
+    await workspace.vfs.write("/a.txt", b"keep")
     io = await workspace.shell("cp /a.txt /a.txt")
     assert io.exit_code != 0
     assert b"are the same file" in io.stderr
-    assert await workspace.fs.read("/a.txt") == b"keep"
+    assert await workspace.vfs.read("/a.txt") == b"keep"
 
 
 @pytest.mark.asyncio
 async def test_cp_missing_source_continues_with_rest(workspace):
-    await workspace.fs.mkdir("/d")
-    await workspace.fs.write("/b.txt", b"b")
+    await workspace.vfs.mkdir("/d")
+    await workspace.vfs.write("/b.txt", b"b")
     io = await workspace.shell("cp /missing.txt /b.txt /d")
     assert io.exit_code != 0
     assert b"cannot stat" in io.stderr
-    assert await workspace.fs.read("/d/b.txt") == b"b"
+    assert await workspace.vfs.read("/d/b.txt") == b"b"
 
 
 @pytest.mark.asyncio
 async def test_cp_into_missing_parent_refuses(workspace):
-    await workspace.fs.write("/a.txt", b"hi")
+    await workspace.vfs.write("/a.txt", b"hi")
     io = await workspace.shell("cp /a.txt /nodir/x.txt")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: cannot create regular file '/nodir/x.txt': "
@@ -65,8 +65,8 @@ async def test_cp_into_missing_parent_refuses(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_under_a_file_reports_not_a_directory(workspace):
-    await workspace.fs.write("/a.txt", b"hi")
-    await workspace.fs.write("/plain", b"y")
+    await workspace.vfs.write("/a.txt", b"hi")
+    await workspace.vfs.write("/plain", b"y")
     io = await workspace.shell("cp /a.txt /plain/x.txt")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: cannot stat '/plain/x.txt': Not a directory\n")
@@ -74,8 +74,8 @@ async def test_cp_under_a_file_reports_not_a_directory(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_deep_under_a_file_reports_not_a_directory(workspace):
-    await workspace.fs.write("/a.txt", b"hi")
-    await workspace.fs.write("/plain", b"y")
+    await workspace.vfs.write("/a.txt", b"hi")
+    await workspace.vfs.write("/plain", b"y")
     io = await workspace.shell("cp /a.txt /plain/s/x.txt")
     assert io.exit_code == 1
     assert io.stderr == (
@@ -84,8 +84,8 @@ async def test_cp_deep_under_a_file_reports_not_a_directory(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_multi_source_missing_target_is_enoent(workspace):
-    await workspace.fs.write("/a.txt", b"a")
-    await workspace.fs.write("/b.txt", b"b")
+    await workspace.vfs.write("/a.txt", b"a")
+    await workspace.vfs.write("/b.txt", b"b")
     io = await workspace.shell("cp /a.txt /b.txt /nodir")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: target '/nodir': No such file or directory\n")
@@ -93,9 +93,9 @@ async def test_cp_multi_source_missing_target_is_enoent(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_multi_source_target_is_file_is_enotdir(workspace):
-    await workspace.fs.write("/a.txt", b"a")
-    await workspace.fs.write("/b.txt", b"b")
-    await workspace.fs.write("/plain", b"y")
+    await workspace.vfs.write("/a.txt", b"a")
+    await workspace.vfs.write("/b.txt", b"b")
+    await workspace.vfs.write("/plain", b"y")
     io = await workspace.shell("cp /a.txt /b.txt /plain")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: target '/plain': Not a directory\n")
@@ -103,10 +103,10 @@ async def test_cp_multi_source_target_is_file_is_enotdir(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_recursive_verbose_lists_directories(workspace):
-    await workspace.fs.mkdir("/dir")
-    await workspace.fs.mkdir("/dir/sub")
-    await workspace.fs.write("/dir/f.txt", b"f")
-    await workspace.fs.write("/dir/sub/g.txt", b"g")
+    await workspace.vfs.mkdir("/dir")
+    await workspace.vfs.mkdir("/dir/sub")
+    await workspace.vfs.write("/dir/f.txt", b"f")
+    await workspace.vfs.write("/dir/sub/g.txt", b"g")
     io = await workspace.shell("cp -rv /dir /newdir")
     assert io.exit_code == 0
     lines = io.stdout.decode().splitlines()
@@ -121,10 +121,10 @@ async def test_cp_recursive_verbose_lists_directories(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_recursive_into_missing_parent_copies_nothing(workspace):
-    await workspace.fs.mkdir("/dir")
-    await workspace.fs.mkdir("/dir/sub")
-    await workspace.fs.write("/dir/f.txt", b"f")
-    await workspace.fs.write("/dir/sub/g.txt", b"g")
+    await workspace.vfs.mkdir("/dir")
+    await workspace.vfs.mkdir("/dir/sub")
+    await workspace.vfs.write("/dir/f.txt", b"f")
+    await workspace.vfs.write("/dir/sub/g.txt", b"g")
     io = await workspace.shell("cp -r /dir /nodir/sub")
     assert io.exit_code == 1
     # GNU reports the failed directory once and copies nothing.
@@ -138,8 +138,8 @@ async def test_cp_recursive_into_missing_parent_copies_nothing(workspace):
 async def test_cp_source_under_a_plain_file_is_not_a_directory(workspace):
     # Backends answer stat with ENOENT for a path under a plain file, so the
     # source probe has to walk the chain to recover GNU's errno.
-    await workspace.fs.write("/plain", b"x")
-    await workspace.fs.mkdir("/d")
+    await workspace.vfs.write("/plain", b"x")
+    await workspace.vfs.mkdir("/d")
     io = await workspace.shell("cp /plain/child /d")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: cannot stat '/plain/child': Not a directory\n")
@@ -147,8 +147,8 @@ async def test_cp_source_under_a_plain_file_is_not_a_directory(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_source_deep_under_a_plain_file_is_not_a_directory(workspace):
-    await workspace.fs.write("/plain", b"x")
-    await workspace.fs.mkdir("/d")
+    await workspace.vfs.write("/plain", b"x")
+    await workspace.vfs.mkdir("/d")
     io = await workspace.shell("cp /plain/a/b /d")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: cannot stat '/plain/a/b': Not a directory\n")
@@ -156,7 +156,7 @@ async def test_cp_source_deep_under_a_plain_file_is_not_a_directory(workspace):
 
 @pytest.mark.asyncio
 async def test_cp_absent_source_is_still_no_such_file(workspace):
-    await workspace.fs.mkdir("/d")
+    await workspace.vfs.mkdir("/d")
     io = await workspace.shell("cp /nope /d")
     assert io.exit_code == 1
     assert io.stderr == (b"cp: cannot stat '/nope': "

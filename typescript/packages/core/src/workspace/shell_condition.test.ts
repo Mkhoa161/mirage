@@ -19,7 +19,7 @@ import { ContentType, FileType } from '../types.ts'
 import { handleTest } from './executor/builtins/condition/index.ts'
 import type { DispatchFn } from './executor/cross_mount.ts'
 import type { Namespace } from './mount/namespace/namespace.ts'
-import type { Session } from './session/session.ts'
+import type { SessionState } from './session/session.ts'
 import type { Workspace } from './workspace/workspace.ts'
 import { makeIntegrationWS, run, runExit, runResult } from './fixtures/integration_fixture.ts'
 
@@ -199,7 +199,7 @@ const stubNamespace = {
   isLink: () => false,
 } as unknown as Namespace
 
-const stubSession = { cwd: '/data', env: {}, arrays: {} } as unknown as Session
+const stubSession = { cwd: '/data', env: {}, arrays: {} } as unknown as SessionState
 
 /**
  * Mimics a prefix store (s3/gridfs/hf/nextcloud): stat never sees

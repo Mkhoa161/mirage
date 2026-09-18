@@ -271,7 +271,7 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
     ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
     cache = ws.cache
     ws.add_mount("/alias", vfs)
-    alias_entries = await ws.fs.readdir("/alias")
+    alias_entries = await ws.vfs.readdir("/alias")
     entered = asyncio.Event()
     release = asyncio.Event()
     store = cache if cache_kind == "file" else vfs.index
@@ -296,10 +296,10 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
         with pytest.raises(ValueError, match="duplicate mount prefix"):
             ws.add_mount("/data", RAMVFS())
         with pytest.raises(OSError) as reading:
-            await ws.fs.readdir("/data")
+            await ws.vfs.readdir("/data")
         assert reading.value.errno == errno.EBUSY
         with pytest.raises(OSError) as writing:
-            await ws.fs.write("/data/file", b"changed")
+            await ws.vfs.write("/data/file", b"changed")
         assert writing.value.errno == errno.EBUSY
         for line in ("cat /data/file", "echo changed > /data/file"):
             assert (await ws.shell(line)).exit_code != 0
@@ -316,7 +316,7 @@ async def test_unmount_keeps_prefix_reserved_until_cache_cleanup(
         assert await cache.get("/data") is None
         assert await cache.get("/data/file") is None
         assert await cache.get("/database/file") == b"peer"
-        assert await ws.fs.readdir("/alias") == alias_entries
+        assert await ws.vfs.readdir("/alias") == alias_entries
         ws.add_mount("/data", RAMVFS())
     finally:
         release.set()
@@ -349,7 +349,7 @@ async def test_mount_change_invalidates_index_before_replacement(
         replacement = RAMVFS()
         ws.add_mount("/data", replacement)
         if shadow:
-            assert await ws.fs.readdir("/data") == []
+            assert await ws.vfs.readdir("/data") == []
         for candidate in (index, replacement.index):
             for path in ("/data", "/data/private.txt",
                          "/data/nested/private.txt"):
@@ -473,7 +473,7 @@ async def test_close_refuses_lifecycle_changes_but_allows_runtime_drain(
             if blocked_phase == "runtime":
                 entered.set()
                 await release.wait()
-            await ws.fs.write("/m/journal.txt", b"drained")
+            await ws.vfs.write("/m/journal.txt", b"drained")
 
     close_vfs = vfs.close
 
@@ -482,7 +482,7 @@ async def test_close_refuses_lifecycle_changes_but_allows_runtime_drain(
         if blocked_phase == "vfs":
             entered.set()
             await release.wait()
-        drained.append(await ws.fs.read("/m/journal.txt"))
+        drained.append(await ws.vfs.read("/m/journal.txt"))
         await close_vfs()
 
     monkeypatch.setattr(vfs, "close", closing_vfs)
@@ -565,7 +565,7 @@ async def test_unmount_preserves_operations_of_each_surviving_vfs():
         assert missing.value.errno == errno.ENOTSUP
         await ws.unmount("/third")
         assert await identity("/first/file") == "first"
-        assert await ws.fs.readdir("/")
+        assert await ws.vfs.readdir("/")
     finally:
         await ws.close()
 

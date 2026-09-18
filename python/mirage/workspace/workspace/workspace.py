@@ -66,7 +66,7 @@ from mirage.workspace.mount import MountEntry, MountRegistry
 from mirage.workspace.mount.namespace import Namespace
 from mirage.workspace.mount.namespace.store import NamespaceStore
 from mirage.workspace.node.explain import explain_line
-from mirage.workspace.session import Session, SessionManager, SessionStore
+from mirage.workspace.session import SessionManager, SessionState, SessionStore
 from mirage.workspace.session.constants import DEFAULT_PROFILE
 from mirage.workspace.session.resolve import (apply_profile, compile_profile,
                                               resolve_profile, with_inline)
@@ -87,7 +87,7 @@ from mirage.workspace.workspace.build import (resolve_control_stores,
 from mirage.workspace.workspace.cache import build_file_cache
 from mirage.workspace.workspace.execute import LineFrame, execute_line
 from mirage.workspace.workspace.guard import reject_config_script
-from mirage.workspace.workspace.handle import SessionHandle
+from mirage.workspace.workspace.handle import Session
 from mirage.workspace.workspace.kernel_mounts import KernelMounts
 from mirage.workspace.workspace.lifecycle import (close_async, patch_process,
                                                   stop_vfs_loop,
@@ -287,7 +287,7 @@ class Workspace:
         self._registry.mount(HISTORY_PREFIX, HistoryViewVFS(self.observer),
                              MountMode.READ)
         # The facade delegates every op to the dispatcher, so FUSE and
-        # programmatic ws.fs walk the same pipeline as a shell command
+        # programmatic ws.vfs walk the same pipeline as a shell command
         # and the policy gates fire exactly once, at that door. It runs
         # as the default session, as a bare ``shell`` does, so the
         # default profile confines it too.
@@ -431,10 +431,10 @@ class Workspace:
         return self._session_mgr.has_managed_env
 
     @property
-    def fs(self) -> Ops:
+    def vfs(self) -> Ops:
         """The op facade: read/write/stat/readdir/... against the mounts.
 
-        Named as TypeScript names it (`ws.fs`), so one host API reads the
+        Named as TypeScript names it (`ws.vfs`), so one host API reads the
         same in both languages; the `Ops` class name stays, since it is
         the op vocabulary the dispatcher speaks, not a filesystem.
         """
@@ -976,7 +976,7 @@ class Workspace:
         *,
         profile: str | SessionProfile | Mapping[str, Any] | None = None,
         permissions: SessionProfile | Mapping[str, Any] | None = None,
-    ) -> Session:
+    ) -> SessionState:
         """Create a session under one profile, with an optional inline
         document of its own.
 
@@ -1027,14 +1027,14 @@ class Workspace:
         *,
         profile: str | SessionProfile | Mapping[str, Any] | None = None,
         permissions: SessionProfile | Mapping[str, Any] | None = None,
-    ) -> SessionHandle:
-        """One session's two doors: ``shell`` and ``fs`` bound to it.
+    ) -> Session:
+        """One session's two doors: ``shell`` and ``vfs`` bound to it.
 
         Creates the session under the given profile when the id is new
         (the same call as ``create_session``), and adopts it as is when
         it exists. A profile, mounts or permissions for an existing
         session are refused rather than ignored: a profile is set once,
-        at creation, and a handle must not look like it narrowed a
+        at creation, and the object it returns must not look like it narrowed a
         session it merely adopted. The session store is hydrated
         first, so a session a previous process persisted is adopted
         with its stored profile rather than recreated over it; that is
@@ -1059,12 +1059,12 @@ class Workspace:
                     or permissions is not None):
                 raise ValueError(f"session {session_id!r} exists; its "
                                  "profile was set when it was created")
-            return SessionHandle(self, session_id)
+            return Session(self, session_id)
         self.create_session(session_id,
                             mounts,
                             profile=profile,
                             permissions=permissions)
-        return SessionHandle(self, session_id)
+        return Session(self, session_id)
 
     def _cli_verbs(self) -> dict[str, frozenset[str]]:
         """The verbs each installed CLI declares, keyed by head word.
@@ -1116,14 +1116,14 @@ class Workspace:
         """
         return [entry.prefix for entry in self._registry.mounts()]
 
-    def get_session(self, session_id: str) -> Session:
+    def get_session(self, session_id: str) -> SessionState:
         return self._session_mgr.get(session_id)
 
     async def set_session_profile(
         self,
         session_id: str,
         profile: str | SessionProfile | Mapping[str, Any] | None,
-    ) -> Session:
+    ) -> SessionState:
         """Replace a live session's permissions, including its policy runtime.
 
         Compilation succeeds before anything changes. This replaces modes,
@@ -1151,7 +1151,7 @@ class Workspace:
             session_id = self.default_session_id
         return await self._session_mgr.set_profile(session_id, compiled)
 
-    def list_sessions(self) -> list[Session]:
+    def list_sessions(self) -> list[SessionState]:
         return self._session_mgr.list()
 
     async def ensure_sessions_loaded(self) -> None:
@@ -1206,7 +1206,7 @@ class Workspace:
         """Run one op door call as ``session_id``.
 
         A session already bound in this context is kept: a command's
-        runtime reaching ``ws.fs`` stays in its own session, and a
+        runtime reaching ``ws.vfs`` stays in its own session, and a
         kernel mount serving one session keeps that one, so the door
         never widens a caller's view. A session another workspace
         bound is the exception: its hides and grants describe that
@@ -1240,7 +1240,7 @@ class Workspace:
                        **kwargs: Any) -> tuple[Any, IOResult]:
         # The door owns pre-dispatch initialization (namespace load,
         # pending drift checks), so FUSE and the ops facade get it too.
-        # Runs as the default session unless one is bound, like ws.fs.
+        # Runs as the default session unless one is bound, like ws.vfs.
         return await self._bind_session(
             None, partial(self._dispatcher.dispatch, op, path, **kwargs))
 

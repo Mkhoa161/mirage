@@ -34,7 +34,7 @@ from mirage.runtime.python.monty import MontyRuntime
 from mirage.runtime.types import ProcessExecution, RunResult, ScriptSource
 from mirage.workspace.expand import argv as argv_module
 from mirage.workspace.lookup import SHELL_NAMES, Consumer, lookup, lookup_all
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 
 
 class ProcessProbe(Runtime, ProcessExecutorMixin):
@@ -464,7 +464,7 @@ async def test_native_captures_preserve_shell_builtins(kind, willing):
     async with workspace({"/work": RAMVFS()},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
-        session = Session(session_id="lookup")
+        session = SessionState(session_id="lookup")
         for name in SHELL_NAMES - {"python", "python3", "node", "js"}:
             assert lookup(name, session,
                           ws._registry) is Consumer.SESSION, name

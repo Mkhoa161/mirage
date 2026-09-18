@@ -324,7 +324,7 @@ def weaker_mode(a: MountMode, b: MountMode) -> MountMode:
 class HiddenPaths:
     """What the data door treats as nonexistent for one session.
 
-    A sibling of ``Session.mount_modes``: per-session narrowing that
+    A sibling of ``SessionState.mount_modes``: per-session narrowing that
     the doors enforce, None-on-the-session means unrestricted. Hiding
     is "does not exist", never "forbidden" — matching paths answer
     ENOENT and drop out of listings, the same no-name-leak rule

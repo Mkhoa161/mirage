@@ -62,7 +62,7 @@ from mirage.workspace.lookup import (JOB_BUILTINS, Consumer, dereferences,
 from mirage.workspace.mount import MountCommandUnsupported, MountRegistry
 from mirage.workspace.mount.namespace import Namespace
 from mirage.workspace.mount.storage import make_storage_key
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.state import session_view
 from mirage.workspace.types import ExecuteLine, ExecutionNode
 
@@ -86,7 +86,7 @@ async def _finish_find(
         io: IOResult,
         texts: list[str],
         registry: MountRegistry,
-        session: Session,
+        session: SessionState,
         execute_fn: ExecuteLine | None,
         ns: NamespaceView | None,
         stat_path: StatPath | None,
@@ -108,7 +108,7 @@ async def _finish_find(
         io (IOResult): the selection's result, amended in place.
         texts (list[str]): the expression tokens.
         registry (MountRegistry): used to route per-match dispatch.
-        session (Session): the session the line runs under.
+        session (SessionState): the session the line runs under.
         execute_fn (ExecuteLine | None): runs an ``-exec`` line.
         ns (NamespaceView | None): the name plane's facts.
         stat_path (StatPath | None): dispatcher stat.
@@ -149,7 +149,7 @@ async def handle_command(
     dispatch: DispatchFn,
     registry: MountRegistry,
     parts: list[str | PathSpec],
-    session: Session,
+    session: SessionState,
     stdin: ByteSource | None = None,
     call_stack: CallStack | None = None,
     job_table: JobTable | None = None,

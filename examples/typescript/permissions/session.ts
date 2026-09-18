@@ -21,22 +21,22 @@ import {
 import type {
   Ops,
   SessionExecuteOptions,
-  SessionHandle,
+  Session,
 } from "@struktoai/mirage-node";
 
-// One agent, one handle. `ws.session(id, { profile })` creates a session
-// under a role and hands back its two doors bound together: `execute`
-// runs a shell line as the session and `fs` is the op facade run as it.
+// One agent, one session. `ws.session(id, { profile })` creates a session
+// under a role and hands back its two doors bound together: `shell`
+// runs a shell line as the session and `vfs` is the op facade run as it.
 // Whichever door an agent's tools use, the same profile answers.
 //
 // Two roles read one world and see two filesystems. The reviewer's
-// profile hides /repo/secrets and its handle caps /repo at read, so the
+// profile hides /repo/secrets and its session caps /repo at read, so the
 // directory does not exist for it on either door and a write is a
 // read-only file system on either door. The editor may write, and a
 // deny rule keeps it out of the secrets by name, so the same file is
 // "does not exist" for one role and "permission denied" for the other,
-// through the shell and through fs.read alike. The workspace names no
-// default profile, so its own doors (`ws.fs`, bare `ws.shell`) are
+// through the shell and through vfs.read alike. The workspace names no
+// default profile, so its own doors (`ws.vfs`, bare `ws.shell`) are
 // the host's view. A second `ws.session(id)` adopts the session as is;
 // naming a profile for a session that already exists is refused.
 
@@ -75,8 +75,8 @@ function show(
   answer: string,
   note: string,
 ): void {
-  console.log(`${pad(role, 9)} ${pad(door, 8)} ${pad(call, 34)} ${answer}`);
-  console.log(`${pad("", 9)} ${pad("", 8)} ${pad("", 34)} ${note}`);
+  console.log(`${pad(role, 9)} ${pad(door, 9)} ${pad(call, 34)} ${answer}`);
+  console.log(`${pad("", 9)} ${pad("", 9)} ${pad("", 34)} ${note}`);
 }
 
 function codeOf(err: unknown): string {
@@ -94,7 +94,7 @@ interface Doors {
     stderr: Uint8Array | null;
     exitCode: number;
   }>;
-  fs: Ops;
+  vfs: Ops;
 }
 
 async function line(
@@ -121,13 +121,13 @@ async function read(
   try {
     show(
       role,
-      "fs.read",
+      "vfs.read",
       call,
-      (await handle.fs.readFileText(path, "utf-8", sessionId)).trim(),
+      (await handle.vfs.readFileText(path, "utf-8", sessionId)).trim(),
       note,
     );
   } catch (err) {
-    show(role, "fs.read", call, codeOf(err), note);
+    show(role, "vfs.read", call, codeOf(err), note);
   }
 }
 
@@ -138,10 +138,10 @@ async function write(
   note: string,
 ): Promise<void> {
   try {
-    await handle.fs.writeFile(path, `${role} wrote\n`);
-    show(role, "fs.write", path, "ok", note);
+    await handle.vfs.writeFile(path, `${role} wrote\n`);
+    show(role, "vfs.write", path, "ok", note);
   } catch (err) {
-    show(role, "fs.write", path, codeOf(err), note);
+    show(role, "vfs.write", path, codeOf(err), note);
   }
 }
 
@@ -160,14 +160,14 @@ async function main(): Promise<void> {
   );
   for (const seed of SEED) await ws.shell(seed);
 
-  const reviewer: SessionHandle = await ws.session("reviewer", {
+  const reviewer: Session = await ws.session("reviewer", {
     profile: "reviewer",
     mounts: { "/repo": "read" },
   });
   const editor = await ws.session("editor", { profile: "editor" });
   const host: Doors = {
     shell: (cmd, options) => ws.shell(cmd, options),
-    fs: ws.fs,
+    vfs: ws.vfs,
   };
 
   await line(

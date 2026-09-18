@@ -110,7 +110,7 @@ def run_link_probe(result: dict[str, ProbeValue]) -> None:
     asyncio.run(ws.shell("ln -s f.txt /data/lk.pinned"))
     asyncio.run(ws.shell("ln -s f.txt /data/lk.plain"))
     mountpoint = tempfile.mkdtemp(prefix="mirage-fuse-link-")
-    mount_background(ws.fs, mountpoint)
+    mount_background(ws.vfs, mountpoint)
     try:
         # A denied removal must FAIL and leave the link where it was.
         # Keyed on the refusal, not on an errno, because Windows cannot
@@ -246,9 +246,9 @@ def run_session_probe(result: dict[str, ProbeValue]) -> None:
                                   session_id="agent"))
     result["session_shell_write_refused"] = capped.exit_code != 0
     result["session_host_reads_hidden"] = asyncio.run(
-        ws.fs.read("/data/vault/secret.txt")).decode().strip()
+        ws.vfs.read("/data/vault/secret.txt")).decode().strip()
     mountpoint = tempfile.mkdtemp(prefix="mirage-fuse-session-")
-    mount_background(ws.fs, mountpoint, session=session)
+    mount_background(ws.vfs, mountpoint, session=session)
     data = f"{mountpoint}/data"
     try:
         with open(f"{data}/pub.txt", "rb") as fh:
@@ -289,7 +289,7 @@ def run_sizeless_probe(result: dict[str, ProbeValue]) -> None:
     api._store.files["/api.json"] = API_CONTENT
     ws = Workspace({"/api": Mount(api, mode=MountMode.READ)})
     mountpoint = tempfile.mkdtemp(prefix="mirage-fuse-api-")
-    mount_background(SizelessOps(ws.fs), mountpoint)
+    mount_background(SizelessOps(ws.vfs), mountpoint)
     api_file = f"{mountpoint}/api/api.json"
     try:
         # Size-unknown semantics (see the CLAUDE.md FUSE section): stat 0

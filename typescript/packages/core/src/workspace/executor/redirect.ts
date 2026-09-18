@@ -32,7 +32,7 @@ import { getText } from '../../shell/helpers.ts'
 import { type Redirect, RedirectKind } from '../../shell/types.ts'
 import { FileStat, FileType, PathSpec } from '../../types.ts'
 import type { TSNodeLike } from '../../shell/types.ts'
-import type { Session } from '../session/session.ts'
+import type { SessionState } from '../session/session.ts'
 import { ExecutionNode } from '../types.ts'
 import type { DispatchFn } from '../../runtime/types.ts'
 import { createFile } from './create.ts'
@@ -108,7 +108,7 @@ export async function handleRedirect(
   dispatch: DispatchFn,
   command: TSNodeLike | null,
   redirects: readonly Redirect[],
-  session: Session,
+  session: SessionState,
   stdin: ByteSource | null = null,
   callStack: CallStack | null = null,
 ): Promise<Result> {
@@ -455,7 +455,7 @@ function shellFailure(line: Uint8Array): Result {
  */
 async function noclobberRefusal(
   dispatch: DispatchFn,
-  session: Session,
+  session: SessionState,
   redirects: readonly Redirect[],
 ): Promise<Result | null> {
   if (session.shellOptions.noclobber !== true) return null
@@ -528,7 +528,7 @@ async function applyPendingOpens(dispatch: DispatchFn, pending: PathSpec[]): Pro
 
 /** The descriptors an `exec` closed for the shell, which a line's dup
  * from refuses before the command runs. */
-function persistentlyClosed(session: Session): Set<number> {
+function persistentlyClosed(session: SessionState): Set<number> {
   const closed = new Set<number>()
   if (session.execStdinIdentity === EXEC_CLOSED) closed.add(FD_STDIN)
   if (session.execStdout === EXEC_CLOSED) closed.add(FD_STDOUT)
@@ -543,7 +543,7 @@ function persistentlyClosed(session: Session): Set<number> {
  * pipe); a terminal stream dup'd onto it (`exec 0<&1`) writes where that
  * stream goes; a file opened for writing (`exec 0>f`) is the file.
  */
-function stdinDest(session: Session): FdDest {
+function stdinDest(session: SessionState): FdDest {
   const id = session.execStdinIdentity
   if (id === null || id === EXEC_CLOSED || id.startsWith(OPEN_FOR_READING)) return CLOSED
   if (id === EXEC_TO_STDOUT) return TO_STDOUT

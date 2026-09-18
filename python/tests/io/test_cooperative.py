@@ -197,7 +197,7 @@ async def test_pipeline_cache_lifecycle(failure):
     from mirage.io import CachableAsyncIterator, IOResult
     from mirage.io.stream import async_chain
     from mirage.workspace.executor.pipes import handle_pipe
-    from mirage.workspace.session import Session
+    from mirage.workspace.session import SessionState
     from mirage.workspace.types import ExecutionNode
     closed = False
 
@@ -223,7 +223,8 @@ async def test_pipeline_cache_lifecycle(failure):
             raise CommandTimeoutError("wc", 1)
         return b"first", IOResult(), ExecutionNode(command="head")
 
-    run = handle_pipe(execute, ["cat", "wc"], [], Session(session_id="test"))
+    run = handle_pipe(execute, ["cat", "wc"], [],
+                      SessionState(session_id="test"))
     if failure == "early":
         await run
         assert not closed

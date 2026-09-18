@@ -72,7 +72,7 @@ from mirage.secrets.registry import known_sources, register_secrets
 from mirage.types import (ContentType, DriftPolicy, FileType, Limit, PathSpec,
                           VFSName)
 from mirage.utils.glob_walk import DEFAULT_MAX_GLOB_MATCHES, make_resolve_glob
-from mirage.workspace import Session
+from mirage.workspace import Session, SessionState
 
 __all__ = [
     "__version__",
@@ -157,6 +157,7 @@ __all__ = [
     "Session",
     "SessionContext",
     "SessionProfile",
+    "SessionState",
     "UsageError",
     "UsageStyle",
     "build_vfs",

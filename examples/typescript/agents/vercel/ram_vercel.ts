@@ -62,6 +62,6 @@ const paths = findAll.stdoutText
 console.log(paths.join('\n'))
 
 for (const path of paths) {
-  const content = await ws.fs.readFileText(path)
+  const content = await ws.vfs.readFileText(path)
   console.log(`cat ${path}:\n${content}`)
 }

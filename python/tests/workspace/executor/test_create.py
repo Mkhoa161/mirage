@@ -24,7 +24,7 @@ from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.scope import _to_scope
 from mirage.workspace.executor.create import create_file
-from mirage.workspace.session.session import Session
+from mirage.workspace.session.session import SessionState
 
 
 class _Dispatch:
@@ -47,14 +47,14 @@ class _Dispatch:
 @pytest.mark.asyncio
 async def test_default_umask_never_probes_or_sets_a_mode():
     dispatch = _Dispatch(exists=False)
-    await create_file(dispatch, Session("s"), _to_scope("/data/f"), b"x")
+    await create_file(dispatch, SessionState("s"), _to_scope("/data/f"), b"x")
     assert dispatch.ops == ["write"]
 
 
 @pytest.mark.asyncio
 async def test_a_created_file_takes_the_masked_mode():
     dispatch = _Dispatch(exists=False)
-    session = Session("s")
+    session = SessionState("s")
     session.umask = 0o077
     await create_file(dispatch, session, _to_scope("/data/f"), b"x")
     assert dispatch.ops == ["stat", "write", "setattr"]
@@ -64,7 +64,7 @@ async def test_a_created_file_takes_the_masked_mode():
 @pytest.mark.asyncio
 async def test_an_existing_file_keeps_its_mode():
     dispatch = _Dispatch(exists=True)
-    session = Session("s")
+    session = SessionState("s")
     session.umask = 0o077
     await create_file(dispatch, session, _to_scope("/data/f"), b"x")
     assert dispatch.ops == ["stat", "write"]

@@ -121,7 +121,7 @@ The browser SDK runs entirely in-page: no kernel, no subprocesses, no Node `fs`.
 
 ### 1. No FUSE
 
-Browsers can't mount filesystems. The browser `Workspace` takes plain mounts: there is no `Mount` backend option and no `addFuseMount`. Use `ws.shell(...)` (virtual executor) and `ws.fs.readFile/writeFile` instead. Every builtin (`cat`, `grep`, `jq`, `awk`, `python3`, etc.) is reimplemented in-process, so most agent code paths work unchanged from Node.
+Browsers can't mount filesystems. The browser `Workspace` takes plain mounts: there is no `Mount` backend option and no `addFuseMount`. Use `ws.shell(...)` (virtual executor) and `ws.vfs.readFile/writeFile` instead. Every builtin (`cat`, `grep`, `jq`, `awk`, `python3`, etc.) is reimplemented in-process, so most agent code paths work unchanged from Node.
 
 ### 2. OPFS quotas and persistence
 

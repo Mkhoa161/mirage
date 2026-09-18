@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { VarAttr } from '../shell/variable.ts'
 import { makeWorkspace, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
-import { Session } from './session/session.ts'
+import { SessionState } from './session/session.ts'
 import { envSnapshot } from './session/state.ts'
 
 // Every case pinned against GNU bash 5.2.37 on debian:stable-slim.
@@ -138,7 +138,7 @@ describe('the process view is not the shell view', () => {
     // `fork({cwd})` rebuilds $PWD to name where the fork is, and has to
     // rebuild the attribute with it: a fresh record would drop the mark
     // and the forked session's env would lose PWD entirely.
-    const session = new Session({ sessionId: 's1', cwd: '/' })
+    const session = new SessionState({ sessionId: 's1', cwd: '/' })
     const forked = session.fork({ cwd: '/data' })
     expect(forked.vars.PWD?.attrs.has(VarAttr.Export)).toBe(true)
     expect(envSnapshot(forked).PWD).toBe('/data')

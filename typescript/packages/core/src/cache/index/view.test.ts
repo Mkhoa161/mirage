@@ -26,7 +26,7 @@ import { IndexView } from './view.ts'
 import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { runWithSession } from '../../context/session_context.ts'
 import { FileStat, FileType, MountMode, PathSpec } from '../../types.ts'
-import { Session } from '../../workspace/session/session.ts'
+import { SessionState } from '../../workspace/session/session.ts'
 import { Workspace } from '../../workspace/workspace/workspace.ts'
 
 const cases = ['backend', 'store'].flatMap((phase) =>
@@ -80,7 +80,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
             })
           },
         })
-        const session = new Session({
+        const session = new SessionState({
           sessionId: 'agent',
           hiddenPaths: { paths: ['/data/source/private'] },
         })
@@ -99,7 +99,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
           await ws.unmount('/data')
           const replacement = new RAMVFS()
           ws.addMount('/data', replacement)
-          await ws.fs.readdir('/data')
+          await ws.vfs.readdir('/data')
           await replacement.index.put(
             '/data/fresh',
             new IndexEntry({ id: 'new', name: 'fresh', resourceType: 'file' }),
@@ -177,7 +177,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
             return ['/data/stale']
           },
         })
-        const reading = ws.fs.readdir('/data')
+        const reading = ws.vfs.readdir('/data')
         let changing: Promise<unknown> | undefined
         const replacement = new RAMVFS()
         try {
@@ -185,7 +185,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
           let changed = false
           if (shadow) {
             ws.addMount('/data', replacement)
-            changing = ws.fs.readdir('/data').then(() => {
+            changing = ws.vfs.readdir('/data').then(() => {
               changed = true
             })
           } else {
@@ -201,7 +201,7 @@ for (const type of [IndexType.RAM, IndexType.REDIS]) {
           await changing
           if (!shadow) {
             ws.addMount('/data', replacement)
-            await ws.fs.readdir('/data')
+            await ws.vfs.readdir('/data')
           }
           await replacement.index.put(
             '/data/fresh',

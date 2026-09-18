@@ -213,7 +213,7 @@ describe('pipeline', () => {
     expect(decode(io.stdout)).toContain('yes')
   })
 
-  // ── Session: cd + env ────────────────────────────────────────────
+  // ── SessionState: cd + env ────────────────────────────────────────────
 
   it('cd then relative cat', async () => {
     await ws.shell('cd /data/subdir')

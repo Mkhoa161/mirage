@@ -64,7 +64,7 @@ def main() -> None:
     print()
     print(f"--- {elapsed:.1f}s ---")
 
-    records = ws.fs.records
+    records = ws.vfs.records
     if records:
         total = sum(r.bytes for r in records)
         print(f"--- {len(records)} ops, {total:,} bytes ---")

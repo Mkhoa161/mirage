@@ -151,8 +151,8 @@ async def _seed(ws: Workspace) -> None:
             directory = "/" + "/".join(parts[:depth])
             if directory not in made:
                 made.add(directory)
-                await ws.fs.mkdir(directory)
-        await ws.fs.write(path, content)
+                await ws.vfs.mkdir(directory)
+        await ws.vfs.write(path, content)
 
 
 @pytest.mark.asyncio

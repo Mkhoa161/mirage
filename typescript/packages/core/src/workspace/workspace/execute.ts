@@ -57,7 +57,7 @@ import { prejudgeLine, unrefusedNodes } from '../node/explain.ts'
 import { runCommandTree } from '../node/run_tree.ts'
 import type { DriftQueue } from '../snapshot/drift.ts'
 import type { SessionManager } from '../session/manager.ts'
-import { type Session, type StatusWriter, newStatusWriter } from '../session/session.ts'
+import { type SessionState, type StatusWriter, newStatusWriter } from '../session/session.ts'
 import { ExecutionNode } from '../types.ts'
 import { abortable, joinOrAbort } from '../abort.ts'
 import { failureResult, isControlFlowError } from './failure.ts'
@@ -139,7 +139,7 @@ async function deniedResult(
   env: ExecuteEnv,
   command: string,
   options: ExecuteOptions,
-  session: Session,
+  session: SessionState,
   reason: string,
 ): Promise<ExecuteResult> {
   const cmdName = commandName(command) || command
@@ -231,7 +231,7 @@ export async function executeLine(
  * the line knows them and before anything stamps.
  */
 interface LineFrame {
-  session: Session | null
+  session: SessionState | null
   statusBefore: StatusSnapshot | null
   // Minted per call, never on the session, so two lines on one session
   // each keep their own and neither restores over the other.
@@ -455,8 +455,8 @@ async function runParsedLine(
   options: ExecuteOptions,
   rootNode: TSNodeLike,
   deps: ExecuteNodeDeps,
-  targetSession: Session,
-  effectiveSession: Session,
+  targetSession: SessionState,
+  effectiveSession: SessionState,
   stdin: ByteSource | null,
   reparse: (line: string) => TSNodeLike,
   nested: NestedRefusal,

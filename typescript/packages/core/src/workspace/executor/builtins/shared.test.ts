@@ -23,7 +23,7 @@ import { ArithError } from '../../../shell/errors.ts'
 import { Namespace } from '../../mount/namespace/namespace.ts'
 import type { ResolveFn } from '../../dispatcher/index.ts'
 import { MountRegistry } from '../../mount/registry.ts'
-import { Session } from '../../session/session.ts'
+import { SessionState } from '../../session/session.ts'
 import { sessionView } from '../../session/state.ts'
 import { IDENTIFIER_RE } from './constants.ts'
 import {
@@ -168,7 +168,7 @@ describe('builtins/shared: expandOperands', () => {
 
 describe('builtins/shared: the session helpers', () => {
   it('requireView returns the threaded view', () => {
-    const session = new Session({ sessionId: 's1' })
+    const session = new SessionState({ sessionId: 's1' })
     const view = sessionView(session)
     expect(requireView(view)).toBe(view)
   })

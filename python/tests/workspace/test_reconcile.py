@@ -162,10 +162,10 @@ async def test_always_probes_live_s3_with_warm_index(index_type, surface,
                                          if change == "overwrite" else b"")
                 assert result.exit_code == (0 if change == "overwrite" else 1)
             elif change == "overwrite":
-                assert await ws.fs.read("/s3/f.txt") == b"v2"
+                assert await ws.vfs.read("/s3/f.txt") == b"v2"
             else:
                 with pytest.raises(FileNotFoundError):
-                    await ws.fs.read("/s3/f.txt")
+                    await ws.vfs.read("/s3/f.txt")
         finally:
             await vfs.index.clear()
             await ws.close()

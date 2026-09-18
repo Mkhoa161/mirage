@@ -16,7 +16,7 @@ import pytest
 
 from mirage.types import ContentType, FileStat, FileType, PathSpec
 from mirage.workspace.executor.builtins.dirs import handle_cd
-from mirage.workspace.session import Session
+from mirage.workspace.session import SessionState
 from mirage.workspace.session.session import vars_from_env
 
 
@@ -40,8 +40,8 @@ def no_mount_root(_path: str) -> bool:
     return False
 
 
-def session(cwd="/", **env) -> Session:
-    return Session(session_id="test", cwd=cwd, vars=vars_from_env(env))
+def session(cwd="/", **env) -> SessionState:
+    return SessionState(session_id="test", cwd=cwd, vars=vars_from_env(env))
 
 
 @pytest.mark.asyncio

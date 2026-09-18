@@ -63,8 +63,8 @@ describe('buildMcpWorkspace', () => {
     const path = join(dir, 'workspace.yaml')
     writeFileSync(path, 'mounts:\n  /:\n    vfs: ram\n')
     const workspace = await buildMcpWorkspace(path)
-    await workspace.fs.writeFile('/hello.txt', 'hello')
-    expect(await workspace.fs.readFileText('/hello.txt')).toBe('hello')
+    await workspace.vfs.writeFile('/hello.txt', 'hello')
+    expect(await workspace.vfs.readFileText('/hello.txt')).toBe('hello')
     await workspace.close()
     // 30s, not vitest's 5s default: `buildWorkspaceFromConfig` now loads the
     // mirage-node barrel through `await import()`, so that ~5s of module load

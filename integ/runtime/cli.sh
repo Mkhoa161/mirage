@@ -8,7 +8,7 @@
 # command_limits, and the per-line --runtime argument.
 #
 # Cases whose steps need the SDK surface (add_runtime, rename, s3_put,
-# read_op, facade — the last calls ws.fs directly) or a runner-local
+# read_op, facade — the last calls ws.vfs directly) or a runner-local
 # test runtime (echobox, named as a string or a mapping, or registered
 # through world.register_runtimes), generated file catalogs, runner-local
 # code policies (world.policies), or non-ram mounts are skipped as sdk-only. Expect semantics: exit and

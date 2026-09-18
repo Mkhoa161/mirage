@@ -36,7 +36,7 @@ ws = Workspace({"/gcs/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:
-    records = ws.fs.records
+    records = ws.vfs.records
     total = sum(r.bytes for r in records)
     return f"{len(records)} ops, {total} bytes transferred"
 
@@ -352,11 +352,11 @@ async def main():
     print(f"  object size: {size:,} bytes")
 
     async def measure(label: str, cmd: str) -> None:
-        before = sum(rec.bytes for rec in ws.fs.records)
+        before = sum(rec.bytes for rec in ws.vfs.records)
         t0 = time.monotonic()
         r = await ws.shell(cmd)
         dt = time.monotonic() - t0
-        net = sum(rec.bytes for rec in ws.fs.records) - before
+        net = sum(rec.bytes for rec in ws.vfs.records) - before
         head = (await r.stdout_str()).strip().splitlines()
         first = head[0][:48] if head else ""
         print(f"  {label:42s} bytes={net:>10,}  t={dt:4.2f}s  "

@@ -117,7 +117,7 @@ describe('saveText', () => {
   it('writes the full content where the locator says', async () => {
     const { store, ws } = await makeStore()
     const ref = await store.saveText(request('the whole output'))
-    expect(await ws.fs.readFileText(String(ref.locator))).toBe('the whole output')
+    expect(await ws.vfs.readFileText(String(ref.locator))).toBe('the whole output')
   })
 
   it('reports the exact UTF-8 byte length, not the character count', async () => {
@@ -146,7 +146,7 @@ describe('saveText', () => {
     const locator = String(ref.locator)
     expect(locator).toMatch(/^\/tmp\/spill\/session-[0-9a-f]{12}\//)
     expect(locator).not.toContain('..')
-    expect(await ws.fs.readFileText(locator)).toBe('PAYLOAD')
+    expect(await ws.vfs.readFileText(locator)).toBe('PAYLOAD')
     // The whole point: a shell reading the locator back finds it.
     ws.createSession('probe')
     const read = await ws.shell(`cat ${locator}`, { sessionId: 'probe' })
@@ -194,8 +194,8 @@ describe('saveText', () => {
     const first = await store.saveText(request('first', { suggestedName: 'r.txt' }))
     const second = await store.saveText(request('second', { suggestedName: 'r.txt' }))
     expect(String(first.locator)).not.toBe(String(second.locator))
-    expect(await ws.fs.readFileText(String(first.locator))).toBe('first')
-    expect(await ws.fs.readFileText(String(second.locator))).toBe('second')
+    expect(await ws.vfs.readFileText(String(first.locator))).toBe('first')
+    expect(await ws.vfs.readFileText(String(second.locator))).toBe('second')
   })
 
   it('cannot be walked out of its directory by a suggested name', async () => {

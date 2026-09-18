@@ -83,7 +83,7 @@ async def main() -> None:
         print(f"  isfile: {os.path.isfile(path)}")
         print(f"  size: {os.path.getsize(path)}")
 
-        records = ws.fs.records
+        records = ws.vfs.records
         total = sum(record.bytes for record in records)
         print(f"\nStats: {len(records)} ops, {total} bytes transferred")
 

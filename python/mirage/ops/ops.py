@@ -32,7 +32,7 @@ class Ops:
     """The typed op facade FUSE and programmatic callers use.
 
     Every op delegates to the workspace dispatcher, so FUSE and
-    ``ws.fs`` walk the same pipeline as a shell command: link follow,
+    ``ws.vfs`` walk the same pipeline as a shell command: link follow,
     session grants, admission policies, cache read-through, namespace
     structure, and write invalidation all fire once, at that one door.
     The facade keeps only what is its own: the typed surface, op
@@ -49,13 +49,13 @@ class Ops:
     The facade runs as one session, ``session_id``, through ``bind``:
     every op is judged under that session's profile (hides, mount
     modes, grants) exactly as a shell line in it would be, so an agent
-    whose file tool reads through ``ws.fs`` is confined the way its
+    whose file tool reads through ``ws.vfs`` is confined the way its
     shell is. None names the workspace's default session as it is when
     the op runs, since a snapshot load can rename it. A session already
     bound when the op arrives (a command's own runtime, a kernel mount
     serving one session) is kept, so the facade never widens the
     caller's view, and the record names the session that judged the
-    op. ``SessionHandle`` derives a facade for another session over
+    op. ``Session`` derives a facade for another session over
     the same ledger.
 
     Every op also takes ``session_id`` for the one-call case, the way
@@ -94,9 +94,9 @@ class Ops:
     def _for_session(self, session_id: str) -> "Ops":
         """The same facade run as another session.
 
-        The mechanism behind ``SessionHandle.fs``, not a door of its
+        The mechanism behind ``Session.vfs``, not a door of its
         own: a host binds a session with ``ws.session(id)`` (creating
-        it when the id is new) or ``SessionHandle(ws, id)`` (adopting
+        it when the id is new) or ``Session(ws, id)`` (adopting
         one that exists), so there is one way to say it rather than
         two. Shares the mount table and the op ledger with this one, so
         the workspace-wide account stays one list and a later mount is

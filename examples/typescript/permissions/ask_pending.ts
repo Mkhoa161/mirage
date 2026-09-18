@@ -37,8 +37,8 @@ const ROLE = parseSessionProfile(
 );
 
 async function run(ws: Workspace, line: string): Promise<void> {
-  await ws.fs.writeFile("/data/a.txt", "a\n");
-  await ws.fs.writeFile("/data/secret.txt", "s\n");
+  await ws.vfs.writeFile("/data/a.txt", "a\n");
+  await ws.vfs.writeFile("/data/secret.txt", "s\n");
   const res = await ws.shell(line, { sessionId: "agent" });
   const how = res.refusal === null ? "ran" : `refused (${res.refusal.kind})`;
   console.log(`${line}: ${how}, exit ${String(res.exitCode)}`);

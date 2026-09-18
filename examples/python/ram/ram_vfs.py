@@ -163,7 +163,7 @@ async def main():
         read = os.readlink(os.fsencode(f"{host}/host_link"))
         print(f"  host readlink(bytes): {os.path.basename(read)!r}")
 
-        records = ws.fs.records
+        records = ws.vfs.records
         total = sum(r.bytes for r in records)
         print(f"\nStats: {len(records)} ops, {total} bytes transferred")
 

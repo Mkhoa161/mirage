@@ -19,7 +19,7 @@ import { OpsRegistry } from '../../ops/registry.ts'
 import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { Limit, MountMode, PathSpec } from '../../types.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
-import { Session } from '../session/session.ts'
+import { SessionState } from '../session/session.ts'
 import { Workspace } from '../workspace/workspace.ts'
 
 const ENC = new TextEncoder()
@@ -327,7 +327,7 @@ describe('the fenced remnant cascade rides the mount revisions', () => {
         registry: { mountFor(path: string): { revisions: Map<string, string> } }
       }
       internals.registry.mountFor('/ram/d').revisions.set('/ram/d/h.txt', 'r1')
-      const sess = new Session({
+      const sess = new SessionState({
         sessionId: 'agent',
         hiddenPaths: { paths: ['/ram/d/h.txt'] },
       })

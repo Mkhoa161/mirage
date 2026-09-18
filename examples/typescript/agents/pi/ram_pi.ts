@@ -77,7 +77,7 @@ const findOut = findAll.stdoutText
 console.log(findOut)
 
 for (const path of findOut.trim().split('\n').filter(Boolean)) {
-  const content = await ws.fs.readFileText(path)
+  const content = await ws.vfs.readFileText(path)
   console.log(`cat ${path}:\n${content}`)
 }
 
