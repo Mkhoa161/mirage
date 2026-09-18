@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.slack import SlackConfig, SlackResource
 from mirage.types import PathSpec
+from mirage.vfs.slack import SlackConfig, SlackVFS
 
 load_dotenv(".env.development")
 
@@ -27,11 +27,11 @@ config = SlackConfig(
     token=os.environ["SLACK_BOT_TOKEN"],
     search_token=os.environ.get("SLACK_USER_TOKEN"),
 )
-resource = SlackResource(config=config)
+vfs = SlackVFS(config=config)
 
 
 async def main():
-    ws = Workspace({"/slack": resource}, mode=MountMode.READ)
+    ws = Workspace({"/slack": vfs}, mode=MountMode.READ)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /slack/__nf_missing__.txt",

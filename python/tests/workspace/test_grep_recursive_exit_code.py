@@ -16,13 +16,13 @@ import asyncio
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _build_ws() -> Workspace:
-    r = RAMResource()
+    r = RAMVFS()
     r._store.dirs.add("/")
     r._store.dirs.add("/src")
     r._store.files["/src/a.js"] = b'legacyFetch("/api");\n'
@@ -81,8 +81,8 @@ def test_grep_r_root_with_or_does_not_run_right_arm():
 
 @pytest.mark.asyncio
 async def test_binary_only_match_survives_nested_mount_fanout():
-    outer = RAMResource()
-    inner = RAMResource()
+    outer = RAMVFS()
+    inner = RAMVFS()
     outer._store.dirs.add("/")
     outer._store.dirs.add("/work")
     inner._store.files["/paper.pdf"] = b"needle\0tail\n"

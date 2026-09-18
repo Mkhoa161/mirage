@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.ceph import CephConfig, CephResource
 from mirage.types import PathSpec
+from mirage.vfs.ceph import CephConfig, CephVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = CephConfig(
     access_key_id=os.environ["CEPH_ACCESS_KEY_ID"],
     secret_access_key=os.environ["CEPH_SECRET_ACCESS_KEY"],
 )
-resource = CephResource(config)
-ws = Workspace({"/ceph/": resource}, mode=MountMode.READ)
+vfs = CephVFS(config)
+ws = Workspace({"/ceph/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

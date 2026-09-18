@@ -14,8 +14,8 @@
 
 import asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 # The lines cover every surface the path axis gates: enumeration (ls,
@@ -41,8 +41,8 @@ BATTERY = (
 def _seeded() -> Workspace:
     ws = Workspace(
         {
-            "/a": (RAMResource(), MountMode.WRITE),
-            "/b": (RAMResource(), MountMode.WRITE),
+            "/a": (RAMVFS(), MountMode.WRITE),
+            "/b": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE)
 

@@ -28,11 +28,11 @@ from mirage.policy.errors import PolicyError
 from mirage.policy.match import Outcome
 from mirage.policy.profile import SessionProfile
 from mirage.policy.types import CommandRule, HideReason
-from mirage.resource.ram import RAMResource
 from mirage.runtime.base import Runtime
 from mirage.runtime.mixin import LineExecutorMixin
 from mirage.runtime.types import RunResult, ScriptSource
 from mirage.types import HiddenPaths, HiddenVars, MountMode, ShowEntry
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.abort import MirageAbortError
 from mirage.workspace.session.state import seed_var
@@ -628,11 +628,11 @@ def test_a_mount_sections_show_must_lie_under_that_mount():
 
 
 def _ws() -> Workspace:
-    a = RAMResource()
+    a = RAMVFS()
     a._store.files["/x.txt"] = b"public\n"
     a._store.files["/secrets/token.txt"] = b"s3cr3t\n"
     a._store.dirs.add("/secrets")
-    b = RAMResource()
+    b = RAMVFS()
     b._store.files["/y.txt"] = b"other\n"
     return Workspace({
         "/a": (a, MountMode.WRITE),
@@ -743,14 +743,14 @@ PROFILES = {
 
 
 def _profiled_ws() -> Workspace:
-    a = RAMResource()
+    a = RAMVFS()
     a._store.files["/x.txt"] = b"public\n"
     a._store.files["/secrets/token.txt"] = b"s3cr3t\n"
     a._store.dirs.add("/secrets")
     return Workspace(
         {
             "/a": (a, MountMode.WRITE),
-            "/b": (RAMResource(), MountMode.WRITE)
+            "/b": (RAMVFS(), MountMode.WRITE)
         },
         mode=MountMode.WRITE,
         profiles=PROFILES,
@@ -787,8 +787,8 @@ def test_default_profile_shapes_the_workspace_session_too():
     # that session as it always was.
     ws = Workspace(
         {
-            "/a": (RAMResource(), MountMode.WRITE),
-            "/b": (RAMResource(), MountMode.WRITE)
+            "/a": (RAMVFS(), MountMode.WRITE),
+            "/b": (RAMVFS(), MountMode.WRITE)
         },
         mode=MountMode.WRITE,
         profiles={
@@ -832,8 +832,8 @@ def test_a_role_keeps_a_mount_away_by_hiding_it_not_by_omitting_it():
     # the profile cannot see.
     ws = Workspace(
         {
-            "/a": (RAMResource(), MountMode.WRITE),
-            "/b": (RAMResource(), MountMode.WRITE)
+            "/a": (RAMVFS(), MountMode.WRITE),
+            "/b": (RAMVFS(), MountMode.WRITE)
         },
         mode=MountMode.WRITE,
         profiles={
@@ -865,8 +865,8 @@ def test_workspace_names_a_default_role_by_name():
     # created without one, including its own.
     ws = Workspace(
         {
-            "/a": (RAMResource(), MountMode.WRITE),
-            "/b": (RAMResource(), MountMode.WRITE)
+            "/a": (RAMVFS(), MountMode.WRITE),
+            "/b": (RAMVFS(), MountMode.WRITE)
         },
         mode=MountMode.WRITE,
         profiles=PROFILES,
@@ -876,7 +876,7 @@ def test_workspace_names_a_default_role_by_name():
         ws.default_session_id).mount_modes["/a"] == (MountMode.READ)
     assert ws.create_session("agent").mount_modes["/a"] == MountMode.READ
     with pytest.raises(PolicyError, match="unknown profile 'gone'"):
-        Workspace({"/a": (RAMResource(), MountMode.WRITE)},
+        Workspace({"/a": (RAMVFS(), MountMode.WRITE)},
                   profiles=PROFILES,
                   profile="gone")
 
@@ -971,15 +971,15 @@ REVIEWER_COMMANDS = {
 
 
 def _commands_ws() -> Workspace:
-    # The frozen subtree is seeded on the resource: the pure path rule
+    # The frozen subtree is seeded on the VFS: the pure path rule
     # holds at every op door, the host's `ws.fs` included.
-    repo = RAMResource()
+    repo = RAMVFS()
     repo._store.dirs.add("/locked")
     repo._store.files["/locked/y"] = b"y\n"
     ws = Workspace(
         {
             "/repo/": (repo, MountMode.WRITE),
-            "/scratch/": (RAMResource(), MountMode.WRITE),
+            "/scratch/": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
         profiles={
@@ -1166,7 +1166,7 @@ async def test_a_command_scoped_path_rule_reads_the_path_the_command_touches():
     # plane has to see the path the command will actually touch: for a
     # command that follows links (open(2)) that is the target, for one
     # that acts on the link itself (rm, lstat(2)) it is the link.
-    ws = Workspace({"/data/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={"default": LINK_DOC})
     try:
@@ -1215,7 +1215,7 @@ async def test_redirect_targets_are_judged_with_the_line():
     # admitted command's gate window, so the targets are judged at the
     # line's admission: the refused read never happens and the refused
     # write never truncates.
-    ws = Workspace({"/data/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={"default": SEALED_REDIRECT_DOC})
     try:
@@ -1243,9 +1243,9 @@ async def test_a_mount_rule_speaks_on_a_walk_from_above():
     # is not its business.
     ws = Workspace(
         {
-            "/scratch/": (RAMResource(), MountMode.WRITE),
-            "/scratch/child/": (RAMResource(), MountMode.WRITE),
-            "/elsewhere/": (RAMResource(), MountMode.WRITE),
+            "/scratch/": (RAMVFS(), MountMode.WRITE),
+            "/scratch/child/": (RAMVFS(), MountMode.WRITE),
+            "/elsewhere/": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
         profiles={
@@ -1303,13 +1303,13 @@ async def test_a_whole_line_runtime_is_gated_like_the_tree():
     # and the approval door before the runtime sees a byte, so a
     # captured line cannot run what the tree would refuse.
     box = _Box()
-    ws = Workspace({"/repo/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/repo/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={
                        "default": COMMANDS_DOC,
                        "reviewer": REVIEWER_COMMANDS
                    },
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     ws.register_cli("git", cli_spec_for("git"))
     try:
         assert await _line(ws, "sort /repo/x") == (127, "",
@@ -1360,10 +1360,10 @@ async def test_a_whole_line_runtime_reads_only_literal_words():
     # where a rule reads that command's arguments, and a line a word
     # runs that the gate cannot see into.
     box = _Box()
-    ws = Workspace({"/repo/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/repo/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={"default": LITERAL_DOC},
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     ws.register_cli("git", cli_spec_for("git"))
     try:
         unread = ("Permission denied\n"
@@ -1413,7 +1413,7 @@ async def test_a_bare_listing_in_a_ruled_directory_is_refused():
     # `ls`, `find`, `du`, `tree` and `grep -r` typed bare read the
     # working directory: the executor injects that operand after the
     # gate, so the gate supplies it itself, typed as `.`.
-    ws = Workspace({"/repo/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/repo/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={
                        "default": {
@@ -1487,7 +1487,7 @@ async def test_a_hidden_path_reads_as_absent_to_every_rule():
     # never raised for it, and the door answers ENOENT as for any
     # absent path. The same lines under a session that sees them meet
     # the rules as usual.
-    ws = Workspace({"/repo/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/repo/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={"default": VEILED_DOC})
     try:
@@ -1562,8 +1562,8 @@ class AskWc(Policy):
 def _ask_ws(**kwargs) -> Workspace:
     ws = Workspace(
         {
-            "/repo/": (RAMResource(), MountMode.WRITE),
-            "/scratch/": (RAMResource(), MountMode.WRITE),
+            "/repo/": (RAMVFS(), MountMode.WRITE),
+            "/scratch/": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
         profiles={"default": ASK_DOC},
@@ -1855,7 +1855,7 @@ WALK_DOC = {
 def _walk_ws() -> Workspace:
     # The rules live on a profile so the tree can be seeded under the
     # unrestricted default session; every probe runs as "g".
-    ws = Workspace({"/data/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={"guarded": WALK_DOC})
     ws.create_session("g", profile="guarded")
@@ -1989,8 +1989,8 @@ async def test_every_permissions_door_accepts_the_plain_document():
     # a built model still passes unchanged.
     ws = Workspace(
         {
-            "/data/": (RAMResource(), MountMode.WRITE),
-            "/box/": (RAMResource(), MountMode.WRITE),
+            "/data/": (RAMVFS(), MountMode.WRITE),
+            "/box/": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
         profiles={
@@ -2040,8 +2040,8 @@ async def test_every_permissions_door_accepts_the_plain_document():
 
 def test_a_misspelled_document_field_fails_at_construction():
     with pytest.raises(ValidationError):
-        Workspace({"/data/": RAMResource()}, profiles={"g": {"commandz": {}}})
-    ws = Workspace({"/data/": RAMResource()})
+        Workspace({"/data/": RAMVFS()}, profiles={"g": {"commandz": {}}})
+    ws = Workspace({"/data/": RAMVFS()})
     with pytest.raises(ValidationError):
         ws.create_session("x", permissions={"command": {"deny": []}})
 

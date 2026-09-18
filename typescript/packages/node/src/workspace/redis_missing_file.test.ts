@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MountMode } from '@struktoai/mirage-core/types'
-import { RedisResource } from '../resource/redis/redis.ts'
+import { RedisVFS } from '../vfs/redis/redis.ts'
 import { Workspace } from '../workspace.ts'
 
 const REDIS_URL = process.env.REDIS_URL
@@ -24,13 +24,11 @@ const DEC = new TextDecoder()
 const RUN_ID = `mirage-missing-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
 describe.skipIf(skip)('redis streaming commands on missing files', () => {
-  let redis: RedisResource
+  let redis: RedisVFS
   let ws: Workspace
 
   beforeEach(async () => {
-    redis = new RedisResource(
-      REDIS_URL !== undefined ? { url: REDIS_URL, keyPrefix: `${RUN_ID}:` } : {},
-    )
+    redis = new RedisVFS(REDIS_URL !== undefined ? { url: REDIS_URL, keyPrefix: `${RUN_ID}:` } : {})
     await redis.open()
     ws = new Workspace({ '/redis': redis }, { mode: MountMode.WRITE })
   })

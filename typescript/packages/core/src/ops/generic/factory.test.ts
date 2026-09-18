@@ -34,12 +34,7 @@ const rows = (
   ops
     .map(
       (o) =>
-        [o.name, o.resource, o.filetype, o.write] as [
-          string,
-          string | null,
-          string | null,
-          boolean,
-        ],
+        [o.name, o.vfs, o.filetype, o.write] as [string, string | null, string | null, boolean],
     )
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
 
@@ -86,10 +81,10 @@ describe('makeGenericOps', () => {
     expect(ops.filter((o) => o.write).every((o) => o.name !== 'read')).toBe(true)
   })
 
-  it('fans out over multiple resources', () => {
+  it('fans out over multiple mounts', () => {
     const ops = makeGenericOps(['a', 'b'], makeTable())
     expect(ops).toHaveLength(6)
-    expect(new Set(ops.map((o) => o.resource))).toEqual(new Set(['a', 'b']))
+    expect(new Set(ops.map((o) => o.vfs))).toEqual(new Set(['a', 'b']))
   })
 
   it('skips names in overrides', () => {

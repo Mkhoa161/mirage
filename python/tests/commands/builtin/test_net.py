@@ -17,11 +17,11 @@ import sys
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.commands.builtin.general.curl import curl
 from mirage.commands.builtin.utils.http import HttpResponse
 from mirage.commands.config import CommandOpts
-from mirage.resource.base import BaseResource
+from mirage.vfs.base import BaseVFS
 
 curl_mod = sys.modules["mirage.commands.builtin.general.curl"]
 wget_mod = sys.modules["mirage.commands.builtin.general.wget"]
@@ -63,9 +63,9 @@ def mock_http(monkeypatch):
 def multi_mount_ws():
     ws = Workspace(
         {
-            "/ram": (RAMResource(), MountMode.WRITE),
-            "/readonly": (RAMResource(), MountMode.READ),
-            "/nowrite": (BaseResource(), MountMode.WRITE),
+            "/ram": (RAMVFS(), MountMode.WRITE),
+            "/readonly": (RAMVFS(), MountMode.READ),
+            "/nowrite": (BaseVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )
@@ -106,8 +106,7 @@ async def test_curl_o_missing_parent_dir_fails(multi_mount_ws, mock_http):
 
 
 @pytest.mark.asyncio
-async def test_curl_o_resource_without_write_op_fails(multi_mount_ws,
-                                                      mock_http):
+async def test_curl_o_vfs_without_write_op_fails(multi_mount_ws, mock_http):
     io = await multi_mount_ws.execute(
         "curl -sS https://x.test/file -o /nowrite/foo.bin")
     assert io.exit_code == 23

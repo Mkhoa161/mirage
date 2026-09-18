@@ -30,10 +30,10 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosedError
 
 from mirage import Limit, MountMode, Workspace
-from mirage.resource.ram import RAMResource
-from mirage.resource.ssh import SSHConfig, SSHResource
 from mirage.runtime.sandbox.e2b import E2BRuntime
 from mirage.runtime.sandbox.ssh import SSHRuntime
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.ssh import SSHVFS, SSHConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -126,12 +126,12 @@ async def wait_for_remote(runtime, command):
 async def exercise_cancellation(runtime):
     workspace = Workspace(
         {
-            '/home/user': (RAMResource(), MountMode.EXEC, {
+            '/home/user': (RAMVFS(), MountMode.EXEC, {
                 'exec': Limit(timeout_seconds=5)
             })
         },
         mode=MountMode.EXEC,
-        runtimes=[runtime, 'vfs'])
+        runtimes=[runtime, 'workspace'])
     try:
         for mode in ('caller', 'timeout'):
             path = f'/home/user/mirage-cancel-{uuid.uuid4().hex}.pid'
@@ -238,10 +238,10 @@ async def main():
             await runtime.run_line('true', None, {}, '/home/user')
             assert runtime._conn is conn
             passed('python_ssh_connection_reused')
-            resource = SSHResource(SSHConfig(root='/home/user/work', **cfg))
-            workspace = Workspace({'/home/user/work': resource},
+            vfs = SSHVFS(SSHConfig(root='/home/user/work', **cfg))
+            workspace = Workspace({'/home/user/work': vfs},
                                   mode=MountMode.EXEC,
-                                  runtimes=[runtime, 'vfs'])
+                                  runtimes=[runtime, 'workspace'])
             result = await workspace.execute(
                 'cat > /home/user/work/output.txt', stdin=b'old')
             assert result.exit_code == 0

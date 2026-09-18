@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { ResourceName } from '../types.ts'
+import { VFSName } from '../types.ts'
 
 export interface OpRecordInit {
   op: string
@@ -63,7 +63,7 @@ export class OpRecord {
   }
 
   get isCache(): boolean {
-    return this.source === ResourceName.RAM
+    return this.source === VFSName.RAM
   }
 
   toJSON(): Record<string, unknown> {

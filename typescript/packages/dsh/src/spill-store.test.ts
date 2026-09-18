@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { SaveTextSpill } from '@deepseek-ai/dsh-spill'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { Workspace } from '@struktoai/mirage-node'
 import { MirageService } from './service.ts'
@@ -36,7 +36,7 @@ const workspaces: Workspace[] = []
 async function makeStore(
   options: { mode?: MountMode; config?: MirageSpillConfig } = {},
 ): Promise<{ store: MirageSpillStore; ws: Workspace }> {
-  const ws = new Workspace({ '/tmp': [new RAMResource(), options.mode ?? MountMode.WRITE] })
+  const ws = new Workspace({ '/tmp': [new RAMVFS(), options.mode ?? MountMode.WRITE] })
   workspaces.push(ws)
   const ctx = new Context()
   await ctx.plugin(MirageService, { workspace: ws }).await()

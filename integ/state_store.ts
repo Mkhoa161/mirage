@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, RAMResource, type SessionStore } from '@struktoai/mirage-core'
+import { MountMode, RAMVFS, type SessionStore } from '@struktoai/mirage-core'
 import { seedVar } from '@struktoai/mirage-core/workspace/session/state'
 import { RedisWorkspaceStateStore, S3WorkspaceStateStore, Workspace } from '@struktoai/mirage-node'
 
@@ -55,7 +55,7 @@ function check(name: string, ok: boolean, detail = ''): void {
 function makeWorkspace(prefix: string): { ws: Workspace; store: RedisWorkspaceStateStore } {
   const store = makeStateStore(prefix)
   const ws = new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     { mode: MountMode.EXEC, workspaceId: WORKSPACE_ID, store },
   )
   return { ws, store }

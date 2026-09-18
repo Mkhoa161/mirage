@@ -15,7 +15,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { Workspace } from '../workspace/workspace.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
@@ -351,11 +351,11 @@ const nestedReaderCases = JSON.parse(
 
 describe('heredocs across nested mounts', () => {
   it.each(nestedReaderCases.cases)('$id', async (testCase) => {
-    const parent = new RAMResource()
-    const child = new RAMResource()
-    const ghost = new RAMResource()
+    const parent = new RAMVFS()
+    const child = new RAMVFS()
+    const ghost = new RAMVFS()
     const ops = new OpsRegistry()
-    for (const resource of [parent, child, ghost]) ops.registerResource(resource)
+    for (const vfs of [parent, child, ghost]) ops.registerVfs(vfs)
     const ws = new Workspace(
       { '/data': parent, '/data/inner': child, '/ghost/deep': ghost },
       { mode: MountMode.WRITE, ops, shellParser: await getTestParser() },

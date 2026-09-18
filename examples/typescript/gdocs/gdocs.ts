@@ -15,7 +15,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { GDocsResource, GWS, MountMode, Workspace, type FileStat, type GDocsConfig } from '@struktoai/mirage-node'
+import { GDocsVFS, GWS, MountMode, Workspace, type FileStat, type GDocsConfig } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../.env.development'), override: true })
@@ -47,8 +47,8 @@ function printOut(label: string, out: string, err: string, max = 500): void {
 
 async function main(): Promise<void> {
   const config = buildConfig()
-  const resource = new GDocsResource(config)
-  const ws = new Workspace({ '/gdocs': resource }, { mode: MountMode.WRITE })
+  const vfs = new GDocsVFS(config)
+  const ws = new Workspace({ '/gdocs': vfs }, { mode: MountMode.WRITE })
   // The gws verbs are a CLI install, separate from the mount.
   ws.registerCli('gws', GWS, { ...config })
   try {

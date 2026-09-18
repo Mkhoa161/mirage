@@ -250,7 +250,7 @@ async def test_cd_physical_mode_reads_dotdot_off_a_relative_operands_spelling(
     sess = session(cwd="/link/sub")
     operand = PathSpec(virtual="/link",
                        directory="/link/",
-                       resource_path="",
+                       vfs_path="",
                        raw_path="..")
     _, io, _ = await handle_cd(dispatch,
                                no_mount_root,

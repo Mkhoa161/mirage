@@ -21,12 +21,12 @@ import {
   headTailProvision,
   metadataProvision,
   MountMode,
-  RedisResource,
+  RedisVFS,
   Workspace,
 } from '@struktoai/mirage-node'
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379/0'
-const resource = new RedisResource({ url: REDIS_URL })
+const vfs = new RedisVFS({ url: REDIS_URL })
 
 function print(bytes: Uint8Array): void {
   process.stdout.write(new TextDecoder().decode(bytes) + '\n')
@@ -45,11 +45,11 @@ async function runLabeled(ws: Workspace, label: string, cmd: string): Promise<vo
 
 async function main(): Promise<void> {
   // Clear any previous state so the demo is reproducible.
-  await resource.open()
-  await resource.store.clear()
-  await resource.store.addDir('/')
+  await vfs.open()
+  await vfs.store.clear()
+  await vfs.store.addDir('/')
 
-  const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
 
   console.log('=== tee (create files) ===')
   await ws.execute('echo "hello world" | tee /data/hello.txt')
@@ -148,16 +148,16 @@ async function main(): Promise<void> {
     PathSpec.fromStrPath('/data/user.json', 'user.json'),
   ]
 
-  const readCost = await fileReadProvision(resource.accessor, paths, [], provisionOpts('cat'))
-  console.log(`  fileReadProvision(resource.accessor, [hello.txt, user.json]):`)
+  const readCost = await fileReadProvision(vfs.accessor, paths, [], provisionOpts('cat'))
+  console.log(`  fileReadProvision(VFS.accessor, [hello.txt, user.json]):`)
   console.log(`    networkRead    = ${readCost.networkRead} bytes (${String(readCost.readOps)} reads)`)
   console.log(`    precision      = ${readCost.precision}`)
 
-  const headCost = await headTailProvision(resource.accessor, paths, [], provisionOpts('head -n 1'))
+  const headCost = await headTailProvision(vfs.accessor, paths, [], provisionOpts('head -n 1'))
   console.log(`  headTailProvision(...) — Redis fetches full value regardless of -n:`)
   console.log(`    networkRead    = ${headCost.networkRead} bytes`)
 
-  const metaCost = metadataProvision(resource.accessor, paths, [], provisionOpts('stat'))
+  const metaCost = metadataProvision(vfs.accessor, paths, [], provisionOpts('stat'))
   console.log(`  metadataProvision(...) — stat/ls/find cost zero network bytes:`)
   console.log(`    networkRead    = ${metaCost.networkRead} bytes`)
   console.log(`    readOps        = ${String(metaCost.readOps)}`)
@@ -175,7 +175,7 @@ async function main(): Promise<void> {
     const size = statSync(snapPath).size
     console.log(`  saved → ${snapPath} (${String(size)} bytes)`)
 
-    // ws.copy() — mirrors Python: remote resources (needsOverride=true) are reused,
+    // ws.copy() — mirrors Python: remote mounts (needsOverride=true) are reused,
     // local ones are reconstructed. Both copies see the same Redis state.
     const cp = await ws.copy()
     console.log(`  copy() mounts: [${cp.mounts().map((m) => m.prefix).join(', ')}]`)
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
 
   console.log('')
   console.log('=== CLEANUP ===')
-  await resource.store.clear()
+  await vfs.store.clear()
   await ws.close()
   console.log('  wiped test keys from Redis')
 }

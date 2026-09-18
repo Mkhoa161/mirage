@@ -28,8 +28,8 @@ from mirage.types import FileStat, PathSpec
 
 # integ/runtime holds the runtime suite (its own schema and runners,
 # integ/runtime/run.{py,ts} + cli.sh), not battery cases; keep it out.
-CASE_DIRS = ("unix", "bash", "crossmount", "resources", "cli", "session",
-             "console", "secrets")
+CASE_DIRS = ("unix", "bash", "crossmount", "vfs", "cli", "session", "console",
+             "secrets")
 
 # A service entry names the env vars each host needs, and may declare
 # ``shared``: the fake behind it holds ONE world rather than a namespace per
@@ -552,12 +552,12 @@ async def run_case(
     """
     if case.get("clear_cache"):
         # A full clear means the file cache AND every mount's index cache:
-        # remote listings live in the per-resource index, and a listing
+        # remote listings live in the per-VFS index, and a listing
         # populated by an earlier case must not leak into this one.
-        # Resources without an index cache have nothing to clear.
+        # mounts without an index cache have nothing to clear.
         await ws.cache.clear()
         for mount in ws.mounts():
-            store = getattr(mount.resource, "index", None)
+            store = getattr(mount.vfs, "index", None)
             if store is not None:
                 await store.clear()
     start = time.monotonic()

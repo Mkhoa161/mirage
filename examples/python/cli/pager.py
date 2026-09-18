@@ -18,8 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from mirage import (CLIInvocation, CLISpec, Operand, Option, RAMResource,
-                    Workspace)
+from mirage import RAMVFS, CLIInvocation, CLISpec, Operand, Option, Workspace
 from mirage.io import IOResult
 
 
@@ -127,7 +126,7 @@ async def show(ws: Workspace, line: str) -> None:
 
 
 async def main() -> None:
-    ws = Workspace({"/workspace": RAMResource()})
+    ws = Workspace({"/workspace": RAMVFS()})
 
     # One immutable program tree can be installed more than once. Each head
     # word gets independently validated configuration: two accounts, one CLI.

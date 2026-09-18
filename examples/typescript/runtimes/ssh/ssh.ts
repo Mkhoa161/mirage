@@ -15,8 +15,8 @@
 import { homedir } from 'node:os'
 import {
   MountMode,
-  S3Resource,
-  SSHResource,
+  S3VFS,
+  SSHVFS,
   SSHRuntime,
   Workspace,
   type S3Config,
@@ -86,8 +86,8 @@ async function main(): Promise<void> {
     config: { host: 'dev', hostname: HOSTNAME, username: 'ubuntu', identityFile: IDENTITY },
   })
   const ws = new Workspace(
-    { '/data': new S3Resource(dataConfig), [REMOTE_DIR]: new SSHResource(projConfig) },
-    { mode: MountMode.EXEC, runtimes: [runtime, 'vfs'] },
+    { '/data': new S3VFS(dataConfig), [REMOTE_DIR]: new SSHVFS(projConfig) },
+    { mode: MountMode.EXEC, runtimes: [runtime, 'workspace'] },
   )
 
   try {

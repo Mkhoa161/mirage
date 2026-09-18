@@ -18,7 +18,7 @@ import {
   Mount,
   MountBackend,
   MountMode,
-  RedisResource,
+  RedisVFS,
   Workspace,
 } from "@struktoai/mirage-node";
 
@@ -26,12 +26,12 @@ const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379/0";
 const KEY_PREFIX = "mirage:fs:";
 
 async function seed(): Promise<void> {
-  const resource = new RedisResource({ url: REDIS_URL, keyPrefix: KEY_PREFIX });
-  await resource.open();
-  await resource.store.clear();
-  await resource.store.addDir("/");
+  const vfs = new RedisVFS({ url: REDIS_URL, keyPrefix: KEY_PREFIX });
+  await vfs.open();
+  await vfs.store.clear();
+  await vfs.store.addDir("/");
 
-  const ws = new Workspace({ "/data/": resource }, { mode: MountMode.WRITE });
+  const ws = new Workspace({ "/data/": vfs }, { mode: MountMode.WRITE });
   try {
     await ws.execute('echo "hello world" | tee /data/hello.txt');
     await ws.execute("mkdir /data/sub");
@@ -40,16 +40,16 @@ async function seed(): Promise<void> {
   } finally {
     await ws.close();
   }
-  await resource.close();
+  await vfs.close();
 }
 
 async function main(): Promise<void> {
   await seed();
   console.log("Seeded Redis with sample files");
 
-  const resource = new RedisResource({ url: REDIS_URL, keyPrefix: KEY_PREFIX });
+  const vfs = new RedisVFS({ url: REDIS_URL, keyPrefix: KEY_PREFIX });
   const ws = new Workspace({
-    "/data/": new Mount(resource, { mode: MountMode.WRITE, backend: MountBackend.FUSE }),
+    "/data/": new Mount(vfs, { mode: MountMode.WRITE, backend: MountBackend.FUSE }),
   });
   await ws.fuseReady();
   const mp = ws.fuseMountpoint as string;
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     rl.close();
   } finally {
     await ws.close();
-    await resource.store.clear();
+    await vfs.store.clear();
   }
 }
 

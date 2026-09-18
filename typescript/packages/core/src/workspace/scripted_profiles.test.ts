@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { ScriptSource } from '../runtime/routing/types.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser } from './fixtures/workspace_fixture.ts'
@@ -61,7 +61,7 @@ async function build(
 ): Promise<Workspace> {
   const shellParser = await getTestParser()
   return new Workspace(
-    { '/data/': new RAMResource() },
+    { '/data/': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParser,
@@ -208,7 +208,7 @@ describe('profile policies', () => {
     // A profile is operator configuration, so the engine that judges
     // for it is a property of the profile, built fresh and never
     // resolved out of the runtime world.
-    const ws = await build(scripted(), ['vfs'])
+    const ws = await build(scripted(), ['workspace'])
     try {
       ws.createSession('s', { profile: 'release' })
       const denied = await ws.execute('cat /data/sealed/k', { sessionId: 's' })
@@ -236,7 +236,7 @@ describe('profile policies', () => {
   })
 
   it('an engine that cannot evaluate fails closed', async () => {
-    const ws = await build(scripted(JUDGE, 'vfs'))
+    const ws = await build(scripted(JUDGE, 'workspace'))
     try {
       ws.createSession('s', { profile: 'release' })
       const refused = await ws.execute('echo hi', { sessionId: 's' })

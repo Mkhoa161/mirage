@@ -22,21 +22,21 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.agents.openai_agents import MirageSandboxClient
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
-from mirage.resource.slack import SlackConfig, SlackResource
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3VFS, S3Config
+from mirage.vfs.slack import SlackConfig, SlackVFS
 
 load_dotenv(".env.development")
 
-ram = RAMResource()
-s3 = S3Resource(
+ram = RAMVFS()
+s3 = S3VFS(
     S3Config(
         bucket=os.environ["AWS_S3_BUCKET"],
         region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
         aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
     ))
-slack = SlackResource(config=SlackConfig(
+slack = SlackVFS(config=SlackConfig(
     token=os.environ["SLACK_BOT_TOKEN"],
     search_token=os.environ.get("SLACK_USER_TOKEN"),
 ))
@@ -91,15 +91,15 @@ async def main():
     # finds the same prefixes to restore content into.
     fresh_ws = Workspace(
         {
-            "/": (RAMResource(), MountMode.WRITE),
-            "/s3": (S3Resource(
+            "/": (RAMVFS(), MountMode.WRITE),
+            "/s3": (S3VFS(
                 S3Config(
                     bucket=os.environ["AWS_S3_BUCKET"],
                     region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
                     aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
                     aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
                 )), MountMode.READ),
-            "/slack": (SlackResource(config=SlackConfig(
+            "/slack": (SlackVFS(config=SlackConfig(
                 token=os.environ["SLACK_BOT_TOKEN"],
                 search_token=os.environ.get("SLACK_USER_TOKEN"),
             )), MountMode.READ),

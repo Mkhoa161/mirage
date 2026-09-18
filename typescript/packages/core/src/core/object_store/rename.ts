@@ -34,7 +34,7 @@ export function makeRename<A extends Accessor, C>(
   const { moveFile, movePrefix } = driver
   if (moveFile === undefined || movePrefix === undefined) {
     throw new Error(
-      `${driver.resource} driver has no native move; leave rename unwired instead of building it`,
+      `${driver.vfs} driver has no native move; leave rename unwired instead of building it`,
     )
   }
   return async function rename(accessor, src, dst) {

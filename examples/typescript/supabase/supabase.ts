@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MountMode, SupabaseResource, Workspace, type FileStat, type SupabaseConfig } from '@struktoai/mirage-node'
+import { MountMode, SupabaseVFS, Workspace, type FileStat, type SupabaseConfig } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -59,8 +59,8 @@ async function run(
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const resource = new SupabaseResource(config)
-  const ws = new Workspace({ '/supabase/': resource }, { mode: MountMode.WRITE })
+  const vfs = new SupabaseVFS(config)
+  const ws = new Workspace({ '/supabase/': vfs }, { mode: MountMode.WRITE })
 
   try {
     console.log('=== ls /supabase/ ===')

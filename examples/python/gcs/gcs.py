@@ -20,8 +20,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gcs import GCSConfig, GCSResource
 from mirage.types import PathSpec
+from mirage.vfs.gcs import GCSVFS, GCSConfig
 
 load_dotenv(".env.development")
 
@@ -31,8 +31,8 @@ config = GCSConfig(
     secret_access_key=os.environ["GCS_SECRET_ACCESS_KEY"],
 )
 
-resource = GCSResource(config)
-ws = Workspace({"/gcs/": resource}, mode=MountMode.READ)
+vfs = GCSVFS(config)
+ws = Workspace({"/gcs/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

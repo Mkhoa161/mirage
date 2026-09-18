@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MountMode, PostgresResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, PostgresVFS, Workspace } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -42,12 +42,12 @@ async function dump(ws: Workspace, label: string, cmd: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const resource = new PostgresResource({
+  const vfs = new PostgresVFS({
     dsn,
     maxReadRows: 200,
     maxReadBytes: 1024 * 1024,
   })
-  const ws = new Workspace({ '/pg/': resource }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/pg/': vfs }, { mode: MountMode.READ })
 
   try {
     console.log('=== VFS MODE: shell pipelines transparently read Postgres ===')
@@ -83,7 +83,7 @@ async function main(): Promise<void> {
     )
   } finally {
     await ws.close()
-    await resource.close()
+    await vfs.close()
   }
 }
 

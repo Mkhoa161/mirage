@@ -216,7 +216,7 @@ describe('handleCd', () => {
     const operand = new PathSpec({
       virtual: '/link',
       directory: '/link/',
-      resourcePath: '',
+      vfsPath: '',
       rawPath: '..',
     })
     const [, io] = await handleCd(

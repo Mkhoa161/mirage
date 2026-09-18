@@ -20,12 +20,12 @@ import pytest
 
 from mirage import MountMode, Workspace
 from mirage.io.types import materialize
-from mirage.resource.ram import RAMResource
 from mirage.runtime.errors import EvalError
 from mirage.runtime.js import QuickJsRuntime
 from mirage.runtime.js.quickjs import QUICKJS_HOME_ENV
 from mirage.runtime.types import RunArgs
 from mirage.runtime.wasm import WasmVFS
+from mirage.vfs.ram import RAMVFS
 
 
 def _home_dir() -> str | None:
@@ -110,7 +110,7 @@ async def test_version_commands_report_the_quickjs_engine():
                                               env=[],
                                               fs=WasmVFS())
     assert code == 0
-    ws = Workspace({"/": RAMResource()}, runtimes=[runtime, "vfs"])
+    ws = Workspace({"/": RAMVFS()}, runtimes=[runtime, "workspace"])
     try:
         for line in ["js --version", "node --version", "js -v", "node -v"]:
             io = await ws.execute(line)
@@ -185,7 +185,7 @@ def test_quickjs_host_fs_invisible():
 @live
 @pytest.mark.asyncio
 async def test_quickjs_node_command_end_to_end():
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/calc.mjs"] = (
         b"export const k = 6;\n"
         b"console.log(Number(scriptArgs[0]) * k)\n")
@@ -230,7 +230,7 @@ def test_quickjs_reuses_compiled_module():
 async def test_quickjs_mounts_read_write_readdir():
     # Guest file I/O bridges through the workspace dispatch: reads see
     # shell writes, guest writes land in the mount, readdir lists it.
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=["quickjs"])
     await ws.execute("echo hello-mount > /data/in.txt")
@@ -266,7 +266,7 @@ def test_quickjs_without_dispatch_sees_no_mounts():
 async def test_quickjs_session_narrowing_reaches_the_guest():
     # A session narrowed to read denies guest writes at open() and no
     # file materializes in the mount.
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=["quickjs"])
     ws.create_session("narrow", {"/data": "read"})
@@ -309,4 +309,4 @@ async def test_eval_failures_raise_eval_error():
 
 
 def test_reach_is_vfs():
-    assert QuickJsRuntime.reach == "vfs"
+    assert QuickJsRuntime.reach == "workspace"

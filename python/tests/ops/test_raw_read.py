@@ -17,8 +17,8 @@ import pytest
 from mirage import MountMode, Workspace
 from mirage.io import IOResult
 from mirage.ops.registry import op
-from mirage.resource.ram import RAMResource
 from mirage.types import PathSpec
+from mirage.vfs.ram import RAMVFS
 
 # A raw read is what read-modify-write needs: FUSE hands the merged
 # buffer straight back to ``write``, which always stores, so a read that
@@ -28,37 +28,37 @@ from mirage.types import PathSpec
 # rendered read already filled under the same path.
 
 
-@op("read", resource="ram", filetype=".tally")
+@op("read", vfs="ram", filetype=".tally")
 async def _read_tally(accessor, path: PathSpec, **kwargs) -> bytes:
     return b"RENDERED"
 
 
-class _CachingRAM(RAMResource):
+class _CachingRAM(RAMVFS):
     caches_reads = True
 
 
-def _workspace(resource: RAMResource) -> Workspace:
-    resource.register_op(_read_tally)
-    return Workspace({"/data/": resource}, mode=MountMode.WRITE)
+def _workspace(vfs: RAMVFS) -> Workspace:
+    vfs.register_op(_read_tally)
+    return Workspace({"/data/": vfs}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio
 async def test_read_resolves_the_filetype_op():
-    ws = _workspace(RAMResource())
+    ws = _workspace(RAMVFS())
     await ws.fs.write("/data/books.tally", b"STORED")
     assert await ws.fs.read("/data/books.tally") == b"RENDERED"
 
 
 @pytest.mark.asyncio
 async def test_raw_read_skips_the_filetype_op():
-    ws = _workspace(RAMResource())
+    ws = _workspace(RAMVFS())
     await ws.fs.write("/data/books.tally", b"STORED")
     assert await ws.fs.read("/data/books.tally", raw=True) == b"STORED"
 
 
 @pytest.mark.asyncio
 async def test_raw_read_leaves_an_unregistered_extension_alone():
-    ws = _workspace(RAMResource())
+    ws = _workspace(RAMVFS())
     await ws.fs.write("/data/notes.txt", b"plain")
     assert await ws.fs.read("/data/notes.txt", raw=True) == b"plain"
 

@@ -16,15 +16,15 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from mirage import DiskResource, MountMode, Workspace
+from mirage import DiskVFS, MountMode, Workspace
 from mirage.commands.config import command
 from mirage.commands.spec import SPECS
 from mirage.io.types import IOResult
-from mirage.resource.ram import RAMResource
 from mirage.types import PathSpec
+from mirage.vfs.ram import RAMVFS
 
 
-@command("greet", resource=["ram", "disk"], spec=SPECS["cat"])
+@command("greet", vfs=["ram", "disk"], spec=SPECS["cat"])
 async def greet(
     accessor,
     paths: list[PathSpec],
@@ -43,15 +43,15 @@ async def main():
 
     ws = Workspace(
         {
-            "/ram/": RAMResource(),
-            "/disk/": DiskResource(str(tmp_root)),
+            "/ram/": RAMVFS(),
+            "/disk/": DiskVFS(str(tmp_root)),
         },
         mode=MountMode.WRITE,
     )
 
     print("=== decorator-level bindings on greet ===")
     for rc in greet._registered_commands:
-        print(f"  resource={rc.resource!r:10}  name={rc.name!r}")
+        print(f"  VFS={rc.vfs!r:10}  name={rc.name!r}")
 
     ws.mount("/ram/").register_fns([greet])
     ws.mount("/disk/").register_fns([greet])

@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MountMode, GCSResource, Workspace, type FileStat, type GCSConfig } from '@struktoai/mirage-node'
+import { MountMode, GCSVFS, Workspace, type FileStat, type GCSConfig } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -40,8 +40,8 @@ async function run(ws: Workspace, command: string): Promise<{ stdout: string; st
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const resource = new GCSResource(config)
-  const ws = new Workspace({ '/gcs/': resource }, { mode: MountMode.READ })
+  const vfs = new GCSVFS(config)
+  const ws = new Workspace({ '/gcs/': vfs }, { mode: MountMode.READ })
 
   try {
     // ── discover structure ────────────────────────────

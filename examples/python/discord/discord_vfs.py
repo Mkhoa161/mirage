@@ -21,16 +21,16 @@ import stat as stat_mod
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.discord import DiscordConfig, DiscordResource
+from mirage.vfs.discord import DiscordConfig, DiscordVFS
 
 load_dotenv(".env.development")
 
 config = DiscordConfig(token=os.environ["DISCORD_BOT_TOKEN"])
-resource = DiscordResource(config=config)
+vfs = DiscordVFS(config=config)
 
 
 async def main():
-    with Workspace({"/discord/": resource}, mode=MountMode.READ) as ws:
+    with Workspace({"/discord/": vfs}, mode=MountMode.READ) as ws:
         print("=== VFS MODE: open() reads from Discord transparently ===\n")
 
         print("--- os.listdir() guilds ---")

@@ -19,7 +19,7 @@ import type { CommandOpts } from '../../config.ts'
 import { pasteGeneric } from './paste.ts'
 
 function opts(flags: Record<string, string | boolean | number | string[]> = {}): CommandOpts {
-  return { stdin: null, flags, filetypeFns: null, cwd: '/', resource: {} } as CommandOpts
+  return { stdin: null, flags, filetypeFns: null, cwd: '/', vfs: {} } as CommandOpts
 }
 
 async function* emptyStream(_path: PathSpec): AsyncIterable<Uint8Array> {

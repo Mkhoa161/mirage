@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
 const SCRIPT = `
 import json, sys
@@ -32,7 +32,7 @@ for r in records[:3]:
 `
 
 async function main(): Promise<void> {
-  const disk = new RAMResource()
+  const disk = new RAMVFS()
   const ws = new Workspace({ '/disk': disk }, { mode: MountMode.EXEC })
 
   console.log('python3 script file (read from mount) + piped stdin\n')

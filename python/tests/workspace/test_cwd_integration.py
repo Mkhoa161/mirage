@@ -15,12 +15,12 @@
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 def _make_ws():
-    resource = RAMResource()
-    store = resource._store
+    vfs = RAMVFS()
+    store = vfs._store
     store.dirs.add("/")
     store.dirs.add("/subdir")
     store.dirs.add("/subdir/nested")
@@ -28,17 +28,17 @@ def _make_ws():
     store.modified["/subdir/file.txt"] = "2024-01-01"
     store.files["/subdir/nested/deep.txt"] = b"deep"
     store.modified["/subdir/nested/deep.txt"] = "2024-01-01"
-    return Workspace({"/ram/": resource}, mode=MountMode.WRITE)
+    return Workspace({"/ram/": vfs}, mode=MountMode.WRITE)
 
 
 def _make_ws_special_chars():
-    resource = RAMResource()
-    store = resource._store
+    vfs = RAMVFS()
+    store = vfs._store
     store.dirs.add("/")
     store.dirs.add("/Zecheng's Server")
     store.files["/Zecheng's Server/image.png"] = b"PNG"
     store.modified["/Zecheng's Server/image.png"] = "2024-01-01"
-    return Workspace({"/ram/": resource}, mode=MountMode.WRITE)
+    return Workspace({"/ram/": vfs}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio

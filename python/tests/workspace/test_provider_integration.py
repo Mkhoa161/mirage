@@ -16,9 +16,9 @@ import asyncio
 
 import pytest
 
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -37,17 +37,17 @@ def _stdout(io):
 
 
 # ═══════════════════════════════════════════════
-# RAM resource integration
+# RAM VFS integration
 # ═══════════════════════════════════════════════
 
 
 def _ram_ws():
-    p = RAMResource()
+    p = RAMVFS()
     p._store.files["/hello.txt"] = b"hello world\n"
     p._store.files["/data.csv"] = b"name,age\nalice,30\nbob,25\n"
     p._store.dirs.add("/sub")
     p._store.files["/sub/nested.txt"] = b"nested content\n"
-    ws = Workspace(resources={"/ram/": (p, MountMode.WRITE)}, )
+    ws = Workspace(mounts={"/ram/": (p, MountMode.WRITE)}, )
     ws.get_session(ws.default_session_id).cwd = "/ram"
     return ws
 
@@ -113,7 +113,7 @@ def test_ram_sort():
 
 
 # ═══════════════════════════════════════════════
-# Disk resource integration
+# Disk VFS integration
 # ═══════════════════════════════════════════════
 
 
@@ -128,8 +128,8 @@ def disk_ws(tmp_path):
     sub.mkdir()
     (sub / "nested.txt").write_bytes(b"nested\n")
 
-    p = DiskResource(root=str(data_dir))
-    ws = Workspace(resources={"/disk/": (p, MountMode.WRITE)}, )
+    p = DiskVFS(root=str(data_dir))
+    ws = Workspace(mounts={"/disk/": (p, MountMode.WRITE)}, )
     ws.get_session(ws.default_session_id).cwd = "/disk"
     return ws
 
@@ -194,7 +194,7 @@ def test_disk_sed(disk_ws):
 
 
 # ═══════════════════════════════════════════════
-# Cross-resource: RAM + Disk
+# Cross-VFS: RAM + Disk
 # ═══════════════════════════════════════════════
 
 
@@ -204,12 +204,12 @@ def multi_ws(tmp_path):
     data_dir.mkdir()
     (data_dir / "disk_file.txt").write_bytes(b"from disk\n")
 
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/ram_file.txt"] = b"from ram\n"
 
-    disk = DiskResource(root=str(data_dir))
+    disk = DiskVFS(root=str(data_dir))
 
-    ws = Workspace(resources={
+    ws = Workspace(mounts={
         "/ram/": (ram, MountMode.WRITE),
         "/disk/": (disk, MountMode.WRITE),
     }, )
@@ -237,7 +237,7 @@ def test_cross_pipeline(multi_ws):
 
 
 def test_cross_for_loop(multi_ws):
-    """for loop across resources."""
+    """for loop across mounts."""
     _run(
         multi_ws.execute("for f in /ram/ram_file.txt /disk/disk_file.txt; do "
                          "cat $f; done"))

@@ -16,7 +16,7 @@ import { setServers } from 'node:dns'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { MongoDBResource, MountMode, Workspace } from '@struktoai/mirage-node'
+import { MongoDBVFS, MountMode, Workspace } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 setServers(['8.8.8.8', '1.1.1.1'])
@@ -32,8 +32,8 @@ async function main(): Promise<void> {
     console.error('MONGODB_URI missing in .env.development')
     process.exit(1)
   }
-  const resource = new MongoDBResource({ uri, databases: [DB] })
-  const ws = new Workspace({ '/mongodb/': resource }, { mode: MountMode.READ })
+  const vfs = new MongoDBVFS({ uri, databases: [DB] })
+  const ws = new Workspace({ '/mongodb/': vfs }, { mode: MountMode.READ })
 
   try {
     console.log('=== VFS MODE: open() reads from MongoDB ===\n')
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
 
   } finally {
     await ws.close()
-    await resource.close()
+    await vfs.close()
   }
 }
 

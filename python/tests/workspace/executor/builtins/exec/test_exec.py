@@ -20,13 +20,13 @@ second session, since the first has its own output diverted.
 """
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws() -> Workspace:
-    ws = Workspace({"data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"data": RAMVFS()}, mode=MountMode.WRITE)
     ws._session_mgr.create("reader")
     return ws
 

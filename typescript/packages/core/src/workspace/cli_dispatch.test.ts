@@ -23,7 +23,7 @@ import { IOResult } from '../io/types.ts'
 import type { Policy } from '../policy/base.ts'
 import type { Action, SessionContext } from '../policy/types.ts'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { MountMode } from '../types.ts'
 import { ScriptSource } from '../runtime/routing/types.ts'
@@ -78,9 +78,9 @@ function makeTree(): CLISpec {
 }
 
 function buildWorkspace(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   return new Workspace(
     { '/data': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -115,9 +115,9 @@ describe('CLI dispatch e2e', () => {
     // head word and not the other, deny and ask rules name one install
     // and leave its twin alone, and a grant runs the line under the
     // granted install's own config.
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const ws = new Workspace(
       { '/data': ram },
       {
@@ -190,9 +190,9 @@ describe('CLI dispatch e2e', () => {
   })
 
   it('the clis constructor option installs through the same path', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const ws = new Workspace(
       { '/data': ram },
       {
@@ -208,16 +208,16 @@ describe('CLI dispatch e2e', () => {
 })
 
 function buildScriptWorkspace(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   return new Workspace(
     { '/data': ram },
     {
       mode: MountMode.WRITE,
       ops: registry,
       shellParser: parser,
-      runtimes: ['monty', 'quickjs', 'vfs'],
+      runtimes: ['monty', 'quickjs', 'workspace'],
     },
   )
 }
@@ -366,9 +366,9 @@ describe('script CLI e2e', () => {
 describe('policy cli fact', () => {
   it('the policy sees the installed head on ctx.commands', async () => {
     const seen: (string | null)[] = []
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace(
       { '/data': ram },
       {
@@ -431,9 +431,9 @@ describe('the session plane reaches a CLI leaf', () => {
     // A door that skipped the gate would make an installed CLI the way around
     // every preSession rule, which is the whole reason writes go through one
     // door rather than to the session.
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const ws = new Workspace(
       { '/data': ram },
       {

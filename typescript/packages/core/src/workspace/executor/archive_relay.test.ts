@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { writeTar } from '../../commands/builtin/tar_helper.ts'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { gzip } from '../../utils/compress.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../fixtures/workspace_fixture.ts'
@@ -49,12 +49,12 @@ async function tgzBytes(): Promise<Uint8Array> {
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const root = new RAMResource()
-  const work = new RAMResource()
+  const root = new RAMVFS()
+  const work = new RAMVFS()
   work.store.files.set('/files.tar.gz', await tgzBytes())
   const registry = new OpsRegistry()
-  registry.registerResource(root)
-  registry.registerResource(work)
+  registry.registerVfs(root)
+  registry.registerVfs(work)
   return new Workspace(
     { '/': root, '/work/': work },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },

@@ -344,10 +344,10 @@ async def handle_df(
     data: list[list[str]] = []
     for mount in mounts:
         async with mount.use():
-            cap = await mount.resource.statfs()
-        cells = [mount.resource.name]
+            cap = await mount.vfs.statfs()
+        cells = [mount.vfs.name]
         if show_type:
-            cells.append(mount.resource.name)
+            cells.append(mount.vfs.name)
         cells += _num_cells(cap, human, si, block, inodes)
         cells.append(_pct_cell(cap, inodes))
         cells.append(mount.prefix.rstrip("/") or "/")

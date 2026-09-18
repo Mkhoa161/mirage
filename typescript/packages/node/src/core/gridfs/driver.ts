@@ -20,8 +20,8 @@ import type {
   ObjectStoreDriver,
   TreeEntry,
 } from '@struktoai/mirage-core/core/object_store/driver'
-import type { FindOptions } from '@struktoai/mirage-core/resource/base'
-import { ResourceName } from '@struktoai/mirage-core/types'
+import type { FindOptions } from '@struktoai/mirage-core/vfs/base'
+import { VFSName } from '@struktoai/mirage-core/types'
 import { toIsoZ } from '@struktoai/mirage-core/utils/dates'
 import type { ObjectId } from 'mongodb'
 import type { GridFSAccessor } from '../../accessor/gridfs.ts'
@@ -302,7 +302,7 @@ async function probePrefix(conn: GridFSAccessor, pfx: string): Promise<boolean> 
 }
 
 export const DRIVER: ObjectStoreDriver<GridFSAccessor, GridFSAccessor> = {
-  resource: ResourceName.GRIDFS,
+  vfs: VFSName.GRIDFS,
   scopeError: SCOPE_ERROR,
   keyPrefixOf,
   connect,

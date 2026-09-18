@@ -22,7 +22,7 @@ from mirage.commands.spec import CommandSpec
 from mirage.io.types import IOResult
 from mirage.observe.store import RAMObserverStore
 from mirage.policy import Action, CommandContext, Deny, Policy
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.abort import ABORT_JOIN_SECONDS, MirageAbortError
 from mirage.workspace.session.ram import RAMSessionStore
 from mirage.workspace.session.store import SessionFields
@@ -60,18 +60,18 @@ def _register(ws: Workspace, prefix: str, fn) -> None:
 
 
 def _make_ws() -> Workspace:
-    resource = RAMResource()
-    store = resource._store
+    vfs = RAMVFS()
+    store = vfs._store
     store.dirs.add("/")
     store.dirs.add("/subdir")
     store.dirs.add("/other")
-    return Workspace({"/ram/": resource}, mode=MountMode.WRITE)
+    return Workspace({"/ram/": vfs}, mode=MountMode.WRITE)
 
 
 def _two_mounts() -> Workspace:
-    a = RAMResource()
+    a = RAMVFS()
     a._store.dirs.add("/")
-    b = RAMResource()
+    b = RAMVFS()
     b._store.dirs.add("/")
     b._store.files["/y.txt"] = b"secret\n"
     return Workspace(
@@ -207,7 +207,7 @@ async def test_another_workspace_resolves_its_own_session():
     ws_b = _two_mounts()
     seen: list[str] = []
 
-    @command("crossprobe", resource="ram", spec=CommandSpec())
+    @command("crossprobe", vfs="ram", spec=CommandSpec())
     async def crossprobe(accessor, paths, texts, opts):
         result = await ws_b.execute("pwd")
         seen.append((await result.stdout_str()).strip())
@@ -229,15 +229,13 @@ async def test_policy_reads_the_ambient_sessions_cwd():
         seen.append(ctx.cwd)
         return None
 
-    resource = RAMResource()
-    store = resource._store
+    vfs = RAMVFS()
+    store = vfs._store
     store.dirs.add("/")
     store.dirs.add("/subdir")
-    ws = Workspace({"/ram/": resource},
-                   mode=MountMode.WRITE,
-                   route_policy=policy)
+    ws = Workspace({"/ram/": vfs}, mode=MountMode.WRITE, route_policy=policy)
 
-    @command("policyprobe", resource="ram", spec=CommandSpec())
+    @command("policyprobe", vfs="ram", spec=CommandSpec())
     async def policyprobe(accessor, paths, texts, opts):
         await ws.execute("pwd")
         return b"", IOResult()
@@ -256,9 +254,9 @@ class _DenySecret(Policy):
 
 
 def _policed_ws() -> Workspace:
-    resource = RAMResource()
-    resource._store.dirs.add("/")
-    return Workspace({"/ram/": resource},
+    vfs = RAMVFS()
+    vfs._store.dirs.add("/")
+    return Workspace({"/ram/": vfs},
                      mode=MountMode.WRITE,
                      policies=[_DenySecret()])
 
@@ -332,7 +330,7 @@ async def test_a_negated_pipeline_keeps_its_refusal():
 async def test_cancel_releases_a_line_stalled_before_it_runs():
     # The session store never answers its load, so the line is stuck
     # before its first gate; the caller's event still has to release it.
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.WRITE,
                    session_store=_StalledSessionStore())
     cancel = asyncio.Event()
@@ -349,7 +347,7 @@ async def test_abort_during_preflight_is_not_recorded():
     # A line is recorded once it has been parsed; one that never got past
     # the loading of workspace state leaves no history entry, as in
     # TypeScript.
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.WRITE,
                    session_store=_StalledSessionStore())
     cancel = asyncio.Event()
@@ -369,9 +367,7 @@ async def test_abort_on_the_flush_restores_status():
     # line flushes normally because the cancelled write kept the
     # generation the store knows.
     store = _StallableSessionStore()
-    ws = Workspace({"/": RAMResource()},
-                   mode=MountMode.WRITE,
-                   session_store=store)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE, session_store=store)
     await ws.execute("false")
     session = ws._session_mgr.get(ws._session_mgr.default_id)
     store.stall = True
@@ -390,7 +386,7 @@ async def test_abort_on_the_flush_restores_status():
 
 @pytest.mark.asyncio
 async def test_abort_on_the_history_record_restores_status():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.WRITE,
                    observe=_StalledObserverStore())
     session = ws._session_mgr.get(ws._session_mgr.default_id)
@@ -410,7 +406,7 @@ async def test_abort_of_a_running_line_is_not_held_by_a_dead_history_store():
     # The cancel lands on the body (`sleep`), and the line's finally then
     # records into a store that never answers. The caller is released
     # after the grace all the same, with the abort and `$?` restored.
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.WRITE,
                    observe=_StalledObserverStore())
     session = ws._session_mgr.get(ws._session_mgr.default_id)
@@ -431,7 +427,7 @@ async def test_a_wait_for_timeout_is_not_held_by_a_dead_history_store():
     # wait_for. The line still gets both cancels and the grace between
     # them, so the dead store does not hold the caller, and `$?` is what
     # the line found rather than what it stamped.
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.WRITE,
                    observe=_StalledObserverStore())
     session = ws._session_mgr.get(ws._session_mgr.default_id)
@@ -448,9 +444,7 @@ async def test_a_wait_for_timeout_is_not_held_by_a_dead_history_store():
 @pytest.mark.asyncio
 async def test_abort_of_a_running_line_is_not_held_by_a_dead_session_store():
     store = _StallableSessionStore()
-    ws = Workspace({"/": RAMResource()},
-                   mode=MountMode.WRITE,
-                   session_store=store)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE, session_store=store)
     await ws.execute("false")
     session = ws._session_mgr.get(ws._session_mgr.default_id)
     store.stall = True

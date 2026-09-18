@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.gws import GWS
-from mirage.resource.gsheets import GSheetsConfig, GSheetsResource
 from mirage.types import PathSpec
+from mirage.vfs.gsheets import GSheetsConfig, GSheetsVFS
 
 load_dotenv(".env.development")
 
@@ -30,11 +30,11 @@ config = GSheetsConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GSheetsResource(config=config)
+vfs = GSheetsVFS(config=config)
 
 
 async def main() -> None:
-    ws = Workspace({"/gsheets": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/gsheets": vfs}, mode=MountMode.WRITE)
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 

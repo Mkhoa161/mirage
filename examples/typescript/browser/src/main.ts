@@ -13,23 +13,23 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import {
-  GCSResource,
-  GDocsResource,
-  GDriveResource,
-  GSheetsResource,
-  GSlidesResource,
-  GitHubResource,
-  LangfuseResource,
-  LinearResource,
+  GCSVFS,
+  GDocsVFS,
+  GDriveVFS,
+  GSheetsVFS,
+  GSlidesVFS,
+  GitHubVFS,
+  LangfuseVFS,
+  LinearVFS,
   MountMode,
-  OCIResource,
-  OPFSResource,
-  R2Resource,
-  type Resource,
-  S3Resource,
+  OCIVFS,
+  OPFSVFS,
+  R2VFS,
+  type VFS,
+  S3VFS,
   type S3BrowserOperation,
   type S3BrowserSignOptions,
-  TrelloResource,
+  TrelloVFS,
   Workspace,
 } from '@struktoai/mirage-browser'
 
@@ -85,17 +85,17 @@ async function fetchConfigured(): Promise<BackendName[]> {
   }
 }
 
-function buildResource(backend: BackendName): Resource {
+function buildVfs(backend: BackendName): VFS {
   const provider = makePresigner(backend)
   switch (backend) {
     case 's3':
-      return new S3Resource({ bucket: backend, presignedUrlProvider: provider })
+      return new S3VFS({ bucket: backend, presignedUrlProvider: provider })
     case 'gcs':
-      return new GCSResource({ bucket: backend, presignedUrlProvider: provider })
+      return new GCSVFS({ bucket: backend, presignedUrlProvider: provider })
     case 'r2':
-      return new R2Resource({ bucket: backend, presignedUrlProvider: provider })
+      return new R2VFS({ bucket: backend, presignedUrlProvider: provider })
     case 'oci':
-      return new OCIResource({ bucket: backend, presignedUrlProvider: provider })
+      return new OCIVFS({ bucket: backend, presignedUrlProvider: provider })
   }
 }
 
@@ -115,9 +115,9 @@ async function demoOpfs(ws: Workspace): Promise<void> {
 /**
  * Trello demo. Unlike S3/GCS/OCI which need a server-side presigner, Trello's
  * REST API supports CORS and uses URL-param auth, so the browser can call
- * api.trello.com directly. The TrelloResource holds apiKey/apiToken just like
- * S3Resource holds accessKeyId/secretAccessKey, and ships a full set of shell
- * commands (ls/cat/tree/grep/find/jq/...) registered against `resource: trello`.
+ * api.trello.com directly. The TrelloVFS holds apiKey/apiToken just like
+ * S3VFS holds accessKeyId/secretAccessKey, and ships a full set of shell
+ * commands (ls/cat/tree/grep/find/jq/...) registered against `vfs: trello`.
  */
 async function demoTrello(ws: Workspace): Promise<void> {
   line('')
@@ -180,7 +180,7 @@ async function demoLangfuse(ws: Workspace): Promise<void> {
 
 /**
  * GitHub demo. GitHub's REST API supports CORS and uses an Authorization
- * header — same model as Linear. The repo's tree is fetched once at resource
+ * header — same model as Linear. The repo's tree is fetched once at VFS
  * creation and cached, so subsequent `ls`/`cat` calls hit it without round
  * trips except for blob fetches when reading file contents.
  */
@@ -245,7 +245,7 @@ async function demoGslides(ws: Workspace): Promise<void> {
 
 async function demoGdrive(ws: Workspace): Promise<void> {
   line('')
-  line('━━━ Google Drive (/gdrive/) — folder tree via multi-resource ━━━', 'prompt')
+  line('━━━ Google Drive (/gdrive/) — folder tree via multi-VFS ━━━', 'prompt')
   await run(ws, 'ls /gdrive/')
   await run(ws, 'tree -L 1 /gdrive/')
   await run(ws, "find /gdrive/ -name '*.gdoc.json' | head -n 3")
@@ -276,16 +276,16 @@ async function main(): Promise<void> {
   const configured = await fetchConfigured()
   line(`configured backends: ${configured.length > 0 ? configured.join(', ') : '(none)'}`, 'ok')
 
-  const resources: Record<string, Resource> = {
-    '/': new OPFSResource({ root: 'mirage-browser-demo' }),
+  const mounts: Record<string, VFS> = {
+    '/': new OPFSVFS({ root: 'mirage-browser-demo' }),
   }
-  for (const b of configured) resources[`/${b}/`] = buildResource(b)
+  for (const b of configured) mounts[`/${b}/`] = buildVfs(b)
 
   const trelloKey = __TRELLO_API_KEY__
   const trelloToken = __TRELLO_API_TOKEN__
   const trelloEnabled = trelloKey !== '' && trelloToken !== ''
   if (trelloEnabled) {
-    resources['/trello/'] = new TrelloResource({
+    mounts['/trello/'] = new TrelloVFS({
       apiKey: trelloKey,
       apiToken: trelloToken,
     })
@@ -294,7 +294,7 @@ async function main(): Promise<void> {
   const linearKey = __LINEAR_API_KEY__
   const linearEnabled = linearKey !== ''
   if (linearEnabled) {
-    resources['/linear/'] = new LinearResource({ apiKey: linearKey })
+    mounts['/linear/'] = new LinearVFS({ apiKey: linearKey })
   }
 
   const lfPublic = __LANGFUSE_PUBLIC_KEY__
@@ -303,7 +303,7 @@ async function main(): Promise<void> {
   const langfuseEnabled = lfPublic !== '' && lfSecret !== ''
   if (langfuseEnabled) {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    resources['/langfuse/'] = new LangfuseResource({
+    mounts['/langfuse/'] = new LangfuseVFS({
       publicKey: lfPublic,
       secretKey: lfSecret,
       ...(lfHost !== '' ? { host: lfHost } : {}),
@@ -318,7 +318,7 @@ async function main(): Promise<void> {
   const githubEnabled = githubToken !== '' && githubOwner !== '' && githubRepo !== ''
   if (githubEnabled) {
     try {
-      resources['/github/'] = await GitHubResource.create({
+      mounts['/github/'] = await GitHubVFS.create({
         token: githubToken,
         owner: githubOwner,
         repo: githubRepo,
@@ -335,29 +335,29 @@ async function main(): Promise<void> {
   const gdocsEnabled =
     googleClientId !== '' && googleClientSecret !== '' && googleRefreshToken !== ''
   if (gdocsEnabled) {
-    resources['/gdocs/'] = new GDocsResource({
+    mounts['/gdocs/'] = new GDocsVFS({
       clientId: googleClientId,
       clientSecret: googleClientSecret,
       refreshToken: googleRefreshToken,
     })
-    resources['/gsheets/'] = new GSheetsResource({
+    mounts['/gsheets/'] = new GSheetsVFS({
       clientId: googleClientId,
       clientSecret: googleClientSecret,
       refreshToken: googleRefreshToken,
     })
-    resources['/gslides/'] = new GSlidesResource({
+    mounts['/gslides/'] = new GSlidesVFS({
       clientId: googleClientId,
       clientSecret: googleClientSecret,
       refreshToken: googleRefreshToken,
     })
-    resources['/gdrive/'] = new GDriveResource({
+    mounts['/gdrive/'] = new GDriveVFS({
       clientId: googleClientId,
       clientSecret: googleClientSecret,
       refreshToken: googleRefreshToken,
     })
   }
 
-  const ws = new Workspace(resources, { mode: MountMode.WRITE })
+  const ws = new Workspace(mounts, { mode: MountMode.WRITE })
 
   await demoOpfs(ws)
   if (trelloEnabled) {
@@ -384,7 +384,7 @@ async function main(): Promise<void> {
       line(`langfuse: ${msg}`, 'err')
     }
   }
-  if (githubEnabled && resources['/github/'] !== undefined) {
+  if (githubEnabled && mounts['/github/'] !== undefined) {
     try {
       await demoGitHub(ws)
     } catch (err) {

@@ -21,7 +21,7 @@ function fPath(): PathSpec {
   return new PathSpec({
     virtual: '/f',
     directory: '/',
-    resourcePath: 'f',
+    vfsPath: 'f',
     resolved: true,
   })
 }

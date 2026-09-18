@@ -38,7 +38,7 @@ function readOp(virtual: string): OpsContext {
     path: new PathSpec({
       virtual,
       directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
-      resourcePath: virtual,
+      vfsPath: virtual,
       rawPath: virtual,
     }),
     write: false,

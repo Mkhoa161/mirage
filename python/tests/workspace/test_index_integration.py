@@ -18,9 +18,9 @@ import boto3
 from moto import mock_aws
 
 from mirage.cache.index import LookupStatus
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3.s3 import S3Config, S3Resource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 
 
@@ -38,20 +38,20 @@ def _stdout(io):
     return b""
 
 
-# ── resource has index ─────────────────────────
+# ── VFS has index ─────────────────────────
 
 
-def test_ram_resource_has_index():
-    p = RAMResource()
+def test_ram_vfs_has_index():
+    p = RAMVFS()
     assert p.index is not None
     assert p.index_ttl == 0
 
 
-def test_s3_resource_has_index():
+def test_s3_vfs_has_index():
     with mock_aws():
         boto3.client("s3",
                      region_name="us-east-1").create_bucket(Bucket="test-idx")
-        p = S3Resource(S3Config(bucket="test-idx", region="us-east-1"))
+        p = S3VFS(S3Config(bucket="test-idx", region="us-east-1"))
         assert p.index is not None
         assert p.index_ttl == 600
 
@@ -60,12 +60,12 @@ def test_s3_resource_has_index():
 
 
 def _ram_ws():
-    p = RAMResource()
+    p = RAMVFS()
     p._store.dirs.add("/sub")
     p._store.files["/sub/a.txt"] = b"aaa\n"
     p._store.files["/sub/b.txt"] = b"bbb\n"
     p._store.files["/sub/c.csv"] = b"col\n"
-    ws = Workspace(resources={"/data/": (p, MountMode.WRITE)}, )
+    ws = Workspace(mounts={"/data/": (p, MountMode.WRITE)}, )
     ws.get_session(ws.default_session_id).cwd = "/data"
     return ws, p
 
@@ -85,7 +85,7 @@ def test_ram_cat_of_a_literal_path_stores_no_listing():
     """A literal path asks for no directory listing, so nothing is indexed.
 
     Renamed from ``test_ram_glob_second_call_uses_index``, which asserted
-    nothing and could not have: the RAM resource's ``index_ttl`` is 0, so
+    nothing and could not have: the RAM VFS's ``index_ttl`` is 0, so
     an index hit is unreachable for it by construction, and ``cat`` on a
     literal path never populates a listing in the first place (the glob
     sibling above is what populates, and it reads back EXPIRED). This
@@ -108,12 +108,12 @@ def test_ram_glob_pattern_works():
 # ── S3 index integration ──────────────────────
 
 
-def test_s3_resource_index_ttl():
-    """S3 resource gets index with TTL=600."""
+def test_s3_vfs_index_ttl():
+    """S3 VFS gets index with TTL=600."""
     with mock_aws():
         boto3.client("s3",
                      region_name="us-east-1").create_bucket(Bucket="test-ttl")
-        prov = S3Resource(S3Config(bucket="test-ttl", region="us-east-1"))
+        prov = S3VFS(S3Config(bucket="test-ttl", region="us-east-1"))
         assert prov.index is not None
         assert prov.index_ttl == 600
 
@@ -124,7 +124,7 @@ def test_s3_index_can_store_entries():
     with mock_aws():
         boto3.client(
             "s3", region_name="us-east-1").create_bucket(Bucket="test-store")
-        prov = S3Resource(S3Config(bucket="test-store", region="us-east-1"))
+        prov = S3VFS(S3Config(bucket="test-store", region="us-east-1"))
         _run(
             prov.index.set_dir("/data", [
                 ("a.txt", IndexEntry(
@@ -139,20 +139,20 @@ def test_s3_index_can_store_entries():
 
 def test_s3_index_separate_from_ram():
     """S3 and RAM have independent indexes."""
-    ram = RAMResource()
+    ram = RAMVFS()
     with mock_aws():
         boto3.client("s3",
                      region_name="us-east-1").create_bucket(Bucket="test-sep")
-        s3 = S3Resource(S3Config(bucket="test-sep", region="us-east-1"))
+        s3 = S3VFS(S3Config(bucket="test-sep", region="us-east-1"))
         assert ram.index is not s3.index
 
 
-# ── index per resource ─────────────────────────
+# ── index per VFS ─────────────────────────
 
 
-def test_index_per_resource():
-    p1 = RAMResource()
-    p2 = RAMResource()
+def test_index_per_vfs():
+    p1 = RAMVFS()
+    p2 = RAMVFS()
     assert p1.index is not p2.index
 
 
@@ -160,15 +160,15 @@ def test_index_per_resource():
 
 
 def test_ram_index_ttl_zero():
-    p = RAMResource()
+    p = RAMVFS()
     assert p.index_ttl == 0
 
 
 def test_index_expired_refetches():
-    p = RAMResource()
+    p = RAMVFS()
     p._store.dirs.add("/sub")
     p._store.files["/sub/a.txt"] = b"aaa\n"
-    ws = Workspace(resources={"/data/": (p, MountMode.WRITE)}, )
+    ws = Workspace(mounts={"/data/": (p, MountMode.WRITE)}, )
     ws.get_session(ws.default_session_id).cwd = "/data"
     _run(ws.execute("cat /data/sub/*.txt"))
     listing = _run(p.index.list_dir("/data/sub"))

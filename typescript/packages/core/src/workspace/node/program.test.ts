@@ -13,17 +13,14 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser, stderrStr } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const ws = new Workspace(
-    { '/': new RAMResource() },
-    { mode: MountMode.WRITE, shellParser: parser },
-  )
+  const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE, shellParser: parser })
   await ws.execute('mkdir -p /data/sub')
   await ws.execute('echo hi > /data/sub/x.txt')
   await ws.execute('cd /data')

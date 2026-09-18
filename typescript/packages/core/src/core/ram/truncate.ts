@@ -14,7 +14,7 @@
 
 import { record, startOp } from '../../observe/context.ts'
 import type { RAMAccessor } from '../../accessor/ram.ts'
-import { ResourceName, type PathSpec } from '../../types.ts'
+import { VFSName, type PathSpec } from '../../types.ts'
 import { norm, nowIso } from './utils.ts'
 import { invalidateAfterWrite } from '../../cache/context.ts'
 
@@ -30,7 +30,7 @@ export async function truncate(
   out.set(existing.subarray(0, Math.min(existing.byteLength, length)))
   accessor.store.files.set(p, out)
   accessor.store.modified.set(p, nowIso())
-  record('truncate', p, ResourceName.RAM, 0, timer)
+  record('truncate', p, VFSName.RAM, 0, timer)
   await invalidateAfterWrite(path)
   return Promise.resolve()
 }

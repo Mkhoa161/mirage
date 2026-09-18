@@ -20,8 +20,8 @@ import uuid
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.hf_buckets import HfBucketsConfig, HfBucketsResource
 from mirage.types import PathSpec
+from mirage.vfs.hf_buckets import HfBucketsConfig, HfBucketsVFS
 
 load_dotenv(".env.development")
 
@@ -30,8 +30,8 @@ config = HfBucketsConfig(
     token=os.environ["HF_TOKEN"],
 )
 
-resource = HfBucketsResource(config)
-ws = Workspace({"/hf/": resource}, mode=MountMode.WRITE)
+vfs = HfBucketsVFS(config)
+ws = Workspace({"/hf/": vfs}, mode=MountMode.WRITE)
 
 
 def ops_summary() -> str:

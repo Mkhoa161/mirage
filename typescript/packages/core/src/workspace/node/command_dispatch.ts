@@ -25,7 +25,7 @@ import type { Runtime } from '../../runtime/base.ts'
 import type { RouteDecision } from '../../runtime/routing/index.ts'
 import { guardDispatch, mergeSignals } from '../abort.ts'
 import { type ByteSource, IOResult, materialize } from '../../io/types.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 import { encodeText } from '../../shell/bytes.ts'
 import type { CallStack } from '../../shell/call_stack.ts'
 import {
@@ -105,7 +105,7 @@ export async function executeCommand(
   stdinIn: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
-  ensureOpen?: (resource: Resource) => Promise<void>,
+  ensureOpen?: (vfs: VFS) => Promise<void>,
   runtimeBindings?: Record<string, Runtime>,
   routingDecision?: RouteDecision,
   signal?: AbortSignal,
@@ -318,7 +318,7 @@ async function runCommandBody(
   stdinIn: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
-  ensureOpen?: (resource: Resource) => Promise<void>,
+  ensureOpen?: (vfs: VFS) => Promise<void>,
   runtimeBindings?: Record<string, Runtime>,
   routingDecision?: RouteDecision,
   signalIn?: AbortSignal,
@@ -487,7 +487,7 @@ async function runArgv(
   stdin: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
-  ensureOpen?: (resource: Resource) => Promise<void>,
+  ensureOpen?: (vfs: VFS) => Promise<void>,
   runtimeBindings?: Record<string, Runtime>,
   routingDecision?: RouteDecision,
   signal?: AbortSignal,
@@ -508,7 +508,7 @@ async function runArgv(
 
   // A glob whose directory holds a child mount cannot be pushed down to
   // one backend: the mount root is a child of that directory but its keys
-  // live in another resource, so the backend reports "no such file" for a
+  // live in another VFS, so the backend reports "no such file" for a
   // name its own listing shows. Expanding such a word here lets the
   // matches route per mount. It has to happen before the admission
   // policies below, not just before the follow policy: a word left
@@ -640,7 +640,7 @@ async function routeArgv(
   stdin: ByteSource | null,
   callStack: CallStack | null,
   jobTable: JobTable | null,
-  ensureOpen: ((resource: Resource) => Promise<void>) | undefined,
+  ensureOpen: ((vfs: VFS) => Promise<void>) | undefined,
   runtimeBindings: Record<string, Runtime> | undefined,
   routingDecision: RouteDecision | undefined,
   signal: AbortSignal | undefined,

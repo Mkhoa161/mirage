@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import type { Resource } from '../../../resource/base.ts'
+import type { VFS } from '../../../vfs/base.ts'
 import {
   FileStat,
   FileType,
@@ -106,7 +106,7 @@ function metaFromFields(fields: NodeFields): NodeMeta {
 
 // Addressing authority: maps virtual paths to their mounts. Owns the mount
 // registry and the per-path node-metadata table (symlinks plus the attribute
-// overlay). Pure addressing: resolve a virtual path to its resource and
+// overlay). Pure addressing: resolve a virtual path to its VFS and
 // backend-relative path, following symlinks and crossing mounts. Holds no
 // cache and performs no backend I/O; op execution and caching live in the
 // Dispatcher, which calls this layer to locate the mount.
@@ -449,7 +449,7 @@ export class Namespace {
 
   // Map a virtual path to its mount, following the symlink table first when
   // `follow` is set. Throws CycleError when resolution exceeds the hop limit.
-  async resolve(path: string, follow = true): Promise<[Resource, PathSpec, MountMode]> {
+  async resolve(path: string, follow = true): Promise<[VFS, PathSpec, MountMode]> {
     if (follow) path = this.follow(path)
     return this.resolveFn(path)
   }

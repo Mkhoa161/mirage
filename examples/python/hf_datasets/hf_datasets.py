@@ -19,8 +19,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.hf_datasets import HfDatasetsConfig, HfDatasetsResource
 from mirage.types import PathSpec
+from mirage.vfs.hf_datasets import HfDatasetsConfig, HfDatasetsVFS
 
 load_dotenv(".env.development")
 
@@ -29,8 +29,8 @@ config = HfDatasetsConfig(
                            "AlienKevin/SWE-ZERO-12M-trajectories"),
     token=os.environ.get("HF_TOKEN"),
 )
-resource = HfDatasetsResource(config)
-ws = Workspace({"/ds/": resource}, mode=MountMode.READ)
+vfs = HfDatasetsVFS(config)
+ws = Workspace({"/ds/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:
@@ -47,7 +47,7 @@ def show_plan(label: str, dr) -> None:
 
 
 async def main():
-    print(f"=== mounted {resource.accessor.bucket_uri} at /ds/ ===")
+    print(f"=== mounted {vfs.accessor.bucket_uri} at /ds/ ===")
 
     print("\n=== not-found errors show the full virtual path ===")
     for cmd in ("cat /ds/__nf_missing__.txt", "head /ds/__nf_missing__.txt",

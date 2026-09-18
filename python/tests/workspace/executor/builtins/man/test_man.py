@@ -26,11 +26,11 @@ from mirage.workspace.executor.builtins.man import (ManEntry, _command_entry,
 from mirage.workspace.session import Session
 
 
-def _mk_cmd(name, spec, filetype=None, resource="ram"):
+def _mk_cmd(name, spec, filetype=None, vfs="ram"):
     return RegisteredCommand(
         name=name,
         spec=spec,
-        resource=resource,
+        vfs=vfs,
         filetype=filetype,
         fn=lambda *a, **kw: None,
     )
@@ -39,8 +39,8 @@ def _mk_cmd(name, spec, filetype=None, resource="ram"):
 def _mk_mount(prefix, kind, cmds=None, general=None):
     mount = MagicMock()
     mount.prefix = prefix
-    mount.resource = MagicMock()
-    mount.resource.name = kind
+    mount.vfs = MagicMock()
+    mount.vfs.name = kind
     cmds = cmds or {}
     general = general or {}
 
@@ -141,7 +141,7 @@ def test_handle_man_missing_entry():
     assert node.exit_code == 1
 
 
-def test_handle_man_page_carries_no_resource():
+def test_handle_man_page_carries_no_vfs():
     spec = CommandSpec(description="cat files")
     cat = _mk_cmd("cat", spec)
     m1 = _mk_mount("/a/", "ram", cmds={"cat": cat})
@@ -168,7 +168,7 @@ def test_handle_man_documents_bash_and_sh_from_the_bash_spec():
 
 def test_render_man_index_lists_every_name_once_sorted():
     spec_g = CommandSpec(description="bc desc")
-    bc = _mk_cmd("bc", spec_g, resource=None)
+    bc = _mk_cmd("bc", spec_g, vfs=None)
     spec_a = CommandSpec(description="ls files")
     ls = _mk_cmd("ls", spec_a)
     spec_c = CommandSpec(description="cat files")

@@ -17,7 +17,7 @@ import re
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.shell.node_kind import pipeline_transparent
 from mirage.shell.parse import parse
 from mirage.workspace.executor.statement import record_status
@@ -169,12 +169,12 @@ async def _out(ws: Workspace, line: str) -> str:
 async def test_pipestatus_matches_bash(line, expected):
     # Every expectation here was pinned against GNU bash 5.2 on
     # debian:stable-slim.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     assert await _out(ws, line) == expected
 
 
 @pytest.mark.asyncio
 async def test_pipestatus_is_not_listed_by_declare():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute("declare -p PIPESTATUS")
     assert io.exit_code == 1

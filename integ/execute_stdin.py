@@ -134,10 +134,10 @@ def execute(client: httpx.Client,
     return result
 
 
-def check_workspace(client: httpx.Client, host: str, resource: str,
+def check_workspace(client: httpx.Client, host: str, vfs: str,
                     root: Path) -> None:
-    mount = {'resource': resource}
-    if resource == 'disk':
+    mount = {'vfs': vfs}
+    if vfs == 'disk':
         mount['config'] = {'root': str(root)}
     created = client.post('/v1/workspaces',
                           json={
@@ -161,7 +161,7 @@ def check_workspace(client: httpx.Client, host: str, resource: str,
                                      legacy=legacy)
                     assert result['stdout'] == stdin.hex() + '\n', result
             print(
-                f'{host}/{resource}: Python stdin '
+                f'{host}/{vfs}: Python stdin '
                 '(empty/binary, JSON/multipart) OK',
                 flush=True)
         for background in (False, True):
@@ -196,7 +196,7 @@ def check_workspace(client: httpx.Client, host: str, resource: str,
                 piped = execute(client, wid, 'grep needle', source, background)
                 assert piped['stdout'] == expected
                 print(
-                    f'{host}/{resource}/background={background}: '
+                    f'{host}/{vfs}/background={background}: '
                     f'grep + save + SHA256, {len(data)} bytes OK',
                     flush=True)
     finally:
@@ -210,10 +210,10 @@ def main() -> None:
                 prefix=f'mirage-stdin-{host}-') as temporary:
             root = Path(temporary)
             with daemon(host, root) as client:
-                for resource in ('ram', 'disk'):
-                    files = root / resource
+                for vfs in ('ram', 'disk'):
+                    files = root / vfs
                     files.mkdir()
-                    check_workspace(client, host, resource, files)
+                    check_workspace(client, host, vfs, files)
     print('Live daemon stdin and grep round trips passed on both hosts.')
 
 

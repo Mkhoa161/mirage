@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.seaweedfs import SeaweedFSConfig, SeaweedFSResource
+from mirage.vfs.seaweedfs import SeaweedFSConfig, SeaweedFSVFS
 
 load_dotenv(".env.development")
 
@@ -30,11 +30,11 @@ config = SeaweedFSConfig(
     secret_access_key=os.environ.get("SEAWEEDFS_SECRET_KEY", "any"),
 )
 
-resource = SeaweedFSResource(config)
+vfs = SeaweedFSVFS(config)
 
 
 async def main():
-    with Workspace({"/seaweedfs/": resource}, mode=MountMode.WRITE) as ws:
+    with Workspace({"/seaweedfs/": vfs}, mode=MountMode.WRITE) as ws:
         print(f"=== VFS MODE: open() reads SeaweedFS at {config.endpoint_url} "
               f"transparently ===\n")
 

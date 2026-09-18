@@ -16,17 +16,17 @@ import { describe, expect, it } from 'vitest'
 import { CLISpec } from '../commands/cli/types.ts'
 import { IOResult } from '../io/types.ts'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   const registry = new OpsRegistry()
-  registry.registerResource(r)
+  registry.registerVfs(r)
   return new Workspace(
     { '/ram/': r },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -35,19 +35,19 @@ async function makeWs(): Promise<Workspace> {
 
 async function makeMultiWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   ram.store.dirs.add('/')
   ram.store.files.set('/a.txt', new TextEncoder().encode('a\n'))
-  const other = new RAMResource()
+  const other = new RAMVFS()
   other.store.dirs.add('/')
   other.store.files.set('/b.txt', new TextEncoder().encode('b\n'))
-  const ro = new RAMResource()
+  const ro = new RAMVFS()
   ro.store.dirs.add('/')
   ro.store.files.set('/c.txt', new TextEncoder().encode('c\n'))
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
-  registry.registerResource(other)
-  registry.registerResource(ro)
+  registry.registerVfs(ram)
+  registry.registerVfs(other)
+  registry.registerVfs(ro)
   return new Workspace(
     {
       '/ram/': [ram, MountMode.EXEC],

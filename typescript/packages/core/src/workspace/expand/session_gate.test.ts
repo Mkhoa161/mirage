@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Policy } from '../../policy/base.ts'
 import type { Action, SessionContext } from '../../policy/types.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
@@ -33,7 +33,7 @@ class DenyAws implements Policy {
 async function guarded(): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/ram': new RAMResource() },
+    { '/ram': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParserFactory: () => Promise.resolve(parser),

@@ -33,9 +33,8 @@ def make_copy(driver: ObjectStoreDriver[A, C],
     """
     copy_file = driver.copy_file
     if copy_file is None:
-        raise ValueError(
-            f"{driver.resource} driver has no native copy; leave copy "
-            "unwired instead of building it")
+        raise ValueError(f"{driver.vfs} driver has no native copy; leave copy "
+                         "unwired instead of building it")
 
     async def copy(accessor: A, src_spec: PathSpec,
                    dst_spec: PathSpec) -> None:

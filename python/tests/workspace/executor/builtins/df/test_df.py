@@ -20,13 +20,13 @@ deterministic (real disk free space is machine-specific).
 """
 import pytest
 
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.types import CapacityResult, CapacityState, MountMode
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
-class _QuotaResource(RAMResource):
+class _QuotaVFS(RAMVFS):
     """RAM backend that reports a fixed quota, standing in for a real
     filesystem / a provider that exposes storage numbers."""
 
@@ -47,8 +47,8 @@ class _QuotaResource(RAMResource):
 def _ws() -> Workspace:
     return Workspace(
         {
-            "/mem": (RAMResource(), MountMode.WRITE),
-            "/q": (_QuotaResource(), MountMode.WRITE),
+            "/mem": (RAMVFS(), MountMode.WRITE),
+            "/q": (_QuotaVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )
@@ -61,7 +61,7 @@ async def _run(ws: Workspace, cmd: str) -> tuple[int, str]:
 
 def test_capacity_default_state_is_unknown():
     import asyncio
-    cap = asyncio.run(RAMResource().statfs())
+    cap = asyncio.run(RAMVFS().statfs())
     assert cap.state == CapacityState.UNKNOWN
     assert cap.total is None
 
@@ -179,7 +179,7 @@ async def test_df_invalid_option():
 @pytest.mark.asyncio
 async def test_disk_statfs_real_quota(tmp_path):
     # The real disk backend reports real numbers (QUOTA), not fabricated.
-    cap = await DiskResource(root=str(tmp_path)).statfs()
+    cap = await DiskVFS(root=str(tmp_path)).statfs()
     assert cap.state == CapacityState.QUOTA
     assert cap.total and cap.total > 0
     assert cap.available is not None and cap.available >= 0

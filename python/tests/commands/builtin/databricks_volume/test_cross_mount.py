@@ -15,9 +15,10 @@
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
-from tests.resource.databricks_volume.test_databricks_volume import (
-    FakeFiles, make_resource, seed_file)
+from mirage.vfs.ram import RAMVFS
+from tests.vfs.databricks_volume.test_databricks_volume import (FakeFiles,
+                                                                make_vfs,
+                                                                seed_file)
 
 ROOT = "/Volumes/main/default/agent_files/root"
 
@@ -38,8 +39,8 @@ def _ws_with_dbx_tree():
     files.create_directory(f"{ROOT}/tree/sub")
     seed_file(files, f"{ROOT}/tree/a.txt", b"aaa\n")
     seed_file(files, f"{ROOT}/tree/sub/b.txt", b"bbb\n")
-    dbx = make_resource(files)
-    ram = RAMResource()
+    dbx = make_vfs(files)
+    ram = RAMVFS()
     ws = Workspace(
         {
             "/dbx": (dbx, MountMode.WRITE),

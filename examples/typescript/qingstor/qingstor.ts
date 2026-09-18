@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  QingStorResource,
+  QingStorVFS,
   Workspace,
   resolvedQingStorEndpoint,
   type QingStorConfig,
@@ -38,7 +38,7 @@ function configFromEnv(): QingStorConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/qs/': new QingStorResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/qs/': new QingStorVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== QingStor at ${resolvedQingStorEndpoint(config)} ===`)
 

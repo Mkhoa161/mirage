@@ -4,7 +4,7 @@ from mirage.server.workspace_config import (WORKSPACE_CONFIG_CANDIDATES,
                                             build_workspace_from_config,
                                             resolve_workspace_config)
 
-MINIMAL = "mounts:\n  /:\n    resource: ram\n    mode: WRITE\n"
+MINIMAL = "mounts:\n  /:\n    vfs: ram\n    mode: WRITE\n"
 
 
 @pytest.fixture

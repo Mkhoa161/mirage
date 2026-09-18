@@ -16,7 +16,7 @@
 import {
   MountMode,
   Outcome,
-  RAMResource,
+  RAMVFS,
   Scope,
   Workspace,
   parseSessionProfile,
@@ -54,7 +54,7 @@ async function run(ws: Workspace, line: string): Promise<void> {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { "/data/": new RAMResource() },
+    { "/data/": new RAMVFS() },
     { mode: MountMode.WRITE, profiles: { agent: ROLE }, onAsk: reviewer },
   );
   ws.createSession("agent", { profile: "agent" });

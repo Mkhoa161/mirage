@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { runWithSession } from '../context/session_context.ts'
 import { OpsRegistry } from '../ops/registry.ts'
 import { RAMSessionStore } from './session/ram.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { FileType, MountMode, type FileStat } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { parseSessionProfile } from '../policy/profile.ts'
@@ -26,9 +26,9 @@ const ENC = new TextEncoder()
 
 interface GrantsWorkspace {
   ws: Workspace
-  a: RAMResource
-  b: RAMResource
-  root: RAMResource | null
+  a: RAMVFS
+  b: RAMVFS
+  root: RAMVFS | null
 }
 
 const open: Workspace[] = []
@@ -37,22 +37,22 @@ async function makeGrantsWorkspace(
   options: { rootMount?: boolean; modes?: Record<string, MountMode> } = {},
 ): Promise<GrantsWorkspace> {
   const parser = await getTestParser()
-  const a = new RAMResource()
-  const b = new RAMResource()
+  const a = new RAMVFS()
+  const b = new RAMVFS()
   a.store.files.set('/x.txt', ENC.encode('hi\n'))
   b.store.files.set('/secret.txt', ENC.encode('SECRET\n'))
-  const resources: Record<string, RAMResource> = { '/a': a, '/b': b }
-  let root: RAMResource | null = null
+  const mounts: Record<string, RAMVFS> = { '/a': a, '/b': b }
+  let root: RAMVFS | null = null
   if (options.rootMount === true) {
-    root = new RAMResource()
+    root = new RAMVFS()
     root.store.files.set('/root.txt', ENC.encode('top\n'))
-    resources['/'] = root
+    mounts['/'] = root
   }
   const registry = new OpsRegistry()
-  for (const r of Object.values(resources)) registry.registerResource(r)
+  for (const r of Object.values(mounts)) registry.registerVfs(r)
   const modes = options.modes ?? {}
   const specs = Object.fromEntries(
-    Object.entries(resources).map(([prefix, r]) => [
+    Object.entries(mounts).map(([prefix, r]) => [
       prefix,
       modes[prefix] !== undefined ? ([r, modes[prefix]] as const) : r,
     ]),
@@ -220,13 +220,13 @@ describe('per-session mount grants', () => {
 describe('structure below a mount whose own content is hidden', () => {
   async function makeNestedWorkspace(): Promise<Workspace> {
     const parser = await getTestParser()
-    const base = new RAMResource()
+    const base = new RAMVFS()
     base.store.files.set('/top.txt', ENC.encode('TOP\n'))
-    const inner = new RAMResource()
+    const inner = new RAMVFS()
     inner.store.files.set('/deep.txt', ENC.encode('needle\n'))
     const registry = new OpsRegistry()
-    registry.registerResource(base)
-    registry.registerResource(inner)
+    registry.registerVfs(base)
+    registry.registerVfs(inner)
     const ws = new Workspace(
       { '/base': base, '/base/inner': inner },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -272,7 +272,7 @@ describe('structure below a mount whose own content is hidden', () => {
 describe('sessions on a shared SessionStore', () => {
   it('a session created by one workspace narrows a sibling on the same store', async () => {
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const store = new RAMSessionStore()
     const wsA = new Workspace(
       { '/data': ram },
@@ -300,12 +300,12 @@ describe('nested mount disclosure', () => {
   // it, while `ls`, `find` and `du` on the same tree all hid it.
   async function makeNested(): Promise<Workspace> {
     const parser = await getTestParser()
-    const base = new RAMResource()
-    const priv = new RAMResource()
+    const base = new RAMVFS()
+    const priv = new RAMVFS()
     base.store.files.set('/top.txt', ENC.encode('public\n'))
     priv.store.files.set('/secret.txt', ENC.encode('SECRET\n'))
     const registry = new OpsRegistry()
-    for (const r of [base, priv]) registry.registerResource(r)
+    for (const r of [base, priv]) registry.registerVfs(r)
     const ws = new Workspace(
       { '/base': base, '/base/private': priv },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },

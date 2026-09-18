@@ -183,7 +183,7 @@ async def _run_with_namespace_globs(ops: CommandIO,
     """Run a builder with an adapter that carries the invocation's
     namespace facts below every guard.
 
-    A nested mount's keys live in another resource and no resource stores
+    A nested mount's keys live in another VFS and no VFS stores
     a symlink, so a glob resolved by one backend's readdir misses both,
     while the same names are already merged into a listing. The adapter
     is built once per backend and the names are session-scoped, so the
@@ -229,7 +229,7 @@ async def _run_with_namespace_globs(ops: CommandIO,
 
 
 def make_generic_commands(
-    resource: str,
+    vfs: str,
     ops: CommandIO,
     *,
     overrides: set[str] | None = None,
@@ -239,7 +239,7 @@ def make_generic_commands(
     """Generate the default command set for a backend from its ops.
 
     Args:
-        resource (str): resource name the commands register under.
+        vfs (str): VFS name the commands register under.
         ops (CommandIO): the backend's IO adapter.
         overrides (set[str] | None): command names to skip (the backend
             ships its own wrapper for these).
@@ -289,7 +289,7 @@ def make_generic_commands(
         agg = b.aggregate if base_ops.local else None
         commands.append(
             command(b.name,
-                    resource=resource,
+                    vfs=vfs,
                     spec=SPECS[b.name],
                     provision=provision,
                     aggregate=agg,

@@ -5,8 +5,8 @@ import uuid
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.nextcloud import NextcloudConfig, NextcloudResource
 from mirage.types import PathSpec
+from mirage.vfs.nextcloud import NextcloudConfig, NextcloudVFS
 
 load_dotenv(".env.development")
 
@@ -15,8 +15,8 @@ config = NextcloudConfig(
     username=os.environ.get("NEXTCLOUD_USERNAME"),
     password=os.environ.get("NEXTCLOUD_PASSWORD"),
 )
-resource = NextcloudResource(config)
-ws = Workspace({"/nc/": resource}, mode=MountMode.WRITE)
+vfs = NextcloudVFS(config)
+ws = Workspace({"/nc/": vfs}, mode=MountMode.WRITE)
 
 
 async def main():

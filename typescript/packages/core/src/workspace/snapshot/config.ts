@@ -14,11 +14,11 @@
 
 import type { CLISpec } from '../../commands/cli/types.ts'
 import type { ConsistencyPolicy, MountMode } from '../../types.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 
 export interface MountArgs {
   clis?: Record<string, [string | CLISpec, Record<string, unknown> | null]>
-  mountArgs: Record<string, [Resource, MountMode]>
+  mountArgs: Record<string, [VFS, MountMode]>
   consistency: ConsistencyPolicy
   defaultSessionId: string | undefined
   defaultAgentId: string | null

@@ -17,20 +17,20 @@ import asyncio
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.abort import MirageAbortError, cancellable_sleep
 from mirage.workspace.executor.builtins.sleep.sleep import handle_sleep
 
 
 def _make_ws():
-    resource = RAMResource()
-    store = resource._store
+    vfs = RAMVFS()
+    store = vfs._store
     store.dirs.add("/")
     store.dirs.add("/subdir")
     store.dirs.add("/other")
     store.files["/subdir/file.txt"] = b"hello"
     store.modified["/subdir/file.txt"] = "2024-01-01"
-    return Workspace({"/ram/": resource}, mode=MountMode.WRITE)
+    return Workspace({"/ram/": vfs}, mode=MountMode.WRITE)
 
 
 # ── cwd tests ────────────────────────────────────────────────────────────
@@ -287,11 +287,9 @@ async def test_agent_pattern_parallel_tool_calls_each_with_own_options():
 
 @pytest.mark.asyncio
 async def test_execute_uses_custom_default_session_id():
-    resource = RAMResource()
-    resource._store.dirs.add("/")
-    ws = Workspace({"/ram/": resource},
-                   mode=MountMode.WRITE,
-                   session_id="mysess")
+    vfs = RAMVFS()
+    vfs._store.dirs.add("/")
+    ws = Workspace({"/ram/": vfs}, mode=MountMode.WRITE, session_id="mysess")
     r = await ws.execute("echo hi > /ram/f.txt")
     assert r.exit_code == 0
     r2 = await ws.execute("cat /ram/f.txt")

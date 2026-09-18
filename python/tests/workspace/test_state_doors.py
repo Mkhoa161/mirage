@@ -23,9 +23,9 @@ from mirage.fuse.core import MountCore
 from mirage.io.types import IOResult
 from mirage.policy import Action, Deny, OpsContext, Policy
 from mirage.policy.types import SessionContext
-from mirage.resource.ram import RAMResource
 from mirage.shell.variable import VarAttr
 from mirage.types import HiddenPaths, HiddenVars, MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.session import (env_snapshot, reset_current_session,
                                       set_current_session)
@@ -44,8 +44,8 @@ class DenyOp(Policy):
         return None
 
 
-class _OverlayRAMResource(RAMResource):
-    """RAM resource with the native setattr op stripped, standing in for
+class _OverlayRAMVFS(RAMVFS):
+    """RAM VFS with the native setattr op stripped, standing in for
     an API backend that has no attribute slot."""
 
     def __init__(self) -> None:
@@ -54,9 +54,9 @@ class _OverlayRAMResource(RAMResource):
 
 
 def _two_mounts(policies=None) -> Workspace:
-    a = RAMResource()
+    a = RAMVFS()
     a._store.files["/x.txt"] = b"public\n"
-    b = RAMResource()
+    b = RAMVFS()
     b._store.files["/y.txt"] = b"other\n"
     return Workspace({
         "/a": (a, MountMode.WRITE),
@@ -265,7 +265,7 @@ def test_chown_h_on_a_link_fires_the_op_gates():
 def test_overlay_setattr_fires_the_op_gates():
     # A backend with no native setattr op stores attrs in the namespace
     # overlay; that write must clear the same gates as a native one.
-    o = _OverlayRAMResource()
+    o = _OverlayRAMVFS()
     o._store.files["/f.txt"] = b"body\n"
     ws = Workspace({"/o": (o, MountMode.WRITE)},
                    mode=MountMode.WRITE,
@@ -282,7 +282,7 @@ def test_overlay_setattr_fires_the_op_gates():
 
 
 def test_overlay_setattr_still_lands_without_policies():
-    o = _OverlayRAMResource()
+    o = _OverlayRAMVFS()
     o._store.files["/f.txt"] = b"body\n"
     ws = Workspace({"/o": (o, MountMode.WRITE)}, mode=MountMode.WRITE)
 
@@ -371,7 +371,7 @@ def test_command_env_is_a_snapshot_not_the_live_dict():
     # A command's env is the process view: a child cannot write the
     # parent's environment, so a mutation must not land in the session.
 
-    @command("envpoke", resource="ram", spec=CommandSpec())
+    @command("envpoke", vfs="ram", spec=CommandSpec())
     async def envpoke(store, paths: list[PathSpec], texts: list[str],
                       opts: CommandOpts):
         assert opts.env is not None
@@ -395,7 +395,7 @@ def test_a_command_can_opt_into_the_session_view():
     # The LinkView pattern for the session plane: the live handle rides
     # CommandOpts, and reads answer through the view.
 
-    @command("envread", resource="ram", spec=CommandSpec())
+    @command("envread", vfs="ram", spec=CommandSpec())
     async def envread(store, paths: list[PathSpec], texts: list[str],
                       opts: CommandOpts):
         assert opts.session_view is not None
@@ -1129,7 +1129,7 @@ def test_guest_env_omits_hidden_vars():
 
 
 def _hidden_paths_ws() -> Workspace:
-    a = RAMResource()
+    a = RAMVFS()
     a._store.files["/x.txt"] = b"public\n"
     a._store.files["/secrets/token.txt"] = b"s3cr3t\n"
     a._store.files["/note.key"] = b"kkk\n"
@@ -1213,7 +1213,7 @@ def test_ops_create_into_hidden_space_never_lands():
 
     asyncio.run(run())
     files = next(m for m in ws.namespace.registry.mounts()
-                 if m.prefix.rstrip("/") == "/a").resource._store.files
+                 if m.prefix.rstrip("/") == "/a").vfs._store.files
     assert "/secrets/new.txt" not in files
 
 
@@ -1332,10 +1332,10 @@ def test_find_predicates_evaluate_on_the_visible_tree():
     # unseen child exists. Under hidden paths the generic must walk
     # through the guarded readdir instead.
     ws = _hidden_paths_ws()
-    resource = next(m for m in ws.namespace.registry.mounts()
-                    if m.prefix.rstrip("/") == "/a").resource
-    resource._store.files["/vault/only.key"] = b"kkk\n"
-    resource._store.dirs.add("/vault")
+    vfs = next(m for m in ws.namespace.registry.mounts()
+               if m.prefix.rstrip("/") == "/a").vfs
+    vfs._store.files["/vault/only.key"] = b"kkk\n"
+    vfs._store.dirs.add("/vault")
 
     async def run():
         io = await ws.execute("find /a -empty", session_id="agent")
@@ -1356,7 +1356,7 @@ def test_shell_redirect_into_hidden_space_fails_and_writes_nothing():
     io = asyncio.run(run())
     assert io.exit_code != 0
     files = next(m for m in ws.namespace.registry.mounts()
-                 if m.prefix.rstrip("/") == "/a").resource._store.files
+                 if m.prefix.rstrip("/") == "/a").vfs._store.files
     assert "/secrets/new.txt" not in files
 
 

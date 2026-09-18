@@ -17,11 +17,11 @@ import pytest
 from mirage import MountMode, Workspace
 from mirage.policy import Action, Deny, Policy, PolicyDenied
 from mirage.policy.types import SessionContext
-from mirage.resource.ram import RAMResource
 from mirage.server.version.api import commit
 from mirage.server.version.backend import LocalBackend
 from mirage.server.version.restore import restore
 from mirage.server.version.store import VersionStore
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.session.state import seed_var
 
 
@@ -31,8 +31,7 @@ async def _cat(ws: Workspace, path: str) -> str:
 
 
 def _ws() -> Workspace:
-    return Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                     mode=MountMode.EXEC)
+    return Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.EXEC)
 
 
 async def _two_file_history(ws, store):

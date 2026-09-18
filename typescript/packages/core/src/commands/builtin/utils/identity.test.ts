@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseSessionProfile } from '../../../policy/profile.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { MountMode } from '../../../types.ts'
 import { getTestParser } from '../../../workspace/fixtures/workspace_fixture.ts'
 import { Session } from '../../../workspace/session/session.ts'
@@ -45,12 +45,9 @@ async function run(ws: Workspace, line: string, sessionId?: string): Promise<[nu
 
 async function makeWs(options: Partial<WorkspaceOptions> = {}): Promise<Workspace> {
   const parser = await getTestParser()
-  const resource = new RAMResource()
-  resource.store.files.set('/f.txt', new TextEncoder().encode('hello'))
-  return new Workspace(
-    { '/data': resource },
-    { mode: MountMode.WRITE, shellParser: parser, ...options },
-  )
+  const vfs = new RAMVFS()
+  vfs.store.files.set('/f.txt', new TextEncoder().encode('hello'))
+  return new Workspace({ '/data': vfs }, { mode: MountMode.WRITE, shellParser: parser, ...options })
 }
 
 describe('identity in a workspace', () => {

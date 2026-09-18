@@ -13,8 +13,8 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 # isort: skip_file
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 from mirage.commands.registry import command
 from mirage.commands.cli import CLIInvocation, CLISpec, register_cli_spec
 from mirage.commands.spec import Operand, Option
@@ -28,10 +28,10 @@ from mirage.utils.ids import new_session_id, new_workspace_id, uuid7
 from mirage.version import __version__ as __version__
 
 # The authoring surface: what a host reaches for to bring its own
-# resource, CLI, policy, runtime or secrets source, and the types the
+# VFS, CLI, policy, runtime or secrets source, and the types the
 # Workspace's own signatures hand back. One front door, the way
 # @struktoai/mirage-core's index.ts is. There is no second, narrower
-# barrel for one plane: the resource author's kit that `mirage.sdk` once
+# barrel for one plane: the VFS author's kit that `mirage.sdk` once
 # held lives here beside the other four.
 from mirage.accessor.base import Accessor
 from mirage.cache.index import NULL_INDEX, IndexCacheStore, IndexConfig
@@ -49,10 +49,9 @@ from mirage.policy import (Ask, Decision, Decisions, Explanation, Outcome,
                            PolicyDenied, PolicyError, Scope, SessionContext,
                            SessionProfile)
 from mirage.policy.types import OpsContext
-from mirage.resource.base import BaseResource
-from mirage.resource.generic import GenericResource
-from mirage.resource.registry import (build_resource, known_resources,
-                                      register_resource)
+from mirage.vfs.base import BaseVFS
+from mirage.vfs.generic import GenericVFS
+from mirage.vfs.registry import (build_vfs, known_vfs_names, register_vfs)
 from mirage.runtime.base import Runtime
 from mirage.runtime.config import RuntimeConfig
 from mirage.runtime.constants import EXTERNAL_COMMANDS
@@ -71,7 +70,7 @@ from mirage.runtime.types import (RunArgs, RunResult, CodeExecution,
                                   RuntimeCapabilities, FilesystemOperation)
 from mirage.secrets.registry import known_sources, register_secrets
 from mirage.types import (ContentType, DriftPolicy, FileType, Limit, PathSpec,
-                          ResourceName)
+                          VFSName)
 from mirage.utils.glob_walk import DEFAULT_MAX_GLOB_MATCHES, make_resolve_glob
 from mirage.workspace import Session
 
@@ -79,8 +78,8 @@ __all__ = [
     "__version__",
     "Workspace",
     "WorkspaceRunner",
-    "RAMResource",
-    "DiskResource",
+    "RAMVFS",
+    "DiskVFS",
     "Action",
     "CommandContext",
     "ConsistencyPolicy",
@@ -104,7 +103,7 @@ __all__ = [
     # authoring surface
     "Accessor",
     "Ask",
-    "BaseResource",
+    "BaseVFS",
     "CLIDoors",
     "CommandIO",
     "CommandSpec",
@@ -118,7 +117,7 @@ __all__ = [
     "Explanation",
     "FileType",
     "FlagView",
-    "GenericResource",
+    "GenericVFS",
     "IOResult",
     "IndexCacheStore",
     "IndexConfig",
@@ -135,7 +134,7 @@ __all__ = [
     "PolicyError",
     "RegisteredOp",
     "RemoteSandbox",
-    "ResourceName",
+    "VFSName",
     "RouteContext",
     "RouteResult",
     "CodeExecution",
@@ -160,16 +159,16 @@ __all__ = [
     "SessionProfile",
     "UsageError",
     "UsageStyle",
-    "build_resource",
+    "build_vfs",
     "build_runtime",
-    "known_resources",
+    "known_vfs_names",
     "known_runtimes",
     "known_sources",
     "make_generic_commands",
     "make_generic_ops",
     "make_resolve_glob",
     "op",
-    "register_resource",
+    "register_vfs",
     "register_runtime",
     "register_secrets",
     "stream_from_bytes",

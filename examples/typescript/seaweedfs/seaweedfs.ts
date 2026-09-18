@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  SeaweedFSResource,
+  SeaweedFSVFS,
   Workspace,
   type SeaweedFSConfig,
   type FileStat,
@@ -35,7 +35,7 @@ function configFromEnv(): SeaweedFSConfig {
 async function main(): Promise<void> {
   const config = configFromEnv()
   const ws = new Workspace(
-    { '/seaweedfs/': new SeaweedFSResource(config) },
+    { '/seaweedfs/': new SeaweedFSVFS(config) },
     { mode: MountMode.WRITE },
   )
   try {

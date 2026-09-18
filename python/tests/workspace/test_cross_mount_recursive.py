@@ -14,14 +14,14 @@
 
 import asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _make_ws():
-    src = RAMResource()
-    dst = RAMResource()
+    src = RAMVFS()
+    dst = RAMVFS()
     src._store.dirs.update({"/dir", "/dir/sub", "/dir/empty"})
     src._store.files["/dir/a.txt"] = b"aaa\n"
     src._store.files["/dir/sub/b.txt"] = b"bbb\n"

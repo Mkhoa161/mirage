@@ -15,7 +15,7 @@
 import pytest
 import pytest_asyncio
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.config import _build_runtime_entries
 from mirage.io.types import materialize
 from mirage.runtime.base import Runtime
@@ -25,13 +25,13 @@ from mirage.runtime.python import LocalRuntime, MontyRuntime
 from mirage.runtime.python.base import PythonRuntime
 from mirage.runtime.resolver import MountResolver
 from mirage.runtime.routing import DenyResult, RouteResult
-from mirage.runtime.table import VFSRuntime
+from mirage.runtime.table import WorkspaceRuntime
 from mirage.runtime.types import RunArgs, RunResult, ScriptSource
 
 
 @pytest_asyncio.fixture
 async def ws():
-    workspace = Workspace({"/": RAMResource()}, mode=MountMode.EXEC)
+    workspace = Workspace({"/": RAMVFS()}, mode=MountMode.EXEC)
     yield workspace
     await workspace.close()
 
@@ -45,9 +45,9 @@ async def test_default_world_binds_python3(ws):
 
 @pytest.mark.asyncio
 async def test_explicit_name_entry_binds():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=["monty", "vfs"])
+                   runtimes=["monty", "workspace"])
     try:
         io = await ws.execute("python3 -c 'print(6 * 7)'")
         assert io.exit_code == 0
@@ -58,7 +58,7 @@ async def test_explicit_name_entry_binds():
 
 @pytest.mark.asyncio
 async def test_instance_entry_gets_dispatch_attached():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[MontyRuntime()])
     try:
@@ -73,7 +73,7 @@ async def test_instance_entry_gets_dispatch_attached():
 
 @pytest.mark.asyncio
 async def test_instance_entry_runs_on_that_runtime():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[LocalRuntime()])
     try:
@@ -86,20 +86,19 @@ async def test_instance_entry_runs_on_that_runtime():
 
 def test_unknown_name_fails_loud():
     with pytest.raises(ValueError, match="unknown runtime"):
-        Workspace({"/": RAMResource()}, runtimes=["ghost"])
+        Workspace({"/": RAMVFS()}, runtimes=["ghost"])
 
 
 def test_duplicate_entries_fail_loud():
     with pytest.raises(ValueError, match="duplicate runtime entry"):
-        Workspace({"/": RAMResource()},
-                  runtimes=[LocalRuntime(), LocalRuntime()])
+        Workspace({"/": RAMVFS()}, runtimes=[LocalRuntime(), LocalRuntime()])
 
 
 def test_config_entries_build_instances():
-    entries = _build_runtime_entries(["local", {"name": "local"}, "vfs"])
+    entries = _build_runtime_entries(["local", {"name": "local"}, "workspace"])
     assert entries[0] == "local"
     assert isinstance(entries[1], LocalRuntime)
-    assert entries[2] == "vfs"
+    assert entries[2] == "workspace"
 
 
 def test_config_entry_needs_a_name():
@@ -109,7 +108,7 @@ def test_config_entry_needs_a_name():
 
 def test_config_vfs_entry_takes_no_options():
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        _build_runtime_entries([{"name": "vfs", "home": "/x"}])
+        _build_runtime_entries([{"name": "workspace", "home": "/x"}])
 
 
 class AlphaRuntime(PythonRuntime):
@@ -128,10 +127,10 @@ class BetaRuntime(PythonRuntime):
 
 @pytest_asyncio.fixture
 async def runtime_arg_ws():
-    workspace = Workspace({"/": RAMResource()},
-                          mode=MountMode.EXEC,
-                          runtimes=[AlphaRuntime(),
-                                    BetaRuntime(), "vfs"])
+    workspace = Workspace(
+        {"/": RAMVFS()},
+        mode=MountMode.EXEC,
+        runtimes=[AlphaRuntime(), BetaRuntime(), "workspace"])
     yield workspace
     await workspace.close()
 
@@ -157,8 +156,8 @@ async def test_runtime_arg_inherited_by_nested_eval(runtime_arg_ws):
 
 @pytest.mark.asyncio
 async def test_runtime_arg_never_touches_uncaptured_stages(runtime_arg_ws):
-    io = await runtime_arg_ws.execute("echo plain-vfs", runtime="beta")
-    assert await materialize(io.stdout) == b"plain-vfs\n"
+    io = await runtime_arg_ws.execute("echo plain-workspace", runtime="beta")
+    assert await materialize(io.stdout) == b"plain-workspace\n"
 
 
 @pytest.mark.asyncio
@@ -170,16 +169,16 @@ async def test_runtime_arg_unknown_name_fails_loud(runtime_arg_ws):
 @pytest.mark.asyncio
 async def test_runtime_arg_vfs_fails_loud(runtime_arg_ws):
     with pytest.raises(ValueError, match="not a runtime you can select"):
-        await runtime_arg_ws.execute("python3 -c 'x'", runtime="vfs")
+        await runtime_arg_ws.execute("python3 -c 'x'", runtime="workspace")
 
 
 @pytest_asyncio.fixture
 async def routed_ws():
     alpha, beta = AlphaRuntime(), BetaRuntime()
     alpha.script = lambda ctx: "big" not in ctx.line
-    workspace = Workspace({"/": RAMResource()},
+    workspace = Workspace({"/": RAMVFS()},
                           mode=MountMode.EXEC,
-                          runtimes=[alpha, beta, "vfs"])
+                          runtimes=[alpha, beta, "workspace"])
     yield workspace
     await workspace.close()
 
@@ -202,16 +201,16 @@ async def test_runtime_arg_beats_scripts(routed_ws):
 async def test_all_capturers_refuse_is_admission_failure():
     alpha = AlphaRuntime()
     alpha.script = lambda ctx: False
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[alpha, "vfs"])
+                   runtimes=[alpha, "workspace"])
     try:
         io = await ws.execute("python3 -c 'x'")
         assert io.exit_code == 126
         err = await materialize(io.stderr)
         assert err == b"python3: no runtime accepted this line\n"
-        io = await ws.execute("echo vfs-still-open")
-        assert await materialize(io.stdout) == b"vfs-still-open\n"
+        io = await ws.execute("echo workspace-still-open")
+        assert await materialize(io.stdout) == b"workspace-still-open\n"
     finally:
         await ws.close()
 
@@ -219,9 +218,11 @@ async def test_all_capturers_refuse_is_admission_failure():
 @pytest.mark.asyncio
 async def test_vfs_entry_script_locks_down_lines():
     ws = Workspace(
-        {"/": RAMResource()},
+        {"/": RAMVFS()},
         mode=MountMode.EXEC,
-        runtimes=[VFSRuntime(script=lambda ctx: "/secret" not in ctx.line)])
+        runtimes=[
+            WorkspaceRuntime(script=lambda ctx: "/secret" not in ctx.line)
+        ])
     try:
         io = await ws.execute("echo ok > /notes.txt && cat /notes.txt")
         assert await materialize(io.stdout) == b"ok\n"
@@ -233,10 +234,11 @@ async def test_vfs_entry_script_locks_down_lines():
 
 @pytest.mark.asyncio
 async def test_vfs_explicit_captures_restrict_the_workspace():
-    ws = Workspace({"/": RAMResource()},
-                   mode=MountMode.EXEC,
-                   runtimes=[AlphaRuntime(),
-                             VFSRuntime(captures=("echo", ))])
+    ws = Workspace(
+        {"/": RAMVFS()},
+        mode=MountMode.EXEC,
+        runtimes=[AlphaRuntime(),
+                  WorkspaceRuntime(captures=("echo", ))])
     try:
         io = await ws.execute("echo listed")
         assert await materialize(io.stdout) == b"listed\n"
@@ -252,19 +254,19 @@ async def test_vfs_explicit_captures_restrict_the_workspace():
 
 def test_config_vfs_entry_carries_captures():
     entries = _build_runtime_entries([{
-        "name": "vfs",
+        "name": "workspace",
         "captures": ["grep", "cat"]
     }])
-    assert isinstance(entries[0], VFSRuntime)
+    assert isinstance(entries[0], WorkspaceRuntime)
     assert entries[0].captures == ("grep", "cat")
 
 
 @pytest.mark.asyncio
 async def test_empty_captures_serve_nothing():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[AlphaRuntime(),
-                             VFSRuntime(captures=())])
+                             WorkspaceRuntime(captures=())])
     try:
         io = await ws.execute("ls /")
         assert io.exit_code == 126
@@ -278,9 +280,9 @@ async def test_empty_captures_serve_nothing():
 async def test_script_sees_its_own_stage_on_pipelines():
     alpha = AlphaRuntime()
     alpha.script = lambda ctx: ctx.command == "python3"
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[alpha, "vfs"])
+                   runtimes=[alpha, "workspace"])
     try:
         io = await ws.execute("echo lead | python3 -c 'x'")
         assert io.exit_code == 0
@@ -293,9 +295,10 @@ async def test_script_sees_its_own_stage_on_pipelines():
 async def test_vfs_explicit_captures_restrict_under_routing():
     alpha = AlphaRuntime()
     alpha.script = lambda ctx: True
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[alpha, VFSRuntime(captures=("echo", ))])
+                   runtimes=[alpha,
+                             WorkspaceRuntime(captures=("echo", ))])
     try:
         io = await ws.execute("echo routed-ok")
         assert await materialize(io.stdout) == b"routed-ok\n"
@@ -307,10 +310,10 @@ async def test_vfs_explicit_captures_restrict_under_routing():
 
 @pytest.mark.asyncio
 async def test_global_route_names_the_runtime():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[AlphaRuntime(),
-                             BetaRuntime(), "vfs"],
+                             BetaRuntime(), "workspace"],
                    route_policy=lambda ctx: "beta"
                    if "heavy" in ctx.line else None)
     try:
@@ -324,9 +327,9 @@ async def test_global_route_names_the_runtime():
 
 @pytest.mark.asyncio
 async def test_policy_deny_folds_into_the_line_result():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[AlphaRuntime(), "vfs"],
+                   runtimes=[AlphaRuntime(), "workspace"],
                    route_policy=lambda ctx: {"deny": "python3 is blocked"}
                    if ctx.command == "python3" else None)
     try:
@@ -355,9 +358,9 @@ async def test_syntax_error_gates_before_policy():
         calls.append(ctx.line)
         return {"deny": "nothing runs"}
 
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[AlphaRuntime(), "vfs"],
+                   runtimes=[AlphaRuntime(), "workspace"],
                    route_policy=deny_all)
     try:
         io = await ws.execute("echo (")
@@ -370,10 +373,10 @@ async def test_syntax_error_gates_before_policy():
 
 @pytest.mark.asyncio
 async def test_policy_result_arms_route_and_deny():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[AlphaRuntime(),
-                             BetaRuntime(), "vfs"],
+                             BetaRuntime(), "workspace"],
                    route_policy=lambda ctx: DenyResult("secrets stay put")
                    if "secret" in ctx.line else RouteResult("beta"))
     try:
@@ -392,9 +395,9 @@ async def test_policy_result_arms_route_and_deny():
 async def test_nested_eval_inherits_routing():
     alpha, beta = AlphaRuntime(), BetaRuntime()
     alpha.script = lambda ctx: "big" not in ctx.line
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[alpha, beta, "vfs"])
+                   runtimes=[alpha, beta, "workspace"])
     try:
         # The typed line routes to beta; the inner eval must not
         # re-route even though the inner line alone would pick alpha.
@@ -406,9 +409,9 @@ async def test_nested_eval_inherits_routing():
 
 @pytest.mark.asyncio
 async def test_add_runtime_appends_and_rebinds():
-    ws = Workspace({"/": RAMResource()},
+    ws = Workspace({"/": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[AlphaRuntime(), "vfs"])
+                   runtimes=[AlphaRuntime(), "workspace"])
     try:
         ws.add_runtime(BetaRuntime())
         io = await ws.execute("python3 -c 'x'")
@@ -436,25 +439,25 @@ def test_config_script_path_form_embeds_content(tmp_path):
         "name": "local",
         "script": str(script)
     }, {
-        "name": "vfs",
+        "name": "workspace",
         "script": str(script)
     }])
     assert entries[0].script == ScriptSource("ctx['command'] == 'python3'")
-    assert isinstance(entries[1], VFSRuntime)
+    assert isinstance(entries[1], WorkspaceRuntime)
     assert entries[1].script == ScriptSource("ctx['command'] == 'python3'")
 
 
 def test_code_string_script_is_rejected():
-    vfs = VFSRuntime()
-    vfs.script = "ctx['command'] == 'python3'"
+    fallback = WorkspaceRuntime()
+    fallback.script = "ctx['command'] == 'python3'"
     with pytest.raises(TypeError, match="reference a .py file"):
-        Workspace({"/ram": RAMResource()}, runtimes=[vfs])
+        Workspace({"/ram": RAMVFS()}, runtimes=[fallback])
 
 
 @pytest.mark.asyncio
 async def test_code_string_route_is_rejected():
     with pytest.raises(TypeError, match="reference a .py file"):
-        Workspace({"/ram": RAMResource()}, route_policy="'local'")
+        Workspace({"/ram": RAMVFS()}, route_policy="'local'")
 
 
 def test_config_script_path_form_missing_file_fails_loud(tmp_path):
@@ -483,9 +486,9 @@ class LineBox(Runtime, LineExecutorMixin):
 @pytest.mark.asyncio
 async def test_named_capture_keeps_pipeline_and_redirects_in_mirage():
     box = LineBox()
-    ws = Workspace({"/ram": RAMResource()},
+    ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     try:
         io = await ws.execute("nvidia-smi -L | grep box > /ram/out.txt")
         assert io.exit_code == 0
@@ -501,9 +504,9 @@ async def test_named_capture_keeps_pipeline_and_redirects_in_mirage():
 async def test_star_captures_any_line_and_stdin_arrives():
     box = LineBox()
     box.captures = ("*", )
-    ws = Workspace({"/ram": RAMResource()},
+    ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     io = await ws.execute("ls /ram && echo done", stdin=b"fed")
     assert (await materialize(io.stdout)).startswith(b"box:")
     assert box.lines[0][1] == b"fed"
@@ -515,9 +518,9 @@ async def test_refused_line_runtime_falls_to_the_workspace():
     box = LineBox()
     box.captures = ("*", )
     box.script = lambda ctx: "keep-out" not in ctx.line
-    ws = Workspace({"/ram": RAMResource()},
+    ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     taken = await ws.execute("echo captured")
     kept = await ws.execute("echo keep-out")
     assert (await materialize(taken.stdout)).startswith(b"box:")
@@ -531,9 +534,9 @@ async def test_runtime_argument_places_the_whole_line():
     box = LineBox()
     box.captures = ("*", )
     box.script = lambda ctx: False
-    ws = Workspace({"/ram": RAMResource()},
+    ws = Workspace({"/ram": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[box, "vfs"])
+                   runtimes=[box, "workspace"])
     refused = await ws.execute("echo hi")
     forced = await ws.execute("echo hi", runtime="sandbox")
     assert await materialize(refused.stdout) == b"hi\n"
@@ -543,14 +546,14 @@ async def test_runtime_argument_places_the_whole_line():
 
 @pytest.mark.asyncio
 async def test_vfs_entry_is_a_pure_routing_marker():
-    # A vfs-resolved line runs on the workspace executor inline; the
+    # A workspace-resolved line runs on the workspace executor inline; the
     # registry entry is a marker with no line door to call.
-    ws = Workspace({"/ram": RAMResource()}, mode=MountMode.EXEC)
-    vfs = ws._registry.vfs_runtime
-    assert vfs is not None
-    assert not isinstance(vfs, LineExecutorMixin)
-    result = await ws.execute("echo through-vfs")
-    assert await materialize(result.stdout) == b"through-vfs\n"
+    ws = Workspace({"/ram": RAMVFS()}, mode=MountMode.EXEC)
+    fallback = ws._registry.workspace_runtime
+    assert fallback is not None
+    assert not isinstance(fallback, LineExecutorMixin)
+    result = await ws.execute("echo through-workspace")
+    assert await materialize(result.stdout) == b"through-workspace\n"
     await ws.close()
 
 
@@ -577,7 +580,7 @@ async def test_binding_withholds_the_history_view_from_runtimes():
     # The history view is a shell surface, not a place to put files;
     # announcing it would make a WASI guest preopen /.bash_history.
     probe = ResolverProbe()
-    ws = Workspace({"/data": RAMResource()}, runtimes=[probe])
+    ws = Workspace({"/data": RAMVFS()}, runtimes=[probe])
     try:
         assert probe.resolver is not None
         prefixes = probe.resolver.prefixes()
@@ -590,9 +593,9 @@ async def test_binding_withholds_the_history_view_from_runtimes():
 @pytest.mark.asyncio
 async def test_binding_withholds_the_synthetic_root_anchor():
     # Nobody mounted the anchor; forwarding it would make every
-    # runtime claim a resource the embedder never asked for.
+    # runtime claim a VFS the embedder never asked for.
     probe = ResolverProbe()
-    ws = Workspace({"/data": RAMResource()}, runtimes=[probe])
+    ws = Workspace({"/data": RAMVFS()}, runtimes=[probe])
     try:
         assert probe.resolver is not None
         assert "/" not in probe.resolver.prefixes()
@@ -605,7 +608,7 @@ async def test_binding_forwards_an_explicit_root_mount():
     # Withheld for being synthetic, never for being `/`: a runtime
     # that cannot serve the root refuses on its own (pyodide does).
     probe = ResolverProbe()
-    ws = Workspace({"/": RAMResource()}, runtimes=[probe])
+    ws = Workspace({"/": RAMVFS()}, runtimes=[probe])
     try:
         assert probe.resolver is not None
         assert "/" in probe.resolver.prefixes()

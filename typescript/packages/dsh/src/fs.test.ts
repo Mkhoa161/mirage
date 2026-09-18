@@ -20,15 +20,15 @@ import { Context } from '@deepseek-ai/cordis'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type { FsErrorCode } from '@deepseek-ai/dsh-fs'
 import { runWithSession } from '@struktoai/mirage-core/context/session_context'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { RAMWorkspaceStateStore } from '@struktoai/mirage-core/workspace/store/ram'
 import {
-  DiskResource,
+  DiskVFS,
   LocalRuntime,
   Workspace,
   parseSessionProfile,
-  registerResourceFactory,
+  registerVfsFactory,
 } from '@struktoai/mirage-node'
 import { MirageFileSystem } from './fs.ts'
 import type { MirageFsConfig } from './fs.ts'
@@ -40,7 +40,7 @@ async function makeFs(
   seed: Record<string, string | Uint8Array> = {},
   options: { cwd?: string; readOnly?: boolean; diffBasisMaxBytes?: number } = {},
 ): Promise<{ fs: MirageFileSystem; ws: Workspace }> {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ws = new Workspace({ '/data': [ram, MountMode.WRITE] })
   workspaces.push(ws)
   for (const [path, content] of Object.entries(seed)) {
@@ -91,7 +91,7 @@ const tempRoots: string[] = []
 /**
  * A workspace with one disk mount, for the host-path mapping.
  *
- * @param prefix where the disk resource is mounted.
+ * @param prefix where the disk VFS is mounted.
  * @returns the filesystem seam and the host directory behind the mount.
  */
 async function makeDiskFs(
@@ -99,7 +99,7 @@ async function makeDiskFs(
 ): Promise<{ fs: MirageFileSystem; root: string; ws: Workspace }> {
   const root = await mkdtemp(join(tmpdir(), 'mirage-dsh-host-'))
   tempRoots.push(root)
-  const ws = new Workspace({ [prefix]: [new DiskResource({ root }), MountMode.WRITE] })
+  const ws = new Workspace({ [prefix]: [new DiskVFS({ root }), MountMode.WRITE] })
   workspaces.push(ws)
   const ctx = new Context()
   await ctx.plugin(MirageService, { workspace: ws }).await()
@@ -533,13 +533,13 @@ describe('cancellation across readiness', () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
-    registerResourceFactory('gated-ram-write', async () => {
+    registerVfsFactory('gated-ram-write', async () => {
       await gate
-      return new RAMResource()
+      return new RAMVFS()
     })
     const ctx = new Context()
     const fiber = ctx.plugin(MirageService, {
-      mounts: { '/data': { resource: 'gated-ram-write', mode: 'write' } },
+      mounts: { '/data': { vfs: 'gated-ram-write', mode: 'write' } },
     })
     await fiber.await()
     await ctx.plugin(MirageFileSystem, {}).await()
@@ -650,7 +650,7 @@ async function adapterOn(ws: Workspace, config: MirageFsConfig): Promise<MirageF
 describe('the session the adapter reads as', () => {
   it('a named session confines ctx.fs the way it confines the shell', async () => {
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.WRITE] },
+      { '/data': [new RAMVFS(), MountMode.WRITE] },
       {
         profiles: {
           agent: parseSessionProfile(
@@ -694,7 +694,7 @@ describe('the session the adapter reads as', () => {
     // link the ambient session hides stays typed for the door to refuse,
     // even though the adapter's own configured session could see it.
     const ws = new Workspace(
-      { '/data': [new RAMResource(), MountMode.WRITE] },
+      { '/data': [new RAMVFS(), MountMode.WRITE] },
       {
         profiles: {
           agent: parseSessionProfile({ paths: { hide: ['/data/vault'] } }, 'profile agent'),
@@ -721,7 +721,7 @@ describe('the session the adapter reads as', () => {
   })
 
   it('probes a caller cwd as the session, not as the default', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const seeder = new Workspace({ '/data': [ram, MountMode.WRITE] })
     workspaces.push(seeder)
     await seeder.fs.mkdir('/data/work')
@@ -753,7 +753,7 @@ describe('the session the adapter reads as', () => {
     // the door, so it must hydrate first or a persisted hide is judged
     // by the wrong session and a persisted link is not seen at all.
     const store = new RAMWorkspaceStateStore()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const build = (): Workspace =>
       new Workspace({ '/data': [ram, MountMode.WRITE] }, { workspaceId: 'shared', store })
     const wsA = build()
@@ -784,7 +784,7 @@ describe('the session the adapter reads as', () => {
 
 describe('a policy refusal at the op door', () => {
   it('reads as a sandbox denial, so the tool layer offers the escalation', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const seeder = new Workspace({ '/data': [ram, MountMode.WRITE] })
     workspaces.push(seeder)
     await seeder.fs.writeFile('/data/keep.txt', 'original')
@@ -849,7 +849,7 @@ describe('processPathFromHostPath', () => {
     // Dispatch routes /work/cache to the RAM child, so the disk file at
     // <root>/cache/x.txt is not what that virtual path reads.
     const { fs, root, ws } = await makeDiskFs()
-    ws.addMount('/work/cache', new RAMResource(), MountMode.WRITE)
+    ws.addMount('/work/cache', new RAMVFS(), MountMode.WRITE)
     expect(fs.processPathFromHostPath(join(root, 'cache', 'x.txt'))).toBeUndefined()
     // The rest of the disk mount still maps.
     expect(fs.processPathFromHostPath(join(root, 'kept.txt'))).toBe('/work/kept.txt')

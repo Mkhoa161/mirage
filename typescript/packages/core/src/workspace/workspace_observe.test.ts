@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { RAMObserverStore } from '../observe/store.ts'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { MountMode } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -35,9 +35,9 @@ beforeAll(async () => {
 })
 
 function buildWorkspace(observe?: RAMObserverStore): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   return new Workspace(
     { '/data': ram },
     {
@@ -157,11 +157,11 @@ describe('Workspace observer wiring', () => {
   // and write land on different mounts. Mirrors python's
   // test_execute_records_op_path_per_mount.
   it('records the op path per mount, not mount-relative', async () => {
-    const s3 = new RAMResource()
-    const db = new RAMResource()
+    const s3 = new RAMVFS()
+    const db = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(s3)
-    registry.registerResource(db)
+    registry.registerVfs(s3)
+    registry.registerVfs(db)
     const ws = new Workspace(
       { '/s3': s3, '/db': db },
       { mode: MountMode.WRITE, ops: registry, shellParser: parser },

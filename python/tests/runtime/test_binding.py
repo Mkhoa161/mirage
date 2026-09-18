@@ -25,20 +25,20 @@ from mirage import (CodeExecution, MountMode, PathSpec, ProcessExecution,
 from mirage.context import get_current_session_for
 from mirage.fuse.core import MountCore
 from mirage.policy import Deny, Policy
-from mirage.resource.ram import RAMResource
 from mirage.runtime.js import QuickJsRuntime
 from mirage.runtime.language import LanguageRuntime
 from mirage.runtime.mixin import LineExecutorMixin
 from mirage.runtime.python.monty import MontyRuntime
 from mirage.runtime.python.wasi import WasiRuntime
 from mirage.runtime.vfs import RuntimeVFS
+from mirage.vfs.ram import RAMVFS
 
 
 class Probe(LanguageRuntime):
     name = "probe"
     language = "python"
     captures = ("python3", )
-    reach = "vfs"
+    reach = "workspace"
 
     def __init__(self):
         super().__init__()
@@ -79,7 +79,7 @@ async def test_execute_capabilities_and_refusals():
                                cwd=PathSpec.from_str_path("/work"))
     language, native = Probe(), ShellProbe()
     assert language.capabilities.languages == ("python", )
-    assert language.capabilities.reach == "vfs"
+    assert language.capabilities.reach == "workspace"
     assert not language.capabilities.shell
     assert native.capabilities.shell and not native.capabilities.process
     assert language.capabilities.filesystem == ()
@@ -97,8 +97,8 @@ async def test_execute_capabilities_and_refusals():
 @pytest.mark.asyncio
 async def test_callbacks_retain_session_and_gate_after_capture():
     with Workspace({
-            "/data": RAMResource(),
-            "/secret": RAMResource()
+            "/data": RAMVFS(),
+            "/secret": RAMVFS()
     },
                    mode=MountMode.EXEC,
                    policies=[DenySecret()]) as ws:
@@ -131,13 +131,13 @@ async def test_callbacks_retain_session_and_gate_after_capture():
 
 @pytest.mark.asyncio
 async def test_context_keeps_namespace_live_and_matches_native_projection():
-    with Workspace({"/data": RAMResource()}, mode=MountMode.EXEC) as ws:
+    with Workspace({"/data": RAMVFS()}, mode=MountMode.EXEC) as ws:
         await ws.execute("echo shared > /data/a; chmod 600 /data/a")
         context = ws.runtime_context()
         await ws.execute("ln -s /data/a /data/link")
         assert context.ns.links is not None
         assert context.ns.links.resolve("/data/link") == "/data/a"
-        ws.add_mount("/data/nested", RAMResource(), mode=MountMode.EXEC)
+        ws.add_mount("/data/nested", RAMVFS(), mode=MountMode.EXEC)
         assert context.resolver.owner_of("/data/nested/a") == "/data/nested/"
         vfs = RuntimeVFS(context.dispatch, asyncio.get_running_loop(),
                          context.resolver)
@@ -154,7 +154,7 @@ async def test_context_keeps_namespace_live_and_matches_native_projection():
 @pytest.mark.asyncio
 async def test_binding_prevents_cross_workspace_reuse_and_foreign_context():
     runtime = Probe()
-    with Workspace({}, runtimes=[runtime, "vfs"]) as first:
+    with Workspace({}, runtimes=[runtime, "workspace"]) as first:
         with Workspace({}) as second:
             request = CodeExecution(language="python", code="ok")
             assert (await
@@ -169,9 +169,9 @@ async def test_binding_prevents_cross_workspace_reuse_and_foreign_context():
 @pytest.mark.asyncio
 async def test_command_execution_supplies_its_active_workspace_context():
     runtime = Probe()
-    with Workspace({"/data": RAMResource()},
+    with Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[runtime, "vfs"]) as ws:
+                   runtimes=[runtime, "workspace"]) as ws:
         ws.create_session("agent")
         await ws.execute("export PUBLIC=agent; cd /data", session_id="agent")
         result = await ws.execute("python3 -c hello", session_id="agent")
@@ -205,9 +205,9 @@ async def test_adapters_use_each_execution_context_for_filesystem_callbacks(
     expected = ("read", "write", "list", "stat")
     assert runtime.capabilities.filesystem == ((*expected, "glob")
                                                if name == "wasi" else expected)
-    with Workspace({"/data": RAMResource()},
+    with Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
-                   runtimes=[runtime, "vfs"]) as ws:
+                   runtimes=[runtime, "workspace"]) as ws:
         await ws.execute(
             "echo shared > /data/file; ln -s /data/file /data/link")
         ws.create_session("one")

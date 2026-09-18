@@ -18,7 +18,7 @@ import { dirname, resolve } from 'node:path'
 import {
   MountMode,
   OpsRegistry,
-  RAMResource,
+  RAMVFS,
   Workspace,
   toStateDict,
 } from '@struktoai/mirage-node'
@@ -31,7 +31,7 @@ loadEnv({
 })
 
 function makeWorkspace(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
   for (const op of ram.ops()) ops.register(op)
   return new Workspace({ '/': ram }, { mode: MountMode.WRITE, ops })

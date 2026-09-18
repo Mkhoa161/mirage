@@ -163,8 +163,8 @@ export interface ObjectStoreConnection<C> {
  * stay unwired, which the dispatcher already surfaces as ENOTSUP.
  */
 export interface ObjectStoreDriver<A extends Accessor, C> {
-  /** Resource name, used in op records and log lines. */
-  resource: string
+  /** VFS name, used in op records and log lines. */
+  vfs: string
   /** Listing size above which readdir logs a warning. */
   scopeError: number
   /** Mount key prefix from the accessor's config ('' for the whole store). */

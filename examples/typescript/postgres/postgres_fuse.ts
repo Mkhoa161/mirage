@@ -18,7 +18,7 @@ import {
   Mount,
   MountBackend,
   MountMode,
-  PostgresResource,
+  PostgresVFS,
   Workspace,
 } from "@struktoai/mirage-node";
 
@@ -38,13 +38,13 @@ const dsn = requireDsn();
 const DEC = new TextDecoder();
 
 async function main(): Promise<void> {
-  const resource = new PostgresResource({
+  const vfs = new PostgresVFS({
     dsn,
     maxReadRows: 1_000_000,
     maxReadBytes: 512 * 1024 * 1024,
   });
   const ws = new Workspace({
-    "/pg/": new Mount(resource, { mode: MountMode.READ, backend: MountBackend.FUSE }),
+    "/pg/": new Mount(vfs, { mode: MountMode.READ, backend: MountBackend.FUSE }),
   });
   await ws.fuseReady();
   const mp = ws.fuseMountpoint as string;
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
     );
   } finally {
     await ws.close();
-    await resource.close();
+    await vfs.close();
   }
 }
 

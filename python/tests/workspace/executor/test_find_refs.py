@@ -14,7 +14,7 @@
 
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.types import FileStat, FileType
 from mirage.workspace.executor.find_refs import resolve_newer_refs
 from mirage.workspace.mount import MountRegistry
@@ -29,7 +29,7 @@ async def _stat(virtual: str) -> FileStat | None:
 
 
 def _registry() -> MountRegistry:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     return ws._registry
 
 
@@ -61,7 +61,7 @@ async def _out(ws: Workspace, line: str) -> tuple[str, str, int]:
 
 @pytest.mark.asyncio
 async def test_newer_and_newermt_in_the_shell():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
     await ws.execute(
         "mkdir -p /w/d/sub; printf a > /w/d/a.txt; printf bb > /w/d/b.txt; "
@@ -94,7 +94,7 @@ async def test_a_link_reference_is_read_by_the_link_policy():
     # mtime, -H and -L against its target's; a dangling reference is its
     # own row under every policy; a loop is an ordinary reference under
     # -P and a refusal when followed.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
     await ws.execute(
         "mkdir -p /w/d; printf t > /w/target; printf c > /w/d/cand; cd /w; "
@@ -121,7 +121,7 @@ async def test_a_link_reference_is_read_by_the_link_policy():
 async def test_repeated_newer_references_intersect():
     # GNU find 4.9: `-newer old -newer new` keeps only what is newer
     # than both references.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
     await ws.execute(
         "printf o > /w/old; printf c > /w/cand; printf n > /w/new; cd /w; "

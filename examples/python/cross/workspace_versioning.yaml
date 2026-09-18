@@ -8,5 +8,5 @@ consistency: LAZY
 # workspace above.
 mounts:
   /:
-    resource: ram
+    vfs: ram
     mode: WRITE

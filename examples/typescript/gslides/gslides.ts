@@ -15,7 +15,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { GSlidesResource, GWS, MountMode, Workspace, type FileStat, type GSlidesConfig } from '@struktoai/mirage-node'
+import { GSlidesVFS, GWS, MountMode, Workspace, type FileStat, type GSlidesConfig } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../.env.development'), override: true })
@@ -47,8 +47,8 @@ function printOut(label: string, out: string, err: string, max = 500): void {
 
 async function main(): Promise<void> {
   const config = buildConfig()
-  const resource = new GSlidesResource(config)
-  const ws = new Workspace({ '/gslides': resource }, { mode: MountMode.WRITE })
+  const vfs = new GSlidesVFS(config)
+  const ws = new Workspace({ '/gslides': vfs }, { mode: MountMode.WRITE })
   // The gws verbs are a CLI install, separate from the mount.
   ws.registerCli('gws', GWS, { ...config })
   try {

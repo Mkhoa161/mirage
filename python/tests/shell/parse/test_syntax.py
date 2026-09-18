@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.shell.parse import (find_syntax_error, find_unterminated_backtick,
                                 parse)
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -104,7 +104,7 @@ def test_find_syntax_error_returns_none_for_valid(good_cmd):
     "true;;s",
 ])
 def test_execute_returns_clear_syntax_error(bad_cmd):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     io = asyncio.run(ws.execute(bad_cmd))
     assert io.exit_code == 2, (
         f"expected exit 2 for {bad_cmd!r}, got {io.exit_code}")
@@ -122,7 +122,7 @@ def test_execute_returns_clear_syntax_error(bad_cmd):
     ("true;;s", ";;"),
 ])
 def test_stray_separator_is_a_syntax_error_and_nothing_runs(bad_cmd, token):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     io = asyncio.run(ws.execute(bad_cmd))
     assert io.exit_code == 2
     assert io.stderr == f"mirage: syntax error near '{token}'\n".encode()
@@ -135,7 +135,7 @@ def test_stray_separator_is_a_syntax_error_and_nothing_runs(bad_cmd, token):
 ])
 def test_unterminated_backtick_is_a_syntax_error(bad_cmd):
     """tree-sitter parses these as complete; bash exits 2 and so do we."""
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     io = asyncio.run(ws.execute(bad_cmd))
     assert io.exit_code == 2, (
         f"expected exit 2 for {bad_cmd!r}, got {io.exit_code}")
@@ -152,7 +152,7 @@ def test_unterminated_backtick_is_a_syntax_error(bad_cmd):
         ("echo a\\\\", b"a\\\n"),
     ])
 def test_trailing_backslash_is_a_line_continuation(command, expected):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     io = asyncio.run(ws.execute(command))
     assert io.exit_code == 0, (io.exit_code, io.stderr)
     assert io.stdout == expected
@@ -169,7 +169,7 @@ MISSING_QUOTE_CASES = json.loads(
     for case in MISSING_QUOTE_CASES if case["expect"]["exit"] == 2
 ])
 async def test_missing_nested_quote_refuses_before_any_execution(command):
-    ws = Workspace({"/data": RAMResource()})
+    ws = Workspace({"/data": RAMVFS()})
     try:
         io = await ws.execute(command)
         assert io.exit_code == 2

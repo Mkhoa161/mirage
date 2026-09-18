@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { Channel } from '../shell/console/index.ts'
 import { JobStatus } from '../shell/job_table/index.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
@@ -44,9 +44,9 @@ afterAll(() => {
 })
 
 function makeWs(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
-  ops.registerResource(ram)
+  ops.registerVfs(ram)
   return new Workspace({ '/data': ram }, { mode: MountMode.WRITE, ops, shellParser: parser })
 }
 

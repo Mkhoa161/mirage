@@ -15,8 +15,8 @@
 import asyncio
 
 from mirage import Deny, MountMode, Policy, SessionContext, Workspace
-from mirage.resource.ram import RAMResource
 from mirage.runtime.types import ScriptSource
+from mirage.vfs.ram import RAMVFS
 
 # A release workspace under two policies, one through each door code
 # has, and the point of the example is what each door is for:
@@ -112,8 +112,8 @@ def answer(out: bytes, err: bytes, code: int) -> str:
 async def main() -> None:
     ws = Workspace(
         {
-            "/repo/": RAMResource(),
-            "/scratch/": RAMResource(),
+            "/repo/": RAMVFS(),
+            "/scratch/": RAMVFS(),
         },
         mode=MountMode.WRITE,
         policies=[OperatorOwnsCredentials()],

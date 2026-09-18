@@ -21,8 +21,8 @@ from mirage.context import reset_current_session, set_current_session
 from mirage.ops import Ops
 from mirage.policy import (Action, Deny, OpsContext, OpsResultContext, Policy,
                            PolicyDenied)
-from mirage.resource.ram import RAMResource
 from mirage.types import FileType, HiddenPaths, MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.session import Session
 
 from .conftest import make_ops, run
@@ -133,10 +133,9 @@ class TestUnlink:
 
 def _two_mount_ops() -> Ops:
     return Workspace({
-        "/a/": RAMResource(),
-        "/b/": RAMResource()
-    },
-                     mode=MountMode.WRITE).fs
+        "/a/": RAMVFS(),
+        "/b/": RAMVFS()
+    }, mode=MountMode.WRITE).fs
 
 
 class TestRename:
@@ -170,7 +169,7 @@ class TestRename:
         assert exc.value.errno == errno.EXDEV
 
 
-class UngrantedRemote(RAMResource):
+class UngrantedRemote(RAMVFS):
     caches_reads = True
     name = "s3"
 
@@ -192,7 +191,7 @@ async def test_a_namespace_answer_is_not_a_backend_op(deep_only_session):
     # a network op against that backend for every such lookup.
     ws = Workspace({
         "/m/": UngrantedRemote(),
-        "/m/inner/deep/": RAMResource()
+        "/m/inner/deep/": RAMVFS()
     },
                    mode=MountMode.WRITE)
     try:
@@ -221,7 +220,7 @@ async def test_a_denied_namespace_answer_is_not_a_backend_op(
     # to produce.
     ws = Workspace({
         "/m/": UngrantedRemote(),
-        "/m/inner/deep/": RAMResource()
+        "/m/inner/deep/": RAMVFS()
     },
                    mode=MountMode.WRITE)
     try:
@@ -315,8 +314,8 @@ class TestIsMounted:
 class TestMultiMount:
 
     def test_two_mounts(self):
-        one = RAMResource()
-        two = RAMResource()
+        one = RAMVFS()
+        two = RAMVFS()
         store1 = one._store
         store2 = two._store
         ops = Workspace({
@@ -337,12 +336,12 @@ class TestOpsAgainstSeededStore:
 
     @pytest.fixture
     def memory_ops(self):
-        resource = RAMResource()
-        store = resource._store
+        vfs = RAMVFS()
+        store = vfs._store
         store.dirs.add("/")
         store.files["/test.txt"] = b"hello"
         store.modified["/test.txt"] = "2024-01-01T00:00:00"
-        ws = Workspace({"/data/": resource}, mode=MountMode.WRITE)
+        ws = Workspace({"/data/": vfs}, mode=MountMode.WRITE)
         return ws.fs, store
 
     def test_read(self, memory_ops):
@@ -372,7 +371,7 @@ def _structure_only_ops(policies: list[Policy]) -> Ops:
     """Ops whose only mount sits below the probed path, so no mount
     serves /data/inner and the answer is namespace structure."""
     return Workspace({
-        "/data/inner/deep/": RAMResource()
+        "/data/inner/deep/": RAMVFS()
     },
                      mode=MountMode.WRITE,
                      policies=policies).fs
@@ -397,12 +396,11 @@ class TestStructureFallbackGates:
 def _granted_child_ops() -> Ops:
     """Ops with a real mount at /data and a nested one at
     /data/inner/deep, for sessions granted only the deep one."""
-    return Workspace(
-        {
-            "/data/": RAMResource(),
-            "/data/inner/deep/": RAMResource()
-        },
-        mode=MountMode.WRITE).fs
+    return Workspace({
+        "/data/": RAMVFS(),
+        "/data/inner/deep/": RAMVFS()
+    },
+                     mode=MountMode.WRITE).fs
 
 
 @pytest.fixture
@@ -462,7 +460,7 @@ class TestAttachedOpsOneDoor:
     @pytest.mark.asyncio
     async def test_gates_fire_exactly_once_per_op(self):
         counter = _CountingPre()
-        ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
         try:
             ws.policies.add(counter)
             await ws.fs.write("/data/x.txt", b"body")
@@ -475,7 +473,7 @@ class TestAttachedOpsOneDoor:
 
     @pytest.mark.asyncio
     async def test_records_survive_the_delegation(self):
-        ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
         try:
             await ws.fs.write("/data/x.txt", b"12345")
             assert await ws.fs.read("/data/x.txt") == b"12345"
@@ -490,7 +488,7 @@ class TestAttachedOpsOneDoor:
         # The mirror of "a post deny still records the completed op"
         # (pinned in tests/workspace/workspace/test_policies.py): a pre
         # deny means the backend never ran, so nothing is recorded.
-        ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+        ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
         try:
             ws.policies.add(_DenyEverything())
             with pytest.raises(PolicyDenied):
@@ -501,7 +499,7 @@ class TestAttachedOpsOneDoor:
 
     @pytest.mark.asyncio
     async def test_read_only_mount_refuses_writes_at_the_door(self):
-        ws = Workspace({"/data/": RAMResource()}, mode=MountMode.READ)
+        ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.READ)
         try:
             with pytest.raises(PermissionError):
                 await ws.fs.write("/data/x.txt", b"body")
@@ -511,8 +509,8 @@ class TestAttachedOpsOneDoor:
     @pytest.mark.asyncio
     async def test_attached_rename_stays_inside_a_mount(self):
         ws = Workspace({
-            "/a/": RAMResource(),
-            "/b/": RAMResource()
+            "/a/": RAMVFS(),
+            "/b/": RAMVFS()
         },
                        mode=MountMode.WRITE)
         try:

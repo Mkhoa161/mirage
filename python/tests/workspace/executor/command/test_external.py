@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 import pytest
 import yaml
 
-from mirage import EXTERNAL_COMMANDS, Limit, MountMode, RAMResource, Workspace
+from mirage import EXTERNAL_COMMANDS, RAMVFS, Limit, MountMode, Workspace
 from mirage.commands.cli.types import CLISpec
 from mirage.commands.config import command
 from mirage.commands.spec.types import CommandSpec, Operand
@@ -77,7 +77,7 @@ async def workspace(*args, **kwargs):
 @pytest.mark.asyncio
 async def test_external_fallback_preserves_vfs_pipes_and_redirects():
     probe = ProcessProbe()
-    async with workspace({"/": RAMResource()},
+    async with workspace({"/": RAMVFS()},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
         result = await ws.execute(
@@ -94,7 +94,7 @@ async def test_external_fallback_preserves_vfs_pipes_and_redirects():
 @pytest.mark.asyncio
 async def test_native_argv_preserves_empty_words_and_interpreter_options():
     probe = ProcessProbe(captures=("python3", EXTERNAL_COMMANDS))
-    async with workspace({"/work": RAMResource()},
+    async with workspace({"/work": RAMVFS()},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
         await ws.execute("cd /work")
@@ -113,7 +113,7 @@ async def test_native_argv_preserves_empty_words_and_interpreter_options():
 @pytest.mark.asyncio
 async def test_external_globs_expand_against_the_workspace():
     probe = ProcessProbe()
-    async with workspace({"/work": RAMResource()},
+    async with workspace({"/work": RAMVFS()},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
         await ws.execute("touch /work/a.txt /work/b.txt")
@@ -128,8 +128,7 @@ async def test_runtime_refusal_cannot_fall_through_to_external_capture():
     named = ProcessProbe(captures=("native-tool", ), script=lambda ctx: False)
     fallback = ProcessProbe()
     fallback.name = "fallback"
-    async with workspace({"/": RAMResource()}, runtimes=[named,
-                                                         fallback]) as ws:
+    async with workspace({"/": RAMVFS()}, runtimes=[named, fallback]) as ws:
         assert (await ws.execute("native-tool")).exit_code == 126
         assert not named.requests and not fallback.requests
         assert (await ws.execute("another-tool")).exit_code == 0
@@ -143,7 +142,7 @@ async def test_runtime_refusal_cannot_fall_through_to_external_capture():
 async def test_refused_external_capture_does_not_expand_globs(
         monkeypatch, captures):
     probe = ProcessProbe(captures=captures, script=lambda ctx: False)
-    async with workspace({"/": RAMResource()}, runtimes=[probe]) as ws:
+    async with workspace({"/": RAMVFS()}, runtimes=[probe]) as ws:
         assert await (await
                       ws.execute("echo mirage")).stdout_str() == "mirage\n"
         await ws.execute("shopt -s failglob")
@@ -168,7 +167,7 @@ async def test_refused_external_capture_does_not_expand_globs(
 async def test_shell_function_precedes_external_and_discovery_names_the_route(
 ):
     probe = ProcessProbe()
-    async with workspace({"/": RAMResource()}, runtimes=[probe]) as ws:
+    async with workspace({"/": RAMVFS()}, runtimes=[probe]) as ws:
         assert await (
             await
             ws.execute("type -t native-tool")).stdout_str() == "external\n"
@@ -194,7 +193,7 @@ async def test_external_mount_timeout_replaces_default(monkeypatch, name,
     monkeypatch.setitem(DEFAULT_COMMAND_LIMITS, name,
                         Limit(timeout_seconds=0.05))
     probe = DelayedProcessProbe(captures=("python3", EXTERNAL_COMMANDS))
-    async with workspace({"/": RAMResource()},
+    async with workspace({"/": RAMVFS()},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
         for mount in ws._registry.mounts():
@@ -218,7 +217,7 @@ async def test_external_timeout_cancels_process(monkeypatch, source):
         "native-tool": Limit(timeout_seconds=0.05)
     } if source == "mount" else {})
     probe = DelayedProcessProbe()
-    async with workspace({"/": (RAMResource(), MountMode.EXEC, overrides)},
+    async with workspace({"/": (RAMVFS(), MountMode.EXEC, overrides)},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
         result = await ws.execute("native-tool")
@@ -244,7 +243,7 @@ async def test_external_timeout_includes_stdin_materialization(monkeypatch):
             cancelled = True
 
     probe = ProcessProbe()
-    async with workspace({"/": RAMResource()}, runtimes=[probe]) as ws:
+    async with workspace({"/": RAMVFS()}, runtimes=[probe]) as ws:
         result = await ws.execute("native-tool", stdin=slow_stdin())
         assert result.exit_code == 124
         assert "native-tool: timed out after 0.05s" in await result.stderr_str(
@@ -266,7 +265,7 @@ class ShellProbe(Runtime, LineExecutorMixin):
 
 
 @command("trello board list",
-         resource="ram",
+         vfs="ram",
          spec=CommandSpec(positional=(Operand(), ), rest=Operand(type="str")))
 async def board_list(accessor, paths, texts, opts):
     return b"ok\n", IOResult()
@@ -280,7 +279,7 @@ async def board_list(accessor, paths, texts, opts):
 ])
 async def test_native_execution_preserves_command_tokens(kind, head, expected):
     probe = kind(captures=("trello board list", ))
-    ram = RAMResource()
+    ram = RAMVFS()
     ram.register(board_list)
     async with workspace({"/": ram}, runtimes=[probe]) as ws:
         result = await ws.execute(head + " 'a b' '$(echo literal)' ''")
@@ -305,7 +304,7 @@ async def test_native_execution_preserves_command_tokens(kind, head, expected):
 async def test_boundary_expansion_preserves_command_tokens(
         kind, head, prefix, pattern, matches, monkeypatch):
     probe = kind(captures=("trello board list", ))
-    ram = RAMResource()
+    ram = RAMVFS()
     ram.register(board_list)
     resolve_globs = argv_module.resolve_globs
     pending = True
@@ -320,8 +319,8 @@ async def test_boundary_expansion_preserves_command_tokens(
     async with workspace(
         {
             "/": ram,
-            "/base/inner": RAMResource(),
-            "/base/other": RAMResource(),
+            "/base/inner": RAMVFS(),
+            "/base/other": RAMVFS(),
         },
             mode=MountMode.EXEC,
             runtimes=[probe]) as ws:
@@ -348,7 +347,7 @@ async def test_scripted_multiword_capture_sees_its_full_command(kind, source):
               ctx.commands[-1].command == "trello board list" and ctx.commands[
                   -1].words[-1] == "/allowed")
     probe = kind(captures=("trello board list", ), script=script)
-    ram = RAMResource()
+    ram = RAMVFS()
     ram.register(board_list)
     async with workspace({"/": ram},
                          runtimes=[probe, MontyRuntime(captures=())]) as ws:
@@ -379,7 +378,7 @@ async def test_external_script_sees_first_unresolved_stage(head):
         script=lambda ctx: seen.append(ctx) or ctx.command == "native-tool")
     named = ProcessProbe(captures=("python3", ))
     named.name = "named"
-    ram = RAMResource()
+    ram = RAMVFS()
     ram.register(board_list)
     async with workspace({"/": ram}, runtimes=[probe, named]) as ws:
         ws.register_cli(
@@ -420,7 +419,7 @@ async def test_named_external_capture_cannot_bypass_path_policy(kind, line):
         CommandRule(reason="protected",
                     commands=("cat", "grep", "tar"),
                     paths=("/work/secret.txt", )))
-    async with workspace({"/work": RAMResource()},
+    async with workspace({"/work": RAMVFS()},
                          runtimes=[probe],
                          policies=[policy],
                          mode=MountMode.EXEC) as ws:
@@ -442,7 +441,7 @@ async def test_external_spec_preserves_text_words_and_shell_globs(kind):
         CommandRule(reason="protected",
                     commands=("grep", ),
                     paths=("/work/secret.txt", )))
-    async with workspace({"/work": RAMResource()},
+    async with workspace({"/work": RAMVFS()},
                          runtimes=[probe],
                          policies=[policy],
                          mode=MountMode.EXEC) as ws:
@@ -465,7 +464,7 @@ async def test_external_spec_preserves_text_words_and_shell_globs(kind):
 @pytest.mark.parametrize("willing", [True, False])
 async def test_native_captures_preserve_shell_builtins(kind, willing):
     probe = kind(captures=tuple(SHELL_NAMES), script=lambda ctx: willing)
-    async with workspace({"/work": RAMResource()},
+    async with workspace({"/work": RAMVFS()},
                          mode=MountMode.EXEC,
                          runtimes=[probe]) as ws:
         session = Session(session_id="lookup")

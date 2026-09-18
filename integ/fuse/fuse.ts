@@ -24,7 +24,7 @@ import {
   MountBackend,
   MountMode,
   parseSessionProfile,
-  RAMResource,
+  RAMVFS,
   Workspace,
   type Action,
   type OpsContext,
@@ -32,7 +32,7 @@ import {
   type Policy,
 } from '@struktoai/mirage-node'
 
-// Size-unknown probe: a stat wrapper simulates API-backed resources (Linear,
+// Size-unknown probe: a stat wrapper simulates API-backed mounts (Linear,
 // Slack, Trello, ...) whose byte size is unknown until the content is
 // fetched. Over FUSE such files must stat as 0 until first open and read
 // fully afterwards (see the CLAUDE.md FUSE section).
@@ -42,7 +42,7 @@ async function runSizelessProbe(
   result: Record<string, string | number | boolean | null>,
 ): Promise<void> {
   const enc = new TextEncoder()
-  const api = new RAMResource()
+  const api = new RAMVFS()
   api.store.dirs.add('/')
   api.store.files.set('/api.json', enc.encode(API_CONTENT))
   const ws = new Workspace({
@@ -95,7 +95,7 @@ async function runPolicyProbe(
   result: Record<string, string | number | boolean | null>,
 ): Promise<void> {
   const enc = new TextEncoder()
-  const res = new RAMResource()
+  const res = new RAMVFS()
   res.store.dirs.add('/')
   res.store.files.set('/clean.txt', enc.encode('hello\n'))
   res.store.files.set('/secret.txt', enc.encode('TOPSECRET plans\n'))
@@ -143,7 +143,7 @@ async function runLinkProbe(
   result: Record<string, string | number | boolean | null>,
 ): Promise<void> {
   const enc = new TextEncoder()
-  const res = new RAMResource()
+  const res = new RAMVFS()
   res.store.dirs.add('/')
   res.store.files.set('/f.txt', enc.encode('body\n'))
   const ws = new Workspace(
@@ -211,7 +211,7 @@ async function runSessionProbe(
 ): Promise<void> {
   const enc = new TextEncoder()
   const dec = new TextDecoder()
-  const res = new RAMResource()
+  const res = new RAMVFS()
   res.store.dirs.add('/')
   res.store.dirs.add('/vault')
   res.store.files.set('/pub.txt', enc.encode('pub\n'))
@@ -258,10 +258,10 @@ async function runSessionProbe(
 async function main(): Promise<void> {
   const result: Record<string, string | number | boolean | null> = {}
   const enc = new TextEncoder()
-  const data = new RAMResource()
+  const data = new RAMVFS()
   data.store.dirs.add('/')
   data.store.files.set('/a.txt', enc.encode('alpha\n'))
-  const logs = new RAMResource()
+  const logs = new RAMVFS()
   logs.store.dirs.add('/')
   logs.store.files.set('/b.txt', enc.encode('beta\n'))
 

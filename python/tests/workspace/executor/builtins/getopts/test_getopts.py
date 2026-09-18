@@ -1,6 +1,6 @@
 import pytest
 
-from mirage import MountMode, RAMResource, Workspace
+from mirage import RAMVFS, MountMode, Workspace
 from mirage.io.stream import materialize
 from mirage.shell.call_stack import CallStack
 from mirage.shell.variable import VarAttr
@@ -203,7 +203,7 @@ async def test_getopts_optind_reset_reparses():
 
 @pytest.mark.asyncio
 async def test_getopts_end_to_end_loop_with_case():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute('set -- -a val -b\n'
                           'while getopts "a:b" opt; do\n'
                           '  case $opt in\n'
@@ -300,7 +300,7 @@ async def test_getopts_fork_preserves_cursor():
 
 @pytest.mark.asyncio
 async def test_getopts_reassign_optind_same_value_reparses():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute('set -- -ab; getopts ab o; echo "1:$o"; '
                           'OPTIND=1; getopts ab o; echo "2:$o"')
     assert (io.stdout or b"") == b"1:a\n2:a\n"
@@ -308,7 +308,7 @@ async def test_getopts_reassign_optind_same_value_reparses():
 
 @pytest.mark.asyncio
 async def test_getopts_subshell_does_not_corrupt_parent_cursor():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     io = await ws.execute('set -- -ab; OPTIND=1; getopts ab o; '
                           '(getopts ab o); getopts ab o; echo "$o"')
     assert (io.stdout or b"") == b"b\n"

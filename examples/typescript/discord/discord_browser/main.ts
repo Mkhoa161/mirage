@@ -12,15 +12,15 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { DiscordResource, MountMode, Workspace } from '@struktoai/mirage-browser'
+import { DiscordVFS, MountMode, Workspace } from '@struktoai/mirage-browser'
 
 const PROXY_URL = process.env.DISCORD_PROXY_URL ?? 'http://127.0.0.1:8902/api/discord'
 
 async function main(): Promise<void> {
-  const discord = new DiscordResource({ proxyUrl: PROXY_URL })
+  const discord = new DiscordVFS({ proxyUrl: PROXY_URL })
   const ws = new Workspace({ '/discord': discord }, { mode: MountMode.READ })
   try {
-    console.log(`=== BROWSER MODE: DiscordResource → ${PROXY_URL} ===\n`)
+    console.log(`=== BROWSER MODE: DiscordVFS → ${PROXY_URL} ===\n`)
 
     console.log('=== ls /discord/ (guilds) ===')
     let r = await ws.execute('ls /discord/')

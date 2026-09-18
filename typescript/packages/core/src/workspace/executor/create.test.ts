@@ -20,7 +20,7 @@ import { PathSpec } from '../../types.ts'
 import { Session } from '../session/session.ts'
 import { createFile } from './create.ts'
 
-const SCOPE = new PathSpec({ virtual: '/data/f', directory: '/data/', resourcePath: '' })
+const SCOPE = new PathSpec({ virtual: '/data/f', directory: '/data/', vfsPath: '' })
 
 class FakeDispatch {
   readonly calls: [string, Record<string, unknown>][] = []

@@ -39,8 +39,6 @@ from mirage.policy import (AskHandler, Decisions, Explanation, HandOff,
                            PermissionsPolicy, Policies, Policy, PolicyError,
                            ScriptPolicy, SessionProfile)
 from mirage.provision import ProvisionResult
-from mirage.resource.base import BaseResource
-from mirage.resource.history import HISTORY_PREFIX, HistoryViewResource
 from mirage.runtime.base import Runtime
 from mirage.runtime.binding import WorkspaceBinding, capture_binding
 from mirage.runtime.resolver import PrefixResolver
@@ -57,6 +55,8 @@ from mirage.types import (ConsistencyPolicy, DriftPolicy, FileEvent, FileStat,
                           JsonValue, MountBackend, MountMode, PathSpec,
                           parse_mount_mode)
 from mirage.utils.ids import new_session_id, new_workspace_id
+from mirage.vfs.base import BaseVFS
+from mirage.vfs.history import HISTORY_PREFIX, HistoryViewVFS
 from mirage.workspace.abort import MirageAbortError, run_cancellable
 from mirage.workspace.cli import CLIInstall
 from mirage.workspace.dispatcher import Dispatcher
@@ -80,7 +80,7 @@ from mirage.workspace.snapshot import snapshot as _write_snapshot
 from mirage.workspace.snapshot import to_state_dict
 from mirage.workspace.snapshot.keys import StateKey
 from mirage.workspace.snapshot.state import (CLIOverrides, reusable_clis,
-                                             reusable_resources)
+                                             reusable_mounts)
 from mirage.workspace.store import WorkspaceStateStore
 from mirage.workspace.workspace.build import (resolve_control_stores,
                                               wire_runtime_world)
@@ -93,27 +93,27 @@ from mirage.workspace.workspace.lifecycle import (close_async, patch_process,
                                                   stop_vfs_loop,
                                                   unpatch_process)
 from mirage.workspace.workspace.meta import WorkspaceMeta
-from mirage.workspace.workspace.mounts import (check_resource, install_mounts,
+from mirage.workspace.workspace.mounts import (check_vfs, install_mounts,
                                                kernel_targets,
-                                               normalize_resources,
+                                               normalize_mounts,
                                                prepare_added_mount)
 from mirage.workspace.workspace.mounts import unmount as unmount_prefix
-from mirage.workspace.workspace.types import ResourceMount
+from mirage.workspace.workspace.types import VFSMount
 from mirage.workspace.workspace.watch import WatchDelegate, WatchManager
 
 logger = logging.getLogger(__name__)
 
 
 class Workspace:
-    """Unified virtual filesystem over heterogeneous resources.
+    """Unified virtual filesystem over heterogeneous mounts.
 
     Manages mounts, caching, and command execution.
-    All ops are forwarded directly to the resolved resource.
+    All ops are forwarded directly to the resolved VFS.
     """
 
     def __init__(
         self,
-        resources: dict[str, ResourceMount],
+        mounts: dict[str, VFSMount],
         cache_limit: str | int = "512MB",
         cache: CacheConfig | None = None,
         index: IndexConfig | None = None,
@@ -176,9 +176,9 @@ class Workspace:
         self._closing = False
         self._async_closed = False
         self._close_lock = asyncio.Lock()
-        # Resources reused from another live workspace (copy() / load
-        # resource overrides) stay open here; their origin closes them.
-        self._shared_resources: set[int] = set()
+        # mounts reused from another live workspace (copy() / load
+        # VFS overrides) stay open here; their origin closes them.
+        self._shared_mounts: set[int] = set()
         self._drift = DriftQueue()
         self.job_table = JobTable(console_factory)
         self._default_agent_id = agent_id
@@ -269,7 +269,7 @@ class Workspace:
         self._registry.set_reconciler(self._dispatcher.reconciler)
         self._watch = WatchManager(self._registry)
 
-        specs = normalize_resources(resources, mode)
+        specs = normalize_mounts(mounts, mode)
         self._implicit_root = install_mounts(self._registry, specs, index,
                                              mode)
         # What the workspace and its mounts hide from every session,
@@ -284,8 +284,7 @@ class Workspace:
                                              else None)
 
         self.observer = Observer(store=stores.observe)
-        self._registry.mount(HISTORY_PREFIX,
-                             HistoryViewResource(self.observer),
+        self._registry.mount(HISTORY_PREFIX, HistoryViewVFS(self.observer),
                              MountMode.READ)
         # The facade delegates every op to the dispatcher, so FUSE and
         # programmatic ws.fs walk the same pipeline as a shell command
@@ -502,13 +501,13 @@ class Workspace:
 
     def add_mount(self,
                   prefix: str,
-                  resource: BaseResource,
+                  vfs: BaseVFS,
                   mode: MountMode = MountMode.READ) -> MountEntry:
-        """Add a resource to a running workspace, mirroring TS ``addMount``.
+        """Add a VFS to a running workspace, mirroring TS ``addMount``.
 
         Args:
             prefix (str): virtual mount point; duplicates are refused.
-            resource (BaseResource): resource providing commands and ops.
+            vfs (BaseVFS): VFS providing commands and ops.
             mode (MountMode): access mode, read-only unless explicitly raised.
 
         Returns:
@@ -516,17 +515,16 @@ class Workspace:
         """
         if self._shutting_down:
             raise RuntimeError("Workspace is closed")
-        check_resource(prefix, resource)
-        self._registry.check_resource_available(resource)
+        check_vfs(prefix, vfs)
+        self._registry.check_vfs_available(vfs)
         previous = self._registry.mounts()
         # Configure before mount() captures the index in its CacheManager.
-        # An alias must retain the index used by the resource's other mounts.
+        # An alias must retain the index used by the VFS's other mounts.
         if (self._index_config is not None
                 and self._registry.try_mount_for_prefix(prefix) is None
-                and not any(m.resource is resource
-                            for m in self._registry.mounts())):
-            resource.set_index(self._index_config)
-        entry = self._registry.mount(prefix, resource, mode)
+                and not any(m.vfs is vfs for m in self._registry.mounts())):
+            vfs.set_index(self._index_config)
+        entry = self._registry.mount(prefix, vfs, mode)
         prepare_added_mount(self._registry, entry, previous)
         self._ops.set_mounts(self._registry.ops_mounts())
         return entry
@@ -535,8 +533,7 @@ class Workspace:
         if self._shutting_down:
             raise RuntimeError("Workspace is closed")
         await unmount_prefix(self._registry, self._ops, prefix,
-                             lambda: self._shutting_down,
-                             self._shared_resources)
+                             lambda: self._shutting_down, self._shared_mounts)
 
     def set_mount_mode(self, prefix: str, mode: MountMode) -> None:
         """Change an exact mount's ceiling, retaining data and session caps.
@@ -627,7 +624,7 @@ class Workspace:
         put files, and the synthetic root anchor, which nobody mounted:
         the workspace adds it so arg-less commands and root listing
         have somewhere to resolve, so announcing it as a mount would
-        make every runtime report a claim on a resource the embedder
+        make every runtime report a claim on a VFS the embedder
         never asked for (TS ``sandboxVisibleMounts``).
         """
         prefixes: list[str] = []
@@ -774,7 +771,7 @@ class Workspace:
         matching ``watch``.
 
         The single entry point for consumer-side detection (webhook
-        receiver or poll loop over ``resource.delta_hook()``); see
+        receiver or poll loop over ``VFS.delta_hook()``); see
         ``mirage.watch.Watcher.notify``.
 
         Args:
@@ -796,7 +793,7 @@ class Workspace:
             * Mount configs, sessions, history, finished jobs.
             * Cache bytes for fast replay.
             * One fingerprint entry per remote read (ETag-equivalent,
-              plus a backend-specific ``revision`` when the resource
+              plus a backend-specific ``revision`` when the VFS
               exposes one — e.g. S3 ``VersionId``).
 
         NOT captured:
@@ -805,7 +802,7 @@ class Workspace:
               them.
             * Files the agent never touched.
             * Bytes of remote objects. Recovery of original bytes works
-              only when the resource accepts a revision pin (S3 family
+              only when the VFS accepts a revision pin (S3 family
               today) and the recorded revision still exists on the
               source.
 
@@ -823,7 +820,7 @@ class Workspace:
             cls,
             source,
             *,
-            resources: dict[str, Any] | None = None,
+            mounts: dict[str, Any] | None = None,
             clis: CLIOverrides | None = None,
             secrets: Mapping[str, SecretSource | Mapping[str, Any]]
         | None = None,
@@ -850,7 +847,7 @@ class Workspace:
 
         Args:
             source: filesystem path OR a readable file-like object.
-            resources: {prefix: Resource} overrides for mounts saved
+            mounts: {prefix: VFS} overrides for mounts saved
                 with redacted creds.
             clis: {name: config} overrides for CLIs saved with
                 redacted config secrets; a (spec, config) tuple also
@@ -860,7 +857,7 @@ class Workspace:
                 pointers. A snapshot never carries the `secrets:` block
                 (it is the deployment's credentials), so a pointer at a
                 declared instance needs the block supplied here, the
-                way a redacted mount needs `resources`.
+                way a redacted mount needs `mounts`.
             drift_policy: STRICT (default) raises on mismatch. OFF
                 disables drift checking and drops the restored RAM
                 cache entries for fingerprinted paths; a Redis cache is
@@ -868,7 +865,7 @@ class Workspace:
                 drop.
         """
         return await cls.from_state(read_tar(source),
-                                    resources=resources,
+                                    mounts=mounts,
                                     clis=clis,
                                     secrets=secrets,
                                     drift_policy=drift_policy)
@@ -878,7 +875,7 @@ class Workspace:
             cls,
             state: dict[str, Any],
             *,
-            resources: dict[str, Any] | None = None,
+            mounts: dict[str, Any] | None = None,
             clis: CLIOverrides | None = None,
             secrets: Mapping[str, SecretSource | Mapping[str, Any]]
         | None = None,
@@ -893,7 +890,7 @@ class Workspace:
 
         Args:
             state: a state dict from ``to_state_dict`` or a version.
-            resources: {prefix: Resource} overrides for mounts saved
+            mounts: {prefix: VFS} overrides for mounts saved
                 with redacted creds.
             clis: {name: config} overrides for CLIs saved with
                 redacted config secrets; a (spec, config) tuple also
@@ -908,7 +905,7 @@ class Workspace:
                 drop.
         """
         ws = await cls._from_state(state,
-                                   resources=resources,
+                                   mounts=mounts,
                                    clis=clis,
                                    secrets=secrets)
         install_fingerprints(ws,
@@ -926,16 +923,16 @@ class Workspace:
         """Duplicate this workspace, sharing only what cannot be rebuilt.
 
         See ``snapshot.api.snapshot`` for why remote backends are
-        shared and local content resources are reconstructed fresh.
+        shared and local content mounts are reconstructed fresh.
         """
         state = await to_state_dict(self)
-        resources = reusable_resources(self._registry.mounts(), state)
+        mounts = reusable_mounts(self._registry.mounts(), state)
         # The declarations travel with the copy the way a live CLI
         # install does: an env pointer restores from state naming its
         # instance, and without the block the copy would answer the
         # first read with "unknown secrets source".
         return await type(self)._from_state(state,
-                                            resources=resources,
+                                            mounts=mounts,
                                             clis=reusable_clis(self),
                                             secrets=self._declared_sources)
 
@@ -944,20 +941,20 @@ class Workspace:
         cls,
         state: dict[str, Any],
         *,
-        resources: dict[str, Any] | None = None,
+        mounts: dict[str, Any] | None = None,
         clis: CLIOverrides | None = None,
         secrets: Mapping[str, SecretSource | Mapping[str, Any]]
         | None = None
     ) -> "Workspace":
-        args = build_mount_args(state, resources, clis)
+        args = build_mount_args(state, mounts, clis)
         ws = cls(args.mount_args,
                  consistency=args.consistency,
                  session_id=args.default_session_id,
                  agent_id=args.default_agent_id,
                  clis=args.clis,
                  secrets=secrets)
-        if resources:
-            ws._shared_resources = {id(r) for r in resources.values()}
+        if mounts:
+            ws._shared_mounts = {id(r) for r in mounts.values()}
         await apply_state_dict(ws, state)
         return ws
 
@@ -1250,7 +1247,7 @@ class Workspace:
     async def stat(self, path: str) -> FileStat:
         scope = PathSpec(virtual=path,
                          directory=path,
-                         resource_path="",
+                         vfs_path="",
                          resolved=True)
         result, _ = await self.dispatch("stat", scope)
         return result
@@ -1258,7 +1255,7 @@ class Workspace:
     async def readdir(self, path: str) -> list[str]:
         scope = PathSpec(virtual=path,
                          directory=path,
-                         resource_path="",
+                         vfs_path="",
                          resolved=False)
         raw, _ = await self.dispatch("readdir", scope)
         return raw

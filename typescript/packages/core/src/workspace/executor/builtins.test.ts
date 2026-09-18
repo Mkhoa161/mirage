@@ -25,7 +25,7 @@ import { CLISpec } from '../../commands/cli/types.ts'
 import { GENERAL_COMMANDS } from '../../commands/builtin/general/index.ts'
 import { IOResult, materialize } from '../../io/types.ts'
 import type { ByteSource } from '../../io/types.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { enoent } from '../../utils/errors.ts'
 import { compareCodePoints } from '../../utils/sort.ts'
 import { byteChar } from '../../shell/bytes.ts'
@@ -65,11 +65,11 @@ import { parseDuration } from './builtins/timeout/timeout.ts'
 import { ReturnSignal } from '../../shell/errors.ts'
 
 function wireMount(mount: MountEntry): void {
-  const cmds = mount.resource.commands?.()
+  const cmds = mount.vfs.commands?.()
   if (cmds !== undefined) {
     for (const cmd of cmds) {
       if (cmd.filetype !== null) mount.register(cmd)
-      else if (cmd.resource === null) mount.registerGeneral(cmd)
+      else if (cmd.vfs === null) mount.registerGeneral(cmd)
       else mount.register(cmd)
     }
   }
@@ -1640,8 +1640,8 @@ describe('handleSource', () => {
 })
 
 describe('handleMan', () => {
-  it('renders header and description for a known command, no resource section', async () => {
-    const reg = new MountRegistry({ '/ram/': new RAMResource() }, MountMode.WRITE)
+  it('renders header and description for a known command, no VFS section', async () => {
+    const reg = new MountRegistry({ '/ram/': new RAMVFS() }, MountMode.WRITE)
     wireRegistry(reg)
     const [out, io] = handleMan(['date'], reg, MAN_SESSION)
     expect(io.exitCode).toBe(0)
@@ -1652,7 +1652,7 @@ describe('handleMan', () => {
   })
 
   it('renders OPTIONS table when the spec has options', async () => {
-    const reg = new MountRegistry({ '/ram/': new RAMResource() }, MountMode.WRITE)
+    const reg = new MountRegistry({ '/ram/': new RAMVFS() }, MountMode.WRITE)
     wireRegistry(reg)
     const [out, io] = handleMan(['date'], reg, MAN_SESSION)
     expect(io.exitCode).toBe(0)
@@ -1663,7 +1663,7 @@ describe('handleMan', () => {
 
   it('renders one page however many mounts register the name', async () => {
     const reg = new MountRegistry(
-      { '/ram-a/': new RAMResource(), '/ram-b/': new RAMResource() },
+      { '/ram-a/': new RAMVFS(), '/ram-b/': new RAMVFS() },
       MountMode.WRITE,
     )
     wireRegistry(reg)
@@ -1675,7 +1675,7 @@ describe('handleMan', () => {
   })
 
   it('documents bash and sh from the bash spec', async () => {
-    const reg = new MountRegistry({ '/ram/': new RAMResource() }, MountMode.WRITE)
+    const reg = new MountRegistry({ '/ram/': new RAMVFS() }, MountMode.WRITE)
     wireRegistry(reg)
     const [out, io] = handleMan(['bash'], reg, MAN_SESSION)
     expect(io.exitCode).toBe(0)
@@ -1688,7 +1688,7 @@ describe('handleMan', () => {
   })
 
   it('exits 1 with a clear error for unknown commands', () => {
-    const reg = new MountRegistry({ '/ram/': new RAMResource() }, MountMode.WRITE)
+    const reg = new MountRegistry({ '/ram/': new RAMVFS() }, MountMode.WRITE)
     wireRegistry(reg)
     const [, io] = handleMan(['definitely-not-a-real-command-xyz'], reg, MAN_SESSION)
     expect(io.exitCode).toBe(1)
@@ -1696,9 +1696,9 @@ describe('handleMan', () => {
     expect(decode(errBytes)).toContain('no entry for definitely-not-a-real-command-xyz')
   })
 
-  it('lists every command once under # commands, sorted, with no resource sections', async () => {
+  it('lists every command once under # commands, sorted, with no VFS sections', async () => {
     const reg = new MountRegistry(
-      { '/ram-a/': new RAMResource(), '/ram-b/': new RAMResource() },
+      { '/ram-a/': new RAMVFS(), '/ram-b/': new RAMVFS() },
       MountMode.WRITE,
     )
     wireRegistry(reg)
@@ -1734,7 +1734,7 @@ function fakeShell(exitCodes: number[] = []): {
 
 describe('handleMan for installed CLIs', () => {
   function cliRegistry(): MountRegistry {
-    const reg = new MountRegistry({ '/ram/': new RAMResource() }, MountMode.WRITE)
+    const reg = new MountRegistry({ '/ram/': new RAMVFS() }, MountMode.WRITE)
     wireRegistry(reg)
     reg.clis.install(
       'linear',

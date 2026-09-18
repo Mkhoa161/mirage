@@ -16,7 +16,7 @@ import asyncio
 import errno
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import SessionHandle
 
 # One agent, one handle. `ws.session(id, profile=...)` creates a session
@@ -138,7 +138,7 @@ async def write(role: str, handle: SessionHandle | Workspace, path: str,
 
 
 async def main() -> None:
-    ws = Workspace({"/repo/": RAMResource()},
+    ws = Workspace({"/repo/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=PROFILES)
     for seed in SEED:

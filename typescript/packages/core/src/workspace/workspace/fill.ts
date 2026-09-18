@@ -15,7 +15,7 @@
 import { invokedEnvNames, suppliedEnvNames } from '../../commands/cli/walk.ts'
 import type { Runtime } from '../../runtime/base.ts'
 import type { RouteDecision } from '../../runtime/routing/index.ts'
-import { VFSRuntime } from '../../runtime/table.ts'
+import { WorkspaceRuntime } from '../../runtime/table.ts'
 import { SecretsError } from '../../secrets/errors.ts'
 import { fieldSummary } from '../../secrets/summary.ts'
 import { fetchSecret } from '../../secrets/registry.ts'
@@ -136,7 +136,7 @@ export function lineNodes(
  * A guest receives the exported environment as one snapshot, so every
  * managed name may be read whatever the line spells --
  * `python3 -c 'os.environ[...]'` never writes a `$NAME` the walk could
- * see. The vfs runtime is the executor itself, whose commands read
+ * see. The workspace runtime is the executor itself, whose commands read
  * vars one at a time, so it does not count. Keyed on the walked set's
  * own command words (stored function bodies included) because the
  * static table binds every captured command in the workspace, not this
@@ -154,7 +154,7 @@ export function guestBound(
   }
   for (const word of words) {
     const runtime = Object.hasOwn(bindings, word) ? bindings[word] : undefined
-    if (runtime != null && !(runtime instanceof VFSRuntime)) return true
+    if (runtime != null && !(runtime instanceof WorkspaceRuntime)) return true
   }
   return false
 }

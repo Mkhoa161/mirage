@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from mirage.core.timeutil import epoch_to_iso
-from mirage.resource.base import BaseResource
 from mirage.types import LINK_TARGET_KEY, FileStat, FileType, MountMode
 from mirage.utils.path import glob_prefix_match, resolve_symlinks
+from mirage.vfs.base import BaseVFS
 from mirage.workspace.mount.mount import MountEntry
 from mirage.workspace.mount.namespace.ram import RAMNamespaceStore
 from mirage.workspace.mount.namespace.store import NamespaceStore, NodeFields
@@ -546,8 +546,8 @@ class Namespace:
     def resolve(self,
                 path: str,
                 *,
-                follow: bool = True) -> tuple[BaseResource, str, MountMode]:
-        """Map a virtual path to ``(resource, resource_path, mode)``.
+                follow: bool = True) -> tuple[BaseVFS, str, MountMode]:
+        """Map a virtual path to ``(VFS, vfs_path, mode)``.
 
         Args:
             path (str): virtual path to resolve.

@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser, stdoutStr } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
@@ -27,11 +27,11 @@ import { Workspace } from '../workspace/workspace.ts'
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const root = new RAMResource()
-  const inner = new RAMResource()
+  const root = new RAMVFS()
+  const inner = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(root)
-  registry.registerResource(inner)
+  registry.registerVfs(root)
+  registry.registerVfs(inner)
   const ws = new Workspace(
     { '/': root, '/base/inner': inner },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -203,11 +203,11 @@ describe('glob expansion follows a symlinked directory', () => {
 // (#1065).
 async function makeDirsWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const root = new RAMResource()
-  const inner = new RAMResource()
+  const root = new RAMVFS()
+  const inner = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(root)
-  registry.registerResource(inner)
+  registry.registerVfs(root)
+  registry.registerVfs(inner)
   const ws = new Workspace(
     { '/': root, '/data/records/inner': inner },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -227,8 +227,8 @@ async function makeDirsWs(): Promise<Workspace> {
 async function makeFlatWs(): Promise<Workspace> {
   const parser = await getTestParser()
   const registry = new OpsRegistry()
-  const data = new RAMResource()
-  registry.registerResource(data)
+  const data = new RAMVFS()
+  registry.registerVfs(data)
   const ws = new Workspace(
     { '/data': data },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },

@@ -30,7 +30,7 @@
 //
 // Phase 1 is READ-ONLY. Writes (tee, cp, mv, rm, mkdir) will be added in
 // Phase 2. See docs/plans for the roadmap.
-import { MountMode, S3Resource, Workspace, type S3Config } from '@struktoai/mirage-node'
+import { MountMode, S3VFS, Workspace, type S3Config } from '@struktoai/mirage-node'
 
 function configFromEnv(): S3Config {
   // Default: NOAA Global Historical Climatology Network daily data.
@@ -56,10 +56,10 @@ function configFromEnv(): S3Config {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  console.log(`=== S3Resource — bucket: ${config.bucket} (region: ${config.region ?? 'default'}) ===\n`)
+  console.log(`=== S3VFS — bucket: ${config.bucket} (region: ${config.region ?? 'default'}) ===\n`)
 
-  const resource = new S3Resource(config)
-  const ws = new Workspace({ '/s3/': resource }, { mode: MountMode.READ })
+  const vfs = new S3VFS(config)
+  const ws = new Workspace({ '/s3/': vfs }, { mode: MountMode.READ })
 
   try {
     console.log('=== ls /s3/csv/by_year/ (first 10) ===')

@@ -15,7 +15,7 @@
 import asyncio
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 
 async def run(ws: Workspace, cmd: str) -> None:
@@ -35,11 +35,11 @@ async def run(ws: Workspace, cmd: str) -> None:
 
 
 async def main() -> None:
-    resource = RAMResource()
-    ws = Workspace({"/data": resource}, mode=MountMode.WRITE)
+    vfs = RAMVFS()
+    ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
 
     def seed(path: str, data: bytes) -> None:
-        resource._store.files[path] = data
+        vfs._store.files[path] = data
 
     seed("/dup.txt", b"banana\napple\ncherry\napple\n")
     seed("/sorted1.txt", b"apple\nbanana\ndate\n")

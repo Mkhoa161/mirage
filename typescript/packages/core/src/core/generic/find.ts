@@ -15,7 +15,7 @@
 import { isEacces, isEnoent } from '../../utils/errors.ts'
 import { mountKey, mountPrefixOf } from '../../utils/key_prefix.ts'
 import type { IndexCacheStore } from '../../cache/index/store.ts'
-import type { FindOptions } from '../../resource/base.ts'
+import type { FindOptions } from '../../vfs/base.ts'
 import {
   buildTree,
   hasLinkChildren,
@@ -73,7 +73,7 @@ async function statEntry(
     virtual: path,
     directory: path,
     resolved: false,
-    resourcePath: mountKey(path, prefix),
+    vfsPath: mountKey(path, prefix),
   })
   try {
     return await deps.stat(spec, index)
@@ -97,7 +97,7 @@ async function isEmptyEntry(
       virtual: path,
       directory: path,
       resolved: false,
-      resourcePath: mountKey(path, prefix),
+      vfsPath: mountKey(path, prefix),
     })
     try {
       return (await deps.readdir(spec, index)).length === 0
@@ -141,12 +141,7 @@ async function walk(
     if (child.endsWith('/')) {
       isFolder = true
     } else {
-      const s = await statEntry(
-        deps,
-        trimmed,
-        mountPrefixOf(spec.virtual, spec.resourcePath),
-        index,
-      )
+      const s = await statEntry(deps, trimmed, mountPrefixOf(spec.virtual, spec.vfsPath), index)
       isFolder = s !== null && s.type === FileType.DIRECTORY
     }
     out.push({ path: trimmed, depth, file: !isFolder })
@@ -155,7 +150,7 @@ async function walk(
         virtual: trimmed,
         directory: trimmed,
         resolved: false,
-        resourcePath: mountKey(trimmed, mountPrefixOf(spec.virtual, spec.resourcePath)),
+        vfsPath: mountKey(trimmed, mountPrefixOf(spec.virtual, spec.vfsPath)),
       })
       await walk(deps, childSpec, index, maxDepth, depth + 1, out)
     }
@@ -169,7 +164,7 @@ export async function walkFind(
   index?: IndexCacheStore,
 ): Promise<string[]> {
   const collected: WalkEntry[] = []
-  const prefix = mountPrefixOf(path.virtual, path.resourcePath)
+  const prefix = mountPrefixOf(path.virtual, path.vfsPath)
   // GNU lists the search root itself at depth 0 (even for the mount
   // root), so `-maxdepth 0` prints just the root and `-name` can match
   // the root's own basename.
@@ -380,7 +375,7 @@ export function makeSearchBackedFind<A>(
           deps,
           accessor,
           item,
-          mountPrefixOf(path.virtual, path.resourcePath),
+          mountPrefixOf(path.virtual, path.vfsPath),
           index,
           path.mountPath,
           options,

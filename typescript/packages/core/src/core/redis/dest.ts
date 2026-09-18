@@ -16,7 +16,7 @@ import type { PathSpec } from '../../types.ts'
 import { eexist, enoent, enotdir } from '../../utils/errors.ts'
 import { mountedPath } from '../../utils/key_prefix.ts'
 import { ancestors } from '../../utils/path.ts'
-import type { RedisStoreLike } from '../../resource/redis/store.ts'
+import type { RedisStoreLike } from '../../vfs/redis/store.ts'
 
 // Reject a destination whose parent chain is not all directories. Mirrors how
 // rename(2) resolves the destination: a component that does not exist is

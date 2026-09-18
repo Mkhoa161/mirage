@@ -50,7 +50,7 @@ export function makeWriteBytes<A extends Accessor, C>(driver: ObjectStoreDriver<
     } finally {
       await close()
     }
-    record('write', path.virtual, driver.resource, data.byteLength, timer)
+    record('write', path.virtual, driver.vfs, data.byteLength, timer)
     await invalidateAfterWrite(path)
     // A put materializes every missing level of the key at once, so the
     // listings above the immediate parent gained entries too.
@@ -69,7 +69,7 @@ export function makeCreate<A extends Accessor, C>(driver: ObjectStoreDriver<A, C
     } finally {
       await close()
     }
-    record('create', path.virtual, driver.resource, 0, timer)
+    record('create', path.virtual, driver.vfs, 0, timer)
     await invalidateAfterWrite(path)
     // An empty put materializes missing parents exactly like write.
     await invalidateAncestors(path)
@@ -93,7 +93,7 @@ export function makeTruncate<A extends Accessor, C>(
     } finally {
       await close()
     }
-    record('truncate', path.virtual, driver.resource, 0, timer)
+    record('truncate', path.virtual, driver.vfs, 0, timer)
     await invalidateAfterWrite(path)
     // Truncating a missing key creates it, parents included.
     await invalidateAncestors(path)

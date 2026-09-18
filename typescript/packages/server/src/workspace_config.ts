@@ -72,16 +72,16 @@ export async function buildWorkspaceFromConfig(configPath: string): Promise<Work
     await import('@struktoai/mirage-node')
   const config = loadWorkspaceConfigFile(configPath)
   const args = await configToWorkspaceArgs(config)
-  const resources: Record<string, MountSpec> = {}
+  const mounts: Record<string, MountSpec> = {}
   const commandLimits: Record<string, Record<string, Limit>> = {}
-  for (const [prefix, [resource, mode, limits]] of Object.entries(args.resources)) {
-    resources[prefix] = [resource, mode]
+  for (const [prefix, [vfs, mode, limits]] of Object.entries(args.mounts)) {
+    mounts[prefix] = [vfs, mode]
     if (Object.keys(limits).length > 0) commandLimits[prefix] = limits
   }
   // Every option the config produced rides through, so a new config
   // knob needs no edit here (the hand-written list is what dropped
   // `clis` on the daemon's own create route).
-  const workspace = new Workspace(resources, {
+  const workspace = new Workspace(mounts, {
     ...args.options,
     workspaceId: args.options.workspaceId ?? newWorkspaceId(),
     ...(Object.keys(commandLimits).length > 0 ? { commandLimits } : {}),

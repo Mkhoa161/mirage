@@ -56,7 +56,7 @@ export interface MountOptions {
    * Which kernel interface serves the mount: 'fuse' (default) or 'fskit'.
    * 'fskit' routes through macFUSE 5.x's FSKit backend (no kernel
    * extension); macOS-only, mounts under /Volumes, and every mounted
-   * resource must report exact sizes. See backend.ts for the guards.
+   * VFS must report exact sizes. See backend.ts for the guards.
    */
   backend?: MountBackend
 }

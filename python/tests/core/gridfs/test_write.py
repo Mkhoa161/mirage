@@ -59,7 +59,7 @@ async def _write(monkeypatch, mount_path: str) -> tuple[_FakeManager, list]:
                 GridFSConfig(uri="mongodb://localhost:27017", database="db")),
             PathSpec(virtual="/mnt" + mount_path,
                      directory="/mnt/",
-                     resource_path=mount_path.lstrip("/")),
+                     vfs_path=mount_path.lstrip("/")),
             b"hi",
         )
     finally:

@@ -17,12 +17,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   command,
-  DiskResource,
+  DiskVFS,
   IOResult,
   MountMode,
   type PathSpec,
-  RAMResource,
-  ResourceName,
+  RAMVFS,
+  VFSName,
   specOf,
   Workspace,
 } from '@struktoai/mirage-node'
@@ -31,7 +31,7 @@ const ENC = new TextEncoder()
 
 const greet = command({
   name: 'greet',
-  resource: [ResourceName.RAM, ResourceName.DISK],
+  vfs: [VFSName.RAM, VFSName.DISK],
   spec: specOf('cat'),
   fn: (accessor, paths: readonly PathSpec[]) => {
     const backend = accessor.constructor.name
@@ -47,15 +47,15 @@ async function main(): Promise<void> {
 
   const ws = new Workspace(
     {
-      '/ram/': new RAMResource(),
-      '/disk/': new DiskResource({ root: tmpRoot }),
+      '/ram/': new RAMVFS(),
+      '/disk/': new DiskVFS({ root: tmpRoot }),
     },
     { mode: MountMode.WRITE },
   )
 
   console.log('=== bindings on greet ===')
   for (const rc of greet) {
-    console.log(`  resource='${rc.resource ?? ''}'  name='${rc.name}'`)
+    console.log(`  VFS='${rc.vfs ?? ''}'  name='${rc.name}'`)
   }
 
   ws.mount('/ram/')?.registerFns(greet)

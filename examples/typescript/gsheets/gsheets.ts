@@ -16,7 +16,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import {
-  GSheetsResource,
+  GSheetsVFS,
   GWS,
   MountMode,
   Workspace,
@@ -64,8 +64,8 @@ function printOut(label: string, out: string, err: string, max = 500): void {
 
 async function main(): Promise<void> {
   const config = buildConfig()
-  const resource = new GSheetsResource(config)
-  const ws = new Workspace({ '/gsheets': resource }, { mode: MountMode.WRITE })
+  const vfs = new GSheetsVFS(config)
+  const ws = new Workspace({ '/gsheets': vfs }, { mode: MountMode.WRITE })
   // The gws verbs are a CLI install, separate from the mount.
   ws.registerCli('gws', GWS, { ...config })
   try {

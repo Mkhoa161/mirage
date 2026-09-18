@@ -21,9 +21,7 @@ from mirage.utils.errors import enoent, enotdir, enotsup
 
 
 def _spec(path: str) -> PathSpec:
-    return PathSpec(virtual=path,
-                    directory=path,
-                    resource_path=path.strip("/"))
+    return PathSpec(virtual=path, directory=path, vfs_path=path.strip("/"))
 
 
 def _key(p) -> str:

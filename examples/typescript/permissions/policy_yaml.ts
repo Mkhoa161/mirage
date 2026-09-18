@@ -62,11 +62,11 @@ function pad(text: string, width: number): string {
 
 async function main(): Promise<void> {
   const args = await configToWorkspaceArgs(loadWorkspaceConfigFile(CONFIG))
-  const resources: Record<string, MountSpec> = {}
-  for (const [prefix, [resource, mode]] of Object.entries(args.resources)) {
-    resources[prefix] = [resource, mode]
+  const mounts: Record<string, MountSpec> = {}
+  for (const [prefix, [vfs, mode]] of Object.entries(args.mounts)) {
+    mounts[prefix] = [vfs, mode]
   }
-  const ws = new Workspace(resources, args.options)
+  const ws = new Workspace(mounts, args.options)
   try {
     for (const line of SEED) await ws.execute(line)
     ws.createSession('reviewer', { profile: 'reviewer' })

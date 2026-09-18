@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { Workspace } from '../../typescript/packages/core/src/workspace/workspace/workspace.ts'
 import { getTestParser } from '../../typescript/packages/core/src/workspace/fixtures/workspace_fixture.ts'
-import { WandbResource } from '../../typescript/packages/core/src/resource/wandb/wandb.ts'
+import { WandbVFS } from '../../typescript/packages/core/src/vfs/wandb/wandb.ts'
 import { normalizeWandbConfig } from '../../typescript/packages/core/src/core/wandb/config.ts'
 import { MountMode, PathSpec } from '../../typescript/packages/core/src/types.ts'
 import { readStream } from '../../typescript/packages/core/src/core/wandb/read.ts'
@@ -60,7 +60,7 @@ function python(base: string): Promise<PythonResult> {
 checkSchema()
 await selftest()
 const server = await startWandb()
-const resource = new WandbResource(
+const vfs = new WandbVFS(
   normalizeWandbConfig({
     entities: ['lab', 'other'],
     api_key: API_KEY,
@@ -69,7 +69,7 @@ const resource = new WandbResource(
   }),
 )
 const ws = new Workspace(
-  { '/wandb': resource },
+  { '/wandb': vfs },
   { mode: MountMode.READ, shellParser: await getTestParser() },
 )
 const decoder = new TextDecoder()
@@ -96,18 +96,18 @@ try {
   const p = (key: string) => PathSpec.fromStrPath('/wandb/' + key, key)
   const summary = 'lab/experiments/run-a/summary.json'
   const other = 'other/experiments/run-a/summary.json'
-  const values = await Promise.all([resource.readFile(p(summary)), resource.readFile(p(other))])
+  const values = await Promise.all([vfs.readFile(p(summary)), vfs.readFile(p(other))])
   assert.deepEqual(
     values.map((b) => JSON.parse(decoder.decode(b))),
     [{ score: 0.4 }, { score: 42 }],
   )
   assert.deepEqual(
-    JSON.parse(decoder.decode(await resource.readFile(p('lab/experiments/run-a/config.json')))),
+    JSON.parse(decoder.decode(await vfs.readFile(p('lab/experiments/run-a/config.json')))),
     { lr: 0.01, label: 'café' },
   )
-  assert.equal((await resource.stat(p(summary))).size, null)
+  assert.equal((await vfs.stat(p(summary))).size, null)
   for (const page_size of [1, 5]) {
-    const narrow = new WandbResource(
+    const narrow = new WandbVFS(
       normalizeWandbConfig({
         entities: ['lab'],
         api_key: API_KEY,
@@ -130,13 +130,13 @@ try {
       await narrow.close()
     }
   }
-  assert.equal((await resource.stat(p('lab/experiments/run-a/files/notes.txt'))).size, 6)
+  assert.equal((await vfs.stat(p('lab/experiments/run-a/files/notes.txt'))).size, 6)
   assert.deepEqual(
-    [...(await resource.readFile(p('lab/experiments/run-a/files/nested/model.bin')))],
+    [...(await vfs.readFile(p('lab/experiments/run-a/files/nested/model.bin')))],
     [0, 1, 2, 255],
   )
-  assert(!JSON.stringify(await resource.getState()).includes(API_KEY))
-  const unauth = new WandbResource(
+  assert(!JSON.stringify(await vfs.getState()).includes(API_KEY))
+  const unauth = new WandbVFS(
     normalizeWandbConfig({ entities: ['lab'], api_key: 'invalid', base_url: server.base }),
   )
   await assert.rejects(unauth.accessor.client.projects('lab'), { code: 'EACCES' })
@@ -145,7 +145,7 @@ try {
     'lab/experiments/run-long/history.jsonl',
   )
   const start = server.requests.length
-  const stream = readStream(resource.accessor, path, resource.index)
+  const stream = readStream(vfs.accessor, path, vfs.index)
   assert.equal((await stream.next()).done, false)
   await stream.return(undefined)
   assert.equal(

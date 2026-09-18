@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stdoutStr } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -27,7 +27,7 @@ const ENC = new TextEncoder()
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   r.store.dirs.add('/data')
   r.store.files.set('/data/a.txt', ENC.encode('orange line\nplain line\nlast line\n'))
@@ -36,7 +36,7 @@ async function makeWs(): Promise<Workspace> {
   r.store.files.set('/data/p2.txt', ENC.encode('last\n'))
   r.store.files.set('/data/empty.txt', new Uint8Array())
   const registry = new OpsRegistry()
-  registry.registerResource(r)
+  registry.registerVfs(r)
   return new Workspace({ '/': r }, { mode: MountMode.WRITE, ops: registry, shellParser: parser })
 }
 

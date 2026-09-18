@@ -26,8 +26,8 @@ from mirage import Mount, MountBackend, MountMode, Workspace
 from mirage.fuse.mount import mount_background
 from mirage.policy import Policy
 from mirage.policy.types import Deny, OpsContext, OpsResultContext
-from mirage.resource.ram import RAMResource
 from mirage.types import FileStat
+from mirage.vfs.ram import RAMVFS
 
 # What a probe records: a captured file body or stat string, a byte
 # count, an assertion that held. Mirrors the TypeScript twin's
@@ -38,7 +38,7 @@ ProbeValue = str | int | bool | None
 class SizelessOps:
     """Ops proxy that strips stat sizes.
 
-    Simulates API-backed resources (Linear, Slack, Trello, ...) whose byte
+    Simulates API-backed mounts (Linear, Slack, Trello, ...) whose byte
     size is unknown until the content is fetched: over FUSE such files must
     stat as 0 until first open and read fully afterwards.
     """
@@ -99,7 +99,7 @@ def run_link_probe(result: dict[str, ProbeValue]) -> None:
     Args:
         result (dict[str, ProbeValue]): the probe result to extend.
     """
-    res = RAMResource()
+    res = RAMVFS()
     res._store.dirs.add("/")
     res._store.files["/f.txt"] = b"body\n"
     ws = Workspace({"/data": Mount(res, mode=MountMode.WRITE)},
@@ -156,7 +156,7 @@ def run_policy_probe(result: dict[str, ProbeValue]) -> None:
     Args:
         result (dict[str, ProbeValue]): the probe result to extend.
     """
-    res = RAMResource()
+    res = RAMVFS()
     res._store.dirs.add("/")
     res._store.files["/clean.txt"] = b"hello\n"
     res._store.files["/secret.txt"] = b"TOPSECRET plans\n"
@@ -220,7 +220,7 @@ def run_session_probe(result: dict[str, ProbeValue]) -> None:
     Args:
         result (dict[str, ProbeValue]): the probe result to extend.
     """
-    res = RAMResource()
+    res = RAMVFS()
     res._store.dirs.add("/")
     res._store.dirs.add("/vault")
     res._store.files["/pub.txt"] = b"pub\n"
@@ -284,7 +284,7 @@ def run_sizeless_probe(result: dict[str, ProbeValue]) -> None:
     Args:
         result (dict[str, ProbeValue]): the probe result to extend.
     """
-    api = RAMResource()
+    api = RAMVFS()
     api._store.dirs.add("/")
     api._store.files["/api.json"] = API_CONTENT
     ws = Workspace({"/api": Mount(api, mode=MountMode.READ)})
@@ -314,10 +314,10 @@ def run_sizeless_probe(result: dict[str, ProbeValue]) -> None:
 
 def main() -> None:
     result: dict[str, ProbeValue] = {}
-    data = RAMResource()
+    data = RAMVFS()
     data._store.dirs.add("/")
     data._store.files["/a.txt"] = b"alpha\n"
-    logs = RAMResource()
+    logs = RAMVFS()
     logs._store.dirs.add("/")
     logs._store.files["/b.txt"] = b"beta\n"
 

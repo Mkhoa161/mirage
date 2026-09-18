@@ -14,17 +14,17 @@
 
 from dataclasses import dataclass, field
 
-from mirage.resource.base import BaseResource
 from mirage.types import Limit, MountBackend, MountMode
+from mirage.vfs.base import BaseVFS
 
 
 @dataclass(frozen=True)
 class Mount:
-    resource: BaseResource
+    vfs: BaseVFS
     mode: MountMode | None = None
-    # How the mount is exposed. VFS (the default) keeps it inside mirage's
-    # own filesystem; FUSE and FSKIT also register a real mountpoint.
-    backend: MountBackend = MountBackend.VFS
+    # How the mount is exposed. WORKSPACE (the default) keeps it inside
+    # mirage's own filesystem; FUSE and FSKIT also register a real mountpoint.
+    backend: MountBackend = MountBackend.WORKSPACE
     # Where to mount, for the kernel backends. None picks a temporary
     # directory appropriate for the backend. Ignored when backend is VFS.
     mountpoint: str | None = None

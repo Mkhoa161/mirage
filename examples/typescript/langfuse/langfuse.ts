@@ -15,7 +15,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { LangfuseResource, MountMode, Workspace, type FileStat, type LangfuseConfig } from '@struktoai/mirage-node'
+import { LangfuseVFS, MountMode, Workspace, type FileStat, type LangfuseConfig } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../.env.development') })
@@ -51,7 +51,7 @@ async function timed(ws: Workspace, cmd: string): Promise<[number, string]> {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/langfuse': new LangfuseResource(buildConfig()) },
+    { '/langfuse': new LangfuseVFS(buildConfig()) },
     { mode: MountMode.READ },
   )
   try {

@@ -17,8 +17,8 @@ from unittest.mock import patch
 import pytest
 
 from mirage.core.slack.config import SlackConfig
-from mirage.resource.slack.slack import SlackResource
 from mirage.types import MountMode
+from mirage.vfs.slack.slack import SlackVFS
 from mirage.workspace.workspace import Workspace
 
 
@@ -35,8 +35,8 @@ async def test_ls_no_args_after_cd_returns_cwd_entries(config):
     without preserving the mount prefix, so readdir treated the mount prefix
     segment as a container name and returned [].
     """
-    resource = SlackResource(config)
-    ws = Workspace({"/slack": resource}, mode=MountMode.READ)
+    vfs = SlackVFS(config)
+    ws = Workspace({"/slack": vfs}, mode=MountMode.READ)
     channels_page = {
         "channels": [{
             "id": "C001",

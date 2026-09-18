@@ -83,8 +83,8 @@ def _mock_registry():
     mount.ensure_ready = AsyncMock()
     mount.mode = MountMode.EXEC
     mount.execute_cmd = AsyncMock(return_value=(b"ok\n", IOResult()))
-    mount.resource = MagicMock()
-    mount.resource.resolve_glob = _no_match_resolve_glob
+    mount.vfs = MagicMock()
+    mount.vfs.resolve_glob = _no_match_resolve_glob
     mount.spec_for = MagicMock(return_value=None)
 
     reg = MagicMock()
@@ -947,7 +947,7 @@ def test_command_file_becomes_globscope():
 
 
 def test_command_glob_becomes_globscope():
-    """cat /data/*.txt → unresolved PathSpec passed to resource."""
+    """cat /data/*.txt → unresolved PathSpec passed to VFS."""
     _, _, _, _, mount, _ = _exec("cat /data/*.txt")
     scopes = mount.execute_cmd.call_args[0][1]
     assert len(scopes) == 1
@@ -959,7 +959,7 @@ def test_command_glob_becomes_globscope():
 
 
 def test_command_question_glob():
-    """cat /data/file?.txt → unresolved PathSpec passed to resource."""
+    """cat /data/file?.txt → unresolved PathSpec passed to VFS."""
     _, _, _, _, mount, _ = _exec("cat /data/file?.txt")
     scopes = mount.execute_cmd.call_args[0][1]
     assert isinstance(scopes[0], PathSpec)
@@ -968,7 +968,7 @@ def test_command_question_glob():
 
 
 def test_command_bracket_glob():
-    """cat /data/file[0-9].txt → unresolved PathSpec passed to resource."""
+    """cat /data/file[0-9].txt → unresolved PathSpec passed to VFS."""
     _, _, _, _, mount, _ = _exec("cat /data/file[0-9].txt")
     scopes = mount.execute_cmd.call_args[0][1]
     assert isinstance(scopes[0], PathSpec)
@@ -1072,7 +1072,7 @@ def test_var_expands_to_file():
 
 
 def test_var_expands_to_glob():
-    """cat $P → unresolved glob PathSpec passed to resource."""
+    """cat $P → unresolved glob PathSpec passed to VFS."""
     _, _, _, _, mount, _ = _exec("cat $P", env={"P": "/data/*.csv"})
     scopes = mount.execute_cmd.call_args[0][1]
     assert len(scopes) == 1
@@ -1098,7 +1098,7 @@ def test_concatenation_var_path():
 
 
 def test_concatenation_var_glob():
-    """cat $DIR/*.csv → unresolved glob PathSpec passed to resource."""
+    """cat $DIR/*.csv → unresolved glob PathSpec passed to VFS."""
     _, _, _, _, mount, _ = _exec("cat $DIR/*.csv", env={"DIR": "/data"})
     scopes = mount.execute_cmd.call_args[0][1]
     assert len(scopes) == 1
@@ -1507,7 +1507,7 @@ def test_case_expanded_word_no_glob_match():
 
 
 def test_cmd_concat_var_glob():
-    """cat $DIR/*.txt → unresolved glob PathSpec passed to resource."""
+    """cat $DIR/*.txt → unresolved glob PathSpec passed to VFS."""
     _, _, _, _, mount, _ = _exec("cat $DIR/*.txt", env={"DIR": "/data"})
     scopes = mount.execute_cmd.call_args[0][1]
     assert len(scopes) == 1

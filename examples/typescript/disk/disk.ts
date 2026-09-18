@@ -16,7 +16,7 @@ import { cpSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DiskResource, MountMode, Workspace, patchNodeFs } from '@struktoai/mirage-node'
+import { DiskVFS, MountMode, Workspace, patchNodeFs } from '@struktoai/mirage-node'
 
 const require = createRequire(import.meta.url)
 const fs = require('fs') as typeof import('fs')
@@ -40,7 +40,7 @@ async function run(ws: Workspace, cmd: string): Promise<void> {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/data': new DiskResource({ root: filesDir }) },
+    { '/data': new DiskVFS({ root: filesDir }) },
     { mode: MountMode.WRITE },
   )
   patchNodeFs(ws)

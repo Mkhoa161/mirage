@@ -76,7 +76,7 @@ async def invalidate_after_write(path: PathSpec) -> None:
     site. No-op if no cache manager is active.
 
     Args:
-        path (PathSpec): Resource-relative path that was written.
+        path (PathSpec): VFS-relative path that was written.
     """
     manager = _active.get()
     if manager is not None:
@@ -88,7 +88,7 @@ async def invalidate_after_unlink(path: PathSpec) -> None:
     mutation site. No-op if no cache manager is active.
 
     Args:
-        path (PathSpec): Resource-relative path that was removed.
+        path (PathSpec): VFS-relative path that was removed.
     """
     manager = _active.get()
     if manager is not None:

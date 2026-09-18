@@ -50,7 +50,7 @@ def spec(mount_path: str) -> PathSpec:
     key = mount_path.strip("/")
     return PathSpec(virtual="/mnt" + mount_path if key else "/mnt",
                     directory="/mnt/",
-                    resource_path=key)
+                    vfs_path=key)
 
 
 def make_driver(
@@ -159,7 +159,7 @@ def make_driver(
                 yield TreeEntry(key=key, size=len(conn.objects[key]))
 
     return ObjectStoreDriver(
-        resource="fake",
+        vfs="fake",
         scope_error=5000,
         key_prefix_of=key_prefix_of,
         connect=connect,

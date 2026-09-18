@@ -1,8 +1,8 @@
 import pytest
 
 from mirage.policy import Action, Deny, OpsContext, Policy
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.builtins.links import (accepts_line,
                                                       follow_parent,
@@ -11,7 +11,7 @@ from mirage.workspace.executor.builtins.links import (accepts_line,
 
 
 def _ws() -> Workspace:
-    return Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    return Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                      mode=MountMode.WRITE)
 
 
@@ -135,7 +135,7 @@ async def test_ln_keeps_going_after_a_source_it_cannot_read():
     # GNU names the source it cannot reach and links the rest, exit 1.
     # mirage's hard link is a byte copy, so a read the stat did not
     # foresee (a policy deny here) is that refusal, not an abort.
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    policies=[SealReads()])
     await ws.execute("mkdir /data/d; printf a > /data/a.sealed; "
@@ -154,7 +154,7 @@ async def test_rm_of_a_link_goes_through_the_door():
     # policy protecting a link never fired for `rm` while it fired for
     # every other door (the FUSE unlink hole, one tier up). The mount is
     # writable, so only the policy can be what refuses.
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    policies=[PinLinks()])
     await ws.execute("echo b > /data/f.txt")
@@ -202,7 +202,7 @@ async def test_a_refused_link_operand_keeps_the_rest_going():
     # GNU rm reports the operand it could not remove and removes the
     # others; the backend half of the line still runs and the exit code
     # says something failed.
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    policies=[PinLinks()])
     await ws.execute("echo b > /data/f.txt")

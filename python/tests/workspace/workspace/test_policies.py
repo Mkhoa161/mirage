@@ -22,9 +22,9 @@ from mirage.io import IOResult
 from mirage.policy import (CommandRule, ExecuteResultContext, OpsContext,
                            OpsResultContext, PolicyError)
 from mirage.policy.profile import ProfilePolicy, SessionProfile
-from mirage.resource.ram import RAMResource
 from mirage.runtime.types import ScriptSource
 from mirage.types import Limit, MountMode, OnExceed, Refusal
+from mirage.vfs.ram import RAMVFS
 
 from mirage.policy.profile import (  # isort: skip
     CommandsBlock, PathsBlock)
@@ -51,7 +51,7 @@ class NoInterpreters(Policy):
 @pytest.mark.asyncio
 async def test_workspace_guards_refuse_before_backend_io():
     ws = Workspace(
-        {"/data/": RAMResource()},
+        {"/data/": RAMVFS()},
         mode=MountMode.WRITE,
         profiles=_profile(commands=CommandsBlock(
             deny=(CommandRule(reason="production data is protected",
@@ -78,7 +78,7 @@ async def test_workspace_guards_refuse_before_backend_io():
 async def test_policies_add_wins_over_runtime_placement():
     # python3 is runtime-bound in the default world; the pre_command
     # hook fires ahead of runtime resolution, so the refusal wins.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(NoInterpreters())
         result = await ws.execute("python3 -c 'print(1)'")
@@ -95,7 +95,7 @@ async def test_policies_add_wins_over_runtime_placement():
 
 @pytest.mark.asyncio
 async def test_policies_constructor_param_accepts_instances():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    policies=[NoInterpreters()])
     try:
@@ -112,7 +112,7 @@ async def test_guards_cover_shell_builtins_and_namespace_routes():
     # namespace-routed; neither reaches handle_command, so this pins
     # the hook at the dispatch chokepoint.
     ws = Workspace(
-        {"/data/": RAMResource()},
+        {"/data/": RAMVFS()},
         mode=MountMode.WRITE,
         profiles=_profile(commands=CommandsBlock(deny=(
             CommandRule(reason="disabled", commands=("source", )),
@@ -142,7 +142,7 @@ async def test_guards_cover_path_valued_flags():
     # shuf discovers its output path from -o, not a positional operand;
     # the policy context must include flag-valued paths.
     ws = Workspace(
-        {"/data/": RAMResource()},
+        {"/data/": RAMVFS()},
         mode=MountMode.WRITE,
         profiles=_profile(commands=CommandsBlock(
             deny=(CommandRule(reason="prod is protected",
@@ -173,7 +173,7 @@ async def test_path_guards_hold_at_the_programmatic_door():
     # ws.fs is the same seam FUSE comes through; a path-only guard
     # must refuse it, not just shell commands (#675).
     ws = Workspace(
-        {"/data/": RAMResource()},
+        {"/data/": RAMVFS()},
         mode=MountMode.WRITE,
         profiles=_profile(commands=CommandsBlock(deny=(
             CommandRule(reason="prod is protected", paths=(
@@ -204,7 +204,7 @@ class SuppressProdWrites(Policy):
 async def test_touch_on_an_existing_file_is_a_write_at_the_op_door():
     # touch on an existing file mutates via setattr, not create; the
     # write classification must cover that op too.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"keep\n")
@@ -220,7 +220,7 @@ async def test_touch_on_an_existing_file_is_a_write_at_the_op_door():
 async def test_post_ops_deny_still_records_the_completed_write():
     # A post deny suppresses the result, not the effect: the backend
     # already mutated, so observation and caches must reflect the op.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod")
         ws.policies.add(SuppressProdWrites())
@@ -245,7 +245,7 @@ async def test_post_ops_deny_records_the_bytes_a_denied_read_moved():
     # The suppressed result is the only place a read's byte count
     # lived, so without carrying it on the exception the record says
     # zero and network_bytes under-reports traffic that happened.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
@@ -268,7 +268,7 @@ class CapProdReads(Policy):
         return None
 
 
-class CachingRAM(RAMResource):
+class CachingRAM(RAMVFS):
     caches_reads = True
     name = "s3"
 
@@ -278,7 +278,7 @@ async def test_a_capped_read_records_what_the_backend_moved():
     # A post_ops Limit truncates what the caller receives; the transfer
     # already happened, so recording the capped length would under-report
     # network_bytes by whatever the cap removed.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/x.txt", b"0123456789")
@@ -323,7 +323,7 @@ class HardCapProdReads(Policy):
         return None
 
 
-class ColdRemote(RAMResource):
+class ColdRemote(RAMVFS):
     caches_reads = False
     name = "s3"
 
@@ -405,7 +405,7 @@ async def test_a_committed_write_is_recorded_when_bookkeeping_fails():
 async def test_pre_ops_policy_holds_on_the_dispatcher_door():
     # touch routes through the shell's internal dispatcher, not
     # handle_command; a pre_ops-only policy must still refuse it.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(ReadOnlyProd())
         await ws.execute("mkdir -p /data/prod")
@@ -438,7 +438,7 @@ async def test_pre_ops_binds_op_doors_and_command_tier_io():
     # the op doors AND for the backend I/O inside a mount command's
     # handler (with_policy_guard). Both tiers are pinned so a move of
     # the boundary is loud.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod")
         await ws.fs.write("/data/secret.txt", b"sealed\n")
@@ -474,7 +474,7 @@ async def test_pre_ops_holds_walks_and_lazy_readers():
     # entries still serve, stderr names the refused one), and a reader
     # the output pipeline drains after dispatch (head binds a lazy
     # stream) still answers through the wrap-time capture.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.fs.write("/data/secret.txt", b"sealed\n")
         await ws.fs.write("/data/ok.txt", b"has sealed word\n")
@@ -502,7 +502,7 @@ async def test_pre_ops_denied_entries_still_list_and_stat():
     # Presence facts stay unguarded on the command tier (mode-000
     # shape): a read-denied entry lists and stats, the read of it is
     # what fails.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.fs.write("/data/secret.txt", b"sealed\n")
         ws.policies.add(SealedPaths())
@@ -532,7 +532,7 @@ async def test_shell_rm_r_admits_through_pre_ops():
     # admitted per deletion while a shell rm -r admitted nothing. The
     # shell tree removal now admits the op the backend performs (the
     # native rm_r here), and a write-deny refuses it outright.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod/sub")
         await ws.fs.write("/data/prod/a.txt", b"a\n")
@@ -546,7 +546,7 @@ async def test_shell_rm_r_admits_through_pre_ops():
     finally:
         await ws.close()
 
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/prod")
         await ws.fs.write("/data/prod/a.txt", b"a\n")
@@ -564,7 +564,7 @@ async def test_find_delete_admits_each_deletion_exactly_once():
     # find's -delete admits the removal itself (in find's own refusal
     # voice) and suspends the delegated rm's slots, so a counting or
     # budget policy sees one deletion once, not twice.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /data/d")
         await ws.fs.write("/data/d/x.txt", b"x\n")
@@ -586,7 +586,7 @@ async def test_pre_ops_sees_the_session_on_the_command_tier():
     # exactly as at the op doors, including for a reader the pipeline
     # drains after dispatch (head), so a session-scoped policy holds on
     # both.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         await ws.fs.write("/data/ok.txt", b"fine\n")
         rec = SessionRecorder()
@@ -629,7 +629,7 @@ class CapReadBytes(Policy):
 async def test_user_limit_policy_caps_line_output():
     # A user Limit merges with the built-in cap (tightest wins) and
     # bounds what execute() returns.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapLines())
         await ws.fs.write("/data/big.txt", b"1\n2\n3\n4\n5\n")
@@ -644,7 +644,7 @@ async def test_user_limit_policy_caps_line_output():
 async def test_user_limit_policy_caps_op_reads():
     # A post_ops Limit bounds the programmatic door too: ws.fs (and
     # FUSE behind it) serve capped bytes.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapReadBytes())
         await ws.fs.write("/data/f.txt", b"hello world")
@@ -685,7 +685,7 @@ class SeeProducer(Policy):
 
 @pytest.mark.asyncio
 async def test_two_limit_policies_merge_to_the_tightest_end_to_end():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapLines())
         ws.policies.add(SuppressNothingCapThree())
@@ -707,7 +707,7 @@ class SuppressNothingCapThree(Policy):
 async def test_error_mode_limit_fails_the_line():
     # ANY-error: a user policy in error mode turns overflow into exit 1
     # with no stdout, GNU-style notice on stderr.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapBytesHard())
         await ws.fs.write("/data/f.txt", b"hello world\n")
@@ -725,7 +725,7 @@ async def test_error_mode_limit_fails_the_line():
 @pytest.mark.asyncio
 async def test_a_post_ops_deny_beats_a_limit():
     # A refusal suppresses the result; bounding it would be meaningless.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(CapReadBytes())
         ws.policies.add(DenyReads())
@@ -739,7 +739,7 @@ async def test_a_post_ops_deny_beats_a_limit():
 
 @pytest.mark.asyncio
 async def test_a_raising_post_execute_policy_fails_the_line_closed():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         ws.policies.add(Boom())
         r = await ws.execute("echo hi")
@@ -758,7 +758,7 @@ async def test_a_raising_post_execute_policy_fails_the_line_closed():
 async def test_post_execute_sees_the_rightmost_producer():
     # The provenance a policy reads follows shell semantics: the tail
     # of a pipe, the right side of `;` and `||`.
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         spy = SeeProducer()
         ws.policies.add(spy)
@@ -776,7 +776,7 @@ async def test_post_execute_sees_the_rightmost_producer():
 
 @pytest.mark.asyncio
 async def test_profile_hides_bind_every_session_including_the_default():
-    ram = RAMResource()
+    ram = RAMVFS()
     ws = Workspace({"/data/": ram},
                    mode=MountMode.WRITE,
                    profiles=_profile(paths=PathsBlock(hide=("/data/finance",
@@ -807,8 +807,8 @@ async def test_a_mount_sections_hides_are_written_in_full():
     # under the mount root. They used to be relative and joined onto the
     # root, which silently doubled a path already written in full
     # (`/repo/secret` under `/repo` became `/repo/repo/secret`).
-    repo = RAMResource()
-    other = RAMResource()
+    repo = RAMVFS()
+    other = RAMVFS()
     ws = Workspace(
         {
             "/repo/": (repo, MountMode.WRITE),
@@ -856,7 +856,7 @@ async def test_a_mount_sections_hides_are_written_in_full():
 async def test_a_bare_name_under_deny_refuses_with_the_default_reason():
     # The document's deny rules compile at construction; a bare string
     # is one command name with the default reason.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_profile(commands=CommandsBlock(deny=("shred", ))))
     try:
@@ -917,7 +917,7 @@ def _scripted(source: str = JUDGE,
 
 @pytest.mark.asyncio
 async def test_a_profile_script_judges_each_command():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
@@ -935,7 +935,7 @@ async def test_a_profile_script_judges_each_command():
 async def test_the_script_reads_resolved_paths_not_typed_words():
     # `cd /data && cat sealed/k` names no /data/sealed word; the gate
     # hands the script the resolved operand, so the deny still lands.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
@@ -951,7 +951,7 @@ async def test_the_script_reads_resolved_paths_not_typed_words():
 async def test_a_script_only_profile_installs_everything():
     # No allow list, so nothing is hidden: a command no document names
     # runs whenever the script stays silent on it.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
@@ -968,7 +968,7 @@ async def test_a_document_may_ride_beside_the_script():
     # list's hiding, and the script adds its verdicts beside it.
     profiles = _scripted()
     profiles["release"]["commands"] = {"allow": ["ls", "cat", "echo"]}
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=profiles)
     try:
@@ -984,7 +984,7 @@ async def test_a_document_may_ride_beside_the_script():
 
 @pytest.mark.asyncio
 async def test_an_ask_it_computed_takes_the_approval_door():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
@@ -1007,7 +1007,7 @@ async def test_a_profile_script_reads_what_the_line_names():
     # same door an agent's program would, so it can ask about what a
     # file holds. A directory operand is not its business, and a file
     # without the marker runs.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(READER))
     try:
@@ -1030,7 +1030,7 @@ async def test_a_profile_script_reads_what_the_line_names():
 
 @pytest.mark.asyncio
 async def test_a_scripted_profile_leaves_other_sessions_alone():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted())
     try:
@@ -1045,7 +1045,7 @@ async def test_a_scripted_profile_leaves_other_sessions_alone():
 
 @pytest.mark.asyncio
 async def test_a_scripted_default_profile_shapes_the_default_session():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(),
                    profile="release")
@@ -1066,9 +1066,9 @@ async def test_a_profile_script_runs_in_a_world_with_no_evaluator():
     # drops entries silently when an optional dependency is missing, so
     # an engine resolved out of it would stop working for reasons that
     # have nothing to do with the profile.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
-                   runtimes=["vfs"],
+                   runtimes=["workspace"],
                    profiles=_scripted())
     try:
         ws.create_session("s", profile="release")
@@ -1084,7 +1084,7 @@ async def test_a_broken_script_fails_closed_per_command():
     # Silence on failure would run exactly the commands the script
     # existed to judge.
     ws = Workspace(
-        {"/data/": RAMResource()},
+        {"/data/": RAMVFS()},
         mode=MountMode.WRITE,
         profiles=_scripted(
             source="def pre_command(ctx):\n    raise ValueError('boom')"))
@@ -1102,7 +1102,7 @@ async def test_a_broken_script_fails_closed_per_command():
 
 @pytest.mark.asyncio
 async def test_an_engine_that_cannot_evaluate_fails_closed():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(runtime="local"))
     try:
@@ -1120,7 +1120,7 @@ async def test_an_engine_that_cannot_evaluate_fails_closed():
 async def test_a_profile_policy_states_its_runtime():
     with pytest.raises(ValueError, match="runtime"):
         Workspace(
-            {"/data/": RAMResource()},
+            {"/data/": RAMVFS()},
             mode=MountMode.WRITE,
             profiles={"release": {
                 "policy": {
@@ -1134,7 +1134,7 @@ def test_the_old_script_and_runtime_keys_are_told_the_new_block():
     # what the file is rather than what it does and an engine that read
     # as the profile's own; the refusal says where they went.
     with pytest.raises(ValueError, match="now one policy block"):
-        Workspace({"/data/": RAMResource()},
+        Workspace({"/data/": RAMVFS()},
                   mode=MountMode.WRITE,
                   profiles={
                       "release": {
@@ -1149,7 +1149,7 @@ async def test_a_policy_defining_no_hook_fails_closed():
     # A verdict as a bare last expression was the old contract; a policy
     # defines the hooks it answers at, and a program defining none is
     # refused at every door rather than read for a value it never meant.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(source="None"))
     try:
@@ -1166,7 +1166,7 @@ async def test_a_policy_defining_no_hook_fails_closed():
 
 @pytest.mark.asyncio
 async def test_an_inline_document_may_not_add_a_policy():
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         with pytest.raises(PolicyError, match="not a policy"):
             ws.create_session(
@@ -1206,7 +1206,7 @@ def pre_ops(ctx):
 
 @pytest.mark.asyncio
 async def test_a_profile_policy_judges_the_op_door():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(GATES))
     try:
@@ -1232,7 +1232,7 @@ async def test_a_profile_policy_judges_the_op_door():
 
 @pytest.mark.asyncio
 async def test_a_profile_policy_judges_the_session_door():
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(GATES))
     try:
@@ -1254,7 +1254,7 @@ async def test_a_policys_own_read_passes_the_door_its_op_hook_guards():
     # pre_ops stands at it: the read is the policy's own and is let
     # through rather than re-entering the evaluation waiting on it, so
     # the content verdict lands and the op hook still refuses a write.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=_scripted(READER_AND_GATE))
     try:

@@ -29,9 +29,9 @@ import { globNameMatches, globPattern } from '../utils/glob_walk.ts'
 import { CLISpec } from '../commands/cli/types.ts'
 import { IOResult } from '../io/types.ts'
 import { op, OpsRegistry } from '../ops/registry.ts'
-import { FileType, MountMode, ResourceName, PathSpec } from '../types.ts'
-import { BaseResource, type Resource } from '../resource/base.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { FileType, MountMode, VFSName, PathSpec } from '../types.ts'
+import { BaseVFS, type VFS } from '../vfs/base.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import type { WorkspaceBinding } from '../runtime/binding.ts'
 import { LanguageRuntime } from '../runtime/language.ts'
 import type { MountResolver } from '../runtime/resolver.ts'
@@ -40,7 +40,7 @@ import { getTestParser } from './fixtures/workspace_fixture.ts'
 import { Workspace } from './workspace/workspace.ts'
 import { expandOperands } from './executor/builtins/shared.ts'
 
-class MockResource extends BaseResource implements Resource {
+class MockVFS extends BaseVFS implements VFS {
   readonly kind = 'mock'
   opens = 0
   closes = 0
@@ -58,7 +58,7 @@ describe('Workspace lifecycle', () => {
   it.each(['glob', 'midpath', 'provision', 'metadata', 'touch', 'chmod', 'chown', 'chgrp'])(
     'prepares the first %s access to a dynamic mount',
     async (action) => {
-      class IndexedRAM extends RAMResource {
+      class IndexedRAM extends RAMVFS {
         constructor(index: IndexCacheStore) {
           super()
           this._index = index
@@ -76,7 +76,7 @@ describe('Workspace lifecycle', () => {
           return super.glob(paths, prefix)
         }
       }
-      const ancestor = new RAMResource()
+      const ancestor = new RAMVFS()
       const ws = new Workspace({ '/': ancestor }, { shellParser: await getTestParser() })
       const replacement = new IndexedRAM(ancestor.index)
       const bytes = new TextEncoder()
@@ -105,7 +105,7 @@ describe('Workspace lifecycle', () => {
             new PathSpec({
               virtual: '/data/*.txt',
               directory: '/data/',
-              resourcePath: '*.txt',
+              vfsPath: '*.txt',
               pattern: '*.txt',
               resolved: false,
             }),
@@ -136,7 +136,7 @@ describe('Workspace lifecycle', () => {
   )
 
   it('waits for an inflight cache write before releasing a mount', async () => {
-    class CachedRAM extends RAMResource {
+    class CachedRAM extends RAMVFS {
       override readonly cachesReads = true
     }
     const old = new CachedRAM()
@@ -181,9 +181,9 @@ describe('Workspace lifecycle', () => {
     }
   })
 
-  it('refuses resource reuse until asynchronous close finishes', async () => {
-    const resource = new RAMResource()
-    const ws = new Workspace({ '/data': resource })
+  it('refuses VFS reuse until asynchronous close finishes', async () => {
+    const vfs = new RAMVFS()
+    const ws = new Workspace({ '/data': vfs })
     await ws.resolve('/data')
     let enter = (): void => undefined
     let resume = (): void => undefined
@@ -193,8 +193,8 @@ describe('Workspace lifecycle', () => {
     const release = new Promise<void>((resolve) => {
       resume = resolve
     })
-    const close = resource.close.bind(resource)
-    vi.spyOn(resource, 'close').mockImplementationOnce(async () => {
+    const close = vfs.close.bind(vfs)
+    vi.spyOn(vfs, 'close').mockImplementationOnce(async () => {
       enter()
       await release
       await close()
@@ -203,13 +203,13 @@ describe('Workspace lifecycle', () => {
     try {
       await entered
       for (const prefix of ['/data', '/alias']) {
-        expect(() => ws.addMount(prefix, resource)).toThrow('resource is being unmounted')
+        expect(() => ws.addMount(prefix, vfs)).toThrow('VFS is being unmounted')
       }
       resume()
       await removing
-      expect(() => ws.addMount('/data', resource)).toThrow('resource is closed')
-      expect(() => new Workspace({ '/data': resource })).toThrow('resource is closed')
-      ws.addMount('/data', new RAMResource())
+      expect(() => ws.addMount('/data', vfs)).toThrow('VFS is closed')
+      expect(() => new Workspace({ '/data': vfs })).toThrow('VFS is closed')
+      ws.addMount('/data', new RAMVFS())
     } finally {
       resume()
       await removing
@@ -221,7 +221,7 @@ describe('Workspace lifecycle', () => {
     'does not cache a retired command result for a different owner (%s)',
     async (change) => {
       const shadow = change === 'shadow'
-      class CachedRAM extends RAMResource {
+      class CachedRAM extends RAMVFS {
         override readonly cachesReads = true
       }
       const old = new CachedRAM()
@@ -243,9 +243,9 @@ describe('Workspace lifecycle', () => {
         resume = resolve
       })
       const prefix = shadow ? '/' : '/data'
-      const resources: Record<string, Resource> = { [prefix]: old }
-      if (change === 'reveal') resources['/'] = replacement
-      const ws = new Workspace(resources, { shellParser: await getTestParser() })
+      const mounts: Record<string, VFS> = { [prefix]: old }
+      if (change === 'reveal') mounts['/'] = replacement
+      const ws = new Workspace(mounts, { shellParser: await getTestParser() })
       ws.registerCli(
         'gate',
         new CLISpec({
@@ -274,7 +274,7 @@ describe('Workspace lifecycle', () => {
             new PathSpec({
               virtual: '/data/file',
               directory: '/data/',
-              resourcePath: 'file',
+              vfsPath: 'file',
             }),
           ),
         ).toBeNull()
@@ -286,14 +286,14 @@ describe('Workspace lifecycle', () => {
     },
   )
 
-  it('does not open resources at construction time', () => {
-    const ram = new MockResource()
+  it('does not open mounts at construction time', () => {
+    const ram = new MockVFS()
     new Workspace({ '/data': ram })
     expect(ram.opens).toBe(0)
   })
 
-  it('opens a resource lazily on first resolve', async () => {
-    const ram = new MockResource()
+  it('opens a VFS lazily on first resolve', async () => {
+    const ram = new MockVFS()
     const ws = new Workspace({ '/data': ram })
     expect(ram.opens).toBe(0)
     await ws.resolve('/data/x')
@@ -301,8 +301,8 @@ describe('Workspace lifecycle', () => {
     await ws.close()
   })
 
-  it('opens each resource exactly once across multiple resolves', async () => {
-    const ram = new MockResource()
+  it('opens each VFS exactly once across multiple resolves', async () => {
+    const ram = new MockVFS()
     const ws = new Workspace({ '/data': ram })
     await ws.resolve('/data/a')
     await ws.resolve('/data/b')
@@ -311,9 +311,9 @@ describe('Workspace lifecycle', () => {
     await ws.close()
   })
 
-  it('close() calls close() on every opened resource', async () => {
-    const a = new MockResource()
-    const b = new MockResource()
+  it('close() calls close() on every opened VFS', async () => {
+    const a = new MockVFS()
+    const b = new MockVFS()
     const ws = new Workspace({ '/a': a, '/b': b })
     await ws.resolve('/a/x')
     await ws.resolve('/b/y')
@@ -322,9 +322,9 @@ describe('Workspace lifecycle', () => {
     expect(b.closes).toBe(1)
   })
 
-  it('close() closes every mount resource, including those never resolved', async () => {
-    const used = new MockResource()
-    const unused = new MockResource()
+  it('close() closes every mount VFS, including those never resolved', async () => {
+    const used = new MockVFS()
+    const unused = new MockVFS()
     const ws = new Workspace({ '/used': used, '/unused': unused })
     await ws.resolve('/used/x')
     await ws.close()
@@ -333,7 +333,7 @@ describe('Workspace lifecycle', () => {
   })
 
   it('close() is idempotent', async () => {
-    const ram = new MockResource()
+    const ram = new MockVFS()
     const ws = new Workspace({ '/data': ram })
     await ws.resolve('/data/x')
     await ws.close()
@@ -342,7 +342,7 @@ describe('Workspace lifecycle', () => {
   })
 
   it('resolve() after close() throws', async () => {
-    const ws = new Workspace({ '/data': new MockResource() })
+    const ws = new Workspace({ '/data': new MockVFS() })
     await ws.close()
     await expect(ws.resolve('/data/x')).rejects.toThrow(/closed/)
   })
@@ -363,10 +363,10 @@ describe('Workspace dynamic mount index', () => {
                   keyPrefix: `lifecycle:${crypto.randomUUID()}:`,
                 }
               : { type }
-          const resource = new RAMResource()
-          const ws = new Workspace({ [shadow ? '/' : '/data']: resource }, { index: config })
-          ws.addMount('/alias', resource)
-          const index = resource.index
+          const vfs = new RAMVFS()
+          const ws = new Workspace({ [shadow ? '/' : '/data']: vfs }, { index: config })
+          ws.addMount('/alias', vfs)
+          const index = vfs.index
           const entry = new IndexEntry({ id: 'old', name: 'private.txt', resourceType: 'file' })
           try {
             await index.put('/data', entry)
@@ -374,7 +374,7 @@ describe('Workspace dynamic mount index', () => {
               await index.setDir(path, [['private.txt', entry]])
             }
             if (!shadow) await ws.unmount('/data')
-            const replacement = new RAMResource()
+            const replacement = new RAMVFS()
             ws.addMount('/data', replacement)
             if (shadow) expect(await ws.fs.readdir('/data')).toEqual([])
             for (const candidate of [index, replacement.index]) {
@@ -399,24 +399,24 @@ describe('Workspace dynamic mount index', () => {
 
   it('applies the workspace Redis index to added mounts', async () => {
     const ws = new Workspace({}, { index: { type: IndexType.REDIS } })
-    const resource = new RAMResource()
-    ws.addMount('/late', resource)
+    const vfs = new RAMVFS()
+    ws.addMount('/late', vfs)
     try {
-      expect(resource.index).toBeInstanceOf(RedisIndexCacheStore)
+      expect(vfs.index).toBeInstanceOf(RedisIndexCacheStore)
     } finally {
       await ws.close()
     }
   })
 
   it('applies the same index TTL to initial and added mounts', async () => {
-    const initial = new RAMResource()
+    const initial = new RAMVFS()
     const ws = new Workspace({ '/initial': initial }, { index: { ttl: -1 } })
-    const added = new RAMResource()
+    const added = new RAMVFS()
     ws.addMount('/late', added)
     try {
-      for (const resource of [initial, added]) {
-        await resource.index.setDir('/listing', [])
-        expect((await resource.index.listDir('/listing')).status).toBe(LookupStatus.EXPIRED)
+      for (const vfs of [initial, added]) {
+        await vfs.index.setDir('/listing', [])
+        expect((await vfs.index.listDir('/listing')).status).toBe(LookupStatus.EXPIRED)
       }
     } finally {
       await ws.close()
@@ -425,15 +425,15 @@ describe('Workspace dynamic mount index', () => {
 
   it('keeps the index coherent across aliases and duplicate attempts', async () => {
     const ws = new Workspace({}, { index: { ttl: 3600 } })
-    const resource = new RAMResource()
-    ws.addMount('/late', resource, MountMode.WRITE)
-    const index = resource.index
-    const rejected = new RAMResource()
+    const vfs = new RAMVFS()
+    ws.addMount('/late', vfs, MountMode.WRITE)
+    const index = vfs.index
+    const rejected = new RAMVFS()
     const rejectedIndex = rejected.index
     try {
       await index.setDir('/late', [])
-      ws.addMount('/alias', resource)
-      expect(resource.index).toBe(index)
+      ws.addMount('/alias', vfs)
+      expect(vfs.index).toBe(index)
       expect((await index.listDir('/late')).entries).toEqual([])
       expect(() => ws.addMount('late/', rejected)).toThrow('duplicate mount prefix')
       expect(rejected.index).toBe(rejectedIndex)
@@ -448,8 +448,8 @@ describe('Workspace dynamic mount index', () => {
 })
 
 describe('Workspace custom cache option', () => {
-  class StubCache extends BaseResource implements Resource, FileCache {
-    readonly kind = ResourceName.RAM
+  class StubCache extends BaseVFS implements VFS, FileCache {
+    readonly kind = VFSName.RAM
     readonly store = new Map<string, Uint8Array>()
     getCalls = 0
     setCalls = 0
@@ -517,7 +517,7 @@ describe('Workspace custom cache option', () => {
 
 describe('Workspace.execute AbortSignal', () => {
   it('execute with pre-aborted signal throws AbortError', async () => {
-    const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const controller = new AbortController()
     controller.abort()
     await expect(ws.execute('echo hi', { signal: controller.signal })).rejects.toThrow(/abort/i)
@@ -525,8 +525,8 @@ describe('Workspace.execute AbortSignal', () => {
 })
 
 describe('Workspace.unmount', () => {
-  it('keeps decorated operations bound to each surviving resource', async () => {
-    class LabeledRAM extends RAMResource {
+  it('keeps decorated operations bound to each surviving VFS', async () => {
+    class LabeledRAM extends RAMVFS {
       closes = 0
       override async close(): Promise<void> {
         this.closes++
@@ -535,14 +535,14 @@ describe('Workspace.unmount', () => {
       constructor(readonly label: string) {
         super()
       }
-      @op('identity', { resource: 'ram' })
+      @op('identity', { vfs: 'ram' })
       identity(): Uint8Array {
-        if (this.closes > 0) throw new Error('resource closed')
+        if (this.closes > 0) throw new Error('VFS closed')
         return new TextEncoder().encode(this.label)
       }
     }
     class SpecializedRAM extends LabeledRAM {
-      @op('unique', { resource: 'ram' })
+      @op('unique', { vfs: 'ram' })
       unique(): Uint8Array {
         return this.identity()
       }
@@ -583,14 +583,14 @@ describe('Workspace.unmount', () => {
   ] as const)(
     'retains a prefix until cache cleanup succeeds (failure=%s, store=%s)',
     async (fails, store) => {
-      const resource = new RAMResource()
-      resource.loadState({ type: 'ram', files: { '/file': new TextEncoder().encode('old') } })
+      const vfs = new RAMVFS()
+      vfs.loadState({ type: 'ram', files: { '/file': new TextEncoder().encode('old') } })
       const ws = new Workspace(
-        { '/data': resource },
+        { '/data': vfs },
         { mode: MountMode.WRITE, shellParser: await getTestParser() },
       )
       const cache = ws.cache
-      ws.addMount('/alias', resource)
+      ws.addMount('/alias', vfs)
       const aliasEntries = await ws.fs.readdir('/alias')
       let enter = (): void => undefined
       let resume = (): void => undefined
@@ -603,11 +603,9 @@ describe('Workspace.unmount', () => {
       const evict =
         store === 'file'
           ? cache.evictPrefix.bind(cache)
-          : resource.index.invalidatePrefix.bind(resource.index)
+          : vfs.index.invalidatePrefix.bind(vfs.index)
       const spy =
-        store === 'file'
-          ? vi.spyOn(cache, 'evictPrefix')
-          : vi.spyOn(resource.index, 'invalidatePrefix')
+        store === 'file' ? vi.spyOn(cache, 'evictPrefix') : vi.spyOn(vfs.index, 'invalidatePrefix')
       spy.mockImplementationOnce(async (prefix) => {
         enter()
         await release
@@ -624,8 +622,8 @@ describe('Workspace.unmount', () => {
       )
       try {
         await entered
-        expect((await ws.resolve('/alias'))[0]).toBe(resource)
-        expect(() => ws.addMount('/data', new RAMResource())).toThrow('duplicate mount prefix')
+        expect((await ws.resolve('/alias'))[0]).toBe(vfs)
+        expect(() => ws.addMount('/data', new RAMVFS())).toThrow('duplicate mount prefix')
         await expect(ws.fs.readdir('/data')).rejects.toMatchObject({ code: 'EBUSY' })
         await expect(ws.fs.writeFile('/data/file', bytes.encode('changed'))).rejects.toMatchObject({
           code: 'EBUSY',
@@ -633,12 +631,12 @@ describe('Workspace.unmount', () => {
         for (const line of ['cat /data/file', 'echo changed > /data/file']) {
           expect((await ws.execute(line)).exitCode).not.toBe(0)
         }
-        expect(resource.getState().files?.['/file']).toEqual(bytes.encode('old'))
+        expect(vfs.getState().files?.['/file']).toEqual(bytes.encode('old'))
         resume()
         const result = await removing
         if (fails) {
           expect(result).toEqual(new Error('cache unavailable'))
-          expect(ws.mount('/data').resource).toBe(resource)
+          expect(ws.mount('/data').vfs).toBe(vfs)
           await ws.unmount('/data')
         } else {
           expect(result).toBeNull()
@@ -647,7 +645,7 @@ describe('Workspace.unmount', () => {
         expect(await cache.get('/data/file')).toBeNull()
         expect(await cache.get('/database/file')).toEqual(bytes.encode('peer'))
         expect(await ws.fs.readdir('/alias')).toEqual(aliasEntries)
-        ws.addMount('/data', new RAMResource())
+        ws.addMount('/data', new RAMVFS())
       } finally {
         resume()
         await removing
@@ -659,9 +657,9 @@ describe('Workspace.unmount', () => {
   it.each([false, true])(
     'preserves root operations after removing every user RAM mount (explicit root: %s)',
     async (explicitRoot) => {
-      const resources: Record<string, RAMResource> = { '/data': new RAMResource() }
-      if (explicitRoot) resources['/'] = new RAMResource()
-      const ws = new Workspace(resources, { shellParser: await getTestParser() })
+      const mounts: Record<string, RAMVFS> = { '/data': new RAMVFS() }
+      if (explicitRoot) mounts['/'] = new RAMVFS()
+      const ws = new Workspace(mounts, { shellParser: await getTestParser() })
       try {
         await ws.unmount('/data')
         await expect(ws.fs.readdir('/')).resolves.toContain('/dev')
@@ -677,8 +675,8 @@ describe('Workspace.unmount', () => {
   )
 
   it('keeps a different RAM instance readable after unmounting its peer', async () => {
-    const a = new RAMResource()
-    const b = new RAMResource()
+    const a = new RAMVFS()
+    const b = new RAMVFS()
     const content = new TextEncoder().encode('surviving mount\n')
     b.store.files.set('/file.txt', content)
     const ws = new Workspace({ '/a': a, '/b': b })
@@ -692,14 +690,14 @@ describe('Workspace.unmount', () => {
     }
   })
 
-  it('closes each resource separately and unregisters operations after the last of its kind', async () => {
-    const a = new MockResource()
-    const b = new MockResource()
+  it('closes each VFS separately and unregisters operations after the last of its kind', async () => {
+    const a = new MockVFS()
+    const b = new MockVFS()
     const content = new TextEncoder().encode('mock data\n')
     const ops = new OpsRegistry()
     ops.register({
       name: 'read',
-      resource: 'mock',
+      vfs: 'mock',
       filetype: null,
       write: false,
       fn: () => content,
@@ -723,20 +721,20 @@ describe('Workspace.unmount', () => {
   })
 
   it('removes a mount from mounts(); the path falls through to the root anchor', async () => {
-    const a = new RAMResource()
-    const b = new RAMResource()
+    const a = new RAMVFS()
+    const b = new RAMVFS()
     const ws = new Workspace({ '/a': a, '/b': b }, { mode: MountMode.WRITE })
     expect(ws.mounts().some((m) => m.prefix === '/a/')).toBe(true)
     await ws.unmount('/a')
     expect(ws.mounts().some((m) => m.prefix === '/a/')).toBe(false)
-    // With /a gone the path no longer routes to a's resource; it falls through
+    // With /a gone the path no longer routes to a's VFS; it falls through
     // to the empty root anchor (prefix '/'), not back to /a.
     expect(ws.registry.mountFor('/a/x').prefix).toBe('/')
     await ws.close()
   })
 
-  it('closes the resource exactly once when it was opened by the workspace', async () => {
-    const r = new MockResource()
+  it('closes the VFS exactly once when it was opened by the workspace', async () => {
+    const r = new MockVFS()
     const ws = new Workspace({ '/x': r })
     await ws.resolve('/x/y')
     expect(r.opens).toBe(1)
@@ -746,8 +744,8 @@ describe('Workspace.unmount', () => {
     expect(r.closes).toBe(1)
   })
 
-  it('closes an owned resource even when it was never explicitly opened', async () => {
-    const r = new MockResource()
+  it('closes an owned VFS even when it was never explicitly opened', async () => {
+    const r = new MockVFS()
     const ws = new Workspace({ '/x': r })
     await ws.unmount('/x')
     expect(r.closes).toBe(1)
@@ -756,7 +754,7 @@ describe('Workspace.unmount', () => {
   })
 
   it('throws on root, history view, /dev/, and unknown prefix', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     await expect(ws.unmount('/')).rejects.toThrow(/root/i)
     await expect(ws.unmount('/.bash_history')).rejects.toThrow(/history view/i)
     await expect(ws.unmount('/dev')).rejects.toThrow(/reserved/i)
@@ -765,8 +763,8 @@ describe('Workspace.unmount', () => {
   })
 
   it('addMount + unmount round-trip preserves other mounts', async () => {
-    const ws = new Workspace({ '/a': new RAMResource() }, { mode: MountMode.WRITE })
-    ws.addMount('/scratch', new RAMResource(), MountMode.WRITE)
+    const ws = new Workspace({ '/a': new RAMVFS() }, { mode: MountMode.WRITE })
+    ws.addMount('/scratch', new RAMVFS(), MountMode.WRITE)
     expect(ws.mounts().some((m) => m.prefix === '/scratch/')).toBe(true)
     await ws.unmount('/scratch')
     expect(ws.mounts().some((m) => m.prefix === '/scratch/')).toBe(false)
@@ -777,7 +775,7 @@ describe('Workspace.unmount', () => {
 
 describe('Workspace mount fallback', () => {
   it('falls back to the root mount, not the observer', async () => {
-    const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const m = ws.registry.mountForCommand('mkdir')
     expect(m).not.toBeNull()
     expect(m?.prefix).toBe('/')
@@ -785,7 +783,7 @@ describe('Workspace mount fallback', () => {
   })
 
   it('skips the history view mount even when no user root provides the command', async () => {
-    const ws = new Workspace({ '/r': new RAMResource() }, { mode: MountMode.READ })
+    const ws = new Workspace({ '/r': new RAMVFS() }, { mode: MountMode.READ })
     // No `/` was mounted, so the workspace adds a plain empty RAM root anchor
     // at `/`, which satisfies `mkdir`. The point: even with the read-only
     // history view in the registry, fallback is the root, never /.bash_history/.
@@ -800,8 +798,8 @@ describe('cd does not change cwd for nonexistent paths', () => {
   async function makeWs(): Promise<Workspace> {
     const parser = await getTestParser()
     const ops = new OpsRegistry()
-    const root = new RAMResource()
-    ops.registerResource(root)
+    const root = new RAMVFS()
+    ops.registerVfs(root)
     return new Workspace({ '/': root }, { mode: MountMode.WRITE, ops, shellParser: parser })
   }
 
@@ -817,10 +815,10 @@ describe('cd does not change cwd for nonexistent paths', () => {
   it('cd into a mount root succeeds', async () => {
     const parser = await getTestParser()
     const ops = new OpsRegistry()
-    const root = new RAMResource()
-    const data = new RAMResource()
-    ops.registerResource(root)
-    ops.registerResource(data)
+    const root = new RAMVFS()
+    const data = new RAMVFS()
+    ops.registerVfs(root)
+    ops.registerVfs(data)
     const ws = new Workspace(
       { '/': root, '/data': data },
       { mode: MountMode.WRITE, ops, shellParser: parser },
@@ -833,15 +831,15 @@ describe('cd does not change cwd for nonexistent paths', () => {
 })
 
 describe('ls injects child mounts as virtual subdirectories', () => {
-  async function makeWs(mounts: Record<string, RAMResource>): Promise<Workspace> {
+  async function makeWs(mounts: Record<string, RAMVFS>): Promise<Workspace> {
     const parser = await getTestParser()
     const ops = new OpsRegistry()
-    for (const r of Object.values(mounts)) ops.registerResource(r)
+    for (const r of Object.values(mounts)) ops.registerVfs(r)
     return new Workspace(mounts, { mode: MountMode.WRITE, ops, shellParser: parser })
   }
 
   it('ls / shows child mount /data as a subfolder', async () => {
-    const ws = await makeWs({ '/': new RAMResource(), '/data': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
     const result = await ws.execute('ls /')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText.split('\n')).toContain('data')
@@ -849,7 +847,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   })
 
   it('ls / classifies child mount with trailing slash under -F', async () => {
-    const ws = await makeWs({ '/': new RAMResource(), '/data': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
     const result = await ws.execute('ls -F /')
     expect(result.exitCode).toBe(0)
     expect(result.stdoutText.split('\n')).toContain('data/')
@@ -857,7 +855,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   })
 
   it('ls / hides .bash_history by default and shows it under -a', async () => {
-    const ws = await makeWs({ '/': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS() })
     const plain = await ws.execute('ls /')
     expect(plain.stdoutText.split('\n')).not.toContain('.bash_history')
     const all = await ws.execute('ls -a /')
@@ -866,7 +864,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   })
 
   it('ls /data does not duplicate when no child mounts exist below', async () => {
-    const ws = await makeWs({ '/': new RAMResource(), '/data': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
     await ws.execute('mkdir -p /data/sub')
     const result = await ws.execute('ls /data')
     const lines = result.stdoutText.split('\n').filter((l) => l !== '')
@@ -876,9 +874,9 @@ describe('ls injects child mounts as virtual subdirectories', () => {
 
   it('ls /data shows nested mount /data/inner', async () => {
     const ws = await makeWs({
-      '/': new RAMResource(),
-      '/data': new RAMResource(),
-      '/data/inner': new RAMResource(),
+      '/': new RAMVFS(),
+      '/data': new RAMVFS(),
+      '/data/inner': new RAMVFS(),
     })
     const result = await ws.execute('ls /data')
     expect(result.stdoutText.split('\n')).toContain('inner')
@@ -886,7 +884,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   })
 
   it('ls -d does not inject child mounts', async () => {
-    const ws = await makeWs({ '/': new RAMResource(), '/data': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/data': new RAMVFS() })
     const result = await ws.execute('ls -d /')
     expect(result.stdoutText.split('\n')).not.toContain('data')
     await ws.close()
@@ -897,7 +895,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   // line is reserved for a path that is really not there. No backend holds an
   // entry for /empty, so only the dispatcher-backed probe knows it is there.
   it('du on the implied parent of a nested mount does not report absence', async () => {
-    const ws = await makeWs({ '/': new RAMResource(), '/empty/hole': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/empty/hole': new RAMVFS() })
     const result = await ws.execute('du /empty')
     expect(result.stdoutText).toBe('0\t/empty/hole\n0\t/empty\n')
     expect(result.stderrText).toBe('')
@@ -906,7 +904,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   })
 
   it('du -s on the implied parent of a nested mount does not report absence', async () => {
-    const ws = await makeWs({ '/': new RAMResource(), '/empty/hole': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/empty/hole': new RAMVFS() })
     const result = await ws.execute('du -s /empty')
     expect(result.stdoutText).toBe('0\t/empty\n')
     expect(result.stderrText).toBe('')
@@ -918,7 +916,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
   // directory for a link's ancestors too, and there is no descendant mount
   // here at all.
   it('du on a directory implied only by a link below it does not report absence', async () => {
-    const ws = await makeWs({ '/': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS() })
     await ws.execute('mkdir -p /real')
     await ws.execute('echo hi > /real/f.txt')
     await ws.execute('ln -s /real/f.txt /ghost/deep/lnk')
@@ -937,7 +935,7 @@ describe('ls injects child mounts as virtual subdirectories', () => {
     // presence from the mount table alone would answer `0 /empty` here
     // and confirm a walled-off mount's parent. The dispatcher-backed
     // probe is filtered, so absence stays the answer.
-    const ws = await makeWs({ '/': new RAMResource(), '/empty/hole': new RAMResource() })
+    const ws = await makeWs({ '/': new RAMVFS(), '/empty/hole': new RAMVFS() })
     ws.createSession('scoped', { profile: { paths: { hide: ['/empty/hole'] } } })
     const result = await ws.execute('du /empty', { sessionId: 'scoped' })
     expect(result.stdoutText).toBe('')
@@ -956,10 +954,10 @@ describe('rm/rmdir on a mount prefix is refused (Unix-like)', () => {
   async function makeWs(): Promise<Workspace> {
     const parser = await getTestParser()
     const ops = new OpsRegistry()
-    const root = new RAMResource()
-    const data = new RAMResource()
-    ops.registerResource(root)
-    ops.registerResource(data)
+    const root = new RAMVFS()
+    const data = new RAMVFS()
+    ops.registerVfs(root)
+    ops.registerVfs(data)
     return new Workspace(
       { '/': root, '/data': data },
       { mode: MountMode.WRITE, ops, shellParser: parser },
@@ -1050,7 +1048,7 @@ describe('runtime-visible mounts', () => {
     // The history view is a shell surface, not a place to put files;
     // announcing it would make a WASI guest preopen /.bash_history.
     const probe = new ResolverProbe()
-    const ws = new Workspace({ '/data': new RAMResource() }, { runtimes: [probe] })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { runtimes: [probe] })
     expect(probe.resolver).not.toBeNull()
     const prefixes = probe.resolver?.prefixes() ?? []
     expect(prefixes).toContain('/data/')
@@ -1060,9 +1058,9 @@ describe('runtime-visible mounts', () => {
 
   it('binding withholds the synthetic root anchor', async () => {
     // Nobody mounted the anchor; forwarding it would make every
-    // runtime claim a resource the embedder never asked for.
+    // runtime claim a VFS the embedder never asked for.
     const probe = new ResolverProbe()
-    const ws = new Workspace({ '/data': new RAMResource() }, { runtimes: [probe] })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { runtimes: [probe] })
     expect(probe.resolver?.prefixes() ?? []).not.toContain('/')
     await ws.close()
   })
@@ -1071,14 +1069,14 @@ describe('runtime-visible mounts', () => {
     // Withheld for being synthetic, never for being `/`: a runtime
     // that cannot serve the root refuses on its own (pyodide does).
     const probe = new ResolverProbe()
-    const ws = new Workspace({ '/': new RAMResource() }, { runtimes: [probe] })
+    const ws = new Workspace({ '/': new RAMVFS() }, { runtimes: [probe] })
     expect(probe.resolver?.prefixes() ?? []).toContain('/')
     await ws.close()
   })
 })
 
 it('changes mount modes without remounting and refuses invalid modes atomically', async () => {
-  const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
   try {
     const fs = ws.fs
     const mount = ws.mount('/data')
@@ -1100,7 +1098,7 @@ it('changes mount modes without remounting and refuses invalid modes atomically'
 })
 
 it('updates default-profile policy for unbound ops without replacing the session', async () => {
-  const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
   try {
     const session = ws.getSession(ws.defaultSessionId)
     await ws.fs.writeFile('/data/file', new TextEncoder().encode('kept'))
@@ -1116,8 +1114,8 @@ it('updates default-profile policy for unbound ops without replacing the session
 })
 
 it('unmount drains metadata globs and their index writes', async () => {
-  const resource = new RAMResource()
-  const ws = new Workspace({ '/data': resource })
+  const vfs = new RAMVFS()
+  const ws = new Workspace({ '/data': vfs })
   await ws.resolve('/data')
   let enter = (): void => undefined
   let resume = (): void => undefined
@@ -1128,13 +1126,13 @@ it('unmount drains metadata globs and their index writes', async () => {
     resume = resolve
   })
   let closed = false
-  const index = resource.index
-  const closeResource = resource.close.bind(resource)
-  vi.spyOn(resource, 'close').mockImplementation(async () => {
+  const index = vfs.index
+  const closeVfs = vfs.close.bind(vfs)
+  vi.spyOn(vfs, 'close').mockImplementation(async () => {
     closed = true
-    await closeResource()
+    await closeVfs()
   })
-  vi.spyOn(resource, 'glob').mockImplementation(async () => {
+  vi.spyOn(vfs, 'glob').mockImplementation(async () => {
     enter()
     await release
     expect(closed).toBe(false)
@@ -1147,7 +1145,7 @@ it('unmount drains metadata globs and their index writes', async () => {
     new PathSpec({
       virtual: '/data/*',
       directory: '/data/',
-      resourcePath: '*',
+      vfsPath: '*',
       pattern: '*',
       resolved: false,
     }),

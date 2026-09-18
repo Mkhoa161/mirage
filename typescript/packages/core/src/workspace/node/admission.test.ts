@@ -14,7 +14,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { classifyParts } from '../expand/classify/parts.ts'
 import { getTestParser, voicedStderr } from '../fixtures/workspace_fixture.ts'
@@ -62,7 +62,7 @@ afterEach(async () => {
 async function ws(profile: SessionProfile | null = DOC): Promise<Workspace> {
   const parser = await getTestParser()
   const w = new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParser: parser,

@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpRecord } from '../../observe/record.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 import { FileStat, FileType } from '../../types.ts'
 import type { MountEntry } from '../mount/mount.ts'
 import { DriftPolicy } from '../../types.ts'
@@ -33,7 +33,7 @@ interface RegistryLike {
 }
 
 function makeMount(prefix: string, supportsSnapshot: boolean): MountEntry {
-  const resource: Resource = {
+  const vfs: VFS = {
     kind: 's3',
     supportsSnapshot,
     open: () => Promise.resolve(),
@@ -45,11 +45,11 @@ function makeMount(prefix: string, supportsSnapshot: boolean): MountEntry {
   }
   const m: Partial<MountEntry> & {
     prefix: string
-    resource: Resource
+    vfs: VFS
     revisions: Map<string, string>
   } = {
     prefix,
-    resource,
+    vfs,
     revisions: new Map(),
   }
   return m as MountEntry

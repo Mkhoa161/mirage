@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IOResult } from '@struktoai/mirage-core/io/types'
 import type { OpRecord } from '@struktoai/mirage-core/observe/record'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { Workspace } from '../workspace.ts'
 
@@ -52,7 +52,7 @@ describe('io key prefix convention', () => {
     ['cat /data/seed.txt >> /data/app.txt', null],
     ['cat /data/seed.txt | tee /data/piped.txt > /dev/null', null],
   ])('records mount-relative keys for %s', async (cmd, stdin) => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute('tee /data/seed.txt > /dev/null', {
       stdin: new TextEncoder().encode('x\ny\n'),
     })
@@ -67,7 +67,7 @@ describe('io key prefix convention', () => {
   })
 
   it('2> records a mount-relative key even when the command fails', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const captured = captureIo(ws)
     const result = await ws.execute('cat /data/missing.txt 2> /data/err.txt')
     expect(result.exitCode).not.toBe(0)
@@ -79,7 +79,7 @@ describe('io key prefix convention', () => {
   })
 
   it('csplit -f with a mount path writes parts inside the mount', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     await ws.execute('tee /data/seed.txt > /dev/null', {
       stdin: new TextEncoder().encode('x\ny\n'),
     })

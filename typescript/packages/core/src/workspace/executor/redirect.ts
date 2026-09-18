@@ -573,7 +573,7 @@ function ensureScope(target: unknown): PathSpec {
 function toScope(path: string): PathSpec {
   const lastSlash = path.lastIndexOf('/')
   const directory = lastSlash >= 0 ? path.slice(0, lastSlash + 1) : '/'
-  return new PathSpec({ resourcePath: stripSlash(path), virtual: path, directory, resolved: true })
+  return new PathSpec({ vfsPath: stripSlash(path), virtual: path, directory, resolved: true })
 }
 
 function concat(chunks: Uint8Array[]): Uint8Array {

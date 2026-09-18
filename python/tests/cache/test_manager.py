@@ -93,7 +93,7 @@ async def _pathspec_case() -> bool:
     cache, index = _stores()
     await _seed(cache, index)
     manager = CacheManager(cache, index, "/data/", True)
-    spec = PathSpec(resource_path=mount_key("/data/arch/h.txt", "/data/"),
+    spec = PathSpec(vfs_path=mount_key("/data/arch/h.txt", "/data/"),
                     virtual="/data/arch/h.txt",
                     directory="/data/arch")
     await manager.invalidate_after_write(spec)
@@ -108,7 +108,7 @@ async def _cached_hit_case() -> bytes | None:
     cache, index = _stores()
     await cache.set("/data/x.txt", b"cached")
     manager = CacheManager(cache, index, "/data/", True)
-    spec = PathSpec(resource_path=mount_key("/data/x.txt", "/data/"),
+    spec = PathSpec(vfs_path=mount_key("/data/x.txt", "/data/"),
                     virtual="/data/x.txt",
                     directory="/data/")
     return await manager.cached_bytes(spec)
@@ -121,7 +121,7 @@ def test_cached_bytes_returns_cached_value():
 async def _cached_miss_case() -> bytes | None:
     cache, index = _stores()
     manager = CacheManager(cache, index, "/data/", True)
-    spec = PathSpec(resource_path=mount_key("/data/x.txt", "/data/"),
+    spec = PathSpec(vfs_path=mount_key("/data/x.txt", "/data/"),
                     virtual="/data/x.txt",
                     directory="/data/")
     return await manager.cached_bytes(spec)
@@ -135,7 +135,7 @@ async def _cached_local_case() -> bytes | None:
     cache, index = _stores()
     await cache.set("/data/x.txt", b"cached")
     manager = CacheManager(cache, index, "/data/", False)
-    spec = PathSpec(resource_path=mount_key("/data/x.txt", "/data/"),
+    spec = PathSpec(vfs_path=mount_key("/data/x.txt", "/data/"),
                     virtual="/data/x.txt",
                     directory="/data/")
     return await manager.cached_bytes(spec)

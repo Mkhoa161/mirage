@@ -190,7 +190,7 @@ async def grep(
                           and not f.no_filename, io), io
 
     mounts = opts.ns.mounts if opts.ns is not None else None
-    prefix = mount_prefix_of(paths[0].virtual, paths[0].resource_path)
+    prefix = mount_prefix_of(paths[0].virtual, paths[0].vfs_path)
     rd = mount_parent_readdir(partial(call_readdir, readdir, prefix=prefix),
                               mounts)
     st = mount_parent_stat(partial(call_stat, stat, prefix=prefix), mounts)
@@ -242,7 +242,7 @@ async def grep(
                 for entry in await rd(p.virtual):
                     child = PathSpec(virtual=entry,
                                      directory=entry,
-                                     resource_path=mount_key(entry, prefix),
+                                     vfs_path=mount_key(entry, prefix),
                                      raw_path=respell_one(
                                          entry, p.virtual, p.raw_path))
                     if not dir_admitted(entry, f.filters):

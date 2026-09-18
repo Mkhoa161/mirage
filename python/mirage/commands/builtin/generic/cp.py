@@ -230,8 +230,8 @@ def wrap_target_dir(ref: PathSpec, virtual: str) -> PathSpec:
         ref (PathSpec): Any operand on the destination's mount.
         virtual (str): Resolved virtual path of the target directory.
     """
-    return PathSpec.from_str_path(
-        virtual, rekey(ref.virtual, ref.resource_path, virtual))
+    return PathSpec.from_str_path(virtual,
+                                  rekey(ref.virtual, ref.vfs_path, virtual))
 
 
 async def target_dir_error(cmd_name: str, stat: StatFn,
@@ -545,8 +545,8 @@ def transfer_line(src: PathSpec, target: PathSpec,
 
 
 def descendant_path(root: PathSpec, virtual: str) -> PathSpec:
-    return PathSpec.from_str_path(
-        virtual, rekey(root.virtual, root.resource_path, virtual))
+    return PathSpec.from_str_path(virtual,
+                                  rekey(root.virtual, root.vfs_path, virtual))
 
 
 async def _tree_lines(strategy: NativeCopy, src: PathSpec, target: PathSpec,

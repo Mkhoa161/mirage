@@ -371,7 +371,7 @@ async def test_a_genuine_zero_count_still_prints_zero():
 
 
 class _OpenSource:
-    """A source whose resources are already held before the first read."""
+    """A source whose mounts are already held before the first read."""
 
     def __init__(self) -> None:
         self.closed = False

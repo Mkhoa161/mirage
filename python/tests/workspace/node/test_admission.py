@@ -20,9 +20,9 @@ from mirage.agents.io_text import with_refusal
 from mirage.policy import PolicyDenied
 from mirage.policy.profile import PathsBlock, SessionProfile
 from mirage.policy.types import AdmissionRules, CommandRule
-from mirage.resource.ram import RAMResource
 from mirage.shell import parse
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.expand.classify import classify_parts
 from mirage.workspace.node.admission import (Admitted, admit, admit_line,
@@ -52,7 +52,7 @@ DOC = {
 
 
 def _ws() -> Workspace:
-    return Workspace({"/data/": (RAMResource(), MountMode.WRITE)},
+    return Workspace({"/data/": (RAMVFS(), MountMode.WRITE)},
                      mode=MountMode.WRITE,
                      profiles={"default": DOC})
 
@@ -365,7 +365,7 @@ async def test_a_hidden_path_is_no_path_to_any_policy():
 async def test_admit_line_without_rules_admits_the_words_as_typed():
     # No command rule in force: nothing is refused for being unreadable,
     # which is what a coded policy always saw.
-    ws = Workspace({"/data/": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data/": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE)
     try:
         session = ws._session_mgr.get(ws._session_mgr.default_id)

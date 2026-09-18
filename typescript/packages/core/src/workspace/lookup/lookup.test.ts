@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
 import { CLISpec } from '../../commands/cli/types.ts'
 import { IOResult } from '../../io/types.ts'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import {
   Consumer,
@@ -33,9 +33,9 @@ import { Session } from '../session/session.ts'
 import { Workspace } from '../workspace/workspace.ts'
 
 function fixture(): { session: Session; ws: Workspace } {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   const ws = new Workspace({ '/ram': ram }, { mode: MountMode.WRITE, ops: registry })
   return { session: new Session({ sessionId: 't' }), ws }
 }

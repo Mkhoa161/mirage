@@ -18,9 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.digitalocean import (DigitalOceanConfig,
-                                          DigitalOceanResource)
 from mirage.types import PathSpec
+from mirage.vfs.digitalocean import DigitalOceanConfig, DigitalOceanVFS
 
 load_dotenv(".env.development")
 
@@ -30,8 +29,8 @@ config = DigitalOceanConfig(
     access_key_id=os.environ["DO_ACCESS_KEY_ID"],
     secret_access_key=os.environ["DO_SECRET_ACCESS_KEY"],
 )
-resource = DigitalOceanResource(config)
-ws = Workspace({"/do/": resource}, mode=MountMode.READ)
+vfs = DigitalOceanVFS(config)
+ws = Workspace({"/do/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

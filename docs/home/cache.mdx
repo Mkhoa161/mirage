@@ -28,20 +28,20 @@ Each layer is a pluggable store with two built-ins:
 from mirage import Workspace
 from mirage.cache.file.config import RedisCacheConfig
 from mirage.cache.index.config import RedisIndexConfig
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.s3 import S3Config, S3VFS
 
 ws = Workspace(
-    {"/s3": S3Resource(S3Config(bucket="my-bucket"))},
+    {"/s3": S3VFS(S3Config(bucket="my-bucket"))},
     cache=RedisCacheConfig(url="redis://localhost:6379/0", limit="8GB"),
     index=RedisIndexConfig(url="redis://localhost:6379/0", ttl=600),
 )
 ```
 
 ```typescript TypeScript
-import { S3Resource, Workspace } from '@struktoai/mirage-node'
+import { S3VFS, Workspace } from '@struktoai/mirage-node'
 
 const ws = new Workspace(
-  { '/s3': new S3Resource({ bucket: 'my-bucket' }) },
+  { '/s3': new S3VFS({ bucket: 'my-bucket' }) },
   {
     cache: { type: 'redis', url: 'redis://localhost:6379/0', limit: '8GB' },
     index: { type: 'redis', url: 'redis://localhost:6379/0', ttl: 600 },
@@ -68,9 +68,9 @@ Raising the file limit keeps more bytes warm at the cost of memory; lengthening 
 
 ```python Python
 from mirage import Workspace
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.s3 import S3Config, S3VFS
 
-ws = Workspace({"/s3": S3Resource(S3Config(bucket="my-bucket"))})
+ws = Workspace({"/s3": S3VFS(S3Config(bucket="my-bucket"))})
 
 # 1. Index miss → S3 LIST. Listing stored in index cache.
 await ws.execute("ls /s3/data/")
@@ -86,9 +86,9 @@ await ws.execute("grep alert /s3/data/log.jsonl")
 ```
 
 ```typescript TypeScript
-import { S3Resource, Workspace } from '@struktoai/mirage-node'
+import { S3VFS, Workspace } from '@struktoai/mirage-node'
 
-const ws = new Workspace({ '/s3': new S3Resource({ bucket: 'my-bucket' }) })
+const ws = new Workspace({ '/s3': new S3VFS({ bucket: 'my-bucket' }) })
 
 // 1. Index miss → S3 LIST. Listing stored in index cache.
 await ws.execute('ls /s3/data/')

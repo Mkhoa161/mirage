@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { FileType, MountMode } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../workspace/fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
@@ -41,13 +41,13 @@ import { MontyRuntime } from './python/monty/index.ts'
 async function structureWorld(): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const base = new RAMResource()
-  const inner = new RAMResource()
-  ops.registerResource(base)
-  ops.registerResource(inner)
+  const base = new RAMVFS()
+  const inner = new RAMVFS()
+  ops.registerVfs(base)
+  ops.registerVfs(inner)
   const ws = new Workspace(
     {},
-    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new MontyRuntime(), 'vfs'] },
+    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new MontyRuntime(), 'workspace'] },
   )
   ws.addMount('/base', base, MountMode.WRITE)
   ws.addMount('/base/inner', inner, MountMode.WRITE)
@@ -71,13 +71,13 @@ async function structureWorld(): Promise<Workspace> {
 async function scopedWorld(): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const open = new RAMResource()
-  const closed = new RAMResource()
-  ops.registerResource(open)
-  ops.registerResource(closed)
+  const open = new RAMVFS()
+  const closed = new RAMVFS()
+  ops.registerVfs(open)
+  ops.registerVfs(closed)
   const ws = new Workspace(
     {},
-    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new MontyRuntime(), 'vfs'] },
+    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new MontyRuntime(), 'workspace'] },
   )
   ws.addMount('/open', open, MountMode.WRITE)
   ws.addMount('/closed', closed, MountMode.WRITE)
@@ -198,13 +198,18 @@ describe('structure world', () => {
     // reporting the operand missing.
     const parser = await getTestParser()
     const ops = new OpsRegistry()
-    const base = new RAMResource()
-    const deep = new RAMResource()
-    ops.registerResource(base)
-    ops.registerResource(deep)
+    const base = new RAMVFS()
+    const deep = new RAMVFS()
+    ops.registerVfs(base)
+    ops.registerVfs(deep)
     const ws = new Workspace(
       {},
-      { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new MontyRuntime(), 'vfs'] },
+      {
+        mode: MountMode.EXEC,
+        ops,
+        shellParser: parser,
+        runtimes: [new MontyRuntime(), 'workspace'],
+      },
     )
     ws.addMount('/base', base, MountMode.WRITE)
     ws.addMount('/ghost/deep', deep, MountMode.WRITE)
@@ -325,13 +330,18 @@ describe('scoped world', () => {
     // refuses.
     const parser = await getTestParser()
     const ops = new OpsRegistry()
-    const base = new RAMResource()
-    const inner = new RAMResource()
-    ops.registerResource(base)
-    ops.registerResource(inner)
+    const base = new RAMVFS()
+    const inner = new RAMVFS()
+    ops.registerVfs(base)
+    ops.registerVfs(inner)
     const ws = new Workspace(
       {},
-      { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new MontyRuntime(), 'vfs'] },
+      {
+        mode: MountMode.EXEC,
+        ops,
+        shellParser: parser,
+        runtimes: [new MontyRuntime(), 'workspace'],
+      },
     )
     ws.addMount('/base', base, MountMode.WRITE)
     await ws.fs.writeFile('/base/a.txt', 'top')
@@ -411,11 +421,16 @@ describe('scoped world', () => {
 async function exclusiveWorld(): Promise<Workspace> {
   const parser = await getTestParser()
   const ops = new OpsRegistry()
-  const w = new RAMResource()
-  ops.registerResource(w)
+  const w = new RAMVFS()
+  ops.registerVfs(w)
   const ws = new Workspace(
     {},
-    { mode: MountMode.EXEC, ops, shellParser: parser, runtimes: [new QuickJsRuntime(), 'vfs'] },
+    {
+      mode: MountMode.EXEC,
+      ops,
+      shellParser: parser,
+      runtimes: [new QuickJsRuntime(), 'workspace'],
+    },
   )
   ws.addMount('/w', w, MountMode.WRITE)
   await ws.fs.writeFile('/w/keep.txt', 'keep')

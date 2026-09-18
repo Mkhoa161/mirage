@@ -19,8 +19,8 @@ import time
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.langfuse import LangfuseConfig, LangfuseResource
 from mirage.types import PathSpec
+from mirage.vfs.langfuse import LangfuseConfig, LangfuseVFS
 
 load_dotenv(".env.development")
 
@@ -30,7 +30,7 @@ config = LangfuseConfig(
     host=os.environ["LANGFUSE_HOST"],
     default_trace_limit=20,
 )
-resource = LangfuseResource(config=config)
+vfs = LangfuseVFS(config=config)
 
 
 async def _run(ws, cmd):
@@ -58,7 +58,7 @@ async def _timed(ws, cmd):
 
 
 async def main():
-    ws = Workspace({"/langfuse": resource}, mode=MountMode.READ)
+    ws = Workspace({"/langfuse": vfs}, mode=MountMode.READ)
 
     print("=== not-found errors show the full virtual path ===")
     for cmd in ("cat /langfuse/__nf_missing__.txt",

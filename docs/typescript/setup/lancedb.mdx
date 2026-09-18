@@ -4,10 +4,10 @@ icon: database
 description: Mount a LanceDB table as a Mirage filesystem in TypeScript, with label folders and a semantic search command.
 ---
 
-`LanceDBResource` exposes a LanceDB table as a read-only filesystem: group-by
+`LanceDBVFS` exposes a LanceDB table as a read-only filesystem: group-by
 columns become nested folders, each row is a card plus an optional blob file, and
 semantic search is the `search` command. The TypeScript backend mirrors the
-[Python one](/python/resource/lancedb) and returns identical results.
+[Python one](/python/vfs/lancedb) and returns identical results.
 
 ## Node
 
@@ -16,9 +16,9 @@ pnpm add @struktoai/mirage-node @lancedb/lancedb
 ```
 
 ```ts
-import { LanceDBResource, MountMode, Workspace } from '@struktoai/mirage-node'
+import { LanceDBVFS, MountMode, Workspace } from '@struktoai/mirage-node'
 
-const fashion = new LanceDBResource({
+const fashion = new LanceDBVFS({
   config: {
     uri: '/data/fashion.lancedb', // or s3://, gs://, db:// (LanceDB Cloud)
     table: 'fashion',
@@ -58,7 +58,7 @@ the canonical `<id>.md` paths above, annotated with the vector distance.
 (`apiKey` + `hostOverride`):
 
 ```ts
-const fashion = new LanceDBResource({
+const fashion = new LanceDBVFS({
   config: {
     uri: 'db://my-database',
     apiKey: process.env.LANCEDB_API_KEY,

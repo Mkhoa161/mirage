@@ -42,7 +42,7 @@ import { SHAREPOINT_OPS } from './sharepoint/index.ts'
 import { TRELLO_OPS } from './trello/index.ts'
 
 // Golden snapshot of every backend's registered op surface, taken before
-// the ops-layer refactor. Each row is [name, resource, filetype, write];
+// the ops-layer refactor. Each row is [name, VFS, filetype, write];
 // filetype '' means no filetype binding. Any diff here is a registration
 // regression unless the change is deliberate.
 
@@ -274,7 +274,7 @@ const sortRows = (rows: Row[]): Row[] =>
 
 for (const [backend, ops] of Object.entries(TABLES)) {
   test(`ops inventory: ${backend}`, () => {
-    const actual = sortRows(ops.map((o) => [o.name, o.resource, o.filetype ?? '', o.write] as Row))
+    const actual = sortRows(ops.map((o) => [o.name, o.vfs, o.filetype ?? '', o.write] as Row))
     const expected = OPS_INVENTORY[backend]
     if (!expected) throw new Error(`missing fixture: ${backend}`)
     expect(actual).toEqual(sortRows(expected))

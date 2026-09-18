@@ -67,7 +67,7 @@ describe('CacheManager', () => {
     const spec = new PathSpec({
       virtual: '/data/arch/h.txt',
       directory: '/data/arch',
-      resourcePath: mountKey('/data/arch/h.txt', '/data'),
+      vfsPath: mountKey('/data/arch/h.txt', '/data'),
     })
     await manager.invalidateAfterWrite(spec)
     expect(await cache.exists('/data/arch/h.txt')).toBe(false)

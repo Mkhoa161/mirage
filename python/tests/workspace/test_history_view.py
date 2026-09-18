@@ -20,15 +20,15 @@ from mirage.accessor.base import Accessor, NOOPAccessor
 from mirage.commands.registry import command
 from mirage.commands.spec import SPECS
 from mirage.io.types import ByteSource, IOResult
-from mirage.resource.ram import RAMResource
 from mirage.shell.console import Channel
 from mirage.shell.job_table import JobStatus
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.snapshot import apply_state_dict, read_tar
 from mirage.workspace.workspace import Workspace
 
 
-@command("history", resource="ram", spec=SPECS["history"])
+@command("history", vfs="ram", spec=SPECS["history"])
 async def fake_history(
     accessor: Accessor = NOOPAccessor(),
     paths: list[PathSpec] | None = None,
@@ -39,7 +39,7 @@ async def fake_history(
 
 
 def _ws() -> Workspace:
-    return Workspace({"/data": (RAMResource(), MountMode.WRITE)})
+    return Workspace({"/data": (RAMVFS(), MountMode.WRITE)})
 
 
 def _exec(ws: Workspace, cmd: str, **kw) -> IOResult:
@@ -71,7 +71,7 @@ def test_history_command_per_session():
 
 
 def test_history_builtin_wins_over_mount_command():
-    res = RAMResource()
+    res = RAMVFS()
     res.register(fake_history)
     ws = Workspace({"/data": (res, MountMode.WRITE)})
     _exec(ws, "ls /data")

@@ -20,7 +20,7 @@
 //             /deep/example.jsonl resolves to s3://<bucket>/subdata/subsubdata/example.jsonl
 //
 // Loads credentials from .env.development at the repo root.
-import { MountMode, S3Resource, Workspace, type S3Config } from '@struktoai/mirage-node'
+import { MountMode, S3VFS, Workspace, type S3Config } from '@struktoai/mirage-node'
 import dotenv from 'dotenv'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,8 +51,8 @@ async function main(): Promise<void> {
 
   const ws = new Workspace(
     {
-      '/s3/': new S3Resource(cfg),
-      '/deep/': new S3Resource(deepCfg),
+      '/s3/': new S3VFS(cfg),
+      '/deep/': new S3VFS(deepCfg),
     },
     { mode: MountMode.READ },
   )

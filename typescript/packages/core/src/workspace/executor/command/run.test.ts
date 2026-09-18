@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { CLISpec } from '../../../commands/cli/types.ts'
 import { IOResult } from '../../../io/types.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { createShellParser } from '../../../shell/parse/index.ts'
 import { ConsistencyPolicy, MountMode, PathSpec } from '../../../types.ts'
 import { Workspace } from '../../workspace/workspace.ts'
@@ -29,9 +29,9 @@ const require = createRequire(import.meta.url)
 const engineWasm = readFileSync(require.resolve('web-tree-sitter/web-tree-sitter.wasm'))
 const grammarWasm = readFileSync(require.resolve('tree-sitter-bash/tree-sitter-bash.wasm'))
 
-function warmWorkspace(): [Workspace, RAMResource, RAMResource] {
-  const ram = new RAMResource()
-  const other = new RAMResource()
+function warmWorkspace(): [Workspace, RAMVFS, RAMVFS] {
+  const ram = new RAMVFS()
+  const other = new RAMVFS()
   // An account CLI's service caches reads, so a body already read is served
   // warm; forcing it on RAM reproduces that without a network backend.
   ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
@@ -47,7 +47,7 @@ function warmWorkspace(): [Workspace, RAMResource, RAMResource] {
   return [ws, ram, other]
 }
 
-async function seed(ram: RAMResource, other: RAMResource): Promise<void> {
+async function seed(ram: RAMVFS, other: RAMVFS): Promise<void> {
   await ram.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v1\n'))
   await other.writeFile(PathSpec.fromStrPath('/b.txt'), ENC.encode('v1\n'))
 }
@@ -58,7 +58,7 @@ async function warm(ws: Workspace): Promise<void> {
   await ws.execute('cat /o/b.txt')
 }
 
-async function mutateOutOfBand(ram: RAMResource, other: RAMResource): Promise<void> {
+async function mutateOutOfBand(ram: RAMVFS, other: RAMVFS): Promise<void> {
   await ram.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v2\n'))
   await ram.writeFile(PathSpec.fromStrPath('/new.txt'), ENC.encode('fresh\n'))
   await other.writeFile(PathSpec.fromStrPath('/b.txt'), ENC.encode('v2\n'))
@@ -95,7 +95,7 @@ describe('dropMountCaches', () => {
   })
 })
 
-function outOfBandWriter(ram: RAMResource): () => Promise<[Uint8Array, IOResult]> {
+function outOfBandWriter(ram: RAMVFS): () => Promise<[Uint8Array, IOResult]> {
   // A leaf that reaches its service past every mount, as an account CLI does:
   // the file lands in the store, and no vfs path was touched.
   return async () => {

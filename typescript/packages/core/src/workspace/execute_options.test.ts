@@ -22,11 +22,11 @@ import { OpsRegistry } from '../ops/registry.ts'
 import type { Action, OpsContext } from '../policy/index.ts'
 import { RAMSessionStore } from './session/ram.ts'
 import type { SessionFields } from './session/store.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { Runtime } from '../runtime/base.ts'
 import { LINE_EXECUTOR, type LineExecutor } from '../runtime/mixin.ts'
 import type { RunResult } from '../runtime/types.ts'
-import { MountMode, ResourceName } from '../types.ts'
+import { MountMode, VFSName } from '../types.ts'
 import { Channel, type ConsoleChunk, JobConsole, RAMConsoleStore } from '../shell/console/index.ts'
 import { getTestParser, stdoutStr } from './fixtures/workspace_fixture.ts'
 import type { ExecuteResult } from './workspace/workspace.ts'
@@ -38,7 +38,7 @@ const ENC = new TextEncoder()
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const r = new RAMResource()
+  const r = new RAMVFS()
   r.store.dirs.add('/')
   r.store.dirs.add('/subdir')
   r.store.dirs.add('/subdir/nested')
@@ -46,7 +46,7 @@ async function makeWs(): Promise<Workspace> {
   r.store.files.set('/subdir/nested/deep.txt', ENC.encode('deep'))
 
   const registry = new OpsRegistry()
-  registry.registerResource(r)
+  registry.registerVfs(r)
   return new Workspace(
     { '/ram/': r },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -382,7 +382,7 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     const late = new RegisteredCommand({
       name: 'latecmd',
       spec: new CommandSpec({ rest: new Operand({ type: 'path' }) }),
-      resource: ResourceName.RAM,
+      vfs: VFSName.RAM,
       fn: () => [
         (async function* () {
           await new Promise((resolve) => setTimeout(resolve, 450))
@@ -411,7 +411,7 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     }
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       { mode: MountMode.EXEC, shellParser: parser, sessionStore: new Stalled() },
     )
     await expect(ws.execute('echo hi', { signal: AbortSignal.timeout(50) })).rejects.toMatchObject({
@@ -439,7 +439,7 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     const store = new Stalled()
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       { mode: MountMode.EXEC, shellParser: parser, sessionStore: store },
     )
     // The first line persists the fresh session; after it, status is not
@@ -469,7 +469,7 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     }
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       { mode: MountMode.EXEC, shellParser: parser, sessionStore: new Slow() },
     )
     await ws.execute('false')
@@ -499,11 +499,11 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     }
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new Answers(), 'vfs'],
+        runtimes: [new Answers(), 'workspace'],
         observe: new Stalled(),
       },
     )
@@ -534,9 +534,9 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     // completes and the handler resumes; the second operand must not
     // reach the door. Python's cancelled task never gets there.
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const seen: string[] = []
     const held: { armed: boolean; release: () => void } = { armed: false, release: () => undefined }
     const first = new Promise<void>((resolve) => {
@@ -580,9 +580,9 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     // The handler resumes after the release; the second file must keep
     // its bytes.
     const parser = await getTestParser()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const seen: string[] = []
     const held: { armed: boolean; release: () => void } = { armed: false, release: () => undefined }
     const first = new Promise<void>((resolve) => {
@@ -633,8 +633,8 @@ describe('execute({ signal }): mid-flight cancellation', () => {
     }
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [new Hanging(), 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [new Hanging(), 'workspace'] },
     )
     await expect(
       ws.execute('hangcmd now', { signal: AbortSignal.timeout(50) }),

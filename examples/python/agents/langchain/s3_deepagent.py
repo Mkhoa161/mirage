@@ -21,7 +21,7 @@ from langchain_anthropic import ChatAnthropic
 from mirage import MountMode, Workspace
 from mirage.agents.langchain import (LangchainWorkspace, build_system_prompt,
                                      extract_text)
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.s3 import S3VFS, S3Config
 
 load_dotenv(".env.development")
 
@@ -32,7 +32,7 @@ config = S3Config(
     aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
 )
 
-s3 = S3Resource(config)
+s3 = S3VFS(config)
 ws = Workspace({"/s3/": s3}, mode=MountMode.READ)
 
 agent = create_deep_agent(

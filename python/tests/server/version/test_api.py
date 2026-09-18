@@ -16,7 +16,6 @@ import pytest
 
 from mirage.policy import Action, Deny, Policy, PolicyDenied
 from mirage.policy.types import SessionContext
-from mirage.resource.ram import RAMResource
 from mirage.server.version.api import (branch, checkout, commit, commit_state,
                                        diff_live_vs_ref, read_version,
                                        resolve_ref, status_state, version_diff,
@@ -26,6 +25,7 @@ from mirage.server.version.errors import NoSuchBranchError
 from mirage.server.version.state_tree import META_PATH
 from mirage.server.version.store import VersionStore
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.session.state import seed_var
 from mirage.workspace.snapshot import to_state_dict
@@ -41,8 +41,7 @@ async def test_checkout_restores_the_whole_world(tmp_path):
     """Rollback = the whole system state: files, sessions (cwd, env
     refs, mount grants), namespace symlinks, and the command history all
     return to what the commit captured."""
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.EXEC)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.EXEC)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo original > /m/a.txt")
     await ws.execute("ln -s /m/a.txt /m/l.txt")
@@ -85,8 +84,7 @@ def _cache_entry(data: bytes) -> dict:
 
 @pytest.mark.asyncio
 async def test_commit_advances_branch_and_links_parent(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
 
     await ws.execute("echo one > /m/a.txt")
@@ -101,8 +99,7 @@ async def test_commit_advances_branch_and_links_parent(tmp_path):
 
 @pytest.mark.asyncio
 async def test_version_log_lists_messages_newest_first(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     await commit(store, ws, message="first")
@@ -115,8 +112,7 @@ async def test_version_log_lists_messages_newest_first(tmp_path):
 
 @pytest.mark.asyncio
 async def test_version_diff_reports_changed_files_only(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     c1 = await commit(store, ws, message="first")
@@ -132,8 +128,7 @@ async def test_version_diff_reports_changed_files_only(tmp_path):
 
 @pytest.mark.asyncio
 async def test_diff_live_vs_ref_reports_changes_against_version(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     c1 = await commit(store, ws, branch="main", message="first")
@@ -150,8 +145,7 @@ async def test_diff_live_vs_ref_reports_changes_against_version(tmp_path):
 
 @pytest.mark.asyncio
 async def test_status_reports_uncommitted_changes(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     await commit(store, ws, message="first")
@@ -163,8 +157,7 @@ async def test_status_reports_uncommitted_changes(tmp_path):
 
 @pytest.mark.asyncio
 async def test_diff_ignores_cache_churn(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
 
@@ -185,8 +178,7 @@ async def test_diff_ignores_cache_churn(tmp_path):
 
 @pytest.mark.asyncio
 async def test_status_state_reports_uncommitted_changes(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     await commit(store, ws, message="first")
@@ -198,8 +190,7 @@ async def test_status_state_reports_uncommitted_changes(tmp_path):
 
 @pytest.mark.asyncio
 async def test_status_state_no_commit_yet_lists_all_as_added(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
 
@@ -209,8 +200,7 @@ async def test_status_state_no_commit_yet_lists_all_as_added(tmp_path):
 
 @pytest.mark.asyncio
 async def test_status_ignores_cache_churn(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
 
@@ -227,8 +217,7 @@ async def test_status_ignores_cache_churn(tmp_path):
 
 @pytest.mark.asyncio
 async def test_resolve_ref_branch_and_oid(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     c1 = await commit(store, ws, branch="main", message="first")
@@ -240,8 +229,7 @@ async def test_resolve_ref_branch_and_oid(tmp_path):
 
 @pytest.mark.asyncio
 async def test_commit_state_creates_version_from_state(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo hi > /m/a.txt")
 
@@ -256,8 +244,7 @@ async def test_commit_state_creates_version_from_state(tmp_path):
 
 @pytest.mark.asyncio
 async def test_commit_to_unknown_branch_errors(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     await commit(store, ws, branch="main", message="first")
@@ -268,8 +255,7 @@ async def test_commit_to_unknown_branch_errors(tmp_path):
 
 @pytest.mark.asyncio
 async def test_commit_diverges_after_branch_created(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     main_head = await commit(store, ws, branch="main", message="first")
@@ -284,8 +270,7 @@ async def test_commit_diverges_after_branch_created(tmp_path):
 
 @pytest.mark.asyncio
 async def test_branch_creates_line_at_current(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo one > /m/a.txt")
     c1 = await commit(store, ws, branch="main", message="first")
@@ -298,8 +283,7 @@ async def test_branch_creates_line_at_current(tmp_path):
 
 @pytest.mark.asyncio
 async def test_read_version_reads_back_files_and_meta(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo hello > /m/a.txt")
     version = await commit(store, ws, message="first")
@@ -313,8 +297,7 @@ async def test_read_version_reads_back_files_and_meta(tmp_path):
 
 @pytest.mark.asyncio
 async def test_checkout_rebuilds_content_in_place(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     await ws.execute("echo original > /m/a.txt")
     await commit(store, ws, branch="main", message="first")
@@ -347,8 +330,7 @@ class DenyGate(Policy):
 # rest of the workspace stayed as it was; the clear now sits behind it.
 @pytest.mark.asyncio
 async def test_a_refused_checkout_leaves_the_live_cache_alone(tmp_path):
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.EXEC)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.EXEC)
     store = await VersionStore.open(LocalBackend(tmp_path), "ws")
     try:
         seed_var(ws.create_session("s2"), "GATE_X", "1")

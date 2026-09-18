@@ -254,7 +254,7 @@ async def _probe_prefix(conn: S3Conn, pfx: str) -> bool:
 
 
 DRIVER: ObjectStoreDriver[S3Accessor, S3Conn] = ObjectStoreDriver(
-    resource="s3",
+    vfs="s3",
     scope_error=SCOPE_ERROR,
     key_prefix_of=_key_prefix_of,
     connect=_connect,

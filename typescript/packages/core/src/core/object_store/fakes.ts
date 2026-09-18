@@ -76,7 +76,7 @@ export function spec(mountPath: string): PathSpec {
   return new PathSpec({
     virtual: key !== '' ? `/mnt${mountPath}` : '/mnt',
     directory: '/mnt/',
-    resourcePath: key,
+    vfsPath: key,
   })
 }
 
@@ -225,7 +225,7 @@ export function makeDriver(
   }
 
   return {
-    resource: 'fake',
+    vfs: 'fake',
     scopeError: 5000,
     keyPrefixOf,
     connect,

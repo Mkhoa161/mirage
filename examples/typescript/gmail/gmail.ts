@@ -15,7 +15,7 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
-import { GWS, GmailResource, MountMode, Workspace, type FileStat, type GmailConfig } from '@struktoai/mirage-node'
+import { GWS, GmailVFS, MountMode, Workspace, type FileStat, type GmailConfig } from '@struktoai/mirage-node'
 
 const __HERE = fileURLToPath(new URL('.', import.meta.url))
 dotenv.config({ path: resolve(__HERE, '../../../.env.development'), override: true })
@@ -50,8 +50,8 @@ function printSection(label: string, out: string, err: string, max = 500): void 
 
 async function main(): Promise<void> {
   const config = buildConfig()
-  const resource = new GmailResource(config)
-  const ws = new Workspace({ '/gmail': resource }, { mode: MountMode.WRITE })
+  const vfs = new GmailVFS(config)
+  const ws = new Workspace({ '/gmail': vfs }, { mode: MountMode.WRITE })
   // The gws verbs are a CLI install, separate from the mount.
   ws.registerCli('gws', GWS, { ...config })
 

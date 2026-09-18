@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import { LINEAR } from '@struktoai/mirage-core'
 import {
-  LinearResource,
+  LinearVFS,
   MountMode,
   Workspace,
   type FileStat,
@@ -50,7 +50,7 @@ async function run(ws: Workspace, cmd: string): Promise<string> {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/linear': new LinearResource(buildConfig()) },
+    { '/linear': new LinearVFS(buildConfig()) },
     { mode: MountMode.READ },
   )
   ws.registerCli('linear', LINEAR, buildConfig() as unknown as Record<string, unknown>)

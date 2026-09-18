@@ -44,7 +44,7 @@ class _Dispatch:
 
 
 def _spec(virtual: str) -> PathSpec:
-    return PathSpec(virtual=virtual, directory=virtual, resource_path="")
+    return PathSpec(virtual=virtual, directory=virtual, vfs_path="")
 
 
 @pytest.mark.asyncio

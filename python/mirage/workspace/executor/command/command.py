@@ -298,7 +298,7 @@ async def handle_command(
     if is_cross_mount(
             cmd_name, routing_scopes,
             registry) and not (cmd_name == "tar" and is_create_mode(raw_argv)):
-        # Cross-mount execution bypasses a resource command handler. Parse
+        # Cross-mount execution bypasses a VFS command handler. Parse
         # against the shared spec so flags and text operands do not depend on
         # the source mount. The bound single-mount runner lets the strategy
         # runners execute each operand natively on its owning mount.

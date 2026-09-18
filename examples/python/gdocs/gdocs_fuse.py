@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import Mount, MountBackend, MountMode, Workspace
-from mirage.resource.gdocs import GDocsConfig, GDocsResource
+from mirage.vfs.gdocs import GDocsConfig, GDocsVFS
 
 load_dotenv(".env.development")
 
@@ -27,12 +27,11 @@ config = GDocsConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GDocsResource(config=config)
+vfs = GDocsVFS(config=config)
 
-with Workspace({
-        "/gdocs/":
-        Mount(resource, mode=MountMode.READ, backend=MountBackend.FUSE)
-}) as ws:
+with Workspace(
+    {"/gdocs/": Mount(vfs, mode=MountMode.READ,
+                      backend=MountBackend.FUSE)}) as ws:
     mp = ws.fuse_mountpoint
 
     print(f"=== FUSE MODE: mounted at {mp} ===\n")

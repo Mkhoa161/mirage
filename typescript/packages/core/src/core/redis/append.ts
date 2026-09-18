@@ -14,7 +14,7 @@
 
 import { invalidateAfterWrite } from '../../cache/context.ts'
 import { record, startOp } from '../../observe/context.ts'
-import { ResourceName } from '../../types.ts'
+import { VFSName } from '../../types.ts'
 import type { PathSpec } from '../../types.ts'
 import type { RedisAccessor } from '../../accessor/redis.ts'
 import { checkDestParents } from './dest.ts'
@@ -39,6 +39,6 @@ export async function appendBytes(
     await store.setFile(p, data)
   }
   await store.setModified(p, nowIso())
-  record('append', p, ResourceName.REDIS, data.byteLength, timer)
+  record('append', p, VFSName.REDIS, data.byteLength, timer)
   await invalidateAfterWrite(p)
 }

@@ -15,7 +15,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import { GitHubResource, MountMode, Workspace, type FileStat } from "@struktoai/mirage-node";
+import { GitHubVFS, MountMode, Workspace, type FileStat } from "@struktoai/mirage-node";
 
 const __HERE = fileURLToPath(new URL(".", import.meta.url));
 dotenv.config({ path: resolve(__HERE, "../../../.env.development") });
@@ -73,18 +73,18 @@ async function narrowCase(
 }
 
 async function main(): Promise<void> {
-  const resource = await GitHubResource.create({
+  const vfs = await GitHubVFS.create({
     token: TOKEN!,
     owner: "strukto-ai",
     repo: "mirage",
     ref: "main",
   });
-  const ws = new Workspace({ "/github": resource }, { mode: MountMode.READ });
+  const ws = new Workspace({ "/github": vfs }, { mode: MountMode.READ });
 
   await show(ws, "ls /github");
   await show(ws, "ls /github/python/mirage/core");
   await show(ws, "cat /github/python/pyproject.toml");
-  await show(ws, "grep 'BaseResource' /github/python/mirage/resource/base.py");
+  await show(ws, "grep 'BaseVFS' /github/python/mirage/vfs/base.py");
   await show(ws, "grep 'import' /github/python/mirage/*");
   await show(ws, "grep 'import' /github/python/mirage/core/s3/*.py");
   await show(ws, "grep -r 'async def' /github/python/mirage/core/s3/");
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
   await header(
     ws,
     "grep -l (files with matches)",
-    "grep -rl 'BaseResource' /github/python/mirage/resource/",
+    "grep -rl 'BaseVFS' /github/python/mirage/vfs/",
   );
 
   for (const [label, cmd] of [
@@ -177,8 +177,8 @@ async function main(): Promise<void> {
   const bigDir = "/github/python/mirage/";
   await narrowCase(
     ws,
-    `grep -rln BaseResource ${bigDir} (subdir narrowing, -l short-circuit)`,
-    `grep -rln BaseResource ${bigDir}`,
+    `grep -rln BaseVFS ${bigDir} (subdir narrowing, -l short-circuit)`,
+    `grep -rln BaseVFS ${bigDir}`,
   );
   await narrowCase(
     ws,
@@ -305,7 +305,7 @@ async function main(): Promise<void> {
     "diff -u /github/python/mirage/core/s3/stat.py /github/python/mirage/core/s3/read.py",
   );
   await header(ws, "tree -L", "tree -L 2 /github/python/mirage/");
-  await header(ws, "rg", "rg 'BaseResource' /github/python/mirage/resource/");
+  await header(ws, "rg", "rg 'BaseVFS' /github/python/mirage/vfs/");
 
   console.log(
     "=== caching: a warm read is served from cache (no backend fetch) ===",

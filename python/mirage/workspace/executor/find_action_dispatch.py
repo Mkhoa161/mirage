@@ -461,7 +461,7 @@ async def _apply_find_actions(
 ) -> tuple[ByteSource | None, bytes, int]:
     """Apply find's actions (-exec / -delete / -print0 / -ls) to its rows.
 
-    Per-resource find handlers only emit matched paths. This dispatcher
+    Per-VFS find handlers only emit matched paths. This dispatcher
     layer re-reads the actions off the expression and applies them per
     match, in the order they were written, the way GNU's implicit ``-a``
     chain runs: each per-match ``-exec`` runs in turn and the first that

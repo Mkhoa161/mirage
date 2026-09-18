@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { GitHubAccessor } from '../accessor/github.ts'
 import { read as githubRead } from '../core/github/read.ts'
 import { stat as githubStat } from '../core/github/stat.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { ConsistencyPolicy, FileStat, FileType, PathSpec } from '../types.ts'
 import type { MountEntry } from './mount/mount.ts'
 import { Reconciler } from './reconcile.ts'
@@ -31,7 +31,7 @@ function mountOf(ws: Workspace, path: string): MountEntry {
 }
 
 async function wsWithOverlay(): Promise<Workspace> {
-  const ws = new Workspace({ '/data': new RAMResource() })
+  const ws = new Workspace({ '/data': new RAMVFS() })
   await ws.namespace.ensureLoaded()
   await ws.namespace.setAttrs('/data/f.txt', { mode: 0o600 })
   return ws
@@ -47,7 +47,7 @@ describe('Reconciler', () => {
   })
 
   it('onOpMissing keeps an authoritative symlink', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     await ws.namespace.ensureLoaded()
     await ws.namespace.symlink('/data/link', '/data/t', 1)
     const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
@@ -81,7 +81,7 @@ describe('Reconciler', () => {
   })
 
   it('mayServeCached trusts the cache under LAZY', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/f.txt')
     const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.LAZY)
     expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(true)
@@ -89,7 +89,7 @@ describe('Reconciler', () => {
   })
 
   it('mayServeCached forces a re-read for a live-only backend under ALWAYS', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/f.txt')
     const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
     expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(false)
@@ -97,7 +97,7 @@ describe('Reconciler', () => {
   })
 
   it('reconcileRead GCs an orphaned overlay when the backend reports gone', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     await ws.namespace.ensureLoaded()
     await ws.namespace.setAttrs('/data/gone.txt', { mode: 0o600 })
     const mount = mountOf(ws, '/data/gone.txt')
@@ -108,7 +108,7 @@ describe('Reconciler', () => {
   })
 
   it('reconcileRead is a no-op without an overlay or cached copy', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/plain.txt')
     const rec = new Reconciler(ws.cache, ws.namespace, ws.ops, ConsistencyPolicy.ALWAYS)
     await rec.reconcileRead(mount, '/data/plain.txt')
@@ -116,7 +116,7 @@ describe('Reconciler', () => {
   })
 
   it('reconcileRead skips under LAZY', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() })
+    const ws = new Workspace({ '/data': new RAMVFS() })
     await ws.namespace.ensureLoaded()
     await ws.namespace.setAttrs('/data/gone.txt', { mode: 0o600 })
     const mount = mountOf(ws, '/data/gone.txt')
@@ -131,11 +131,11 @@ describe('unverified freshness probes', () => {
   it.each(['unknown', 'none', 'failed', 'fresh'])(
     '%s cannot silently certify cached bytes',
     async (probe) => {
-      const ws = new Workspace({ '/data': new RAMResource() })
+      const ws = new Workspace({ '/data': new RAMVFS() })
       try {
         const path = '/data/f.txt'
         const mount = mountOf(ws, path)
-        Object.defineProperty(mount.resource, 'supportsSnapshot', { value: true })
+        Object.defineProperty(mount.vfs, 'supportsSnapshot', { value: true })
         vi.spyOn(ws.ops, 'call').mockImplementation(() => {
           if (probe === 'failed') return Promise.reject(new Error('probe unavailable'))
           if (probe === 'none') return Promise.resolve(null)
@@ -183,16 +183,16 @@ it.each(['gate', 'shell'])('reconciles GitHub IDs before the %s reread', async (
       request: () => Promise.reject(new Error('unexpected request')),
     },
   })
-  const resource = new RAMResource()
-  Object.defineProperty(resource, 'supportsSnapshot', { value: true })
+  const vfs = new RAMVFS()
+  Object.defineProperty(vfs, 'supportsSnapshot', { value: true })
   // Model GitHub's snapshot lifetime; RAM's zero TTL expires each listing immediately.
-  const ws = new Workspace({ '/gh': resource }, { index: { ttl: 86_400 } })
+  const ws = new Workspace({ '/gh': vfs }, { index: { ttl: 86_400 } })
   try {
     const path = '/gh/f.txt'
-    const scope = new PathSpec({ virtual: path, resourcePath: 'f.txt', directory: '/gh/' })
-    expect((await githubStat(accessor, scope, resource.index)).fingerprint).toBe('v1')
+    const scope = new PathSpec({ virtual: path, vfsPath: 'f.txt', directory: '/gh/' })
+    expect((await githubStat(accessor, scope, vfs.index)).fingerprint).toBe('v1')
     await ws.cache.set(path, new TextEncoder().encode('v1'), { fingerprint: 'v1' })
-    vi.spyOn(ws.ops, 'call').mockImplementation((_op, _resource, _accessor, p, _args, kwargs) =>
+    vi.spyOn(ws.ops, 'call').mockImplementation((_op, _vfs, _accessor, p, _args, kwargs) =>
       githubStat(accessor, p, kwargs?.index),
     )
     const mount = mountOf(ws, path)
@@ -202,7 +202,7 @@ it.each(['gate', 'shell'])('reconciles GitHub IDs before the %s reread', async (
     sha = 'v2'
     if (surface === 'gate') expect(await rec.mayServeCached(mount, path)).toBe(false)
     else await rec.reconcileRead(mount, path)
-    expect(new TextDecoder().decode(await githubRead(accessor, scope, resource.index))).toBe('v2')
+    expect(new TextDecoder().decode(await githubRead(accessor, scope, vfs.index))).toBe('v2')
   } finally {
     vi.restoreAllMocks()
     await ws.close()

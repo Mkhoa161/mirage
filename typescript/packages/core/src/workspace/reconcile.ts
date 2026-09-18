@@ -16,7 +16,7 @@ import { RAMIndexCacheStore } from '../cache/index/ram.ts'
 import { NOOPAccessor } from '../accessor/base.ts'
 import type { FileCache } from '../cache/file/mixin.ts'
 import type { OpsRegistry } from '../ops/registry.ts'
-import type { Resource } from '../resource/base.ts'
+import type { VFS } from '../vfs/base.ts'
 import { ConsistencyPolicy, FileStat, PathSpec } from '../types.ts'
 import { enoent, isEnoent } from '../utils/errors.ts'
 import { mountKey } from '../utils/key_prefix.ts'
@@ -52,13 +52,13 @@ enum Verdict {
  * runtimes), so this is a thin coordinator holding references, not config.
  */
 export class Reconciler {
-  private readonly cache: FileCache & Resource
+  private readonly cache: FileCache & VFS
   private readonly namespace: Namespace
   private readonly opsRegistry: OpsRegistry
   private readonly consistency: ConsistencyPolicy
 
   constructor(
-    cache: FileCache & Resource,
+    cache: FileCache & VFS,
     namespace: Namespace,
     opsRegistry: OpsRegistry,
     consistency: ConsistencyPolicy,
@@ -73,19 +73,19 @@ export class Reconciler {
   // missing path GCs (evict cache + drop overlay); a fingerprint mismatch
   // evicts the stale cache entry. Non-ENOENT errors propagate.
   private async probe(mount: MountEntry, path: string): Promise<Verdict> {
-    const resource = mount.resource
+    const vfs = mount.vfs
     const lastSlash = path.lastIndexOf('/')
     const scope = new PathSpec({
       virtual: path,
       directory: lastSlash > 0 ? path.slice(0, lastSlash + 1) : '/',
-      resourcePath: mountKey(path, rstripSlash(mount.prefix)),
+      vfsPath: mountKey(path, rstripSlash(mount.prefix)),
     })
     let remoteStat: unknown
     try {
       remoteStat = await this.opsRegistry.call(
         'stat',
-        resource,
-        resource.accessor ?? NOOP_ACCESSOR,
+        vfs,
+        vfs.accessor ?? NOOP_ACCESSOR,
         scope,
         [],
         { index: new RAMIndexCacheStore() },
@@ -120,7 +120,7 @@ export class Reconciler {
   // fresh read also surfaces a remote delete via its own ENOENT).
   async mayServeCached(mount: MountEntry, path: string): Promise<boolean> {
     if (this.consistency !== ConsistencyPolicy.ALWAYS) return true
-    if (mount.resource.supportsSnapshot !== true) {
+    if (mount.vfs.supportsSnapshot !== true) {
       await this.cache.remove(path)
       await mount.index?.clear()
       return false

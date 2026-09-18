@@ -71,7 +71,7 @@ export async function resolvePattern(
   if (Array.isArray(patternFiles)) {
     const first = paths[0]
     const prefix =
-      (first === undefined ? undefined : mountPrefixOf(first.virtual, first.resourcePath)) ??
+      (first === undefined ? undefined : mountPrefixOf(first.virtual, first.vfsPath)) ??
       mountPrefix ??
       ''
     for (const filePath of patternFiles) {

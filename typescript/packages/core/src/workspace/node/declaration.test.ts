@@ -16,17 +16,14 @@
 // python/tests/workspace/node/test_declaration.py.
 
 import { describe, expect, it } from 'vitest'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { MountMode } from '../../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace.ts'
 
 async function makeWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  return new Workspace(
-    { '/data': new RAMResource() },
-    { mode: MountMode.WRITE, shellParser: parser },
-  )
+  return new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE, shellParser: parser })
 }
 
 describe('executeDeclaration', () => {

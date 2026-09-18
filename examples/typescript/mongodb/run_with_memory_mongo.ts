@@ -89,13 +89,13 @@ async function main(): Promise<void> {
     console.log('  Direct probe: BSON serialization (Date + ObjectId + null)')
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
     {
-      const { MongoDBResource, MountMode, Workspace, PathSpec } = await import('@struktoai/mirage-node')
-      const resource = new MongoDBResource({ uri })
-      const ws = new Workspace({ '/m/': resource }, { mode: MountMode.READ })
+      const { MongoDBVFS, MountMode, Workspace, PathSpec } = await import('@struktoai/mirage-node')
+      const vfs = new MongoDBVFS({ uri })
+      const ws = new Workspace({ '/m/': vfs }, { mode: MountMode.READ })
       const DEC = new TextDecoder()
       try {
         const ps = (p: string) => PathSpec.fromStrPath(p)
-        const usersBytes = await resource.readFile(ps('/app/users.jsonl'))
+        const usersBytes = await vfs.readFile(ps('/app/users.jsonl'))
         const usersText = DEC.decode(usersBytes).trim().split('\n')
         console.log('app/users.jsonl:')
         for (const line of usersText) console.log(`  ${line}`)
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
         }
       } finally {
         await ws.close()
-        await resource.close()
+        await vfs.close()
       }
     }
 

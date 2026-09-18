@@ -20,8 +20,8 @@ import zipfile
 
 import pytest
 
-from mirage.resource import RAMResource
 from mirage.types import MountMode
+from mirage.vfs import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -45,11 +45,11 @@ def _zip_bytes() -> bytes:
 
 @pytest.fixture()
 def ws() -> Workspace:
-    work = RAMResource()
+    work = RAMVFS()
     work._store.files["/files.tar.gz"] = _tgz_bytes()
     work._store.files["/files.zip"] = _zip_bytes()
-    return Workspace(resources={
-        "/": (RAMResource(), MountMode.WRITE),
+    return Workspace(mounts={
+        "/": (RAMVFS(), MountMode.WRITE),
         "/work/": (work, MountMode.WRITE),
     })
 

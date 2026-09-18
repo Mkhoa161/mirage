@@ -26,11 +26,11 @@ import pytest
 from mirage.core.ram.mkdir import mkdir
 from mirage.core.ram.write import write_bytes as mem_write
 from mirage.io.types import ByteSource
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
-from mirage.resource.redis import RedisResource
-from mirage.resource.s3 import S3Config, S3Resource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.redis import RedisVFS
+from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 
 BUCKET = "test-bucket"
@@ -214,27 +214,27 @@ def _make_s3_env(tmp_path):
         aws_access_key_id="testing",
         aws_secret_access_key="testing",
     )
-    resource = S3Resource(config)
-    return NativeTestEnv(tmp_path, resource, "s3", objects=objects)
+    vfs = S3VFS(config)
+    return NativeTestEnv(tmp_path, vfs, "s3", objects=objects)
 
 
 def _make_memory_env(tmp_path):
-    resource = RAMResource()
-    return NativeTestEnv(tmp_path, resource, "ram")
+    vfs = RAMVFS()
+    return NativeTestEnv(tmp_path, vfs, "ram")
 
 
 def _make_disk_env(tmp_path):
     disk_root = tmp_path / "disk_root"
     disk_root.mkdir()
-    resource = DiskResource(root=str(disk_root))
-    return NativeTestEnv(tmp_path, resource, "disk", disk_root=disk_root)
+    vfs = DiskVFS(root=str(disk_root))
+    return NativeTestEnv(tmp_path, vfs, "disk", disk_root=disk_root)
 
 
 def _make_redis_env(tmp_path):
     url = os.environ["REDIS_URL"]
     prefix = f"mirage:test:{uuid.uuid4().hex[:8]}:"
-    resource = RedisResource(url=url, key_prefix=prefix)
-    return NativeTestEnv(tmp_path, resource, "redis")
+    vfs = RedisVFS(url=url, key_prefix=prefix)
+    return NativeTestEnv(tmp_path, vfs, "redis")
 
 
 def _redis_available():
@@ -257,7 +257,7 @@ def env(request, tmp_path):
     elif request.param == "redis":
         test_env = _make_redis_env(tmp_path)
         yield test_env
-        asyncio.run(test_env.resource._store.clear())
+        asyncio.run(test_env.vfs._store.clear())
     else:
         yield _make_memory_env(tmp_path)
 
@@ -278,17 +278,17 @@ class NativeTestEnv:
 
     def __init__(self,
                  tmp_path,
-                 resource,
+                 vfs,
                  resource_type,
                  objects=None,
                  disk_root=None):
         self.tmp_path = tmp_path
-        self.resource = resource
+        self.vfs = vfs
         self.resource_type = resource_type
         self.objects = objects
         self.disk_root = disk_root
         self.ws = Workspace(
-            {"/data": (resource, MountMode.WRITE)},
+            {"/data": (vfs, MountMode.WRITE)},
             mode=MountMode.WRITE,
         )
 
@@ -298,9 +298,9 @@ class NativeTestEnv:
         local_path.write_bytes(content)
         remote_path = "/" + name
         if self.resource_type == "disk":
-            resource_path = self.disk_root / name
-            resource_path.parent.mkdir(parents=True, exist_ok=True)
-            resource_path.write_bytes(content)
+            vfs_path = self.disk_root / name
+            vfs_path.parent.mkdir(parents=True, exist_ok=True)
+            vfs_path.write_bytes(content)
         elif self.resource_type == "s3":
             key = name
             self.objects[key] = content
@@ -310,7 +310,7 @@ class NativeTestEnv:
             self._memory_write(remote_path, content)
 
     def _redis_write(self, path: str, content: bytes):
-        store = self.resource._store
+        store = self.vfs._store
         parts = path.strip("/").split("/")
         for i in range(1, len(parts)):
             d = "/" + "/".join(parts[:i])
@@ -318,7 +318,7 @@ class NativeTestEnv:
         asyncio.run(store.set_file(path, content))
 
     def _memory_write(self, path: str, content: bytes):
-        accessor = self.resource.accessor
+        accessor = self.vfs.accessor
         parts = path.strip("/").split("/")
         for i in range(1, len(parts)):
             d = "/" + "/".join(parts[:i])

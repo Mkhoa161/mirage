@@ -12,7 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, RAMResource, Workspace, parseSessionProfile } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace, parseSessionProfile } from '@struktoai/mirage-node'
 
 // An incident-response workspace: the service tree, the runbooks the
 // oncall works from, and the credentials nobody reads by hand.
@@ -175,7 +175,7 @@ function pad(text: string, width: number): string {
 
 async function main(): Promise<void> {
   const ws = new Workspace(
-    { '/repo/': new RAMResource(), '/runbook/': new RAMResource(), '/vault/': new RAMResource() },
+    { '/repo/': new RAMVFS(), '/runbook/': new RAMVFS(), '/vault/': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       // The one place this file differs from its Python twin: the

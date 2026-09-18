@@ -18,8 +18,8 @@ from mirage.commands.registry import RegisteredCommand
 from mirage.commands.spec import CommandSpec, Operand
 from mirage.io.types import IOResult
 from mirage.provision import ProvisionResult
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 _SPEC = CommandSpec(rest=Operand(type="path"))
@@ -28,8 +28,8 @@ _SPEC = CommandSpec(rest=Operand(type="path"))
 def _make_ws():
     ws = Workspace(
         {
-            "/m1": (RAMResource(), MountMode.WRITE),
-            "/m2": (RAMResource(), MountMode.WRITE),
+            "/m1": (RAMVFS(), MountMode.WRITE),
+            "/m2": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )
@@ -57,12 +57,12 @@ def _register_on_both(ws, rc):
     ws._registry.mount_for("/m2/").register(rc)
 
 
-def test_cross_resource_no_aggregate_returns_error():
+def test_cross_vfs_no_aggregate_returns_error():
     ws = _make_ws()
     _seed(ws)
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn)
     _register_on_both(ws, rc)
@@ -71,12 +71,12 @@ def test_cross_resource_no_aggregate_returns_error():
     assert b"cross-mount not supported" in io.stderr
 
 
-def test_cross_resource_no_aggregate_names_mounts():
+def test_cross_vfs_no_aggregate_names_mounts():
     ws = _make_ws()
     _seed(ws)
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn)
     _register_on_both(ws, rc)
@@ -86,19 +86,19 @@ def test_cross_resource_no_aggregate_names_mounts():
     assert "/m2" in stderr
 
 
-def test_cross_resource_with_aggregate_works():
+def test_cross_vfs_with_aggregate_works():
     ws = _make_ws()
     _seed(ws)
     io = asyncio.run(ws.execute("cat /m1/a.txt /m2/b.txt"))
     assert io.exit_code == 0
 
 
-def test_cross_resource_single_mount_still_works():
+def test_cross_vfs_single_mount_still_works():
     ws = _make_ws()
     _seed(ws)
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn)
     _register_on_both(ws, rc)
@@ -106,12 +106,12 @@ def test_cross_resource_single_mount_still_works():
     assert io.exit_code == 0
 
 
-def test_cross_resource_three_mounts():
+def test_cross_vfs_three_mounts():
     ws = Workspace(
         {
-            "/m1": (RAMResource(), MountMode.WRITE),
-            "/m2": (RAMResource(), MountMode.WRITE),
-            "/m3": (RAMResource(), MountMode.WRITE),
+            "/m1": (RAMVFS(), MountMode.WRITE),
+            "/m2": (RAMVFS(), MountMode.WRITE),
+            "/m3": (RAMVFS(), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
     )
@@ -120,7 +120,7 @@ def test_cross_resource_three_mounts():
     asyncio.run(ws.fs.write("/m3/c.txt", b"c"))
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn)
     ws._registry.mount_for("/m1/").register(rc)
@@ -132,12 +132,12 @@ def test_cross_resource_three_mounts():
     assert "/m1" in stderr or "/m2" in stderr or "/m3" in stderr
 
 
-def test_plan_cross_resource_no_aggregate_returns_unknown():
+def test_plan_cross_vfs_no_aggregate_returns_unknown():
     ws = _make_ws()
     _seed(ws)
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn,
                            provision_fn=_noop_provision)
@@ -147,12 +147,12 @@ def test_plan_cross_resource_no_aggregate_returns_unknown():
     assert hasattr(result, "precision")
 
 
-def test_plan_cross_resource_with_aggregate_sums_metrics():
+def test_plan_cross_vfs_with_aggregate_sums_metrics():
     ws = _make_ws()
     _seed(ws)
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn,
                            provision_fn=_noop_provision)
@@ -167,7 +167,7 @@ def test_plan_single_mount_still_works():
     _seed(ws)
     rc = RegisteredCommand("nocross",
                            spec=_SPEC,
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=_noop_fn,
                            provision_fn=_noop_provision)

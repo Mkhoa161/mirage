@@ -41,12 +41,12 @@ Mirage 是 **面向 AI Agent 的虛擬終端機**。虛擬檔案系統提供廣�
 ```python
 ws = Workspace(
     {
-        "/tmp":   (RAMResource(), MountMode.EXEC),
-        "/redis": (RedisResource(url=redis_url), MountMode.WRITE),
-        "/slack": (SlackResource(SlackConfig(token=slack_bot_token)), MountMode.EXEC),
+        "/tmp":   (RAMVFS(), MountMode.EXEC),
+        "/redis": (RedisVFS(url=redis_url), MountMode.WRITE),
+        "/slack": (SlackVFS(SlackConfig(token=slack_bot_token)), MountMode.EXEC),
     },
     # monty 捕獲 python，腳本在工作區內以沙箱方式執行
-    runtimes=[MontyRuntime(captures=["python", "python3"]), "vfs"],
+    runtimes=[MontyRuntime(captures=["python", "python3"]), "workspace"],
 )
 
 # 一次 grep 掃遍所有資料來源
@@ -121,12 +121,12 @@ npx @struktoai/mirage-cli
 
 ```python
 from mirage import Workspace
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3 import S3Config, S3VFS
 
 ws = Workspace({
-    "/data": RAMResource(),
-    "/s3":   S3Resource(S3Config(bucket="my-bucket")),
+    "/data": RAMVFS(),
+    "/s3":   S3VFS(S3Config(bucket="my-bucket")),
 })
 
 await ws.execute("cp /s3/report.csv /data/report.csv")
@@ -138,11 +138,11 @@ await ws.snapshot("demo.tar")
 ### TypeScript
 
 ```ts
-import { Workspace, RAMResource, S3Resource } from '@struktoai/mirage-node'
+import { Workspace, RAMVFS, S3VFS } from '@struktoai/mirage-node'
 
 const ws = new Workspace({
-  '/data': new RAMResource(),
-  '/s3':   new S3Resource({ bucket: 'my-bucket' }),
+  '/data': new RAMVFS(),
+  '/s3':   new S3VFS({ bucket: 'my-bucket' }),
 })
 
 await ws.execute('cp /s3/report.csv /data/report.csv')
@@ -163,7 +163,7 @@ mirage workspace load demo.tar --id demo-restored
 
 ## Agent 框架
 
-Mirage 可以作為沙箱或工具層接入 Agent 框架。`read` 等 POSIX 操作也可以按資源和檔案類型自訂：Mirage 不內建任何檔案類型渲染器，因此某種格式如何渲染完全取決於你註冊的實作，而針對特定資源和副檔名註冊的命令優先於通用命令。
+Mirage 可以作為沙箱或工具層接入 Agent 框架。`read` 等 POSIX 操作也可以按 VFS 和檔案類型自訂：Mirage 不內建任何檔案類型渲染器，因此某種格式如何渲染完全取決於你註冊的實作，而針對特定 VFS 和副檔名註冊的命令優先於通用命令。
 
 |            | 整合                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -181,10 +181,10 @@ Mirage 可以作為沙箱或工具層接入 Agent 框架。`read` 等 POSIX 操�
 兩層預設都使用行程內 RAM，零設定。Redis 儲存可以在 worker、行程和機器之間共享快取狀態：
 
 ```ts
-import { RedisFileCacheStore, S3Resource, Workspace } from '@struktoai/mirage-node'
+import { RedisFileCacheStore, S3VFS, Workspace } from '@struktoai/mirage-node'
 
 const ws = new Workspace(
-  { '/s3': new S3Resource({ bucket: 'my-bucket' }) },
+  { '/s3': new S3VFS({ bucket: 'my-bucket' }) },
   {
     cache: new RedisFileCacheStore({ url: 'redis://localhost:6379/0', cacheLimit: '8GB' }),
     index: { type: 'redis', url: 'redis://localhost:6379/0', ttl: 600 },

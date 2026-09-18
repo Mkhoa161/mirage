@@ -28,11 +28,11 @@ def validate_max_drain_bytes(cache_limit: int,
 
 
 class FileCacheMixin:
-    """LRU file cache mixin for resources.
+    """LRU file cache mixin for mounts.
 
     Adds cache tracking (sizes, fingerprints, TTL, LRU order)
-    on top of any resource. Data lives in the resource's storage —
-    subclass implements the cache methods using resource's store.
+    on top of any VFS. Data lives in the VFS's storage —
+    subclass implements the cache methods using VFS's store.
     """
 
     _max_drain_bytes: int | None = None

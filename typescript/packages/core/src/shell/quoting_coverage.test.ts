@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { getTestParser, stderrStr, stdoutStr } from '../workspace/fixtures/workspace_fixture.ts'
 import { Workspace } from '../workspace/workspace/workspace.ts'
@@ -27,7 +27,7 @@ const ENC = new TextEncoder()
 
 async function makeQuotingWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   ram.store.files.set('/plain.txt', ENC.encode('plain content\n'))
   ram.store.files.set('/my folder/note.txt', ENC.encode('in spaced folder\n'))
   ram.store.files.set('/my folder/My File.txt', ENC.encode('camelcase with space\n'))
@@ -37,7 +37,7 @@ async function makeQuotingWs(): Promise<Workspace> {
   ram.store.dirs.add('/数据')
 
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
 
   const ws = new Workspace(
     { '/data': ram },
@@ -232,7 +232,7 @@ describe('shell quoting coverage (port of tests/shell/test_quoting_coverage.py)'
     it('grep pattern with escaped embedded quote', async () => {
       const ws = await makeQuotingWs()
       const mount2 = ws.mount('/data/')
-      const ws2Ram = mount2.resource as RAMResource
+      const ws2Ram = mount2.vfs as RAMVFS
       ws2Ram.store.files.set('/quote.txt', ENC.encode('she said "hi"\n'))
       const r = await run(ws, 'grep "she said \\"hi\\"" /data/quote.txt')
       expect(r.out).toContain('hi')
@@ -627,12 +627,12 @@ describe('an empty splat element is still a word', () => {
 
 async function makeGlobbableWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   ram.store.files.set('/a.txt', ENC.encode('hello\n'))
   ram.store.files.set('/b.txt', ENC.encode('world\n'))
 
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
 
   const ws = new Workspace(
     { '/data': ram },
@@ -716,12 +716,12 @@ describe('quoted globs stay literal', () => {
 
 async function makeMetacharWs(): Promise<Workspace> {
   const parser = await getTestParser()
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   for (const name of ['*a.txt', 'xa.txt', 'a.txt', '?b.txt', '[c].txt']) {
     ram.store.files.set(`/${name}`, ENC.encode('x\n'))
   }
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   const ws = new Workspace(
     { '/data': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },

@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { record, startOp } from '@struktoai/mirage-core/observe/context'
-import { ResourceName } from '@struktoai/mirage-core/types'
+import { VFSName } from '@struktoai/mirage-core/types'
 import type { PathSpec } from '@struktoai/mirage-core/types'
 import type { OPFSAccessor } from '../../accessor/opfs.ts'
 import { destError, resolveFileHandle, toWritableChunk } from './utils.ts'
@@ -35,5 +35,5 @@ export async function writeBytes(
   const writable = await handle.createWritable()
   await writable.write(toWritableChunk(data))
   await writable.close()
-  record('write', virtual, ResourceName.OPFS, data.byteLength, timer)
+  record('write', virtual, VFSName.OPFS, data.byteLength, timer)
 }

@@ -22,7 +22,7 @@ class OpRecord:
     Args:
         op (str): Operation type ("read", "write", "stat", "readdir", etc.).
         path (str): Virtual path, mount prefix included.
-        source (str): Resource name ("s3", "ram", "disk").
+        source (str): VFS name ("s3", "ram", "disk").
         bytes (int): Bytes transferred (0 for metadata ops).
         timestamp (int): UTC epoch milliseconds.
         duration_ms (int): Wall-clock duration.

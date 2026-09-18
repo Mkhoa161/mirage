@@ -24,7 +24,7 @@ import {
   type ReaddirFn,
   type StatFn,
 } from '../../../types.ts'
-import type { FindOptions } from '../../../resource/base.ts'
+import type { FindOptions } from '../../../vfs/base.ts'
 import { eacces, enoent, enotsup } from '../../../utils/errors.ts'
 import { rstripSlash } from '../../../utils/slash.ts'
 import {
@@ -53,7 +53,7 @@ function spec(path: string): PathSpec {
     virtual: path,
     directory: path,
     resolved: false,
-    resourcePath: mountKey(path, ''),
+    vfsPath: mountKey(path, ''),
   })
 }
 

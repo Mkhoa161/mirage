@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { materialize } from '../../../io/types.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { GENERAL_BC } from './bc.ts'
 
 const ENC = new TextEncoder()
@@ -25,10 +25,10 @@ async function runBc(
   flags: Record<string, string | boolean | number | string[]> = {},
   env?: Record<string, string>,
 ): Promise<{ out: string; err: string; exitCode: number }> {
-  const resource = new RAMResource()
+  const vfs = new RAMVFS()
   const cmd = GENERAL_BC[0]
   if (cmd === undefined) throw new Error('bc not registered')
-  const result = await cmd.fn((resource as { accessor?: unknown }).accessor as never, [], [], {
+  const result = await cmd.fn((vfs as { accessor?: unknown }).accessor as never, [], [], {
     stdin: ENC.encode(stdin),
     flags,
     filetypeFns: null,

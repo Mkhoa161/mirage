@@ -21,13 +21,13 @@ from mirage.cache.file.mixin import FileCacheMixin, validate_max_drain_bytes
 from mirage.cache.file.utils import (default_fingerprint_async, glob_escape,
                                      parse_limit)
 from mirage.cache.invalidation import Invalidation
-from mirage.resource.redis.redis import RedisResource
+from mirage.vfs.redis.redis import RedisVFS
 
 # Shipped next to this module; byte-identical to the TypeScript add.lua.
 ADD_LUA = (files("mirage.cache.file") / "add.lua").read_text(encoding="utf-8")
 
 
-class RedisFileCacheStore(RedisResource, FileCacheMixin):
+class RedisFileCacheStore(RedisVFS, FileCacheMixin):
 
     def __init__(
         self,

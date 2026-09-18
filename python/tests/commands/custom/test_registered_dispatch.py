@@ -19,15 +19,15 @@ import pytest
 from mirage.commands.registry import RegisteredCommand
 from mirage.commands.spec import SPECS, CommandSpec
 from mirage.io.types import IOResult
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 @pytest.mark.asyncio
 async def test_registered_command_dispatch():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/a.txt", b"hello")
@@ -37,7 +37,7 @@ async def test_registered_command_dispatch():
 
     rc = RegisteredCommand("cat",
                            spec=SPECS["cat"],
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=my_cat)
     ws._registry.mount_for("/tmp/").register(rc)
@@ -50,7 +50,7 @@ async def test_registered_command_dispatch():
 @pytest.mark.asyncio
 async def test_registered_filetype_dispatch():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/data.avro", b"avro-data")
@@ -60,7 +60,7 @@ async def test_registered_filetype_dispatch():
 
     rc = RegisteredCommand("cat",
                            spec=SPECS["cat"],
-                           resource="ram",
+                           vfs="ram",
                            filetype=".avro",
                            fn=cat_avro)
     ws._registry.mount_for("/tmp/").register(rc)
@@ -73,7 +73,7 @@ async def test_registered_filetype_dispatch():
 @pytest.mark.asyncio
 async def test_filetype_takes_priority_over_generic():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/data.avro", b"avro-data")
@@ -88,13 +88,13 @@ async def test_filetype_takes_priority_over_generic():
     mount.register(
         RegisteredCommand("cat",
                           spec=SPECS["cat"],
-                          resource="ram",
+                          vfs="ram",
                           filetype=None,
                           fn=cat_generic))
     mount.register(
         RegisteredCommand("cat",
                           spec=SPECS["cat"],
-                          resource="ram",
+                          vfs="ram",
                           filetype=".avro",
                           fn=cat_avro))
 
@@ -110,7 +110,7 @@ async def test_filetype_takes_priority_over_generic():
 @pytest.mark.asyncio
 async def test_registered_falls_back_to_builtin():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
     await ws.fs.write("/tmp/a.txt", b"hello world")
@@ -122,7 +122,7 @@ async def test_registered_falls_back_to_builtin():
 
 def test_general_command_dispatch():
     ws = Workspace(
-        {"/tmp/": RAMResource()},
+        {"/tmp/": RAMVFS()},
         mode=MountMode.WRITE,
     )
 
@@ -131,7 +131,7 @@ def test_general_command_dispatch():
 
     rc = RegisteredCommand("stat",
                            spec=CommandSpec(),
-                           resource="ram",
+                           vfs="ram",
                            filetype=None,
                            fn=my_stat)
     ws._registry.mount_for("/tmp/").register(rc)

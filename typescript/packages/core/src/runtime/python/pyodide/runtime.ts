@@ -109,7 +109,7 @@ function mountpointOf(prefix: string): string {
  * Emscripten answers EBUSY to a second mount there. Left to itself
  * `mountpointOf` hands back the empty string, which mounts a detached
  * pseudo-filesystem no path reaches, so the guest keeps reading and
- * writing MEMFS and a write reports success while the resource never
+ * writing MEMFS and a write reports success while the VFS never
  * sees it.
  *
  * Args:
@@ -226,8 +226,8 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   // so file effects pass the workspace gate, and loader.ts seals the
   // `js` module (null-prototype jsglobals) so guest code cannot reach
   // js.process or js.fetch either. Both doors closed is what makes this
-  // 'vfs'; jsglobals.test.ts pins the seal.
-  override readonly reach = 'vfs'
+  // 'workspace'; jsglobals.test.ts pins the seal.
+  override readonly reach = 'workspace'
   override readonly filesystem = ['read', 'write', 'list', 'stat', 'glob'] as const
   readonly [EVALUATOR] = true as const
   private pyodide: PyodideInterface | null = null

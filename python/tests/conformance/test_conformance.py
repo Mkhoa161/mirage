@@ -20,9 +20,9 @@ from pathlib import Path
 import pytest
 
 from mirage import MountMode, Workspace
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
-from mirage.resource.redis import RedisResource
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.redis import RedisVFS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFORMANCE_DIR = REPO_ROOT / "conformance"
@@ -128,19 +128,18 @@ def _params() -> list:
     return params
 
 
-async def _build_workspace(
-        backend: str, tmp_path: Path,
-        case_id: str) -> tuple[Workspace, RedisResource | None]:
+async def _build_workspace(backend: str, tmp_path: Path,
+                           case_id: str) -> tuple[Workspace, RedisVFS | None]:
     if backend == "ram":
-        return Workspace({"/": RAMResource()}, mode=MountMode.WRITE), None
+        return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE), None
     if backend == "disk":
-        return Workspace({"/": DiskResource(root=str(tmp_path))},
+        return Workspace({"/": DiskVFS(root=str(tmp_path))},
                          mode=MountMode.WRITE), None
     if backend == "redis":
-        resource = RedisResource(url=REDIS_URL,
-                                 key_prefix=f"test:conformance:{case_id}:")
-        await resource._store.clear()
-        return Workspace({"/": resource}, mode=MountMode.WRITE), resource
+        vfs = RedisVFS(url=REDIS_URL,
+                       key_prefix=f"test:conformance:{case_id}:")
+        await vfs._store.clear()
+        return Workspace({"/": vfs}, mode=MountMode.WRITE), vfs
     raise ValueError(f"unknown python backend in matrix: {backend}")
 
 
@@ -159,7 +158,7 @@ async def _seed(ws: Workspace) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("backend", "case"), _params())
 async def test_conformance(backend: str, case: dict, tmp_path: Path) -> None:
-    ws, resource = await _build_workspace(backend, tmp_path, case["id"])
+    ws, vfs = await _build_workspace(backend, tmp_path, case["id"])
     try:
         await _seed(ws)
         stdin = None
@@ -173,9 +172,9 @@ async def test_conformance(backend: str, case: dict, tmp_path: Path) -> None:
         assert stdout == _decode_bytes(expect, "stdout_text", "stdout_base64")
         assert stderr == _decode_bytes(expect, "stderr_text", "stderr_base64")
     finally:
-        if resource is not None:
-            await resource._store.clear()
-            await resource._store.close()
+        if vfs is not None:
+            await vfs._store.clear()
+            await vfs._store.close()
 
 
 @pytest.mark.parametrize(

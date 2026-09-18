@@ -20,9 +20,9 @@ import pytest
 from mirage import MountMode, Workspace
 from mirage.fuse.core import MountCore
 from mirage.io.types import materialize
-from mirage.resource.ram import RAMResource
 from mirage.runtime.js.quickjs import QUICKJS_HOME_ENV
 from mirage.runtime.python.wasi import WASI_HOME_ENV
+from mirage.vfs.ram import RAMVFS
 
 
 def _wasi_available() -> bool:
@@ -63,13 +63,13 @@ quickjs_live = pytest.mark.skipif(
 CWD = "runtime cwd is not wired: guests resolve no relative paths"
 
 
-def _seed(files: dict[str, bytes]) -> RAMResource:
-    """A RAM resource preloaded with mount-relative files.
+def _seed(files: dict[str, bytes]) -> RAMVFS:
+    """A RAM VFS preloaded with mount-relative files.
 
     Args:
         files (dict[str, bytes]): mount-relative path -> content.
     """
-    r = RAMResource()
+    r = RAMVFS()
     for name, body in files.items():
         r._store.files[name] = body
     return r
@@ -94,7 +94,7 @@ def structure_world(runtime: str) -> Workspace:
             "/base/inner": _seed({"/deep.txt": b"needle"}),
         },
         mode=MountMode.EXEC,
-        runtimes=[runtime, "vfs"],
+        runtimes=[runtime, "workspace"],
     )
 
 
@@ -119,7 +119,7 @@ def scoped_world(runtime: str) -> Workspace:
             "/closed": _seed({"/sec.txt": b"SECRET-xyz"}),
         },
         mode=MountMode.EXEC,
-        runtimes=[runtime, "vfs"],
+        runtimes=[runtime, "workspace"],
     )
     ws.create_session("agent", profile={"paths": {"hide": ["/closed"]}})
     return ws
@@ -347,7 +347,7 @@ async def test_namespace_only_ancestor_serves_every_ls_variant():
             "/ghost/deep": _seed({"/x.txt": b"inside"}),
         },
         mode=MountMode.EXEC,
-        runtimes=["monty", "vfs"],
+        runtimes=["monty", "workspace"],
     )
     try:
         code, out, _ = await _sh(ws, "ls -R /ghost")
@@ -462,7 +462,7 @@ def granted_child_world(runtime: str) -> Workspace:
             "/base/inner": _seed({"/deep.txt": b"needle"}),
         },
         mode=MountMode.EXEC,
-        runtimes=[runtime, "vfs"],
+        runtimes=[runtime, "workspace"],
     )
     ws.create_session("agent", profile={"paths": {"hide": ["/base/a.txt"]}})
     return ws
@@ -532,7 +532,7 @@ def shadowed_world(runtime: str) -> Workspace:
             _seed({"/deep.txt": b"needle"}),
         },
         mode=MountMode.EXEC,
-        runtimes=[runtime, "vfs"],
+        runtimes=[runtime, "workspace"],
     )
     ws.create_session("agent", profile={"paths": {"hide": ["/base/inner"]}})
     return ws
@@ -680,7 +680,7 @@ def exclusive_world(runtime: str) -> Workspace:
     return Workspace(
         {"/w": _seed({"/keep.txt": b"keep"})},
         mode=MountMode.EXEC,
-        runtimes=[runtime, "vfs"],
+        runtimes=[runtime, "workspace"],
     )
 
 

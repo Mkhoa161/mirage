@@ -25,7 +25,7 @@ import {
   Mount,
   MountBackend,
   MountMode,
-  S3Resource,
+  S3VFS,
   Workspace,
   type S3Config,
 } from "@struktoai/mirage-node";
@@ -58,11 +58,11 @@ async function main(): Promise<void> {
   const deepCfg: S3Config = { ...cfg, keyPrefix: "subdata/subsubdata/" };
 
   const ws = new Workspace({
-    "/s3/": new Mount(new S3Resource(cfg), {
+    "/s3/": new Mount(new S3VFS(cfg), {
       mode: MountMode.READ,
       backend: MountBackend.FUSE,
     }),
-    "/deep/": new S3Resource(deepCfg),
+    "/deep/": new S3VFS(deepCfg),
   });
 
   try {

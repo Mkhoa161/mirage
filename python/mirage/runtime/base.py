@@ -48,13 +48,13 @@ class Runtime(ABC):
     name: str
     captures: tuple[str, ...] = ()
     # Which doors this runtime's code has to the outside world (see
-    # RuntimeReach): "vfs" when the workspace dispatch is its only
+    # RuntimeReach): "workspace" when the workspace dispatch is its only
     # one, as the bridged engines (monty, quickjs, wasi) and the vfs
     # routing marker declare, "process" or "remote" when the code can
     # act around that gate. The default is "process", the no-promise
     # claim, so a custom runtime must declare a narrower reach
     # explicitly rather than inherit it. Embedders read the aggregate:
-    # only a world in which every runtime reaches "vfs" makes "agent
+    # only a world in which every runtime reaches "workspace" makes "agent
     # code cannot bypass mount modes and policy" a true statement; one
     # wider runtime voids it.
     reach: RuntimeReach = "process"

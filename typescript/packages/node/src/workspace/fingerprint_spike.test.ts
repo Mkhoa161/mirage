@@ -16,9 +16,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { ConsistencyPolicy, MountMode } from '@struktoai/mirage-core/types'
-import { DiskResource } from '../resource/disk/disk.ts'
+import { DiskVFS } from '../vfs/disk/disk.ts'
 import { Workspace } from '../workspace.ts'
 
 const DEC = new TextDecoder()
@@ -39,8 +39,8 @@ describe('fingerprint spike (ConsistencyPolicy port of test_fingerprint_spike.py
 
   it('Disk + ALWAYS refetches after external mtime change', async () => {
     writeFileSync(join(root, 'file.txt'), 'v1')
-    const resource = new DiskResource({ root })
-    const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE })
+    const vfs = new DiskVFS({ root })
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
     ws.registry.setConsistency(ConsistencyPolicy.ALWAYS)
 
     const io1 = await ws.execute('cat /data/file.txt')
@@ -57,8 +57,8 @@ describe('fingerprint spike (ConsistencyPolicy port of test_fingerprint_spike.py
 
   it('Disk + LAZY may serve stale cache (no crash guaranteed)', async () => {
     writeFileSync(join(root, 'file.txt'), 'v1')
-    const resource = new DiskResource({ root })
-    const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE })
+    const vfs = new DiskVFS({ root })
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
     ws.registry.setConsistency(ConsistencyPolicy.LAZY)
 
     const io1 = await ws.execute('cat /data/file.txt')
@@ -74,9 +74,9 @@ describe('fingerprint spike (ConsistencyPolicy port of test_fingerprint_spike.py
   })
 
   it('RAM + ALWAYS falls back gracefully when fingerprint absent', async () => {
-    const resource = new RAMResource()
-    resource.store.files.set('/file.txt', new TextEncoder().encode('v1'))
-    const ws = new Workspace({ '/data': resource }, { mode: MountMode.WRITE })
+    const vfs = new RAMVFS()
+    vfs.store.files.set('/file.txt', new TextEncoder().encode('v1'))
+    const ws = new Workspace({ '/data': vfs }, { mode: MountMode.WRITE })
     ws.registry.setConsistency(ConsistencyPolicy.ALWAYS)
 
     const io1 = await ws.execute('cat /data/file.txt')

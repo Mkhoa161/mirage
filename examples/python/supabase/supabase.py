@@ -19,8 +19,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.supabase import SupabaseConfig, SupabaseResource
 from mirage.types import PathSpec
+from mirage.vfs.supabase import SupabaseConfig, SupabaseVFS
 
 load_dotenv(".env.development")
 
@@ -34,7 +34,7 @@ config = SupabaseConfig(
     session_token=os.environ.get("SUPABASE_SESSION_TOKEN"),
 )
 
-backend = SupabaseResource(config)
+backend = SupabaseVFS(config)
 ws = Workspace({"/supabase/": backend}, mode=MountMode.READ)
 
 

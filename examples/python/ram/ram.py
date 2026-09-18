@@ -18,13 +18,13 @@ import os
 import tempfile
 
 from mirage import MountMode, Workspace
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
-resource = RAMResource()
+vfs = RAMVFS()
 
 
 async def main() -> None:
-    ws = Workspace({"/data": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": vfs}, mode=MountMode.WRITE)
 
     print("=== tee (create files) ===")
     await ws.execute('echo "hello world" | tee /data/hello.txt')
@@ -216,7 +216,7 @@ async def main() -> None:
 
     # ── persistence: save / load / copy / deepcopy ──────────────────
     # RAM has no redacted config: full content is in the snapshot, so
-    # no resources= needed at load time.
+    # no mounts= needed at load time.
     print("\n=== PERSISTENCE ===\n")
     with tempfile.NamedTemporaryFile(suffix=".tar", delete=False) as f:
         snap = f.name

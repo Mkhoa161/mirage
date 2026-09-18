@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.wasabi import WasabiConfig, WasabiResource
+from mirage.vfs.wasabi import WasabiConfig, WasabiVFS
 
 load_dotenv(".env.development")
 
@@ -28,8 +28,8 @@ config = WasabiConfig(
     access_key_id=os.environ["WASABI_ACCESS_KEY_ID"],
     secret_access_key=os.environ["WASABI_SECRET_ACCESS_KEY"],
 )
-resource = WasabiResource(config)
-ws = Workspace({"/wasabi/": resource}, mode=MountMode.READ)
+vfs = WasabiVFS(config)
+ws = Workspace({"/wasabi/": vfs}, mode=MountMode.READ)
 
 
 def ops_summary() -> str:

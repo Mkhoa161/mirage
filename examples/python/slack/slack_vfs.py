@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.slack import SlackConfig, SlackResource
+from mirage.vfs.slack import SlackConfig, SlackVFS
 
 load_dotenv(".env.development")
 
@@ -27,11 +27,11 @@ config = SlackConfig(
     token=os.environ["SLACK_BOT_TOKEN"],
     search_token=os.environ.get("SLACK_USER_TOKEN"),
 )
-resource = SlackResource(config=config)
+vfs = SlackVFS(config=config)
 
 
 async def main():
-    with Workspace({"/slack/": resource}, mode=MountMode.READ) as ws:
+    with Workspace({"/slack/": vfs}, mode=MountMode.READ) as ws:
         print("=== VFS MODE: open() reads from Slack transparently ===\n")
 
         print("--- os.listdir() root ---")

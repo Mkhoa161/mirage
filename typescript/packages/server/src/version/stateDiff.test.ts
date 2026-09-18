@@ -20,7 +20,7 @@ import type { Policy } from '@struktoai/mirage-core/policy/index'
 import type { Action, SessionContext } from '@struktoai/mirage-core/policy/types'
 import { toStateDict } from '@struktoai/mirage-core/workspace/snapshot/state'
 import { seedVar } from '@struktoai/mirage-core/workspace/session/state'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { Workspace } from '@struktoai/mirage-node'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -49,7 +49,7 @@ describe('stateDiff + restore', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'mir-sdiff-'))
     store = await VersionStore.open(new LocalBackend(root), 'ws')
-    ws = new Workspace({ '/m': new RAMResource() }, { mode: MountMode.EXEC })
+    ws = new Workspace({ '/m': new RAMVFS() }, { mode: MountMode.EXEC })
   })
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })

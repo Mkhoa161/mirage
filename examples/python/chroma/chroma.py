@@ -5,8 +5,8 @@ import shlex
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.chroma import ChromaConfig, ChromaResource
 from mirage.types import PathSpec
+from mirage.vfs.chroma import ChromaConfig, ChromaVFS
 
 load_dotenv(".env.development")
 
@@ -32,7 +32,7 @@ def require_env(name: str) -> str:
     return value
 
 
-def build_resource() -> ChromaResource:
+def build_vfs() -> ChromaVFS:
     config = ChromaConfig(
         host=os.environ.get("CHROMA_HOST", "localhost"),
         port=int_env("CHROMA_PORT", 8000),
@@ -42,7 +42,7 @@ def build_resource() -> ChromaResource:
         chunk_index_field=os.environ.get("CHROMA_CHUNK_INDEX_FIELD",
                                          "chunk_index"),
     )
-    return ChromaResource(config=config)
+    return ChromaVFS(config=config)
 
 
 async def run(ws: Workspace, command: str, max_chars: int = 1000) -> str:
@@ -68,8 +68,8 @@ async def first_document_path(ws: Workspace) -> str | None:
 
 
 async def main() -> None:
-    resource = build_resource()
-    ws = Workspace({"/knowledge/": resource}, mode=MountMode.READ)
+    vfs = build_vfs()
+    ws = Workspace({"/knowledge/": vfs}, mode=MountMode.READ)
 
     print("=== Chroma Knowledge ===\n")
 

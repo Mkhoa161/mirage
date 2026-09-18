@@ -15,8 +15,8 @@
 import asyncio
 
 from mirage.commands.cli.types import CLISpec
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -25,20 +25,20 @@ def _run(coro):
 
 
 def _ws():
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/hello.txt"] = b"hi\n"
-    return Workspace(resources={"/ram/": (ram, MountMode.EXEC)}, )
+    return Workspace(mounts={"/ram/": (ram, MountMode.EXEC)}, )
 
 
 def _multi_ws():
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/a.txt"] = b"a\n"
-    other = RAMResource()
+    other = RAMVFS()
     other._store.files["/b.txt"] = b"b\n"
-    ro = RAMResource()
+    ro = RAMVFS()
     ro._store.files["/c.txt"] = b"c\n"
     return Workspace(
-        resources={
+        mounts={
             "/ram/": (ram, MountMode.EXEC),
             "/other/": (other, MountMode.EXEC),
             "/ro/": (ro, MountMode.READ),

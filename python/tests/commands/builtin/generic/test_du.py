@@ -8,19 +8,19 @@ from mirage.commands.builtin.generic.du import (DuFlags, _depth, du,
 from mirage.commands.builtin.generic_bind import CommandIO, DuOps
 from mirage.commands.errors import UsageError
 from mirage.ops.types import LinkView, MountView
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.types import FileStat, FileType, PathSpec
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 
 
 async def _ok(value):
     return value
 
 
-def _spec(virtual: str, resource_path: str, raw_path: str | None = None):
+def _spec(virtual: str, vfs_path: str, raw_path: str | None = None):
     return PathSpec(virtual=virtual,
                     directory=virtual,
-                    resource_path=resource_path,
+                    vfs_path=vfs_path,
                     raw_path=raw_path)
 
 
@@ -420,7 +420,7 @@ async def test_namespace_only_directory_is_present_not_missing():
     """A directory that exists only above a nested mount is readable.
 
     The parent backend holds nothing at the operand and cannot: the
-    content lives in the descendant's own resource. Both backend channels
+    content lives in the descendant's own VFS. Both backend channels
     therefore come back empty, and only the dispatcher-backed probe knows
     the path is a directory.
     """
@@ -742,7 +742,7 @@ async def test_fully_shadowed_operand_reports_zero():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("flag", ["-S", "--separate-dirs"])
 async def test_du_separate_dirs_off_the_command_line(tmp_path, flag):
-    res = DiskResource(root=str(tmp_path))
+    res = DiskVFS(root=str(tmp_path))
     ws = Workspace({"/d": res}, mode=MountMode.WRITE)
     await ws.execute("mkdir -p /d/sub/deep")
     await ws.execute("printf abc > /d/a.txt")
@@ -761,7 +761,7 @@ async def test_du_separate_dirs_off_the_command_line(tmp_path, flag):
 async def test_du_missing_operand_reports_and_exits_1(tmp_path):
     # GNU: "du: cannot access 'X': No such file or directory", exit 1. Walking
     # a missing operand used to report it as size 0 with exit 0.
-    res = DiskResource(root=str(tmp_path))
+    res = DiskVFS(root=str(tmp_path))
     ws = Workspace({"/d": res}, mode=MountMode.WRITE)
     result = await ws.execute("du /d/__nf_missing__")
     assert result.exit_code == 1
@@ -773,7 +773,7 @@ async def test_du_missing_operand_reports_and_exits_1(tmp_path):
 
 @pytest.mark.asyncio
 async def test_du_partial_operands_keeps_present_output(tmp_path):
-    res = DiskResource(root=str(tmp_path))
+    res = DiskVFS(root=str(tmp_path))
     ws = Workspace({"/d": res}, mode=MountMode.WRITE)
     await ws.execute("mkdir -p /d/sub")
     result = await ws.execute("du /d/sub /d/__nf_missing__")
@@ -789,8 +789,8 @@ async def test_du_on_the_implied_parent_of_a_nested_mount():
     # `du --apparent-size -B1 /empty` prints both rows and exits 0. The
     # absence line is reserved for a path that is really not there.
     ws = Workspace({
-        "/": RAMResource(),
-        "/empty/hole": RAMResource()
+        "/": RAMVFS(),
+        "/empty/hole": RAMVFS()
     },
                    mode=MountMode.WRITE)
     ws.create_session("s")
@@ -804,8 +804,8 @@ async def test_du_on_the_implied_parent_of_a_nested_mount():
 @pytest.mark.asyncio
 async def test_du_on_the_implied_parent_of_a_nested_mount_under_s():
     ws = Workspace({
-        "/": RAMResource(),
-        "/empty/hole": RAMResource()
+        "/": RAMVFS(),
+        "/empty/hole": RAMVFS()
     },
                    mode=MountMode.WRITE)
     ws.create_session("s")
@@ -824,7 +824,7 @@ async def test_du_on_a_directory_implied_only_by_a_link_below_it():
     too, so the mount table alone is not enough evidence; the probe that
     answers here is the one that asks the namespace as a whole.
     """
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     ws.create_session("s")
     await ws.execute("mkdir -p /real", session_id="s")
     await ws.execute("echo hi > /real/f.txt", session_id="s")
@@ -846,8 +846,8 @@ async def test_du_still_reports_absence_when_the_descendant_is_hidden():
     filtered, so absence stays the answer.
     """
     ws = Workspace({
-        "/": RAMResource(),
-        "/empty/hole": RAMResource()
+        "/": RAMVFS(),
+        "/empty/hole": RAMVFS()
     },
                    mode=MountMode.WRITE)
     ws.create_session("scoped", profile={"paths": {"hide": ["/empty/hole"]}})

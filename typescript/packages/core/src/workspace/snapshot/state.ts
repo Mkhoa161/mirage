@@ -14,11 +14,11 @@
 
 import { CacheEntry } from '../../cache/file/entry.ts'
 import { RAMFileCacheStore } from '../../cache/file/ram.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 import { EVENT_CLEAR, EVENT_COMMAND, EVENT_DELETE } from '../../observe/log_entry.ts'
 import type { EventDict } from '../../observe/observer.ts'
-import { RAMResource, type RAMResourceState } from '../../resource/ram/ram.ts'
-import { type ResourceStateBase, resourceRefOf } from '../../resource/base.ts'
+import { RAMVFS, type RAMVFSState } from '../../vfs/ram/ram.ts'
+import { type VFSStateBase, vfsRefOf } from '../../vfs/base.ts'
 import { z } from 'zod'
 
 import { narrow } from '../session/resolve.ts'
@@ -38,12 +38,12 @@ export type CLIOverrides = Record<
   string,
   Record<string, unknown> | [CLISpec, Record<string, unknown> | null]
 >
-import { HISTORY_PREFIX } from '../../resource/history/history.ts'
+import { HISTORY_PREFIX } from '../../vfs/history/history.ts'
 import {
   hasRedactedSecret,
   redactConfigWithSchema,
-  resourceStateRequiresOverride,
-} from '../../resource/secrets.ts'
+  vfsStateRequiresOverride,
+} from '../../vfs/secrets.ts'
 import { Job, JobStatus } from '../../shell/job_table/index.ts'
 import type { ShellVar } from '../../shell/variable.ts'
 import {
@@ -68,7 +68,7 @@ import type {
   JobSnapshot,
   MountSnapshot,
   NodeMetaSnapshot,
-  ResourceState,
+  VFSState,
   SessionSnapshot,
   WorkspaceStateDict,
 } from './types.ts'
@@ -85,19 +85,19 @@ export async function toStateDict(ws: Workspace): Promise<WorkspaceStateDict> {
   for (let i = 0; i < mounts.length; i++) {
     const m = mounts[i]
     if (m === undefined) continue
-    // The resource is no longer cast into a shape that promises getState:
-    // the contract carries it, so a resource missing one fails to compile
+    // The VFS is no longer cast into a shape that promises getState:
+    // the contract carries it, so a VFS missing one fails to compile
     // rather than throwing here at save time. What remains narrows the
     // returned state to the snapshot format's union.
-    const state = (await m.use(() => Promise.resolve(m.resource.getState()))) as ResourceState
+    const state = (await m.use(() => Promise.resolve(m.vfs.getState()))) as VFSState
     mountSnapshots.push({
       index: i,
       prefix: m.prefix,
       mode: m.mode,
       consistency: ConsistencyPolicy.LAZY,
-      resource_class: m.resource.kind,
-      resource_ref: resourceRefOf(m.resource),
-      resource_state: state,
+      vfs_class: m.vfs.kind,
+      vfs_ref: vfsRefOf(m.vfs),
+      vfs_state: state,
     })
   }
   const ramCache = ws.cache instanceof RAMFileCacheStore ? ws.cache : null
@@ -238,7 +238,7 @@ function captureCliConfig(install: CLIInstall): Record<string, unknown> | null {
 
 export function buildMountArgs(
   state: WorkspaceStateDict,
-  overrides: Record<string, Resource> = {},
+  overrides: Record<string, VFS> = {},
   cliOverrides: CLIOverrides = {},
 ): MountArgs {
   if (state.version < FORMAT_VERSION) {
@@ -247,39 +247,39 @@ export function buildMountArgs(
         `(loader expects v${String(FORMAT_VERSION)})`,
     )
   }
-  const normalized: Record<string, Resource> = {}
-  for (const [prefix, resource] of Object.entries(overrides)) {
-    normalized[normMountPrefix(prefix)] = resource
+  const normalized: Record<string, VFS> = {}
+  for (const [prefix, vfs] of Object.entries(overrides)) {
+    normalized[normMountPrefix(prefix)] = vfs
   }
   // A mount with no override by now is one nobody can build: it asked to
   // be handed back live or was saved with a redacted secret, or the
-  // registry `withRebuiltResources` consulted had nothing for its ref or
+  // registry `withRebuiltMounts` consulted had nothing for its ref or
   // type. Only a mount this builder restores itself is exempt. Refusing
-  // is what Python's `requires_resource_override` does for a class it
-  // cannot import; an empty RAMResource in its place would lose the
+  // is what Python's `requires_vfs_override` does for a class it
+  // cannot import; an empty RAMVFS in its place would lose the
   // backend without a word.
   const missing = state.mounts
     .filter(
       (m) =>
         normalized[normMountPrefix(m.prefix)] === undefined &&
-        (resourceStateRequiresOverride(m.resource_state) || !restoresAsFreshRAM(m)),
+        (vfsStateRequiresOverride(m.vfs_state) || !restoresAsFreshRAM(m)),
     )
     .map((m) => m.prefix)
   if (missing.length > 0) {
     throw new Error(
-      `Workspace.load: resources= must include overrides for: ${missing.join(', ')}. ` +
+      `Workspace.load: mounts= must include overrides for: ${missing.join(', ')}. ` +
         `A listed mount was saved with redacted credentials, asked to be handed back live ` +
-        `(needs_override), or names a resource this registry cannot build; register its ` +
+        `(needs_override), or names a VFS this registry cannot build; register its ` +
         `factory (register) or pass a live instance.`,
     )
   }
-  const mountArgs: Record<string, [Resource, MountMode]> = {}
+  const mountArgs: Record<string, [VFS, MountMode]> = {}
   for (const m of state.mounts) {
     if (!VALID_MODES.includes(m.mode)) {
       throw new Error(`Workspace.fromState: mount '${m.prefix}' has invalid mode '${m.mode}'`)
     }
     mountArgs[m.prefix] = [
-      normalized[normMountPrefix(m.prefix)] ?? new RAMResource(),
+      normalized[normMountPrefix(m.prefix)] ?? new RAMVFS(),
       m.mode as MountMode,
     ]
   }
@@ -299,7 +299,7 @@ export function buildMountArgs(
     if (Array.isArray(override)) {
       // copy() shares the live spec alongside the revealed config, so a
       // directly installed (never registry-named) spec survives the
-      // round trip like a shared live resource.
+      // round trip like a shared live VFS.
       cliArgs[e.name] = override
     } else {
       cliArgs[e.name] = [cliSpecFromEntry(e), override ?? e.config]
@@ -315,30 +315,30 @@ export function buildMountArgs(
   }
 }
 
-/** Builds the resource a saved mount names, or null when it cannot. */
-export type SavedResourceBuilder = (entry: MountSnapshot) => Promise<Resource | null>
+/** Builds the VFS a saved mount names, or null when it cannot. */
+export type SavedResourceBuilder = (entry: MountSnapshot) => Promise<VFS | null>
 
 /**
- * The `resource_ref` a saved mount was built from, or null: for one
+ * The `vfs_ref` a saved mount was built from, or null: for one
  * constructed in code, and for a v3 snapshot written before the key
  * existed, which carries none (the format version did not move).
  */
 function savedRef(entry: MountSnapshot): string | null {
-  return (entry.resource_ref as string | null | undefined) ?? null
+  return (entry.vfs_ref as string | null | undefined) ?? null
 }
 
 /**
  * Whether `buildMountArgs` restores a saved mount itself, into a fresh
- * RAMResource, so no registry is asked about it: `disk` (its content
+ * RAMVFS, so no registry is asked about it: `disk` (its content
  * rides the state, and reopening the original root is exactly what a
  * restore must not do), and `ram` declared by its builtin name or
  * constructed in code. A `ram` mount whose ref points elsewhere is an
- * alias registered over RAMResource, and rebuilds through that alias so
- * the subclass survives; Python's `_construct_resource` calls `cls()` on
+ * alias registered over RAMVFS, and rebuilds through that alias so
+ * the subclass survives; Python's `_construct_vfs` calls `cls()` on
  * the class its ladder found for the same reason.
  */
 export function restoresAsFreshRAM(entry: MountSnapshot): boolean {
-  const type = entry.resource_state.type
+  const type = entry.vfs_state.type
   if (type === 'disk') return true
   const ref = savedRef(entry)
   return type === 'ram' && (ref === null || ref === type)
@@ -346,28 +346,28 @@ export function restoresAsFreshRAM(entry: MountSnapshot): boolean {
 
 /**
  * What a saved mount asks a registry to build: the name and config, or
- * null when the registry has nothing to say. The `resource_ref` the
+ * null when the registry has nothing to say. The `vfs_ref` the
  * registry built the mount from when one was recorded (a registered name,
  * or a code reference, which is how a mount declared as
- * `./wiki.mjs:WikiResource` comes back), else the resource's `type`, the
- * one locator a resource constructed in code leaves. The ref comes first
+ * `./wiki.mjs:WikiVFS` comes back), else the VFS's `type`, the
+ * one locator a VFS constructed in code leaves. The ref comes first
  * because `type` is the class's `kind` and a subclass inherits it: an
  * alias registered over a builtin reports the builtin's type and rebuilt
  * as the builtin while the type was consulted first. A recorded ref this
  * registry cannot resolve is not a reason to fall back to that guess: the
  * answer is null, and `buildMountArgs` then asks for the mount live.
  */
-export function savedResourceBuild(
+export function savedVfsBuild(
   entry: MountSnapshot,
   known: (name: string) => boolean,
 ): { name: string; config: Record<string, unknown> } | null {
   if (restoresAsFreshRAM(entry)) return null
-  const type = entry.resource_state.type
+  const type = entry.vfs_state.type
   const ref = savedRef(entry)
   const name =
     ref !== null ? (known(ref) || ref.includes(':') ? ref : null) : known(type) ? type : null
   if (name === null) return null
-  const config = (entry.resource_state as ResourceStateBase).config
+  const config = (entry.vfs_state as VFSStateBase).config
   return {
     name,
     config:
@@ -380,19 +380,19 @@ export function savedResourceBuild(
 /**
  * The overrides `buildMountArgs` restores with: the caller's, plus every
  * mount the builder can rebuild from its saved state. A mount that asks
- * to be handed back live (`resourceStateRequiresOverride`) is never
+ * to be handed back live (`vfsStateRequiresOverride`) is never
  * built here, so the refusal `buildMountArgs` raises for it stands.
  */
-export async function withRebuiltResources(
+export async function withRebuiltMounts(
   state: WorkspaceStateDict,
-  overrides: Record<string, Resource>,
+  overrides: Record<string, VFS>,
   build: SavedResourceBuilder,
-): Promise<Record<string, Resource>> {
-  const merged: Record<string, Resource> = { ...overrides }
+): Promise<Record<string, VFS>> {
+  const merged: Record<string, VFS> = { ...overrides }
   const held = new Set(Object.keys(overrides).map(normMountPrefix))
   for (const m of state.mounts) {
     if (held.has(normMountPrefix(m.prefix))) continue
-    if (resourceStateRequiresOverride(m.resource_state)) continue
+    if (vfsStateRequiresOverride(m.vfs_state)) continue
     const built = await build(m)
     if (built !== null) merged[m.prefix] = built
   }
@@ -425,7 +425,7 @@ export async function applyStateDict(
   for (const m of state.mounts) {
     // Exact-prefix lookup, mirroring Python: a snapshot prefix the new
     // workspace does not mount is skipped, never resolved to an
-    // ancestor mount (which would load state into the wrong resource).
+    // ancestor mount (which would load state into the wrong VFS).
     // It runs before the override skip below so a mount that asks to be
     // handed back live is reported too: those are the remote and
     // config-backed mounts, exactly the ones a renamed prefix matters for.
@@ -438,9 +438,9 @@ export async function applyStateDict(
       )
       continue
     }
-    if (resourceStateRequiresOverride(m.resource_state)) continue
+    if (vfsStateRequiresOverride(m.vfs_state)) continue
     // No cast, for the same reason as toStateDict above.
-    await Promise.resolve(mount.resource.loadState(m.resource_state as RAMResourceState))
+    await Promise.resolve(mount.vfs.loadState(m.vfs_state as RAMVFSState))
   }
   await restoreSessions(ws, state, sessions)
   // The env template is constructor state the rebuilt workspace was

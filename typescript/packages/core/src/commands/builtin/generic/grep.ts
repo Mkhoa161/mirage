@@ -152,7 +152,7 @@ function makeSpec(path: string, template: PathSpec): PathSpec {
     virtual: path,
     directory: path,
     resolved: false,
-    resourcePath: mountKey(path, mountPrefixOf(template.virtual, template.resourcePath)),
+    vfsPath: mountKey(path, mountPrefixOf(template.virtual, template.vfsPath)),
   })
 }
 
@@ -206,7 +206,7 @@ export async function grepGeneric(
       return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(error.message + '\n') })]
     }
   }
-  const prefix = mountPrefixOf(first.virtual, first.resourcePath)
+  const prefix = mountPrefixOf(first.virtual, first.vfsPath)
   const mounts = opts.ns?.mounts
   const rd = mountParentReaddir((p: string) => readdir(makeSpec(p, first)), mounts)
   const st = mountParentStat((p: string) => stat(makeSpec(p, first)), mounts)
@@ -266,7 +266,7 @@ export async function grepGeneric(
           const child = new PathSpec({
             virtual: entry,
             directory: entry,
-            resourcePath: mountKey(entry, prefix),
+            vfsPath: mountKey(entry, prefix),
             rawPath: respellOne(entry, p.virtual, p.rawPath),
           })
           if (!dirAdmitted(entry, f.filters)) {

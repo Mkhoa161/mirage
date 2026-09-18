@@ -17,36 +17,36 @@ import pytest
 from mirage.commands.registry import command
 from mirage.commands.spec import CommandSpec, Operand
 from mirage.io.types import IOResult
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 SPEC = CommandSpec(rest=Operand(type="path"), )
 
 
-@command("testcmd", resource="ram", filetype=".custom", spec=SPEC)
+@command("testcmd", vfs="ram", filetype=".custom", spec=SPEC)
 async def _testcmd_custom(store, paths, *texts, **kw):
     return None
 
 
-@command("testcmd", resource="ram", spec=SPEC)
+@command("testcmd", vfs="ram", spec=SPEC)
 async def _testcmd_default(store, paths, *texts, **kw):
     return b"default handler", IOResult()
 
 
-@command("testcmd2", resource="ram", filetype=".special", spec=SPEC)
+@command("testcmd2", vfs="ram", filetype=".special", spec=SPEC)
 async def _testcmd2_special(store, paths, *texts, **kw):
     return b"special handler", IOResult()  # noqa
 
 
-@command("testcmd2", resource="ram", spec=SPEC)
+@command("testcmd2", vfs="ram", spec=SPEC)
 async def _testcmd2_default(store, paths, *texts, **kw):
     return b"default handler", IOResult()
 
 
 @pytest.mark.asyncio
 async def test_command_fallthrough_on_none():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     mount = ws._registry.mount_for("/data/")
     for rc in _testcmd_custom._registered_commands:
         mount.register(rc)
@@ -60,7 +60,7 @@ async def test_command_fallthrough_on_none():
 
 @pytest.mark.asyncio
 async def test_command_no_fallthrough_when_stdout_present():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     mount = ws._registry.mount_for("/data/")
     for rc in _testcmd2_special._registered_commands:
         mount.register(rc)

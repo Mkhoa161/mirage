@@ -21,8 +21,8 @@ from dulwich.repo import Repo
 from mirage.commands.cli.builtin.git import GIT
 from mirage.commands.cli.builtin.git.restore import index_tree, parse_flags
 from mirage.commands.spec.flag_view import FlagView
-from mirage.resource.disk import DiskResource
 from mirage.types import MountMode
+from mirage.vfs.disk import DiskVFS
 from mirage.workspace import Workspace
 from tests.commands.cli.builtin.git.conftest import (commit_gitlink,
                                                      conflict_index)
@@ -493,8 +493,8 @@ async def test_a_directory_holding_a_nested_mount_is_refused(
     (inner / "precious.txt").write_text("precious\n", encoding="utf-8")
     with Workspace(
         {
-            "/repo/": DiskResource(root=str(repo_path)),
-            "/repo/slot/data/": DiskResource(root=str(inner)),
+            "/repo/": DiskVFS(root=str(repo_path)),
+            "/repo/slot/data/": DiskVFS(root=str(inner)),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -520,8 +520,8 @@ async def test_pruning_a_parent_leaves_a_mount_root_alone(
     inner.mkdir()
     with Workspace(
         {
-            "/repo/": DiskResource(root=str(repo_path)),
-            "/repo/slot/data/": DiskResource(root=str(inner)),
+            "/repo/": DiskVFS(root=str(repo_path)),
+            "/repo/slot/data/": DiskVFS(root=str(inner)),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -544,8 +544,8 @@ async def test_the_index_waits_for_the_worktree_pass_to_be_possible(
     (inner / "precious.txt").write_text("precious\n", encoding="utf-8")
     with Workspace(
         {
-            "/repo/": DiskResource(root=str(repo_path)),
-            "/repo/slot/data/": DiskResource(root=str(inner)),
+            "/repo/": DiskVFS(root=str(repo_path)),
+            "/repo/slot/data/": DiskVFS(root=str(inner)),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
@@ -574,8 +574,8 @@ async def test_the_staged_half_alone_is_untouched_by_the_preflight(
     inner.mkdir()
     with Workspace(
         {
-            "/repo/": DiskResource(root=str(repo_path)),
-            "/repo/slot/data/": DiskResource(root=str(inner)),
+            "/repo/": DiskVFS(root=str(repo_path)),
+            "/repo/slot/data/": DiskVFS(root=str(inner)),
         },
             mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)

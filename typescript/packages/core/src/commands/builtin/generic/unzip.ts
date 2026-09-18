@@ -157,7 +157,7 @@ function makePathSpec(virtual: string): PathSpec {
   return new PathSpec({
     virtual,
     directory: virtual,
-    resourcePath: stripSlash(virtual),
+    vfsPath: stripSlash(virtual),
     resolved: true,
   })
 }
@@ -200,7 +200,7 @@ export async function unzipGeneric(
   const testMode = fl.asBool('t')
   const pipeMode = fl.asBool('p')
   const quiet = fl.asBool('q')
-  const mountPrefix = relay ? '' : mountPrefixOf(archivePath.virtual, archivePath.resourcePath)
+  const mountPrefix = relay ? '' : mountPrefixOf(archivePath.virtual, archivePath.vfsPath)
   const destRaw = extractDest(fl.asStr('d') ?? null, opts.cwd)
   const dest =
     mountPrefix !== '' && destRaw.startsWith(mountPrefix + '/')

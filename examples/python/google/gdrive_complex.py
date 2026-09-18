@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gdrive import GoogleDriveConfig, GoogleDriveResource
+from mirage.vfs.gdrive import GoogleDriveConfig, GoogleDriveVFS
 
 load_dotenv(".env.development")
 
@@ -29,7 +29,7 @@ config = GoogleDriveConfig(
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
 
-backend = GoogleDriveResource(config=config)
+backend = GoogleDriveVFS(config=config)
 ws = Workspace({"/gdrive/": backend}, mode=MountMode.READ)
 
 

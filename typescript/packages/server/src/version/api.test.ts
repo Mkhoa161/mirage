@@ -20,7 +20,7 @@ import type { Policy } from '@struktoai/mirage-core/policy/index'
 import type { Action, SessionContext } from '@struktoai/mirage-core/policy/types'
 import { toStateDict } from '@struktoai/mirage-core/workspace/snapshot/state'
 import { seedVar } from '@struktoai/mirage-core/workspace/session/state'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { Workspace } from '@struktoai/mirage-node'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -38,7 +38,7 @@ import { NoSuchBranchError } from './errors.ts'
 import { VersionStore } from './store.ts'
 
 function newWs(): Workspace {
-  return new Workspace({ '/m': new RAMResource() }, { mode: MountMode.WRITE })
+  return new Workspace({ '/m': new RAMVFS() }, { mode: MountMode.WRITE })
 }
 
 /** Refuse env writes to GATE_* names, the deployment's rule. */
@@ -144,7 +144,7 @@ describe('version api', () => {
   })
 
   it('checkout restores the whole world: sessions, symlinks, history', async () => {
-    const ws = new Workspace({ '/m': new RAMResource() }, { mode: MountMode.EXEC })
+    const ws = new Workspace({ '/m': new RAMVFS() }, { mode: MountMode.EXEC })
     const store = await openStore()
     await ws.execute('echo original > /m/a.txt')
     await ws.execute('ln -s /m/a.txt /m/l.txt')

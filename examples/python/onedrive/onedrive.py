@@ -18,8 +18,8 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.onedrive import OneDriveConfig, OneDriveResource
 from mirage.types import PathSpec
+from mirage.vfs.onedrive import OneDriveConfig, OneDriveVFS
 
 load_dotenv(".env.development")
 
@@ -27,7 +27,7 @@ config = OneDriveConfig(
     access_token=os.environ["MS_GRAPH_DRIVE_TOKEN"],
     drive_id=os.environ.get("MS_GRAPH_DRIVE_ID") or None,
 )
-backend = OneDriveResource(config)
+backend = OneDriveVFS(config)
 ws = Workspace({"/onedrive/": backend}, mode=MountMode.WRITE)
 
 TEST_FILE = "/onedrive/mirage_onedrive_example.txt"

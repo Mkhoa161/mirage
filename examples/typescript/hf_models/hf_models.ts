@@ -14,7 +14,7 @@
 
 // Read-only Hugging Face model demo against a public model repo.
 // No credentials required. Set HF_MODEL_REPO / HF_TOKEN for private repos.
-import { HfModelsResource, Workspace, MountMode, type FileStat, type HfModelsConfig } from '@struktoai/mirage-node'
+import { HfModelsVFS, Workspace, MountMode, type FileStat, type HfModelsConfig } from '@struktoai/mirage-node'
 
 function configFromEnv(): HfModelsConfig {
   return {
@@ -25,9 +25,9 @@ function configFromEnv(): HfModelsConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const resource = new HfModelsResource(config)
-  const ws = new Workspace({ '/m/': resource }, { mode: MountMode.READ })
-  console.log(`=== mounted ${resource.accessor.bucketUri} at /m/ ===\n`)
+  const vfs = new HfModelsVFS(config)
+  const ws = new Workspace({ '/m/': vfs }, { mode: MountMode.READ })
+  console.log(`=== mounted ${vfs.accessor.bucketUri} at /m/ ===\n`)
 
   try {
     console.log('=== ls /m/ ===')

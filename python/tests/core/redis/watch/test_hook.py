@@ -4,8 +4,8 @@ import os
 import pytest
 
 from mirage.core.redis.watch.hook import RedisEventHook
-from mirage.resource.redis import RedisResource
 from mirage.types import FileChangeKind, MountMode, PathSpec
+from mirage.vfs.redis import RedisVFS
 from mirage.workspace import Workspace
 
 REDIS_URL = os.environ.get("REDIS_URL", "")
@@ -13,12 +13,11 @@ pytestmark = pytest.mark.skipif(not REDIS_URL, reason="REDIS_URL not set")
 
 
 def _root() -> PathSpec:
-    return PathSpec(virtual="/r", directory="/r", resource_path="")
+    return PathSpec(virtual="/r", directory="/r", vfs_path="")
 
 
 def _hook(prefix: str = "wt:") -> RedisEventHook:
-    return RedisEventHook(
-        RedisResource(url=REDIS_URL, key_prefix=prefix).accessor)
+    return RedisEventHook(RedisVFS(url=REDIS_URL, key_prefix=prefix).accessor)
 
 
 def _map(event_type: str, key: str):
@@ -30,7 +29,7 @@ def test_set_maps_to_an_update_on_the_virtual_path():
     assert len(events) == 1
     assert events[0].kind is FileChangeKind.UPDATE
     assert events[0].path.virtual == "/r/day/a.txt"
-    assert events[0].path.resource_path == "day/a.txt"
+    assert events[0].path.vfs_path == "day/a.txt"
 
 
 def test_deletions_map_to_delete():
@@ -79,13 +78,10 @@ def test_a_non_string_payload_maps_to_nothing():
 @pytest.mark.asyncio
 async def test_a_real_keyspace_notification_refreshes_the_listing():
     prefix = "wtlive:"
-    watched = RedisResource(url=REDIS_URL, key_prefix=prefix)
+    watched = RedisVFS(url=REDIS_URL, key_prefix=prefix)
     ws = Workspace({"/r": (watched, MountMode.WRITE)}, mode=MountMode.WRITE)
     other = Workspace(
-        {
-            "/r":
-            (RedisResource(url=REDIS_URL, key_prefix=prefix), MountMode.WRITE)
-        },
+        {"/r": (RedisVFS(url=REDIS_URL, key_prefix=prefix), MountMode.WRITE)},
         mode=MountMode.WRITE)
     try:
         await ws.execute("mkdir -p /r/day")

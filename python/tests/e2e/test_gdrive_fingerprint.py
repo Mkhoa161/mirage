@@ -14,8 +14,8 @@
 
 import pytest
 
-from mirage.resource.gdrive import GoogleDriveConfig, GoogleDriveResource
 from mirage.types import ConsistencyPolicy, MountMode
+from mirage.vfs.gdrive import GoogleDriveConfig, GoogleDriveVFS
 from mirage.workspace import Workspace
 from tests.e2e.gdrive_mock import FakeGDrive, patch_gdrive
 
@@ -29,9 +29,9 @@ async def test_gdrive_always_refetches_after_external_mutation():
         client_secret="fake-secret",
         refresh_token="fake-refresh",
     )
-    resource = GoogleDriveResource(config)
+    vfs = GoogleDriveVFS(config)
     ws = Workspace(
-        {"/gd": (resource, MountMode.WRITE)},
+        {"/gd": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.ALWAYS,
     )
@@ -57,9 +57,9 @@ async def test_gdrive_lazy_may_serve_stale():
         client_secret="fake-secret",
         refresh_token="fake-refresh",
     )
-    resource = GoogleDriveResource(config)
+    vfs = GoogleDriveVFS(config)
     ws = Workspace(
-        {"/gd": (resource, MountMode.WRITE)},
+        {"/gd": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
         consistency=ConsistencyPolicy.LAZY,
     )

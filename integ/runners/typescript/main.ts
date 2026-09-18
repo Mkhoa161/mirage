@@ -194,13 +194,13 @@ export async function runTarget(
   // A console block is only wired into the ram opener; refusing it
   // anywhere else keeps a silently RAM-consoled "redis console" target
   // from reading as covered.
-  if (target.console !== undefined && target.mounts[0].resource !== 'ram') {
+  if (target.console !== undefined && target.mounts[0].vfs !== 'ram') {
     throw new Error(`target ${target.id}: console targets ride ram mounts`)
   }
   // The secrets env block is wired into the ram opener alone, for the
   // console block's reason: a target that declares one on an opener
   // that drops it would run with no managed vars and read as covered.
-  if (target.secrets !== undefined && target.mounts[0].resource !== 'ram') {
+  if (target.secrets !== undefined && target.mounts[0].vfs !== 'ram') {
     throw new Error(`target ${target.id}: secrets targets ride ram mounts`)
   }
   // Profiles reach the workspace only through the openers that pass them
@@ -209,10 +209,10 @@ export async function runTarget(
   // such list because it builds every target's workspace in one place.
   const PROFILE_OPENERS = ['ram', 'disk', 'email']
   const declaresProfiles = target.profiles !== undefined || target.profile !== undefined
-  if (declaresProfiles && !PROFILE_OPENERS.includes(target.mounts[0].resource)) {
+  if (declaresProfiles && !PROFILE_OPENERS.includes(target.mounts[0].vfs)) {
     throw new Error(`target ${target.id}: profiles ride ${PROFILE_OPENERS.join(', ')} mounts`)
   }
-  const { ws, cleanup } = await ADAPTERS[target.mounts[0].resource](target)
+  const { ws, cleanup } = await ADAPTERS[target.mounts[0].vfs](target)
   try {
     // A target's declared environment. A CLI whose spec reads a variable
     // (ntn's --notion-version off NOTION_API_VERSION) behaves differently with
@@ -292,7 +292,7 @@ export async function runTarget(
       // Loud on purpose: an adapter that cannot build a shadow workspace used
       // to drop every scenario case for its target without a word.
       process.stderr.write(
-        `skip [${target.id}] ${c.id}: ${target.mounts[0].resource} adapter has no shadow workspace\n`,
+        `skip [${target.id}] ${c.id}: ${target.mounts[0].vfs} adapter has no shadow workspace\n`,
       )
       continue
     }
@@ -349,7 +349,7 @@ async function main(): Promise<void> {
       process.stderr.write(`skip [${id}]: not a typescript host\n`)
       continue
     }
-    if (!(target.mounts[0].resource in ADAPTERS)) {
+    if (!(target.mounts[0].vfs in ADAPTERS)) {
       process.stderr.write(`skip [${id}]: no typescript adapter\n`)
       continue
     }

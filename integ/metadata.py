@@ -17,7 +17,7 @@
 # them on 22 backends instead of the four here. What is left are the three
 # scenarios the declarative harness cannot express: it can run commands and
 # stat paths, but it cannot snapshot a workspace, reload it onto a fresh
-# resource, or mutate a backend out of band. Retiring these needs snapshot
+# VFS, or mutate a backend out of band. Retiring these needs snapshot
 # and namespace support in the harness, not another case file.
 #
 # Emits its result as one JSON line for integ/check_json.py, so the moto
@@ -49,9 +49,9 @@ _ON_PATH = any(p in _INTEG_ALIASES for p in sys.path)
 sys.path[:] = [p for p in sys.path if p not in _INTEG_ALIASES]
 
 from mirage import MountMode, Workspace  # noqa: E402
-from mirage.resource.ram import RAMResource  # noqa: E402
-from mirage.resource.s3 import S3Config, S3Resource  # noqa: E402
 from mirage.types import ConsistencyPolicy, FileStat, PathSpec  # noqa: E402
+from mirage.vfs.ram import RAMVFS  # noqa: E402
+from mirage.vfs.s3 import S3VFS, S3Config  # noqa: E402
 
 if _ON_PATH:
     sys.path.insert(0, _INTEG_DIR)
@@ -92,17 +92,17 @@ def overlay_stat_fields(st: FileStat) -> dict[str, MetaValue]:
     }
 
 
-async def run_overlay_snapshot_roundtrip(
-        ws: Workspace, fresh: S3Resource) -> dict[str, MetaValue]:
+async def run_overlay_snapshot_roundtrip(ws: Workspace,
+                                         fresh: S3VFS) -> dict[str, MetaValue]:
     # Overlay attrs live in namespace NODES, so they must survive a
-    # snapshot even though the s3 resource is rebuilt fresh at load
-    # (s3 snapshots redact creds and require a resources= override).
+    # snapshot even though the s3 VFS is rebuilt fresh at load
+    # (s3 snapshots redact creds and require a mounts= override).
     await ws.execute("echo alpha > /data/f.txt")
     await ws.execute("chmod 601 /data/f.txt && chown 500:dev /data/f.txt"
                      " && touch -t 202601021530 /data/f.txt")
     snap = Path(tempfile.mkdtemp(prefix="mirage-meta-osnap-")) / "ws.tar"
     await ws.snapshot(str(snap))
-    restored = await Workspace.load(str(snap), resources={"/data": fresh})
+    restored = await Workspace.load(str(snap), mounts={"/data": fresh})
     st, _ = await restored.dispatch("stat",
                                     PathSpec.from_str_path("/data/f.txt"))
     await restored.execute("rm /data/f.txt")
@@ -115,7 +115,7 @@ async def run_overlay_orphan_gc(config: S3Config) -> dict[str, MetaValue]:
     # the namespace. When the object is deleted out-of-band (another agent,
     # the raw API), the overlay is orphaned. Under ALWAYS, a stat that the
     # backend reports gone must GC that orphaned node.
-    ws = Workspace({"/data": S3Resource(config)},
+    ws = Workspace({"/data": S3VFS(config)},
                    mode=MountMode.WRITE,
                    consistency=ConsistencyPolicy.ALWAYS)
     await ws.execute("echo alpha > /data/g.txt && chmod 601 /data/g.txt")
@@ -128,7 +128,7 @@ async def run_overlay_orphan_gc(config: S3Config) -> dict[str, MetaValue]:
 
 
 async def run_snapshot_roundtrip() -> dict[str, MetaValue]:
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("echo alpha > /data/f.txt")
     await ws.execute("chmod 601 /data/f.txt && chown 500:dev /data/f.txt"
                      " && touch -t 202601021530 /data/f.txt")
@@ -158,9 +158,8 @@ async def main() -> None:
     try:
         boto3.client("s3", endpoint_url=endpoint,
                      **CREDS).create_bucket(Bucket=bucket)
-        s3_ws = Workspace({"/data": S3Resource(config)}, mode=MountMode.WRITE)
-        overlay = await run_overlay_snapshot_roundtrip(s3_ws,
-                                                       S3Resource(config))
+        s3_ws = Workspace({"/data": S3VFS(config)}, mode=MountMode.WRITE)
+        overlay = await run_overlay_snapshot_roundtrip(s3_ws, S3VFS(config))
         result.update(overlay)
         result.update(await run_overlay_orphan_gc(config))
     finally:

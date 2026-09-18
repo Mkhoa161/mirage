@@ -19,8 +19,8 @@ from build_collection import MODEL, build_collection, build_lineage_collection
 from qdrant_client import QdrantClient
 
 from mirage import MountMode, Workspace
-from mirage.resource.qdrant import QdrantConfig, QdrantResource
 from mirage.types import PathSpec
+from mirage.vfs.qdrant import QdrantConfig, QdrantVFS
 
 
 def _connection() -> dict[str, str | int | None]:
@@ -77,8 +77,8 @@ async def main() -> None:
     )
     ws = Workspace(
         {
-            "/fashion/": QdrantResource(fashion),
-            "/docs/": QdrantResource(docs),
+            "/fashion/": QdrantVFS(fashion),
+            "/docs/": QdrantVFS(docs),
         },
         mode=MountMode.READ,
     )

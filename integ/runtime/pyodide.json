@@ -9,11 +9,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -35,11 +35,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "data.txt": "hello from ram\n"
             }
@@ -64,11 +64,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -90,11 +90,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -116,11 +116,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -142,11 +142,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -168,11 +168,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -194,11 +194,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "keep.txt": "base"
             }
@@ -223,14 +223,14 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           },
           "/other": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -258,17 +258,17 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "top.txt": "top\n"
             }
           },
           "/data/inner": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "leaf.txt": "deep\n"
             }
@@ -307,17 +307,17 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "top.txt": "top\n"
             }
           },
           "/data/inner": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -352,11 +352,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "t.txt": "hello\n"
             }
@@ -394,11 +394,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "t.txt": "hello\n"
             }
@@ -429,11 +429,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "t.txt": "hello\n"
             }
@@ -477,11 +477,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "t.txt": "hello\n"
             }
@@ -519,11 +519,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "t.txt": "hello\n"
             }
@@ -561,11 +561,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "sub dir/data.txt": "relative-data\n"
             }
@@ -659,11 +659,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/cold": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "one.txt": "one",
               "unused.txt": "unused"
@@ -707,17 +707,17 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "work/program.py": "print('root script')\n"
             }
           },
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "sub/value.txt": "nested\n"
             }
@@ -775,24 +775,24 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "one.txt": "one",
               "unused.txt": "unused"
             }
           },
           "/data/nested": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "inside.txt": "nested"
             }
           },
           "/large": {
-            "resource": "ram",
+            "vfs": "ram",
             "generated_files": 47000
           }
         },
@@ -953,11 +953,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "seed.txt": "seed\n",
               "sub/inner.txt": "inner\n"
@@ -989,11 +989,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "seed.txt": "seed\n",
               "sub/inner.txt": "inner\n"
@@ -1025,11 +1025,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/data": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "seed.txt": "seed\n",
               "sub/inner.txt": "inner\n"
@@ -1056,11 +1056,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram"
+            "vfs": "ram"
           }
         }
       },
@@ -1118,11 +1118,11 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ],
         "mounts": {
           "/ram": {
-            "resource": "ram",
+            "vfs": "ram",
             "files": {
               "input.json": "{\"value\":1}"
             }
@@ -1188,7 +1188,7 @@
       "world": {
         "runtimes": [
           "pyodide",
-          "vfs"
+          "workspace"
         ]
       },
       "steps": [

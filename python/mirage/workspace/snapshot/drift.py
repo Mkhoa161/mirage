@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class ContentDriftError(Exception):
-    """Raised at load time when a remote resource's live fingerprint
+    """Raised at load time when a remote VFS's live fingerprint
     differs from what was recorded in the snapshot.
 
     Indicates the underlying source has been modified since the snapshot
@@ -157,7 +157,7 @@ def capture_fingerprints(ws: "Workspace", ) -> list[dict[str, Any]]:
                              and rec.mount_id != mount.mount_id):
             continue
         seen.add(rec.path)
-        if not getattr(mount.resource, "SUPPORTS_SNAPSHOT", False):
+        if not getattr(mount.vfs, "SUPPORTS_SNAPSHOT", False):
             continue
         entry: dict[str, Any] = {
             FingerprintKey.PATH: rec.path,
@@ -211,7 +211,7 @@ def install_fingerprints(
 
 
 def live_only_mount_prefixes(ws: "Workspace", ) -> list[str]:
-    """Return mount prefixes whose resource opts out of snapshot replay.
+    """Return mount prefixes whose VFS opts out of snapshot replay.
 
     These mounts will serve current state at load time with no drift
     detection. Surfaced in the snapshot manifest so the load layer can
@@ -227,7 +227,7 @@ def live_only_mount_prefixes(ws: "Workspace", ) -> list[str]:
             continue
         if ws._implicit_root and m.prefix == "/":
             continue
-        if not getattr(m.resource, "SUPPORTS_SNAPSHOT", False):
+        if not getattr(m.vfs, "SUPPORTS_SNAPSHOT", False):
             out.append(m.prefix)
     return out
 
@@ -239,7 +239,7 @@ async def check_drift(mount_for: TryMountFor,
     """Stat `path` against its mount and raise ContentDriftError if the
     live fingerprint does not match `recorded`.
 
-    No-op if the mount cannot be resolved or the resource cannot
+    No-op if the mount cannot be resolved or the VFS cannot
     fingerprint (raises only on a real, observable mismatch).
 
     Args:
@@ -255,7 +255,7 @@ async def check_drift(mount_for: TryMountFor,
     mount = mount_for(path)
     if mount is None or (mount_id is not None and mount.mount_id != mount_id):
         return
-    if not getattr(mount.resource, "SUPPORTS_SNAPSHOT", False):
+    if not getattr(mount.vfs, "SUPPORTS_SNAPSHOT", False):
         return
     # Resolve backend IDs afresh without consulting the restored index.
     try:

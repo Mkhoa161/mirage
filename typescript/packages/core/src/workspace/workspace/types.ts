@@ -20,7 +20,7 @@ import type { ByteSource } from '../../io/types.ts'
 import type { JobConsole } from '../../shell/console/index.ts'
 import type { ObserverStore } from '../../observe/store.ts'
 import type { OpsRegistry } from '../../ops/registry.ts'
-import type { Resource } from '../../resource/base.ts'
+import type { VFS } from '../../vfs/base.ts'
 import type { EnvEntries, SecretEntries } from '../../secrets/config.ts'
 import type { ConsoleFactory } from '../../shell/job_table/index.ts'
 import type { ShellParser } from '../../shell/parse/index.ts'
@@ -34,15 +34,15 @@ import type { SessionStore } from '../session/store.ts'
 import type { WorkspaceStateStore } from '../store/base.ts'
 
 /**
- * One mount entry: a bare resource takes the workspace default mode, a
- * `[resource, mode]` pair pins the mount's own mode, and an optional
+ * One mount entry: a bare VFS takes the workspace default mode, a
+ * `[VFS, mode]` pair pins the mount's own mode, and an optional
  * third element attaches per-command limits (mirrors the Python
- * `(resource, mode, limits)` tuple form).
+ * `(VFS, mode, limits)` tuple form).
  */
 export type MountSpec =
-  | Resource
-  | readonly [Resource, MountMode]
-  | readonly [Resource, MountMode, Record<string, Limit>]
+  | VFS
+  | readonly [VFS, MountMode]
+  | readonly [VFS, MountMode, Record<string, Limit>]
 
 export interface WorkspaceOptions {
   mode?: MountMode
@@ -104,8 +104,8 @@ export interface WorkspaceOptions {
   }
   /**
    * The workspace's ordered runtime world: instances and name
-   * shorthands including 'vfs'; the first capturer binds each
-   * command. Unset = the default world (pyodide, quickjs, vfs).
+   * shorthands including 'workspace'; the first capturer binds each
+   * command. Unset = the default world (pyodide, quickjs, workspace).
    */
   runtimes?: RuntimeEntry[]
   /**

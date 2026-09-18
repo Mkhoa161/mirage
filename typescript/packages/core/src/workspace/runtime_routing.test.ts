@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { Runtime } from '../runtime/base.ts'
 import { LanguageRuntime } from '../runtime/language.ts'
-import { VFSRuntime } from '../runtime/table.ts'
+import { WorkspaceRuntime } from '../runtime/table.ts'
 import {
   EVALUATOR,
   isLineExecutor,
@@ -37,7 +37,7 @@ import {
 } from '../runtime/routing/index.ts'
 import { getTestParser } from './fixtures/workspace_fixture.ts'
 import { Channel, JobConsole } from '../shell/console/index.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { MountMode } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
 
@@ -106,11 +106,11 @@ class NamedFakeRuntime extends LanguageRuntime {
 async function runtimeArgWorkspace(): Promise<Workspace> {
   const parser = await getTestParser()
   return new Workspace(
-    { '/': new RAMResource() },
+    { '/': new RAMVFS() },
     {
       mode: MountMode.EXEC,
       shellParser: parser,
-      runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'vfs'],
+      runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'workspace'],
     },
   )
 }
@@ -141,20 +141,20 @@ describe('per-line runtime argument', () => {
   it('never touches uncaptured stages', async () => {
     const ws = await runtimeArgWorkspace()
     try {
-      const io = await ws.execute('echo plain-vfs', { runtime: 'beta' })
-      expect(DEC.decode(io.stdout)).toBe('plain-vfs\n')
+      const io = await ws.execute('echo plain-workspace', { runtime: 'beta' })
+      expect(DEC.decode(io.stdout)).toBe('plain-workspace\n')
     } finally {
       await ws.close()
     }
   })
 
-  it('fails loud on unknown runtimes and the vfs name', async () => {
+  it('fails loud on unknown runtimes and the workspace name', async () => {
     const ws = await runtimeArgWorkspace()
     try {
       await expect(ws.execute('python3 -c "x"', { runtime: 'nope' })).rejects.toThrow(
         /unknown runtime:/,
       )
-      await expect(ws.execute('python3 -c "x"', { runtime: 'vfs' })).rejects.toThrow(
+      await expect(ws.execute('python3 -c "x"', { runtime: 'workspace' })).rejects.toThrow(
         /not a runtime you can select/,
       )
     } finally {
@@ -168,11 +168,11 @@ async function routedWorkspace(): Promise<Workspace> {
   const alpha = new NamedFakeRuntime('alpha')
   alpha.script = (ctx) => !ctx.line.includes('big')
   return new Workspace(
-    { '/': new RAMResource() },
+    { '/': new RAMVFS() },
     {
       mode: MountMode.EXEC,
       shellParser: parser,
-      runtimes: [alpha, new NamedFakeRuntime('beta'), 'vfs'],
+      runtimes: [alpha, new NamedFakeRuntime('beta'), 'workspace'],
     },
   )
 }
@@ -200,33 +200,33 @@ describe('routing ladder', () => {
     }
   })
 
-  it('all capturers refusing is an admission failure, vfs stays open', async () => {
+  it('all capturers refusing is an admission failure, workspace stays open', async () => {
     const parser = await getTestParser()
     const alpha = new NamedFakeRuntime('alpha')
     alpha.script = () => false
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [alpha, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [alpha, 'workspace'] },
     )
     try {
       const denied = await ws.execute('python3 -c "x"')
       expect(denied.exitCode).toBe(126)
       expect(DEC.decode(denied.stderr)).toBe('python3: no runtime accepted this line\n')
-      const open = await ws.execute('echo vfs-still-open')
-      expect(DEC.decode(open.stdout)).toBe('vfs-still-open\n')
+      const open = await ws.execute('echo workspace-still-open')
+      expect(DEC.decode(open.stdout)).toBe('workspace-still-open\n')
     } finally {
       await ws.close()
     }
   })
 
-  it('a scripted vfs entry locks down refused lines', async () => {
+  it('a scripted workspace entry locks down refused lines', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new VFSRuntime({ script: (ctx) => !ctx.line.includes('/secret') })],
+        runtimes: [new WorkspaceRuntime({ script: (ctx) => !ctx.line.includes('/secret') })],
       },
     )
     try {
@@ -242,11 +242,11 @@ describe('routing ladder', () => {
   it('the global policy names the runtime', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'vfs'],
+        runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'workspace'],
         routePolicy: (ctx) => (ctx.line.includes('heavy') ? 'beta' : null),
       },
     )
@@ -265,11 +265,11 @@ describe('routing ladder', () => {
     const saved = POLICY_EVAL_TIMEOUT.seconds
     POLICY_EVAL_TIMEOUT.seconds = 0.1
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new HangingEvaluator(), 'vfs'],
+        runtimes: [new HangingEvaluator(), 'workspace'],
         routePolicy: new ScriptSource('1'),
       },
     )
@@ -284,11 +284,11 @@ describe('routing ladder', () => {
   it('a JS policy script selects the JS evaluator over an earlier python one', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new MontyRuntime(), new QuickJsRuntime(), 'vfs'],
+        runtimes: [new MontyRuntime(), new QuickJsRuntime(), 'workspace'],
         routePolicy: new ScriptSource(
           "ctx.command === 'node' ? {deny: 'js-engine-picked'} : null",
           'js',
@@ -351,11 +351,11 @@ describe('routing ladder', () => {
   it('a JS policy script reads mounted content through the fs bridge', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new QuickJsRuntime(), 'vfs'],
+        runtimes: [new QuickJsRuntime(), 'workspace'],
         routePolicy: new ScriptSource(
           "const f = std.open('/deny.txt', 'r'); " +
             'const blocked = f !== null && f.readAsString().includes(ctx.command); ' +
@@ -381,11 +381,11 @@ describe('routing ladder', () => {
   it('a deny verdict folds into the line result', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), 'vfs'],
+        runtimes: [new NamedFakeRuntime('alpha'), 'workspace'],
         routePolicy: (ctx) => (ctx.command === 'python3' ? { deny: 'python3 is blocked' } : null),
       },
     )
@@ -410,11 +410,11 @@ describe('routing ladder', () => {
   it('a runtime verdict object places the line', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'vfs'],
+        runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'workspace'],
         routePolicy: () => ({ runtime: 'beta' }),
       },
     )
@@ -430,11 +430,11 @@ describe('routing ladder', () => {
     const parser = await getTestParser()
     const calls: string[] = []
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), 'vfs'],
+        runtimes: [new NamedFakeRuntime('alpha'), 'workspace'],
         routePolicy: (ctx) => {
           calls.push(ctx.line)
           return { deny: 'nothing runs' }
@@ -456,11 +456,11 @@ describe('routing ladder', () => {
     expect(() => parseVerdict(new DenyResult('not here'))).toThrow(RouteDeny)
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'vfs'],
+        runtimes: [new NamedFakeRuntime('alpha'), new NamedFakeRuntime('beta'), 'workspace'],
         routePolicy: (ctx) =>
           ctx.line.includes('secret')
             ? new DenyResult('secrets stay put')
@@ -484,11 +484,11 @@ describe('routing ladder', () => {
     const alpha = new NamedFakeRuntime('alpha')
     alpha.script = new ScriptSource("{'deny': 'nope'}")
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [alpha, new MontyRuntime(), 'vfs'],
+        runtimes: [alpha, new MontyRuntime(), 'workspace'],
       },
     )
     try {
@@ -536,8 +536,8 @@ not big
     // capturer and its refusal is still an admission failure.
     const engine = new MontyRuntime({ captures: [] })
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [alpha, engine, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [alpha, engine, 'workspace'] },
     )
     try {
       await ws.execute("echo 'x = 1' > /fine.py")
@@ -553,11 +553,11 @@ not big
   it('addRuntime appends, rebinds, and rejects duplicates', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), 'vfs'],
+        runtimes: [new NamedFakeRuntime('alpha'), 'workspace'],
       },
     )
     try {
@@ -573,15 +573,15 @@ not big
   })
 })
 
-describe('vfs runtime overrides', () => {
+describe('workspace runtime overrides', () => {
   it('explicit captures restrict the workspace', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), new VFSRuntime({ captures: ['echo'] })],
+        runtimes: [new NamedFakeRuntime('alpha'), new WorkspaceRuntime({ captures: ['echo'] })],
       },
     )
     try {
@@ -602,11 +602,11 @@ describe('vfs runtime overrides', () => {
     const alpha = new NamedFakeRuntime('alpha')
     alpha.script = () => true
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [alpha, new VFSRuntime({ captures: ['echo'] })],
+        runtimes: [alpha, new WorkspaceRuntime({ captures: ['echo'] })],
       },
     )
     try {
@@ -626,8 +626,8 @@ describe('script context', () => {
     const alpha = new NamedFakeRuntime('alpha')
     alpha.script = (ctx) => ctx.command === 'python3'
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [alpha, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [alpha, 'workspace'] },
     )
     try {
       const io = await ws.execute('echo lead | python3 -c "x"')
@@ -641,11 +641,11 @@ describe('script context', () => {
   it('empty declared captures serve nothing', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
+      { '/': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
-        runtimes: [new NamedFakeRuntime('alpha'), new VFSRuntime({ captures: [] })],
+        runtimes: [new NamedFakeRuntime('alpha'), new WorkspaceRuntime({ captures: [] })],
       },
     )
     try {
@@ -685,8 +685,8 @@ describe('whole-line runtimes', () => {
     const parser = await getTestParser()
     const box = new LineBox()
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     try {
       const result = await ws.execute('nvidia-smi -L | grep box > /out.txt')
@@ -705,8 +705,8 @@ describe('whole-line runtimes', () => {
     const box = new LineBox()
     box.captures = ['*']
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     try {
       const result = await ws.execute('ls / && echo done', { stdin: ENC.encode('fed') })
@@ -723,8 +723,8 @@ describe('whole-line runtimes', () => {
     box.captures = ['*']
     box.script = (ctx) => !ctx.line.includes('keep-out')
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     try {
       const taken = await ws.execute('echo captured')
@@ -743,8 +743,8 @@ describe('whole-line runtimes', () => {
     box.captures = ['*']
     box.script = () => false
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     try {
       const refused = await ws.execute('echo hi')
@@ -761,8 +761,8 @@ describe('whole-line runtimes', () => {
     const box = new LineBox()
     box.captures = ['*']
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: [box, 'workspace'] },
     )
     const console_ = new JobConsole()
     try {
@@ -777,19 +777,19 @@ describe('whole-line runtimes', () => {
     }
   })
 
-  it('the vfs entry is a pure routing marker', async () => {
-    // A vfs-resolved line runs on the workspace executor inline; the
+  it('the workspace entry is a pure routing marker', async () => {
+    // A workspace-resolved line runs on the workspace executor inline; the
     // entry is a marker with no line door to call.
     const parser = await getTestParser()
-    const vfs = new VFSRuntime()
+    const fallback = new WorkspaceRuntime()
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['pyodide', vfs] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['pyodide', fallback] },
     )
     try {
-      expect(isLineExecutor(vfs)).toBe(false)
-      const result = await ws.execute('echo through-vfs')
-      expect(DEC.decode(result.stdout)).toBe('through-vfs\n')
+      expect(isLineExecutor(fallback)).toBe(false)
+      const result = await ws.execute('echo through-workspace')
+      expect(DEC.decode(result.stdout)).toBe('through-workspace\n')
       expect(result.exitCode).toBe(0)
     } finally {
       await ws.close()

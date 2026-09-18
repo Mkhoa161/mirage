@@ -12,10 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 
 async function main(): Promise<void> {
-  const ws = new Workspace({ '/ram': new RAMResource() }, { mode: MountMode.EXEC })
+  const ws = new Workspace({ '/ram': new RAMVFS() }, { mode: MountMode.EXEC })
 
   console.log('python3 heredoc patterns (commonly emitted by AI agents)\n')
 

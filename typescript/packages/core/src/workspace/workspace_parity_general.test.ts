@@ -132,7 +132,7 @@ describe('workspace: general commands (seq/expr/bc/date/echo)', () => {
   })
 })
 
-describe('workspace: sort as resource command', () => {
+describe('workspace: sort as VFS command', () => {
   it('sort file', async () => {
     const { ws } = await makeWorkspace()
     const io = await ws.execute('sort /ram/nums.txt')

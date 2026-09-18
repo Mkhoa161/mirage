@@ -16,17 +16,16 @@ import pytest
 
 from mirage import MountMode, Workspace
 from mirage.observe.log_entry import EVENT_COMMAND
-from mirage.resource.ram import RAMResource
 from mirage.server.version.api import commit
 from mirage.server.version.backend import LocalBackend
 from mirage.server.version.state_diff import state_diff
 from mirage.server.version.store import VersionStore
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.session.state import seed_var
 
 
 def _ws() -> Workspace:
-    return Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                     mode=MountMode.EXEC)
+    return Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.EXEC)
 
 
 @pytest.mark.asyncio

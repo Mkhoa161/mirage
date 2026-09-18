@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MountMode, PostgresResource, Workspace, type FileStat } from '@struktoai/mirage-node'
+import { MountMode, PostgresVFS, Workspace, type FileStat } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -23,8 +23,8 @@ if (dsn === undefined) {
   process.exit(1)
 }
 
-const resource = new PostgresResource({ dsn })
-const ws = new Workspace({ '/pg/': resource }, { mode: MountMode.READ })
+const vfs = new PostgresVFS({ dsn })
+const ws = new Workspace({ '/pg/': vfs }, { mode: MountMode.READ })
 
 const DEC = new TextDecoder()
 
@@ -96,5 +96,5 @@ try {
   console.log('all commands completed')
 } finally {
   await ws.close()
-  await resource.close()
+  await vfs.close()
 }

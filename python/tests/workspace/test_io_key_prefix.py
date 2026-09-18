@@ -21,9 +21,9 @@ import boto3
 import pytest
 from moto.server import ThreadedMotoServer
 
-from mirage.resource.ram import RAMResource
-from mirage.resource.s3.s3 import S3Config, S3Resource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
+from mirage.vfs.s3.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 
 CREDS = dict(aws_access_key_id="testing",
@@ -43,7 +43,7 @@ def s3_endpoint() -> Iterator[str]:
 def _s3_workspace(endpoint: str, bucket: str) -> Workspace:
     boto3.client("s3", endpoint_url=endpoint,
                  **CREDS).create_bucket(Bucket=bucket)
-    s3 = S3Resource(
+    s3 = S3VFS(
         S3Config(bucket=bucket,
                  region="us-east-1",
                  endpoint_url=endpoint,
@@ -94,7 +94,7 @@ def _assert_single_prefix(captured: list) -> None:
      " > /data/s2.txt", None),
 ])
 def test_ram_io_keys_single_prefixed(cmd, stdin):
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
     async def run():
         await ws.execute("tee /data/seed.txt > /dev/null", stdin=b"x\ny\n")
@@ -109,7 +109,7 @@ def test_ram_io_keys_single_prefixed(cmd, stdin):
 
 
 def test_ram_stderr_redirect_records_mount_relative_key():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
     async def run():
         captured = _capture_io(ws)
@@ -125,7 +125,7 @@ def test_ram_stderr_redirect_records_mount_relative_key():
 
 
 def test_ram_csplit_writes_parts_inside_mount():
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
     async def run():
         await ws.execute("tee /data/seed.txt > /dev/null", stdin=b"x\ny\n")

@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mirageTools } from '@struktoai/mirage-agents/vercel'
-import { MountMode, RAMResource, Workspace } from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, Workspace } from '@struktoai/mirage-node'
 import { openai } from '@ai-sdk/openai'
 import { generateText, stepCountIs } from 'ai'
 
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
     throw new Error('OPENAI_API_KEY is required')
   }
 
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ws = new Workspace({ '/': ram }, { mode: MountMode.WRITE })
   await ws.fs.writeFile('/chart.png', new Uint8Array(readFileSync(PNG_PATH)))
   await ws.fs.writeFile('/paper.pdf', new Uint8Array(readFileSync(PDF_PATH)))

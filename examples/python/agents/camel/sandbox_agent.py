@@ -22,11 +22,11 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.agents.camel import MirageFileToolkit, MirageTerminalToolkit
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 load_dotenv(".env.development")
 
-ram = RAMResource()
+ram = RAMVFS()
 ws = Workspace({"/": ram}, mode=MountMode.WRITE)
 
 terminal = MirageTerminalToolkit(ws)

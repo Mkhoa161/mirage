@@ -16,10 +16,10 @@ import io
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.server.version.state_tree import (blob_to_meta, meta_to_blob,
                                               to_state, tree_inputs_from_state)
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.snapshot.keys import (CacheKey, FingerprintKey, MountKey,
                                             SessionKey, StateKey)
@@ -31,14 +31,13 @@ from mirage.workspace.snapshot.tar_io import read_tar, write_tar
 def _mount_files(state: dict, prefix: str) -> dict:
     for mount in state["mounts"]:
         if mount["prefix"] == prefix:
-            return mount["resource_state"]["files"]
+            return mount["vfs_state"]["files"]
     raise KeyError(prefix)
 
 
 @pytest.mark.asyncio
 async def test_tree_inputs_from_state_ram_files():
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     await ws.execute("echo hello > /m/a.txt")
     await ws.execute("mkdir -p /m/sub && echo world > /m/sub/b.txt")
 
@@ -53,8 +52,7 @@ async def test_tree_inputs_from_state_ram_files():
 
 @pytest.mark.asyncio
 async def test_to_state_round_trips_files():
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     await ws.execute("echo hello > /m/a.txt")
     await ws.execute("mkdir -p /m/sub && echo world > /m/sub/b.txt")
 
@@ -67,8 +65,7 @@ async def test_to_state_round_trips_files():
 
 @pytest.mark.asyncio
 async def test_to_state_is_tar_loadable():
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     await ws.execute("echo hello > /m/a.txt")
 
     entries, meta = tree_inputs_from_state(await to_state_dict(ws))
@@ -88,8 +85,7 @@ async def test_whole_world_round_trip_sessions_nodes_history():
     """A commit is the whole world: sessions, namespace nodes, and the
     command history round-trip through the .mirage/ control-plane
     subtree. Cache stays out (derived, rebuildable)."""
-    ws = Workspace({"/": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     await ws.execute("echo hi > /a.txt")
     state = await to_state_dict(ws)
     state[StateKey.CACHE][CacheKey.ENTRIES] = [{
@@ -160,8 +156,7 @@ async def test_whole_world_round_trip_sessions_nodes_history():
 
 @pytest.mark.asyncio
 async def test_control_plane_files_never_leak_into_mount_files():
-    ws = Workspace({"/": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     await ws.execute("echo hi > /a.txt")
     state = await to_state_dict(ws)
     state[StateKey.SESSIONS] = [{
@@ -195,31 +190,29 @@ def test_meta_blob_round_trip():
 
 
 @pytest.mark.asyncio
-async def test_resource_ref_rides_the_version_meta():
-    """The ``resource:`` reference a mount was built from is the only
+async def test_vfs_ref_rides_the_version_meta():
+    """The ``vfs:`` reference a mount was built from is the only
     locator that rebuilds a class loaded from a script file, so a commit
     has to carry it or a clone at that version asks for an override the
     snapshot never needed."""
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     state = await to_state_dict(ws)
-    ref = "./wiki.py:WikiResource"
-    state[StateKey.MOUNTS][0][MountKey.RESOURCE_REF] = ref
+    ref = "./wiki.py:WikiVFS"
+    state[StateKey.MOUNTS][0][MountKey.VFS_REF] = ref
 
     entries, meta = tree_inputs_from_state(state)
-    assert meta["mounts"][0][MountKey.RESOURCE_REF] == ref
+    assert meta["mounts"][0][MountKey.VFS_REF] == ref
     restored = to_state(entries, blob_to_meta(meta_to_blob(meta)))
 
-    assert restored[StateKey.MOUNTS][0][MountKey.RESOURCE_REF] == ref
+    assert restored[StateKey.MOUNTS][0][MountKey.VFS_REF] == ref
 
 
 @pytest.mark.asyncio
 async def test_a_meta_without_a_ref_reads_as_constructed_in_code():
-    ws = Workspace({"/m": (RAMResource(), MountMode.WRITE)},
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
     entries, meta = tree_inputs_from_state(await to_state_dict(ws))
-    del meta["mounts"][0][MountKey.RESOURCE_REF]
+    del meta["mounts"][0][MountKey.VFS_REF]
 
     restored = to_state(entries, meta)
 
-    assert restored[StateKey.MOUNTS][0][MountKey.RESOURCE_REF] is None
+    assert restored[StateKey.MOUNTS][0][MountKey.VFS_REF] is None

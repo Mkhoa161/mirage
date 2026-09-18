@@ -53,8 +53,8 @@ requirement_met() {
 cli_expressible() {
   local case_json="$1"
   jq -e '
-    ((.world.mounts // {"/ram": {"resource": "ram"}})
-      | to_entries | all(.value.resource == "ram"))
+    ((.world.mounts // {"/ram": {"vfs": "ram"}})
+      | to_entries | all(.value.vfs == "ram"))
     and (((.world.mounts // {}) | to_entries) | all(.value.generated_files == null))
     and (((.world.policies // []) | length) == 0)
     and (((.world.runtimes // []) | map(select((type == "object" and .name == "echobox") or . == "echobox")) | length) == 0)
@@ -95,8 +95,8 @@ write_world_yaml() {
       <<<"$world_json")
   done < <(jq -r '(.clis // {}) | keys[]' <<<"$world_json")
   jq '{mode: "EXEC",
-       mounts: ((.mounts // {"/ram": {"resource": "ram"}})
-         | map_values({resource: .resource}
+       mounts: ((.mounts // {"/ram": {"vfs": "ram"}})
+         | map_values({vfs: .vfs}
              + (if .limits then {command_limits: .limits} else {} end)))}
       + (if .runtimes then {runtimes: .runtimes} else {} end)
       + (if .route_policy then {route_policy: .route_policy} else {} end)

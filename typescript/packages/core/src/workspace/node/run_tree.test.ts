@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { IOResult, materialize } from '../../io/types.ts'
 import { OpsRegistry } from '../../ops/registry.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { JobTable } from '../../shell/job_table/index.ts'
 import { createShellParser, type ShellParser } from '../../shell/parse/index.ts'
 import { MountMode } from '../../types.ts'
@@ -56,9 +56,9 @@ function buildDeps(registry: MountRegistry): ExecuteNodeDeps {
 }
 
 function registry(): MountRegistry {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
-  ops.registerResource(ram)
+  ops.registerVfs(ram)
   return new MountRegistry({ '/': ram }, MountMode.WRITE)
 }
 

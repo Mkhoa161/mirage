@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { record, startOp } from '@struktoai/mirage-core/observe/context'
-import { ResourceName } from '@struktoai/mirage-core/types'
+import { VFSName } from '@struktoai/mirage-core/types'
 import type { PathSpec } from '@struktoai/mirage-core/types'
 import type { OPFSAccessor } from '../../accessor/opfs.ts'
 import { destError, resolveFileHandle, toWritableChunk } from './utils.ts'
@@ -40,5 +40,5 @@ export async function appendBytes(
   const writable = await handle.createWritable()
   await writable.write(toWritableChunk(merged))
   await writable.close()
-  record('append', virtual, ResourceName.OPFS, data.byteLength, timer)
+  record('append', virtual, VFSName.OPFS, data.byteLength, timer)
 }

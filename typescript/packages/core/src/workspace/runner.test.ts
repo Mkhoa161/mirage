@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { createShellParser } from '../shell/parse/index.ts'
 import { MountMode } from '../types.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { Workspace } from './workspace/workspace.ts'
 import { WorkspaceRunner } from './runner.ts'
 
@@ -27,7 +27,7 @@ const grammarWasm = readFileSync(require.resolve('tree-sitter-bash/tree-sitter-b
 
 function makeWs(): Workspace {
   return new Workspace(
-    { '/': new RAMResource() },
+    { '/': new RAMVFS() },
     {
       mode: MountMode.WRITE,
       shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),

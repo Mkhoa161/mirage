@@ -13,6 +13,6 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 from mirage.workspace.workspace.handle import SessionHandle
-from mirage.workspace.workspace.workspace import ResourceMount, Workspace
+from mirage.workspace.workspace.workspace import VFSMount, Workspace
 
-__all__ = ["ResourceMount", "SessionHandle", "Workspace"]
+__all__ = ["VFSMount", "SessionHandle", "Workspace"]

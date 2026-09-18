@@ -17,8 +17,8 @@ import subprocess
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
@@ -31,7 +31,7 @@ class ShellTestEnv:
 
     def __init__(self, tmp_path):
         self.tmp_path = tmp_path
-        self.mem = RAMResource()
+        self.mem = RAMVFS()
         self.ws = Workspace(
             {"/data": (self.mem, MountMode.WRITE)},
             mode=MountMode.WRITE,

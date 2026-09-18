@@ -40,7 +40,7 @@ export function walkOf(
   index: IndexCacheStore | undefined,
 ): WalkFn {
   return async (p, findType) => {
-    const prefix = mountPrefixOf(p.virtual, p.resourcePath)
+    const prefix = mountPrefixOf(p.virtual, p.vfsPath)
     const unreadable: string[] = []
     const keys = await walkFind(
       p,

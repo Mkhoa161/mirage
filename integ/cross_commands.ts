@@ -14,13 +14,7 @@
 
 import { CreateBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import type { FileStat } from '@struktoai/mirage-node'
-import {
-  MountMode,
-  RAMResource,
-  RedisResource,
-  S3Resource,
-  Workspace,
-} from '@struktoai/mirage-node'
+import { MountMode, RAMVFS, RedisVFS, S3VFS, Workspace } from '@struktoai/mirage-node'
 
 const S3_BUCKET = 'mirage-integ-cross'
 const ENDPOINT = process.env.S3_ENDPOINT ?? 'http://localhost:9000'
@@ -573,10 +567,10 @@ async function main(): Promise<void> {
     if (code !== 'BucketAlreadyOwnedByYou' && code !== 'BucketAlreadyExists') throw err
   }
 
-  const mounts: Record<string, RAMResource | S3Resource | RedisResource> = {
-    '/ram': new RAMResource(),
-    '/ram2': new RAMResource(),
-    '/s3': new S3Resource({
+  const mounts: Record<string, RAMVFS | S3VFS | RedisVFS> = {
+    '/ram': new RAMVFS(),
+    '/ram2': new RAMVFS(),
+    '/s3': new S3VFS({
       bucket: S3_BUCKET,
       region: REGION,
       endpoint: ENDPOINT,
@@ -588,7 +582,7 @@ async function main(): Promise<void> {
   const redisUrl = process.env.REDIS_URL
   if (redisUrl) {
     const prefix = `mirage-integ-cross-${String(process.pid)}-${String(Date.now())}/`
-    mounts['/redis'] = new RedisResource({ url: redisUrl, keyPrefix: prefix })
+    mounts['/redis'] = new RedisVFS({ url: redisUrl, keyPrefix: prefix })
   }
 
   const ws = new Workspace(mounts, {

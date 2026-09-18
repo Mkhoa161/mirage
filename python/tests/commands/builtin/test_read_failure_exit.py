@@ -14,8 +14,8 @@
 
 import pytest
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 # The exit code GNU answers when a command cannot read an operand,
@@ -98,7 +98,7 @@ SILENT_IN_GNU = {"jq . {p}", "zgrep x {p}"}
 # on stdout, and `diff dir dir` exits 0. That is different semantics,
 # not a message bug.
 async def _ws() -> Workspace:
-    ws = Workspace({"/ram/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/ram/": RAMVFS()}, mode=MountMode.WRITE)
     ws.get_session(ws.default_session_id).cwd = "/"
     await ws.execute("mkdir -p /ram/dir")
     await ws.fs.write("/ram/dir/inner.txt", b"inner\n")

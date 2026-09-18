@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.commands.cli.builtin.gws import GWS
-from mirage.resource.gmail import GmailConfig, GmailResource
 from mirage.types import PathSpec
+from mirage.vfs.gmail import GmailConfig, GmailVFS
 
 load_dotenv(".env.development")
 
@@ -30,11 +30,11 @@ config = GmailConfig(
     client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
 )
-resource = GmailResource(config=config)
+vfs = GmailVFS(config=config)
 
 
 async def main() -> None:
-    ws = Workspace({"/gmail": resource}, mode=MountMode.WRITE)
+    ws = Workspace({"/gmail": vfs}, mode=MountMode.WRITE)
     # The gws verbs are a CLI install, separate from the mounts.
     ws.register_cli("gws", GWS, config.model_dump())
 
@@ -213,7 +213,7 @@ async def main() -> None:
     result = await ws.execute(f"realpath {msg_path}")
     print(await result.stdout_str())
 
-    # Resource-specific commands
+    # VFS-specific commands
 
     # gws gmail triage
     print("=== gws gmail triage ===")

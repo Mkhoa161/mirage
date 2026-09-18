@@ -25,8 +25,8 @@ import pytest
 import pytest_asyncio
 
 from mirage.fuse.fs import MirageFS
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 try:
@@ -42,7 +42,7 @@ _fuse_available = sys.platform in ("linux", "darwin") and _driver_present
 
 @pytest_asyncio.fixture
 async def seed_ws():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /a.txt", stdin=b"hello world")
     await ws.execute("mkdir /sub")
     await ws.execute("tee /sub/b.txt", stdin=b"nested")
@@ -51,7 +51,7 @@ async def seed_ws():
 
 @pytest.fixture
 def rw_ws():
-    return Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio
@@ -86,7 +86,7 @@ async def test_getattr_missing(seed_ws):
 
 @pytest.mark.asyncio
 async def test_getattr_empty_readdir_not_ghost_dir():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("mkdir /emptydir")
     fs = MirageFS(ws.fs)
     with pytest.raises(OSError) as exc:
@@ -391,7 +391,7 @@ async def test_drain_ops_read_deduplication(seed_ws):
 
 @pytest.mark.asyncio
 async def test_fuse_read_uses_cache_when_populated():
-    mem = RAMResource()
+    mem = RAMVFS()
     mem.caches_reads = True
     mem._store.files["/a.txt"] = b"hello world"
     ws = Workspace({"/": mem}, mode=MountMode.WRITE)
@@ -437,14 +437,14 @@ async def test_total_ops_counts_reads_and_writes(rw_ws):
 
 
 def test_permission_error_logged_on_create():
-    ro_ws = Workspace({"/": RAMResource()}, mode=MountMode.READ)
+    ro_ws = Workspace({"/": RAMVFS()}, mode=MountMode.READ)
     fs = MirageFS(ro_ws.fs)
     with pytest.raises(Exception):
         fs.create("/new.txt", 0o644)
 
 
 def test_permission_error_not_counted_as_op():
-    ro_ws = Workspace({"/": RAMResource()}, mode=MountMode.READ)
+    ro_ws = Workspace({"/": RAMVFS()}, mode=MountMode.READ)
     fs = MirageFS(ro_ws.fs)
     fs.core._ops.records.clear()
     with pytest.raises(Exception):
@@ -477,7 +477,7 @@ async def test_fuse_write_buffered_flush(rw_ws):
 @pytest.mark.asyncio
 async def test_mount_background_readable():
     from mirage.fuse.mount import mount_background
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /hello.txt", stdin=b"hi from memory")
     with tempfile.TemporaryDirectory() as mountpoint:
         t = mount_background(ws.fs, mountpoint)
@@ -575,7 +575,7 @@ _PAYLOAD = b"payload-bytes"
 
 @pytest_asyncio.fixture
 async def sizeless_fs():
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /u.json", stdin=_PAYLOAD)
     ops = _SizelessOps(ws.fs)
     return MirageFS(ops), ops
@@ -638,7 +638,7 @@ async def test_unknown_size_truncate_through_a_link_drops_the_targets_cache():
     # The target was opened and released as /u.json, leaving its bytes in
     # the TTL cache; an O_TRUNC open through a link to it must drop that
     # entry too, or the next stat of /u.json serves the old length.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /u.json", stdin=_PAYLOAD)
     await ws.execute("ln -s u.json /lk")
     fs = MirageFS(_SizelessOps(ws.fs))
@@ -860,8 +860,8 @@ async def test_session_bound_fs_enforces_grants():
     shell command in that session would."""
     ws = Workspace(
         {
-            "/open": RAMResource(),
-            "/secret": RAMResource()
+            "/open": RAMVFS(),
+            "/secret": RAMVFS()
         },
         mode=MountMode.WRITE,
     )
@@ -887,7 +887,7 @@ async def test_session_bound_fs_enforces_grants():
 async def test_session_bound_fs_read_narrowing():
     """A session narrowed to read on a mount can read through its
     bound FUSE tree but not write."""
-    ws = Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
     await ws.execute("tee /data/f.txt", stdin=b"bytes")
     session = ws.create_session("ro", mounts={"/data": "read"})
 

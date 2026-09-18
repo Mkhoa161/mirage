@@ -16,8 +16,8 @@ import pytest
 
 from mirage.io import IOResult
 from mirage.io.types import materialize
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 from mirage.workspace.executor.pipes import handle_pipe, handle_subshell
 from mirage.workspace.session import Session
@@ -127,7 +127,7 @@ async def test_a_segment_expands_the_pre_pipeline_status():
     # bash 5.2: each segment is a child of the shell as it stood before
     # the pipeline, so `$?` is the pre-pipeline status even after a
     # sibling segment ran a compound command or a function.
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         for line in ("false; { true; } | echo $?",
                      "f() { true; }; false; f | echo $?",

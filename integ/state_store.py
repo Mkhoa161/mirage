@@ -23,7 +23,7 @@ import uuid  # noqa: E402
 
 from mirage import MountMode, Workspace  # noqa: E402
 from mirage.accessor.s3 import S3Config  # noqa: E402
-from mirage.resource.ram import RAMResource  # noqa: E402
+from mirage.vfs.ram import RAMVFS  # noqa: E402
 from mirage.workspace.session.state import seed_var  # noqa: E402
 from mirage.workspace.session.store import SessionStore  # noqa: E402
 from mirage.workspace.store.redis import RedisWorkspaceStateStore  # noqa: E402
@@ -71,7 +71,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 def make_workspace(prefix: str) -> tuple[Workspace, RedisWorkspaceStateStore]:
     store = make_state_store(prefix)
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
                    workspace_id=WORKSPACE_ID,
                    store=store)

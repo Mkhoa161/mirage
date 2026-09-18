@@ -208,7 +208,7 @@ export function splitOperands(
 
 // Build the -t directory PathSpec from a same-mount reference operand.
 export function wrapTargetDir(ref: PathSpec, virtual: string): PathSpec {
-  return PathSpec.fromStrPath(virtual, rekey(ref.virtual, ref.resourcePath, virtual))
+  return PathSpec.fromStrPath(virtual, rekey(ref.virtual, ref.vfsPath, virtual))
 }
 
 // GNU error line when a -t operand is missing or not a directory.
@@ -470,7 +470,7 @@ function transferLine(src: PathSpec, target: PathSpec, backup: PathSpec | null):
 }
 
 function descendantPath(root: PathSpec, virtual: string): PathSpec {
-  return PathSpec.fromStrPath(virtual, rekey(root.virtual, root.resourcePath, virtual))
+  return PathSpec.fromStrPath(virtual, rekey(root.virtual, root.vfsPath, virtual))
 }
 
 // Recreate a source tree's directories under the destination root. Only

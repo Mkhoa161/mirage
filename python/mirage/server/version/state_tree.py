@@ -15,8 +15,8 @@
 import json
 from typing import Any
 
-from mirage.workspace.snapshot.keys import (CacheKey, MountKey,
-                                            ResourceStateKey, StateKey)
+from mirage.workspace.snapshot.keys import (CacheKey, MountKey, StateKey,
+                                            VFSStateKey)
 from mirage.workspace.snapshot.tar_io import _json_default
 from mirage.workspace.snapshot.utils import FORMAT_VERSION
 
@@ -100,25 +100,18 @@ def tree_inputs_from_state(
     mounts_meta: list[dict[str, Any]] = []
     for mount in state[StateKey.MOUNTS]:
         prefix = mount[MountKey.PREFIX]
-        resource_state = dict(mount[MountKey.RESOURCE_STATE])
-        files = resource_state.pop(ResourceStateKey.FILES, {})
+        vfs_state = dict(mount[MountKey.VFS_STATE])
+        files = vfs_state.pop(VFSStateKey.FILES, {})
         for rel, data in files.items():
             entries[_tree_path(prefix, rel)] = data
         mounts_meta.append({
-            MountKey.INDEX:
-            mount[MountKey.INDEX],
-            MountKey.PREFIX:
-            prefix,
-            MountKey.MODE:
-            mount[MountKey.MODE],
-            MountKey.CONSISTENCY:
-            mount[MountKey.CONSISTENCY],
-            MountKey.RESOURCE_CLASS:
-            mount[MountKey.RESOURCE_CLASS],
-            MountKey.RESOURCE_REF:
-            mount.get(MountKey.RESOURCE_REF),
-            MountKey.RESOURCE_STATE:
-            resource_state,
+            MountKey.INDEX: mount[MountKey.INDEX],
+            MountKey.PREFIX: prefix,
+            MountKey.MODE: mount[MountKey.MODE],
+            MountKey.CONSISTENCY: mount[MountKey.CONSISTENCY],
+            MountKey.VFS_CLASS: mount[MountKey.VFS_CLASS],
+            MountKey.VFS_REF: mount.get(MountKey.VFS_REF),
+            MountKey.VFS_STATE: vfs_state,
         })
     cache = state[StateKey.CACHE]
     config = {
@@ -151,14 +144,14 @@ def to_state(entries: dict[str, bytes], meta: dict[str,
     for mount in meta["mounts"]:
         prefix = mount[MountKey.PREFIX]
         tree_prefix = prefix.strip("/")
-        resource_state = dict(mount[MountKey.RESOURCE_STATE])
+        vfs_state = dict(mount[MountKey.VFS_STATE])
         files: dict[str, bytes] = {}
         for tree_path, data in entries.items():
             if _is_reserved(tree_path):
                 continue
             if _belongs(tree_prefix, tree_path):
                 files[_rel_path(prefix, tree_path)] = data
-        resource_state[ResourceStateKey.FILES] = files
+        vfs_state[VFSStateKey.FILES] = files
         mounts.append({
             MountKey.INDEX:
             mount[MountKey.INDEX],
@@ -168,14 +161,14 @@ def to_state(entries: dict[str, bytes], meta: dict[str,
             mount[MountKey.MODE],
             MountKey.CONSISTENCY:
             mount[MountKey.CONSISTENCY],
-            MountKey.RESOURCE_CLASS:
-            mount[MountKey.RESOURCE_CLASS],
+            MountKey.VFS_CLASS:
+            mount[MountKey.VFS_CLASS],
             # ``get``: a meta committed before the ref was recorded reads
-            # as None, the answer for a resource constructed in code.
-            MountKey.RESOURCE_REF:
-            mount.get(MountKey.RESOURCE_REF),
-            MountKey.RESOURCE_STATE:
-            resource_state,
+            # as None, the answer for a VFS constructed in code.
+            MountKey.VFS_REF:
+            mount.get(MountKey.VFS_REF),
+            MountKey.VFS_STATE:
+            vfs_state,
         })
     config = meta.get("config", {})
     sessions_blob = entries.get(SESSIONS_PATH)

@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.gcs import GCSConfig, GCSResource
+from mirage.vfs.gcs import GCSVFS, GCSConfig
 
 load_dotenv(".env.development")
 
@@ -29,11 +29,11 @@ config = GCSConfig(
     secret_access_key=os.environ["GCS_SECRET_ACCESS_KEY"],
 )
 
-resource = GCSResource(config)
+vfs = GCSVFS(config)
 
 
 async def main():
-    with Workspace({"/gcs/": resource}, mode=MountMode.READ) as ws:
+    with Workspace({"/gcs/": vfs}, mode=MountMode.READ) as ws:
         print("=== VFS MODE: open() reads from GCS transparently ===\n")
 
         print("--- os.listdir() root ---")

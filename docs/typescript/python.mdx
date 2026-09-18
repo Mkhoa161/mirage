@@ -109,9 +109,9 @@ Anything through `sys.stdin.read()`, `input()`, `print()`, `.buffer.read/write()
 Python code under `python3` can `open()` paths inside any Mirage-mounted prefix. Reads and writes route through the workspace's mount layer (RAM, S3, OPFS, Slack, anything you've registered).
 
 ```ts
-import { MountMode, RAMResource } from '@struktoai/mirage-core'
+import { MountMode, RAMVFS } from '@struktoai/mirage-core'
 
-const ram = new RAMResource()
+const ram = new RAMVFS()
 ws.addMount('/ram', ram, MountMode.WRITE)
 
 await ws.fs.writeFile('/ram/in.txt', 'hello')

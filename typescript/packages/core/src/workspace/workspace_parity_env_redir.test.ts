@@ -94,7 +94,7 @@ describe('workspace: whoami', () => {
 })
 
 describe('workspace: man', () => {
-  it('man date renders the page with header and options, no resource section', async () => {
+  it('man date renders the page with header and options, no VFS section', async () => {
     const { ws } = await makeWorkspace()
     const io = await ws.execute('man date')
     expect(io.exitCode).toBe(0)
@@ -414,7 +414,7 @@ describe('workspace: pipeline mount fallback (cwd-less commands)', () => {
   })
 })
 
-describe('workspace: cache resource fallback', () => {
+describe('workspace: cache VFS fallback', () => {
   it('wc under /mirage cwd', async () => {
     const { ws } = await makeWorkspace()
     ws.getSession(ws.defaultSessionId).cwd = '/mirage'

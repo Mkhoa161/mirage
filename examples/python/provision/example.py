@@ -33,47 +33,47 @@ load_dotenv(".env.development")
 
 def build(backend: str):
     if backend == "discord":
-        from mirage.resource.discord import DiscordConfig, DiscordResource
-        return DiscordResource(config=DiscordConfig(
+        from mirage.vfs.discord import DiscordConfig, DiscordVFS
+        return DiscordVFS(config=DiscordConfig(
             token=os.environ["DISCORD_BOT_TOKEN"]))
     if backend == "slack":
-        from mirage.resource.slack import SlackConfig, SlackResource
-        return SlackResource(config=SlackConfig(
-            token=os.environ["SLACK_BOT_TOKEN"],
-            search_token=os.environ.get("SLACK_USER_TOKEN")))
+        from mirage.vfs.slack import SlackConfig, SlackVFS
+        return SlackVFS(config=SlackConfig(token=os.environ["SLACK_BOT_TOKEN"],
+                                           search_token=os.environ.get(
+                                               "SLACK_USER_TOKEN")))
     if backend == "linear":
-        from mirage.resource.linear import LinearConfig, LinearResource
-        return LinearResource(config=LinearConfig(
+        from mirage.vfs.linear import LinearConfig, LinearVFS
+        return LinearVFS(config=LinearConfig(
             api_key=os.environ["LINEAR_API_KEY"]))
     if backend == "trello":
-        from mirage.resource.trello import TrelloConfig, TrelloResource
-        return TrelloResource(
+        from mirage.vfs.trello import TrelloConfig, TrelloVFS
+        return TrelloVFS(
             config=TrelloConfig(api_key=os.environ["TRELLO_API_KEY"],
                                 api_token=os.environ["TRELLO_API_TOKEN"]))
     if backend == "langfuse":
-        from mirage.resource.langfuse import LangfuseConfig, LangfuseResource
-        return LangfuseResource(
+        from mirage.vfs.langfuse import LangfuseConfig, LangfuseVFS
+        return LangfuseVFS(
             config=LangfuseConfig(public_key=os.environ["LANGFUSE_PUBLIC_KEY"],
                                   secret_key=os.environ["LANGFUSE_SECRET_KEY"],
                                   host=os.environ["LANGFUSE_HOST"],
                                   default_trace_limit=5))
     if backend == "email":
-        from mirage.resource.email import EmailConfig, EmailResource
-        return EmailResource(
+        from mirage.vfs.email import EmailConfig, EmailVFS
+        return EmailVFS(
             config=EmailConfig(imap_host=os.environ["IMAP_HOST"],
                                smtp_host=os.environ["SMTP_HOST"],
                                username=os.environ["EMAIL_USERNAME"],
                                password=os.environ["EMAIL_PASSWORD"],
                                max_messages=5))
     if backend == "gdocs":
-        from mirage.resource.gdocs import GDocsConfig, GDocsResource
-        return GDocsResource(config=GDocsConfig(
+        from mirage.vfs.gdocs import GDocsConfig, GDocsVFS
+        return GDocsVFS(config=GDocsConfig(
             client_id=os.environ["GOOGLE_CLIENT_ID"],
             client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
             refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"]))
     if backend == "gmail":
-        from mirage.resource.gmail import GmailConfig, GmailResource
-        return GmailResource(config=GmailConfig(
+        from mirage.vfs.gmail import GmailConfig, GmailVFS
+        return GmailVFS(config=GmailConfig(
             client_id=os.environ["GOOGLE_CLIENT_ID"],
             client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
             refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"]))

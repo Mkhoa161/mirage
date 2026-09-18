@@ -22,13 +22,13 @@ from mirage.commands.builtin.general import COMMANDS as GENERAL_COMMANDS
 from mirage.context import effective_path_mode, strongest_mode_under
 from mirage.ops.config import OpsMount
 from mirage.policy import Decisions, MountRootPolicy, OutputCapPolicy, Policies
-from mirage.resource.base import BaseResource
-from mirage.resource.dev import DevResource
 from mirage.runtime.base import Runtime
-from mirage.runtime.table import VFSRuntime
+from mirage.runtime.table import WorkspaceRuntime
 from mirage.types import ConsistencyPolicy, Limit, MountMode, PathSpec
 from mirage.utils.errors import NoMountError, no_mount
 from mirage.utils.path import owner_prefix
+from mirage.vfs.base import BaseVFS
+from mirage.vfs.dev import DevVFS
 from mirage.workspace.cli import CLIRegistry
 from mirage.workspace.mount.mount import MountEntry
 
@@ -67,13 +67,13 @@ class MountRegistry:
 
     Given a virtual path like "/s3-prod/data/file.json",
     resolves to the mount at "/s3-prod/" and returns the
-    stripped resource path "/data/file.json".
+    stripped VFS path "/data/file.json".
     """
 
     def __init__(self) -> None:
         self._mounts: list[MountEntry] = []
-        self.retiring_resources: dict[int, asyncio.Task[None]] = {}
-        self.retired_resources: WeakValueDictionary[int, BaseResource] = (
+        self.retiring_mounts: dict[int, asyncio.Task[None]] = {}
+        self.retired_mounts: WeakValueDictionary[int, BaseVFS] = (
             WeakValueDictionary())
         self._root: MountEntry | None = None
         # Workspace-level command -> runtime bindings (first listed
@@ -82,10 +82,10 @@ class MountRegistry:
         # bound runtime only for commands that have one, so it cannot
         # tell python3 from grep.
         self.runtime_bindings: dict[str, Runtime] = {}
-        # The world's vfs runtime, set by Workspace after construction.
+        # The world's workspace runtime, set by Workspace after construction.
         # Catch-all when its captures are empty; explicit captures make
         # unclaimed commands an admission failure (126).
-        self.vfs_runtime: VFSRuntime | None = None
+        self.workspace_runtime: WorkspaceRuntime | None = None
         # The ordered runtime world, set by Workspace after
         # construction and refreshed on add(). The CLI script arm
         # selects an interpreter from it (a runtime: pin or the
@@ -122,7 +122,7 @@ class MountRegistry:
         self._consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
         self._file_cache: FileCacheMixin | None = None
         self._reconciler: ReadReconciler | None = None
-        self.mount(DEV_PREFIX, DevResource(), MountMode.WRITE)
+        self.mount(DEV_PREFIX, DevVFS(), MountMode.WRITE)
 
     async def invalidate_after_external(self) -> None:
         """Refetch cached data after native code may have changed files."""
@@ -130,10 +130,10 @@ class MountRegistry:
             await self._file_cache.clear()
         for mount in self.mounts():
             if mount.cache_manager is not None:
-                await mount.cache_manager.clear_index(mount.resource.index)
+                await mount.cache_manager.clear_index(mount.vfs.index)
             else:
                 async with mount.use():
-                    await mount.resource.index.clear()
+                    await mount.vfs.index.clear()
 
     def set_consistency(self, consistency: ConsistencyPolicy) -> None:
         self._consistency = consistency
@@ -157,45 +157,42 @@ class MountRegistry:
 
     def _attach_manager(self, m: MountEntry) -> None:
         m.cache_manager = CacheManager(
-            self._file_cache, m.resource.index, m.prefix,
-            m.resource.caches_reads,
+            self._file_cache, m.vfs.index, m.prefix, m.vfs.caches_reads,
             lambda path: not m.retiring and self.try_mount_for(path) is m)
 
-    def check_resource_available(self, resource: BaseResource) -> None:
-        """A removed resource instance cannot start a second lifecycle."""
-        if id(resource) in self.retiring_resources or any(
-                m.resource is resource and m.retiring for m in self._mounts):
-            raise ValueError("resource is being unmounted")
-        if (resource.is_closed
-                or self.retired_resources.get(id(resource)) is resource):
-            raise ValueError(
-                "resource is closed; create a new resource instance")
+    def check_vfs_available(self, vfs: BaseVFS) -> None:
+        """A removed VFS instance cannot start a second lifecycle."""
+        if id(vfs) in self.retiring_mounts or any(m.vfs is vfs and m.retiring
+                                                  for m in self._mounts):
+            raise ValueError("VFS is being unmounted")
+        if (vfs.is_closed or self.retired_mounts.get(id(vfs)) is vfs):
+            raise ValueError("VFS is closed; create a new VFS instance")
 
     def mount(
         self,
         prefix: str,
-        resource: BaseResource,
+        vfs: BaseVFS,
         mode: MountMode = MountMode.READ,
         consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
     ) -> MountEntry:
-        """Mount a resource and return the Mount object."""
-        self.check_resource_available(resource)
+        """Mount a VFS and return the Mount object."""
+        self.check_vfs_available(vfs)
         stripped = prefix.strip("/")
         norm_prefix = ("/" + stripped + "/" if stripped else "/")
         for existing in self._mounts:
             if existing.prefix == norm_prefix:
                 raise ValueError(f"duplicate mount prefix: "
                                  f"{norm_prefix!r}")
-        m = MountEntry(norm_prefix, resource, mode, consistency)
+        m = MountEntry(norm_prefix, vfs, mode, consistency)
         for existing in self._mounts:
-            if existing.resource is resource:
+            if existing.vfs is vfs:
                 m.activity = existing.activity
                 break
-        for cmd in resource.commands():
+        for cmd in vfs.commands():
             m.register(cmd)
         for cmd in GENERAL_COMMANDS:
             m.register_general(cmd)
-        for ro in resource.ops_list():
+        for ro in vfs.ops_list():
             m.register_op(ro)
         if self._file_cache is not None:
             self._attach_manager(m)
@@ -230,15 +227,15 @@ class MountRegistry:
     def resolve(
         self,
         path: str,
-    ) -> tuple[BaseResource, str, MountMode]:
-        """Returns (resource, resource_path, mode)."""
+    ) -> tuple[BaseVFS, str, MountMode]:
+        """Returns (VFS, vfs_path, mode)."""
         m = self.mount_for(path)
         had_trailing = path.endswith("/")
         norm = "/" + path.strip("/")
-        resource_path = "/" + norm[len(m.prefix):]
-        if had_trailing and not resource_path.endswith("/"):
-            resource_path += "/"
-        return m.resource, resource_path, m.mode
+        vfs_path = "/" + norm[len(m.prefix):]
+        if had_trailing and not vfs_path.endswith("/"):
+            vfs_path += "/"
+        return m.vfs, vfs_path, m.mode
 
     def mount_for_prefix(self, prefix: str) -> MountEntry:
         """The mount at exactly this prefix; raises NoMountError for none.
@@ -427,7 +424,7 @@ class MountRegistry:
         if mount is not None and mount.resolve_command(cmd_name) is None:
             if path_scopes:
                 raise MountCommandUnsupported(
-                    cmd_name, mount.resource.name, path_scopes[0].raw_path
+                    cmd_name, mount.vfs.name, path_scopes[0].raw_path
                     or path_scopes[0].virtual)
             mount = self.mount_for_command(cmd_name)
         elif mount is None:
@@ -445,7 +442,7 @@ class MountRegistry:
         # GCs an orphaned overlay when the backend reports the path gone.
         if (self._reconciler is not None and path_scopes
                 and resolved is not None and not resolved.write
-                and mount.resource.caches_reads
+                and mount.vfs.caches_reads
                 and self._consistency == ConsistencyPolicy.ALWAYS):
             for scope in path_scopes:
                 await self._reconciler.reconcile_read(mount, scope.virtual)
@@ -468,37 +465,37 @@ class MountRegistry:
         return [
             OpsMount(
                 prefix=m.prefix,
-                resource_type=m.resource.name,
-                accessor=m.resource.accessor,
-                index=m.resource.index,
+                resource_type=m.vfs.name,
+                accessor=m.vfs.accessor,
+                index=m.vfs.index,
                 mode=m.mode,
-                ops=m.resource.ops_list(),
-                sizes_always_known=m.resource.SIZES_ALWAYS_KNOWN,
+                ops=m.vfs.ops_list(),
+                sizes_always_known=m.vfs.SIZES_ALWAYS_KNOWN,
             ) for m in self._mounts
         ]
 
-    def find_resource_by_name(
+    def find_vfs_by_name(
         self,
-        resource_name: str | None,
-    ) -> BaseResource | None:
-        """Find a resource by its type name."""
-        if resource_name is None:
+        vfs_name: str | None,
+    ) -> BaseVFS | None:
+        """Find a VFS by its type name."""
+        if vfs_name is None:
             return None
         for mount in self._mounts:
-            if mount.resource.name == resource_name:
-                return mount.resource
+            if mount.vfs.name == vfs_name:
+                return mount.vfs
         return None
 
     def get_resource_type(
         self,
         path: str | None,
     ) -> str | None:
-        """Get the resource type for a virtual path."""
+        """Get the VFS type for a virtual path."""
         if path is None:
             return None
         try:
-            resource, _, _ = self.resolve(path)
-            return resource.name
+            vfs, _, _ = self.resolve(path)
+            return vfs.name
         except NoMountError:
             return None
 
@@ -508,14 +505,14 @@ class MountRegistry:
     ) -> list[tuple[MountEntry, list[str]]]:
         """Group virtual paths by their mount.
 
-        Returns list of (mount, resource_paths).
+        Returns list of (mount, vfs_paths).
         """
         groups: dict[int, tuple[MountEntry, list[str]]] = {}
         for path in paths:
             mount = self.mount_for(path)
-            _, resource_path, _ = self.resolve(path)
+            _, vfs_path, _ = self.resolve(path)
             key = id(mount)
             if key not in groups:
                 groups[key] = (mount, [])
-            groups[key][1].append(resource_path)
+            groups[key][1].append(vfs_path)
         return list(groups.values())

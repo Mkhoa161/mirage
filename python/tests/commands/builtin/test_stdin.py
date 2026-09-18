@@ -14,13 +14,13 @@
 
 import asyncio
 
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 
 def _ws() -> Workspace:
-    mem = RAMResource()
+    mem = RAMVFS()
     asyncio.run(
         mem.write(PathSpec.from_str_path("/hello.txt"),
                   data=b"hello\nworld\nfoo\n"))

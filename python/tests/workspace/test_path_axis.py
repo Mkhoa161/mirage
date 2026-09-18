@@ -18,8 +18,8 @@ import errno
 import pytest
 
 from mirage.context import reset_current_session, set_current_session
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode, PathSpec
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 CARVE_PROFILE = {
@@ -36,7 +36,7 @@ CARVE_PROFILE = {
 
 
 def _seeded(mode: MountMode = MountMode.WRITE) -> Workspace:
-    ws = Workspace({"/repo": (RAMResource(), mode)}, mode=MountMode.WRITE)
+    ws = Workspace({"/repo": (RAMVFS(), mode)}, mode=MountMode.WRITE)
 
     async def seed():
         io = await ws.execute(
@@ -139,7 +139,7 @@ def test_the_op_door_runs_as_the_default_session():
     # `for_session` runs the same door as another session over the
     # same ledger; a session with an explicit empty profile is the
     # host's door to what the default profile hides.
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles={"agent": {
                        "paths": {
@@ -174,7 +174,7 @@ def test_the_op_door_runs_as_the_default_session():
 
 
 def _hiding() -> Workspace:
-    return Workspace({"/data/": RAMResource()},
+    return Workspace({"/data/": RAMVFS()},
                      mode=MountMode.WRITE,
                      profiles={"agent": {
                          "paths": {
@@ -191,7 +191,7 @@ def test_the_op_door_does_not_adopt_another_workspaces_session():
     # session it arrived under. A binding that names no owner is a
     # deliberate placement (a kernel mount binds one that way) and is
     # kept as before.
-    other = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    other = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     wide = other.create_session("wide", profile={})
     ws = _hiding()
     host = ws.create_session("host", profile={})
@@ -278,7 +278,7 @@ def test_a_deeper_show_mode_refines_the_mount_cap():
 def test_a_show_mode_never_grants_past_the_configured_mode():
     # The mount's own mode stays the strongest answer possible: a show
     # stating rw on a READ-configured mount changes nothing.
-    ws = Workspace({"/repo": (RAMResource(), MountMode.READ)})
+    ws = Workspace({"/repo": (RAMVFS(), MountMode.READ)})
     ws.create_session("rev",
                       profile={"paths": {
                           "show": {
@@ -333,7 +333,7 @@ def test_scripts_run_only_from_an_x_region():
 
 
 def test_inline_permissions_cannot_add_show():
-    ws = Workspace({"/repo": RAMResource()})
+    ws = Workspace({"/repo": RAMVFS()})
     try:
         ws.create_session("rev",
                           profile=CARVE_PROFILE,
@@ -455,7 +455,7 @@ def test_a_fork_carries_the_carve_out():
 
 
 def _boxed(profile: dict) -> Workspace:
-    ws = Workspace({"/repo": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/repo": RAMVFS()}, mode=MountMode.WRITE)
 
     async def seed():
         io = await ws.execute("mkdir -p /repo/box/sec /repo/only && "
@@ -602,8 +602,8 @@ def test_a_mounted_child_keeps_the_command_planes_refusal():
     # not-empty refusal stays instead of the cascade destroying the
     # hidden remnant and reporting success while the mount remains.
     ws = Workspace({
-        "/repo": RAMResource(),
-        "/repo/only/m": RAMResource()
+        "/repo": RAMVFS(),
+        "/repo/only/m": RAMVFS()
     },
                    mode=MountMode.WRITE)
 
@@ -629,11 +629,7 @@ def test_ops_rmdir_keeps_the_refusal_when_a_mounted_child_remains():
     # keeps the not-empty refusal instead of the arm destroying the
     # hidden backend remnants and reporting a successful rmdir while
     # the mount remains.
-    ws = Workspace({
-        "/a": RAMResource(),
-        "/a/d/m": RAMResource()
-    },
-                   mode=MountMode.WRITE)
+    ws = Workspace({"/a": RAMVFS(), "/a/d/m": RAMVFS()}, mode=MountMode.WRITE)
 
     async def seed():
         io = await ws.execute("mkdir -p /a/d/sec && printf 'k\\n' > /a/d/sec/k"

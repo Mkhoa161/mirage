@@ -15,8 +15,8 @@
 import pytest
 
 from mirage.context import reset_current_session, set_current_session
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import SessionHandle, Workspace
 from mirage.workspace.session import RAMSessionStore
 
@@ -24,7 +24,7 @@ PROFILES = {"reviewer": {"paths": {"hide": ["/repo/secrets"]}}}
 
 
 def _seeded() -> Workspace:
-    ws = Workspace({"/repo/": RAMResource()},
+    ws = Workspace({"/repo/": RAMVFS()},
                    mode=MountMode.WRITE,
                    profiles=PROFILES)
     return ws
@@ -83,11 +83,11 @@ async def test_a_handle_adopts_a_persisted_session_before_creating_one():
     # flush a record that overwrote the stored profile. The door
     # hydrates first, so the stored session is adopted as is.
     store = RAMSessionStore()
-    first = Workspace({"/repo/": RAMResource()},
+    first = Workspace({"/repo/": RAMVFS()},
                       mode=MountMode.WRITE,
                       profiles=PROFILES,
                       session_store=store)
-    second = Workspace({"/repo/": RAMResource()},
+    second = Workspace({"/repo/": RAMVFS()},
                        mode=MountMode.WRITE,
                        profiles=PROFILES,
                        session_store=store)

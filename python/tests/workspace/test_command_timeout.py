@@ -21,10 +21,10 @@ import pytest
 from mirage import MountMode, Workspace
 from mirage.policy import resolve_producer
 from mirage.policy.builtin import output_cap as sg
-from mirage.resource.ram import RAMResource
 from mirage.runtime.python import LocalRuntime
 from mirage.shell.console import Channel
 from mirage.types import Limit, OnExceed
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace.session.ram import RAMSessionStore
 
 
@@ -42,9 +42,9 @@ def restore_defaults():
 
 def _ws(limits: dict | None = None) -> Workspace:
     if limits:
-        return Workspace({"/data": (RAMResource(), MountMode.WRITE, limits)},
+        return Workspace({"/data": (RAMVFS(), MountMode.WRITE, limits)},
                          mode=MountMode.WRITE)
-    return Workspace({"/data": RAMResource()}, mode=MountMode.WRITE)
+    return Workspace({"/data": RAMVFS()}, mode=MountMode.WRITE)
 
 
 @pytest.mark.asyncio
@@ -124,7 +124,7 @@ async def test_timeout_answers_124_when_the_session_store_suspends(
     # the caller's event stays untouched, the line flushes and is
     # recorded, and `$?` is 124.
     sg.DEFAULT_COMMAND_LIMITS["sleep"] = Limit(timeout_seconds=0.05)
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.WRITE,
                    session_store=_SuspendingStore())
     cancel = asyncio.Event()
@@ -174,8 +174,8 @@ async def test_foreground_timeout_leaves_a_background_job_alone(
 @pytest.mark.asyncio
 async def test_cross_mount_cat_honors_command_default_limit(restore_defaults):
     sg.DEFAULT_COMMAND_LIMITS["cat"] = Limit(max_lines=4)
-    a = RAMResource()
-    b = RAMResource()
+    a = RAMVFS()
+    b = RAMVFS()
     a._store.dirs.add("/")
     b._store.dirs.add("/")
     a._store.files["/x.txt"] = b"a\n" * 20
@@ -190,7 +190,7 @@ async def test_cross_mount_cat_honors_command_default_limit(restore_defaults):
 
 @pytest.mark.asyncio
 async def test_fan_out_find_has_limit_set():
-    a = RAMResource()
+    a = RAMVFS()
     a._store.dirs.add("/")
     a._store.files["/x.txt"] = b"hi\n"
     ws = Workspace({"/a/": a}, mode=MountMode.WRITE)
@@ -203,8 +203,8 @@ async def test_fan_out_find_has_limit_set():
 
 @pytest.mark.asyncio
 async def test_cross_mount_honors_per_mount_timeout_override():
-    a = RAMResource()
-    b = RAMResource()
+    a = RAMVFS()
+    b = RAMVFS()
     a._store.dirs.add("/")
     b._store.dirs.add("/")
     a._store.files["/x.txt"] = b"hi\n"
@@ -226,8 +226,8 @@ async def test_cross_mount_honors_per_mount_timeout_override():
 
 @pytest.mark.asyncio
 async def test_fan_out_uses_tightest_timeout_among_mounts():
-    parent = RAMResource()
-    child = RAMResource()
+    parent = RAMVFS()
+    child = RAMVFS()
     parent._store.dirs.add("/")
     parent._store.files["/a.txt"] = b"hi\n"
     child._store.dirs.add("/")
@@ -250,8 +250,8 @@ async def test_fan_out_uses_tightest_timeout_among_mounts():
 
 @pytest.mark.asyncio
 async def test_fan_out_tightest_when_parent_is_tighter():
-    parent = RAMResource()
-    child = RAMResource()
+    parent = RAMVFS()
+    child = RAMVFS()
     parent._store.dirs.add("/")
     parent._store.files["/a.txt"] = b"hi\n"
     child._store.dirs.add("/")
@@ -361,8 +361,8 @@ async def test_timeout_preserves_partial_records_and_logs(
 
 @pytest.mark.asyncio
 async def test_cross_mount_cat_aggregates_tightest_limit():
-    a = RAMResource()
-    b = RAMResource()
+    a = RAMVFS()
+    b = RAMVFS()
     a._store.dirs.add("/")
     b._store.dirs.add("/")
     a._store.files["/x.txt"] = b"1\n2\n3\n"
@@ -386,7 +386,7 @@ async def test_cross_mount_cat_aggregates_tightest_limit():
 @pytest.mark.asyncio
 async def test_python3_default_limit_fires_like_any_command(restore_defaults):
     sg.DEFAULT_COMMAND_LIMITS["python3"] = Limit(timeout_seconds=0.2)
-    ws = Workspace({"/data": RAMResource()},
+    ws = Workspace({"/data": RAMVFS()},
                    mode=MountMode.EXEC,
                    runtimes=[LocalRuntime()])
     r = await ws.execute('python3 -c "import time; time.sleep(5)"')
@@ -399,7 +399,7 @@ async def test_python3_default_limit_fires_like_any_command(restore_defaults):
 async def test_python3_mount_limit_fires_like_any_command(restore_defaults):
     ws = Workspace(
         {
-            "/data": (RAMResource(), MountMode.EXEC, {
+            "/data": (RAMVFS(), MountMode.EXEC, {
                 "python3": Limit(timeout_seconds=0.2)
             })
         },
@@ -414,7 +414,7 @@ async def test_python3_mount_limit_fires_like_any_command(restore_defaults):
 @pytest.mark.asyncio
 async def test_python3_timeout_reclaims_monty_interpreter(restore_defaults):
     sg.DEFAULT_COMMAND_LIMITS["python3"] = Limit(timeout_seconds=0.2)
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/spin.py"] = b"n = 0\nwhile True:\n    n = n + 1\n"
     ws = Workspace({"/data": ram}, mode=MountMode.EXEC)
     start = time.monotonic()
@@ -430,7 +430,7 @@ async def test_python3_timeout_reclaims_monty_interpreter(restore_defaults):
 
 @pytest.mark.asyncio
 async def test_python3_mount_limit_follows_script_path(restore_defaults):
-    ram = RAMResource()
+    ram = RAMVFS()
     ram._store.files["/slow.py"] = b"import time; time.sleep(5)\n"
     ws = Workspace(
         {
@@ -452,7 +452,7 @@ async def test_python3_mount_limit_follows_script_path(restore_defaults):
 async def test_large_ram_command_honors_caller_cancel(command):
     from mirage.workspace.abort import MirageAbortError
 
-    ram = RAMResource()
+    ram = RAMVFS()
     ram.accessor.store.files["/big"] = b"line\n" * 200_000
     ws = Workspace({"/": ram})
     cancel = asyncio.Event()

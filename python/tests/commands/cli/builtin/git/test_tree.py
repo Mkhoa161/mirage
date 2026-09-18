@@ -17,8 +17,8 @@ import pytest
 from mirage import Workspace
 from mirage.commands.cli.builtin.git import GIT
 from mirage.commands.cli.specs import cli_spec_for
-from mirage.resource.ram import RAMResource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 
 HEAD_MAIN = b"ref: refs/heads/main\n"
 NOT_A_REPO = (b"fatal: not a git repository (or any of the parent "
@@ -74,7 +74,7 @@ def test_status_only_reads():
 
 @pytest.mark.asyncio
 async def test_status_outside_a_repository_is_gits_fatal():
-    with Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE) as ws:
+    with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         result = await ws.execute("git -C /data status")
     assert result.exit_code == 128
@@ -83,7 +83,7 @@ async def test_status_outside_a_repository_is_gits_fatal():
 
 @pytest.mark.asyncio
 async def test_status_reports_the_checked_out_branch():
-    with Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE) as ws:
+    with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.execute("mkdir -p /data/repo/.git")
         await ws.fs.write("/data/repo/.git/HEAD", HEAD_MAIN)
@@ -94,7 +94,7 @@ async def test_status_reports_the_checked_out_branch():
 
 @pytest.mark.asyncio
 async def test_discovery_walks_up_from_a_subdirectory():
-    with Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE) as ws:
+    with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.execute("mkdir -p /data/repo/.git")
         await ws.execute("mkdir -p /data/repo/src/deep")
@@ -109,10 +109,9 @@ async def test_discovery_stops_at_the_mount_root():
     # The .git sits above the mount, on another backend entirely, so
     # git's filesystem-boundary rule must not reach it.
     with Workspace({
-            "/": RAMResource(),
-            "/data/": RAMResource(),
-    },
-                   mode=MountMode.WRITE) as ws:
+            "/": RAMVFS(),
+            "/data/": RAMVFS(),
+    }, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.execute("mkdir -p /.git")
         await ws.fs.write("/.git/HEAD", HEAD_MAIN)
@@ -124,7 +123,7 @@ async def test_discovery_stops_at_the_mount_root():
 
 @pytest.mark.asyncio
 async def test_detached_head_reports_the_short_commit():
-    with Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE) as ws:
+    with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.execute("mkdir -p /data/repo/.git")
         await ws.fs.write("/data/repo/.git/HEAD",
@@ -136,7 +135,7 @@ async def test_detached_head_reports_the_short_commit():
 
 @pytest.mark.asyncio
 async def test_bare_status_uses_the_session_cwd():
-    with Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE) as ws:
+    with Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE) as ws:
         ws.register_cli("git", GIT)
         await ws.execute("mkdir -p /data/repo/.git")
         await ws.fs.write("/data/repo/.git/HEAD", HEAD_MAIN)

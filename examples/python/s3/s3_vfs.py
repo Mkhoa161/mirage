@@ -19,7 +19,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.s3 import S3Config, S3Resource
+from mirage.vfs.s3 import S3VFS, S3Config
 
 load_dotenv(".env.development")
 
@@ -38,15 +38,15 @@ deep_config = S3Config(
     key_prefix="subdata/subsubdata/",
 )
 
-resource = S3Resource(config)
-deep_resource = S3Resource(deep_config)
+vfs = S3VFS(config)
+deep_vfs = S3VFS(deep_config)
 
 
 async def main():
     with Workspace(
         {
-            "/s3/": resource,
-            "/deep/": deep_resource
+            "/s3/": vfs,
+            "/deep/": deep_vfs
         },
             mode=MountMode.READ,
     ) as ws:

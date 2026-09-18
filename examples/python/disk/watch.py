@@ -18,8 +18,8 @@ import tempfile
 from pathlib import Path
 
 from mirage import MountMode, Workspace
-from mirage.resource.disk import DiskResource
 from mirage.types import PathSpec
+from mirage.vfs.disk import DiskVFS
 
 MOUNT = "/data"
 
@@ -54,10 +54,10 @@ async def main() -> None:
     tmp = Path(tempfile.mkdtemp())
     seed(tmp)
 
-    resource = DiskResource(root=str(tmp))
-    ws = Workspace({MOUNT: resource}, mode=MountMode.READ)
-    hook = resource.delta_hook()
-    root = PathSpec.from_str_path(MOUNT, resource_path="")
+    vfs = DiskVFS(root=str(tmp))
+    ws = Workspace({MOUNT: vfs}, mode=MountMode.READ)
+    hook = vfs.delta_hook()
+    root = PathSpec.from_str_path(MOUNT, vfs_path="")
 
     # A baseline pull records state and reports nothing. Hand the
     # checkpoint back on the next call and it diffs against it.

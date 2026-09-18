@@ -17,7 +17,7 @@ import { z } from 'zod'
 
 import { Outcome, Scope } from '../../policy/index.ts'
 import type { Action, AskHandler, CommandContext, Policy } from '../../policy/index.ts'
-import { RAMResource } from '../../resource/ram/ram.ts'
+import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { Runtime } from '../../runtime/base.ts'
 import { LINE_EXECUTOR, type LineExecutor } from '../../runtime/mixin.ts'
 import type { RunResult } from '../../runtime/types.ts'
@@ -84,7 +84,7 @@ afterEach(async () => {
 async function ws(): Promise<Workspace> {
   const parser = await getTestParser()
   const w = new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     { mode: MountMode.WRITE, shellParser: parser, profiles: { r: PROFILE } },
   )
   open.push(w)
@@ -103,7 +103,7 @@ async function ws(): Promise<Workspace> {
 async function inlineWs(onAsk: AskHandler, profile = PROFILE): Promise<Workspace> {
   const parser = await getTestParser()
   const w = new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     { mode: MountMode.WRITE, shellParser: parser, profiles: { r: profile }, onAsk },
   )
   open.push(w)
@@ -334,7 +334,7 @@ const SEALED = parseSessionProfile({
 async function sealedWs(): Promise<Workspace> {
   const parser = await getTestParser()
   const w = new Workspace(
-    { '/data': new RAMResource() },
+    { '/data': new RAMVFS() },
     { mode: MountMode.WRITE, shellParser: parser, profiles: { r: SEALED } },
   )
   open.push(w)
@@ -383,7 +383,7 @@ describe('prejudge', () => {
     // the pass exists to remove.
     const parser = await getTestParser()
     const w = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, shellParser: parser, policies: [new NoCat()] },
     )
     open.push(w)
@@ -494,7 +494,7 @@ describe('prejudge', () => {
     const asked: string[] = []
     const parser = await getTestParser()
     const w = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,
@@ -617,12 +617,12 @@ describe('prejudge', () => {
     const box = new LineBox()
     const parser = await getTestParser()
     const w = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.EXEC,
         shellParser: parser,
         profiles: { r: PROFILE },
-        runtimes: [box, 'vfs'],
+        runtimes: [box, 'workspace'],
       },
     )
     open.push(w)
@@ -654,7 +654,7 @@ describe('prejudge', () => {
     const parser = await getTestParser()
     let consoles = 0
     const w = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParser: parser,

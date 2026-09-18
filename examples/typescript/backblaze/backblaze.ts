@@ -15,7 +15,7 @@
 import dotenv from 'dotenv'
 import {
   MountMode,
-  BackblazeResource,
+  BackblazeVFS,
   Workspace,
   resolvedBackblazeEndpoint,
   type BackblazeConfig,
@@ -37,7 +37,7 @@ function configFromEnv(): BackblazeConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/b2/': new BackblazeResource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/b2/': new BackblazeVFS(config) }, { mode: MountMode.READ })
   try {
     console.log(`=== Backblaze B2 at ${resolvedBackblazeEndpoint(config)} ===`)
 

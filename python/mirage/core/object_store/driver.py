@@ -221,7 +221,7 @@ class ObjectStoreDriver(Generic[A, C]):
     surfaces as ENOTSUP.
 
     Args:
-        resource (str): resource name, used in op records and log lines.
+        vfs (str): VFS name, used in op records and log lines.
         scope_error (int): listing size above which readdir logs a
             warning.
         key_prefix_of (Callable): mount key prefix from the accessor's
@@ -269,7 +269,7 @@ class ObjectStoreDriver(Generic[A, C]):
             query was narrowed beyond the prefix; None means find walks
             ``list_tree`` unnarrowed.
     """
-    resource: str
+    vfs: str
     scope_error: int
     key_prefix_of: Callable[[A], str]
     connect: Callable[[A], AbstractAsyncContextManager[C]]

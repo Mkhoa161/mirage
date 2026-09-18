@@ -18,7 +18,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { CLISpec } from '../commands/cli/types.ts'
 import { IOResult } from '../io/types.ts'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import type { FileEvent, PathSpec } from '../types.ts'
 import { MountMode } from '../types.ts'
@@ -36,9 +36,9 @@ beforeAll(async () => {
 })
 
 function build(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   return new Workspace(
     { '/data': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -83,7 +83,7 @@ describe('Workspace.close', () => {
   it('refuses new work as soon as close starts', async () => {
     const ws = build()
     const closing = ws.close()
-    expect(() => ws.addMount('/late', new RAMResource())).toThrow('Workspace is closed')
+    expect(() => ws.addMount('/late', new RAMVFS())).toThrow('Workspace is closed')
     // The top-level door too: a line that got in here could submit a
     // background job after killAll had already run, and teardown would close
     // resources out from under it.

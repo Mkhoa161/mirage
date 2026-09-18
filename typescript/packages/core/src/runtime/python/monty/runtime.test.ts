@@ -20,7 +20,7 @@ import { MontyUnavailableError } from './binding.ts'
 import { PyodideRuntime } from '../pyodide/runtime.ts'
 import { buildRuntime } from '../../table.ts'
 import { getTestParser } from '../../../workspace/fixtures/workspace_fixture.ts'
-import { RAMResource } from '../../../resource/ram/ram.ts'
+import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { ContentType, FileStat, FileType, MountMode } from '../../../types.ts'
 import { Workspace } from '../../../workspace/workspace/workspace.ts'
 import { PrefixResolver } from '../../resolver.ts'
@@ -807,8 +807,8 @@ describe('Workspace with the monty runtime', () => {
       new MontyUnavailableError('install @pydantic/monty'),
     )
     const ws = new Workspace(
-      { '/data': new RAMResource() },
-      { shellParser: await getTestParser(), runtimes: [runtime, 'vfs'] },
+      { '/data': new RAMVFS() },
+      { shellParser: await getTestParser(), runtimes: [runtime, 'workspace'] },
     )
     try {
       const io = await ws.execute('python3 --version')
@@ -822,8 +822,8 @@ describe('Workspace with the monty runtime', () => {
 
   it('does not print Mirage versions for unbound interpreter commands', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource() },
-      { shellParser: await getTestParser(), runtimes: ['vfs'] },
+      { '/data': new RAMVFS() },
+      { shellParser: await getTestParser(), runtimes: ['workspace'] },
     )
     try {
       for (const name of ['python3', 'python', 'node', 'js']) {
@@ -839,8 +839,8 @@ describe('Workspace with the monty runtime', () => {
 
   it('reports the guest Python version for --version and -V', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource() },
-      { shellParser: await getTestParser(), runtimes: ['monty', 'vfs'] },
+      { '/data': new RAMVFS() },
+      { shellParser: await getTestParser(), runtimes: ['monty', 'workspace'] },
     )
     try {
       for (const line of ['python3 --version', 'python -V', 'python3 -VV']) {
@@ -856,10 +856,10 @@ describe('Workspace with the monty runtime', () => {
 
   it('python3 reads a virtualized file end to end', async () => {
     const parser = await getTestParser()
-    const data = new RAMResource()
+    const data = new RAMVFS()
     const ws = new Workspace(
       { '/data': data },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'vfs'] },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'workspace'] },
     )
     await ws.execute('echo virtual-content > /data/a.txt')
     const io = await ws.execute(
@@ -940,8 +940,8 @@ describe('python3 option table (CPython-pinned)', () => {
   async function run(line: string) {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'workspace'] },
     )
     try {
       return await ws.execute(line)
@@ -953,8 +953,8 @@ describe('python3 option table (CPython-pinned)', () => {
   it('takes -u before a script as a flag, not as the script', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'workspace'] },
     )
     try {
       await ws.execute("printf 'print(42)\\n' > /s.py")
@@ -983,8 +983,8 @@ describe('python3 option table (CPython-pinned)', () => {
   it('sets argv[0] to the script as typed', async () => {
     const parser = await getTestParser()
     const ws = new Workspace(
-      { '/': new RAMResource() },
-      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'vfs'] },
+      { '/': new RAMVFS() },
+      { mode: MountMode.EXEC, shellParser: parser, runtimes: ['monty', 'workspace'] },
     )
     try {
       await ws.execute("printf 'print(argv[0])\\n' > /s.py")

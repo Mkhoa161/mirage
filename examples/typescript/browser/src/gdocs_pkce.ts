@@ -17,7 +17,7 @@
  *
  * Verifies the change in `core/src/core/google/client.ts` (clientSecret
  * optional) by running the full browser-PKCE dance and then exercising a
- * GDocsResource with `{ clientId, refreshToken }` — no client_secret. If
+ * GDocsVFS with `{ clientId, refreshToken }` — no client_secret. If
  * mirage-core's TokenManager can refresh the access token without a secret,
  * `ls /gdocs/`, `cat`, etc. work; if not, the refresh request returns 401.
  *
@@ -33,7 +33,7 @@
  * Tip: open DevTools → Network → token refresh → confirm the request body has
  * NO `client_secret` parameter (PKCE works as expected end-to-end).
  */
-import { GDocsResource, MountMode, Workspace } from '@struktoai/mirage-browser'
+import { GDocsVFS, MountMode, Workspace } from '@struktoai/mirage-browser'
 import { escapeHtml } from './html.ts'
 
 declare const __GOOGLE_CLIENT_ID__: string
@@ -183,9 +183,9 @@ async function run(ws: Workspace, cmd: string): Promise<void> {
 }
 
 async function runDemo(tokens: StoredTokens): Promise<void> {
-  // The point of the demo: construct GDocsResource with NO client_secret.
+  // The point of the demo: construct GDocsVFS with NO client_secret.
   // mirage-core's TokenManager refreshes access tokens via PKCE-style refresh.
-  const gdocs = new GDocsResource({
+  const gdocs = new GDocsVFS({
     clientId: clientId(),
     refreshToken: tokens.refresh,
   })

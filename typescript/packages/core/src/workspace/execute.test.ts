@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { MountMode } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -31,10 +31,10 @@ beforeAll(async () => {
   parser = await createShellParser({ engineWasm, grammarWasm })
 })
 
-function buildWorkspace(): { ws: Workspace; ram: RAMResource } {
-  const ram = new RAMResource()
+function buildWorkspace(): { ws: Workspace; ram: RAMVFS } {
+  const ram = new RAMVFS()
   const registry = new OpsRegistry()
-  registry.registerResource(ram)
+  registry.registerVfs(ram)
   const ws = new Workspace(
     { '/ram': ram },
     { mode: MountMode.WRITE, ops: registry, shellParser: parser },
@@ -192,9 +192,9 @@ describe('Workspace.execute', () => {
   })
 
   it('throws when shellParser is missing', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const registry = new OpsRegistry()
-    registry.registerResource(ram)
+    registry.registerVfs(ram)
     const ws = new Workspace({ '/ram': ram }, { mode: MountMode.READ, ops: registry })
     await expect(ws.execute('true')).rejects.toThrow(/shellParser/)
     await ws.close()
@@ -247,7 +247,7 @@ describe('argv dispatch regressions', () => {
 })
 
 describe('glob rule: resolved by whoever consumes the word, exactly once', () => {
-  function seed(ram: RAMResource): void {
+  function seed(ram: RAMVFS): void {
     ram.store.files.set('/notes.txt', new TextEncoder().encode('line1\n'))
     ram.store.files.set('/nums.txt', new TextEncoder().encode('5\n'))
     ram.store.files.set('/words.txt', new TextEncoder().encode('banana\n'))

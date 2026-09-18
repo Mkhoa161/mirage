@@ -25,10 +25,10 @@ from mirage.config import load_config
 from mirage.io import IOResult
 from mirage.io.types import materialize
 from mirage.policy.match import Outcome
-from mirage.resource.ram import RAMResource
 from mirage.runtime.js.quickjs import QUICKJS_HOME_ENV
 from mirage.runtime.types import ScriptSource
 from mirage.types import MountMode
+from mirage.vfs.ram import RAMVFS
 
 
 class TokenConfig(BaseModel):
@@ -60,7 +60,7 @@ def make_tree() -> CLISpec:
 
 @pytest.fixture
 def ws():
-    workspace = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    workspace = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                           mode=MountMode.WRITE)
     yield workspace
 
@@ -100,7 +100,7 @@ async def test_command_tiers_key_on_the_installed_name():
     # word and not the other, deny and ask rules name one install and
     # leave its twin alone, and a grant runs the line under the granted
     # install's own config.
-    ws = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    ws = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                    mode=MountMode.WRITE,
                    profiles={
                        "crew": {
@@ -194,7 +194,7 @@ async def test_yaml_clis_section_installs_through_load_config():
         cfg = load_config({
             "mounts": {
                 "/data": {
-                    "resource": "ram"
+                    "vfs": "ram"
                 }
             },
             "clis": {
@@ -216,7 +216,7 @@ async def test_yaml_clis_section_installs_through_load_config():
 
 @pytest.mark.asyncio
 async def test_yaml_cli_reference_form_installs(tmp_path):
-    # `cli:` points at code like `resource:` does: a ./file.py:ATTR
+    # `cli:` points at code like `vfs:` does: a ./file.py:ATTR
     # reference loads the CLISpec straight from the script.
     script = tmp_path / "slackish.py"
     script.write_text(
@@ -232,7 +232,7 @@ async def test_yaml_cli_reference_form_installs(tmp_path):
     cfg = load_config({
         "mounts": {
             "/data": {
-                "resource": "ram"
+                "vfs": "ram"
             }
         },
         "clis": {
@@ -255,7 +255,7 @@ async def test_yaml_unknown_cli_key_fails_loud():
     cfg = load_config({
         "mounts": {
             "/data": {
-                "resource": "ram"
+                "vfs": "ram"
             }
         },
         "clis": {
@@ -278,7 +278,7 @@ async def test_policy_sees_the_cli_fact():
             return {"deny": "cli lines are frozen"}
         return None
 
-    workspace = Workspace({"/data": (RAMResource(), MountMode.WRITE)},
+    workspace = Workspace({"/data": (RAMVFS(), MountMode.WRITE)},
                           mode=MountMode.WRITE,
                           route_policy=policy)
     workspace.register_cli("slack-eng", make_tree(), config={"token": "tok"})
@@ -430,7 +430,7 @@ async def test_yaml_script_entry_executes_end_to_end(tmp_path):
     cfg = load_config({
         "mounts": {
             "/data": {
-                "resource": "ram"
+                "vfs": "ram"
             }
         },
         "clis": {

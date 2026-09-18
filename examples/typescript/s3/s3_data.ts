@@ -28,7 +28,7 @@
 import {
   MountMode,
   ProvisionResult,
-  S3Resource,
+  S3VFS,
   Workspace,
   type S3Config,
 } from '@struktoai/mirage-node'
@@ -86,7 +86,7 @@ async function seed(): Promise<void> {
 
 async function main(): Promise<void> {
   await seed()
-  const ws = new Workspace({ '/s3/': new S3Resource(config) }, { mode: MountMode.READ })
+  const ws = new Workspace({ '/s3/': new S3VFS(config) }, { mode: MountMode.READ })
   try {
     console.log('=== PROVISION: estimate bytes before running ===\n')
     for (const cmd of [
@@ -132,7 +132,7 @@ async function main(): Promise<void> {
 
     console.log('\n=== CLEANUP ===')
     const cleanupWs = new Workspace(
-      { '/s3/': new S3Resource(config) },
+      { '/s3/': new S3VFS(config) },
       { mode: MountMode.WRITE },
     )
     await cleanupWs.execute('rm -rf /s3/data')

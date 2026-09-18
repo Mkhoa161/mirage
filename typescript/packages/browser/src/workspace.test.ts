@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import { MountMode } from '@struktoai/mirage-core/types'
 import { installFakeNavigator, makeMockRoot } from './test-utils.ts'
 import { Workspace } from './workspace.ts'
@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('@struktoai/mirage-browser Workspace', () => {
   it('lazy-decodes inlined WASM and runs `echo hi` end-to-end', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const res = await ws.execute('echo hi')
     expect(res.exitCode).toBe(0)
     expect(new TextDecoder().decode(res.stdout)).toBe('hi\n')
@@ -37,7 +37,7 @@ describe('@struktoai/mirage-browser Workspace', () => {
   })
 
   it('reuses the cached parser across executes', async () => {
-    const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     const r1 = await ws.execute('echo one')
     const r2 = await ws.execute('echo two')
     expect(new TextDecoder().decode(r1.stdout)).toBe('one\n')
@@ -46,8 +46,8 @@ describe('@struktoai/mirage-browser Workspace', () => {
   })
 
   it('assigns a unique sessionId per Workspace by default', async () => {
-    const a = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
-    const b = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+    const a = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
+    const b = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
     expect(a.sessionManager.defaultId).not.toBe('default')
     expect(b.sessionManager.defaultId).not.toBe('default')
     expect(a.sessionManager.defaultId).not.toBe(b.sessionManager.defaultId)
@@ -57,7 +57,7 @@ describe('@struktoai/mirage-browser Workspace', () => {
 
   it('honors an explicit sessionId option', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, sessionId: 'pinned' },
     )
     expect(ws.sessionManager.defaultId).toBe('pinned')
@@ -67,7 +67,7 @@ describe('@struktoai/mirage-browser Workspace', () => {
   it('respects explicitly provided shellParserFactory (overrides inlined WASM)', async () => {
     let calls = 0
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       {
         mode: MountMode.WRITE,
         shellParserFactory: async () => {
@@ -99,7 +99,7 @@ describe('@struktoai/mirage-browser Workspace', () => {
 })
 
 it('handles binary grep through the browser workspace', async () => {
-  const ws = new Workspace({ '/data': new RAMResource() }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
   try {
     await ws.execute("printf 'needle\\000tail\\n' > /data/report.pdf")
     const normal = await ws.execute('grep needle /data/report.pdf')

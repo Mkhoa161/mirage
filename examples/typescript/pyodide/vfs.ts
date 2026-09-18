@@ -16,11 +16,11 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import {
-  GDocsResource,
-  LinearResource,
+  GDocsVFS,
+  LinearVFS,
   MountMode,
-  RAMResource,
-  S3Resource,
+  RAMVFS,
+  S3VFS,
   Workspace,
   type GDocsConfig,
   type LinearConfig,
@@ -63,14 +63,14 @@ async function py(ws: Workspace, label: string, code: string): Promise<void> {
 async function main(): Promise<void> {
   const ws = new Workspace({}, { mode: MountMode.EXEC })
   // The demo scripts live under /ram, so the mount carries x.
-  ws.addMount('/ram', new RAMResource(), MountMode.EXEC)
+  ws.addMount('/ram', new RAMVFS(), MountMode.EXEC)
 
   const linear = buildLinear()
-  if (linear !== undefined) ws.addMount('/linear', new LinearResource(linear), MountMode.READ)
+  if (linear !== undefined) ws.addMount('/linear', new LinearVFS(linear), MountMode.READ)
   const gdocs = buildGDocs()
-  if (gdocs !== undefined) ws.addMount('/gdocs', new GDocsResource(gdocs), MountMode.READ)
+  if (gdocs !== undefined) ws.addMount('/gdocs', new GDocsVFS(gdocs), MountMode.READ)
   const s3 = buildS3()
-  if (s3 !== undefined) ws.addMount('/s3', new S3Resource(s3), MountMode.READ)
+  if (s3 !== undefined) ws.addMount('/s3', new S3VFS(s3), MountMode.READ)
 
   console.log('Mounts:', ws.mounts().map((m) => m.prefix).join(', '))
 

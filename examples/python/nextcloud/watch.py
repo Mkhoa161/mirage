@@ -6,8 +6,8 @@ from aiohttp import web
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.nextcloud import NextcloudConfig, NextcloudResource
 from mirage.types import FileChangeKind, FileEvent, PathSpec
+from mirage.vfs.nextcloud import NextcloudConfig, NextcloudVFS
 
 load_dotenv(".env.development")
 
@@ -26,8 +26,8 @@ config = NextcloudConfig(
     username=os.environ.get("NEXTCLOUD_USERNAME", "admin"),
     password=os.environ.get("NEXTCLOUD_PASSWORD", "admin123"),
 )
-resource = NextcloudResource(config)
-ws = Workspace({MOUNT: resource}, mode=MountMode.WRITE)
+vfs = NextcloudVFS(config)
+ws = Workspace({MOUNT: vfs}, mode=MountMode.WRITE)
 files_prefix = f"/{config.username}/files"
 
 

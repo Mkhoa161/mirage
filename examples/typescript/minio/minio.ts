@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import dotenv from 'dotenv'
-import { MinIOResource, MountMode, Workspace, type FileStat, type MinIOConfig } from '@struktoai/mirage-node'
+import { MinIOVFS, MountMode, Workspace, type FileStat, type MinIOConfig } from '@struktoai/mirage-node'
 
 dotenv.config({ path: '.env.development' })
 
@@ -28,7 +28,7 @@ function configFromEnv(): MinIOConfig {
 
 async function main(): Promise<void> {
   const config = configFromEnv()
-  const ws = new Workspace({ '/minio/': new MinIOResource(config) }, { mode: MountMode.WRITE })
+  const ws = new Workspace({ '/minio/': new MinIOVFS(config) }, { mode: MountMode.WRITE })
   try {
     console.log(`=== MinIO at ${config.endpoint} (bucket ${config.bucket}) ===`)
 

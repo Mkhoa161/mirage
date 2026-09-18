@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { Limit, MountMode, OnExceed, PathSpec, type Refusal } from '../types.ts'
 import { MountRegistry } from '../workspace/mount/registry.ts'
@@ -140,14 +140,14 @@ class NoInterpreters implements Policy {
 }
 
 function registry(): MountRegistry {
-  return new MountRegistry({ '/data': new RAMResource() }, MountMode.WRITE, {})
+  return new MountRegistry({ '/data': new RAMVFS() }, MountMode.WRITE, {})
 }
 
 function path(virtual: string): PathSpec {
   return new PathSpec({
     virtual,
     directory: virtual,
-    resourcePath: '',
+    vfsPath: '',
     rawPath: virtual,
     resolved: true,
   })
@@ -161,9 +161,9 @@ function executableWorkspace(
   deny?: readonly CommandRule[],
   policies?: readonly Policy[],
 ): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
-  ops.registerResource(ram)
+  ops.registerVfs(ram)
   return new Workspace(
     { '/data/': ram },
     {

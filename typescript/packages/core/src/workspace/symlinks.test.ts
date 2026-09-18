@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { rstripSlash } from '../utils/slash.ts'
 import { FileStat, FileType, MountMode } from '../types.ts'
@@ -44,9 +44,9 @@ afterAll(() => {
 })
 
 function buildWorkspace(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
-  ops.registerResource(ram)
+  ops.registerVfs(ram)
   return new Workspace({ '/data': ram }, { mode: MountMode.WRITE, ops, shellParser: parser })
 }
 
@@ -120,9 +120,9 @@ describe('symlinks (namespace-backed)', () => {
     // the schema is there, and a grouping mount stats every path under a
     // live collection as a directory. Refusing on either reading denied
     // the ordinary case of adding a link inside a mounted tree.
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const real = ops.call.bind(ops)
     ops.call = async (name, kind, accessor, path, args, kwargs) => {
       if (name === 'stat') {
@@ -160,9 +160,9 @@ describe('symlinks (namespace-backed)', () => {
     // The link rename is the door's, so a policy that denies it wins. mv
     // used to move the node itself, which made it the one write in the
     // shell no admission policy could see.
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace(
       { '/data': ram },
       {

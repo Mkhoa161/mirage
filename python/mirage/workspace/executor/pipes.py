@@ -108,7 +108,7 @@ async def handle_pipe(
         raise
     finally:
         # Explicitly close any intermediate generators that may still
-        # be holding resource resources (HTTP connections, file
+        # be holding VFS resources (HTTP connections, file
         # handles). Harmless on exhausted streams.
         for s in intermediate_streams:
             await close_quietly(s)

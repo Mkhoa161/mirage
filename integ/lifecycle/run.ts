@@ -16,17 +16,17 @@ import { isDeepStrictEqual } from 'node:util'
 import { readFileSync } from 'node:fs'
 import {
   Workspace as NodeWorkspace,
-  buildResource as buildNodeResource,
-  registerResourceFactory as registerNodeResource,
+  buildVfs as buildNodeVfs,
+  registerVfsFactory as registerNodeVfs,
 } from '@struktoai/mirage-node'
 import {
   Workspace as BrowserWorkspace,
-  buildResource as buildBrowserResource,
-  registerResourceFactory as registerBrowserResource,
+  buildVfs as buildBrowserVfs,
+  registerVfsFactory as registerBrowserVfs,
 } from '@struktoai/mirage-browser'
 import { MountMode } from '@struktoai/mirage-core/types'
-import type { Resource } from '@struktoai/mirage-core/resource/base'
-import { RAMResource } from '@struktoai/mirage-core/resource/ram/ram'
+import type { VFS } from '@struktoai/mirage-core/vfs/base'
+import { RAMVFS } from '@struktoai/mirage-core/vfs/ram/ram'
 import type {
   Workspace,
   WorkspaceOptions,
@@ -41,7 +41,7 @@ import { applyStateDict, toStateDict } from '@struktoai/mirage-core/workspace/sn
 import type { WorkspaceStateDict } from '@struktoai/mirage-core/workspace/snapshot/types'
 
 interface ResourceConfig {
-  resource: string
+  vfs: string
   config?: Record<string, unknown>
 }
 
@@ -104,33 +104,33 @@ function profileDocument(raw: Record<string, unknown>) {
 
 interface Host {
   name: string
-  workspace: new (resources: Record<string, Resource>, options: WorkspaceOptions) => Workspace
-  build: (name: string, config: Record<string, unknown>) => Promise<Resource>
+  workspace: new (mounts: Record<string, VFS>, options: WorkspaceOptions) => Workspace
+  build: (name: string, config: Record<string, unknown>) => Promise<VFS>
 }
 
 const HOSTS: Host[] = [
-  { name: 'node', workspace: NodeWorkspace, build: buildNodeResource },
-  { name: 'browser', workspace: BrowserWorkspace, build: buildBrowserResource },
+  { name: 'node', workspace: NodeWorkspace, build: buildNodeVfs },
+  { name: 'browser', workspace: BrowserWorkspace, build: buildBrowserVfs },
 ]
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
 
-class CachedRAMResource extends RAMResource {
+class CachedRAMVFS extends RAMVFS {
   override readonly cachesReads = true
 }
 
 // Register a fixture through the same factory extension point as an embedder.
-for (const register of [registerNodeResource, registerBrowserResource]) {
+for (const register of [registerNodeVfs, registerBrowserVfs]) {
   register('cached-ram', (config) => {
-    const resource = new CachedRAMResource()
+    const vfs = new CachedRAMVFS()
     const files = (config.files ?? {}) as Record<string, string>
-    resource.loadState({
+    vfs.loadState({
       type: 'ram',
       files: Object.fromEntries(
         Object.entries(files).map(([path, data]) => [path, ENC.encode(data)]),
       ),
     })
-    return Promise.resolve(resource)
+    return Promise.resolve(vfs)
   })
 }
 
@@ -157,11 +157,11 @@ async function action(
       return value === null ? null : DEC.decode(value)
     }
     case 'mount': {
-      const resource = await host.build(step.resource, step.config ?? {})
+      const vfs = await host.build(step.vfs, step.config ?? {})
       try {
-        return ws.addMount(step.path, resource, step.mode ?? MountMode.READ).prefix
+        return ws.addMount(step.path, vfs, step.mode ?? MountMode.READ).prefix
       } catch (err) {
-        await resource.close()
+        await vfs.close()
         throw err
       }
     }
@@ -271,9 +271,9 @@ async function action(
 }
 
 async function run(host: Host, testCase: Case): Promise<number> {
-  const resources: Record<string, Resource> = {}
+  const mounts: Record<string, VFS> = {}
   for (const [prefix, config] of Object.entries(testCase.settings.mounts)) {
-    resources[prefix] = await host.build(config.resource, config.config ?? {})
+    mounts[prefix] = await host.build(config.vfs, config.config ?? {})
   }
   const profiles = Object.fromEntries(
     Object.entries(testCase.settings.profiles ?? {}).map(([name, profile]) => [
@@ -281,7 +281,7 @@ async function run(host: Host, testCase: Case): Promise<number> {
       parseSessionProfile(profile),
     ]),
   )
-  const ws = new host.workspace(resources, {
+  const ws = new host.workspace(mounts, {
     mode: testCase.settings.mode,
     profiles,
     ...(testCase.settings.runtimes !== undefined ? { runtimes: testCase.settings.runtimes } : {}),

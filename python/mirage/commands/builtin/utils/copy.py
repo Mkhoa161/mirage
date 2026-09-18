@@ -21,7 +21,7 @@ _SWALLOW = (FileNotFoundError, ValueError)
 def child_path(parent: PathSpec, name: str) -> PathSpec:
     child = parent.virtual.rstrip("/") + "/" + name
     return PathSpec.from_str_path(
-        child, rekey(parent.virtual, parent.resource_path, child))
+        child, rekey(parent.virtual, parent.vfs_path, child))
 
 
 def backend_key_default(path: PathSpec) -> str:

@@ -75,8 +75,7 @@ async def resolve_pattern(
             file_data = await call_read_bytes(read_bytes,
                                               pf,
                                               prefix=mount_prefix_of(
-                                                  pf.virtual,
-                                                  pf.resource_path))
+                                                  pf.virtual, pf.vfs_path))
             pattern = merge_pattern_list(pattern, file_data)
         if pattern is None:
             return NEVER_MATCH, True

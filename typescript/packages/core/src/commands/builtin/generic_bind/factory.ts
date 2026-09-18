@@ -161,7 +161,7 @@ function stampNamespace(raw: CommandIO, children?: ChildMounts, links?: LinkView
 }
 
 export function makeGenericCommands<A extends Accessor = Accessor>(
-  resource: string,
+  vfs: string,
   ops: CommandIO<A>,
   options: MakeGenericCommandsOptions<A> = {},
 ): RegisteredCommand[] {
@@ -183,7 +183,7 @@ export function makeGenericCommands<A extends Accessor = Accessor>(
     // one that crashes when invoked.
     if (!supports(baseOps, b.requirements ?? [])) continue
     const finish = b.read === true ? readWraps : b.write === true ? writeWraps : statWraps
-    // A nested mount's keys live in another resource and no resource
+    // A nested mount's keys live in another VFS and no VFS
     // stores a symlink, so a glob resolved by one backend's readdir
     // misses both. The names are session-scoped, so the fact is stamped
     // per invocation, and the whole guard chain is applied on top of
@@ -242,7 +242,7 @@ export function makeGenericCommands<A extends Accessor = Accessor>(
     commands.push(
       ...command({
         name: b.name,
-        resource,
+        vfs,
         spec: specOf(b.name),
         fn,
         provision,

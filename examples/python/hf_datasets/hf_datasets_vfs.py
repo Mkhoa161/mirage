@@ -18,7 +18,7 @@ import os
 from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
-from mirage.resource.hf_datasets import HfDatasetsConfig, HfDatasetsResource
+from mirage.vfs.hf_datasets import HfDatasetsConfig, HfDatasetsVFS
 
 load_dotenv(".env.development")
 
@@ -27,12 +27,12 @@ config = HfDatasetsConfig(
                            "AlienKevin/SWE-ZERO-12M-trajectories"),
     token=os.environ.get("HF_TOKEN"),
 )
-resource = HfDatasetsResource(config)
+vfs = HfDatasetsVFS(config)
 
 
 async def main():
-    with Workspace({"/ds/": resource}, mode=MountMode.READ) as ws:
-        print(f"=== VFS: {resource.accessor.bucket_uri} ===")
+    with Workspace({"/ds/": vfs}, mode=MountMode.READ) as ws:
+        print(f"=== VFS: {vfs.accessor.bucket_uri} ===")
 
         print("\n--- os.listdir('/ds') ---")
         root_entries = os.listdir("/ds")

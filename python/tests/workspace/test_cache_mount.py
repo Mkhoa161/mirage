@@ -20,16 +20,16 @@ from mirage.core.disk.constants import SCOPE_ERROR
 from mirage.core.disk.read import read_bytes
 from mirage.core.disk.readdir import readdir
 from mirage.io.types import IOResult
-from mirage.resource.disk import DiskResource
-from mirage.resource.ram import RAMResource
 from mirage.types import ConsistencyPolicy, MountMode, PathSpec
 from mirage.utils.glob_walk import make_resolve_glob
+from mirage.vfs.disk import DiskVFS
+from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
 
 resolve_glob = make_resolve_glob(readdir, SCOPE_ERROR)
 
 
-@command("stat", resource="disk", spec=SPECS["stat"], filetype=".zzz")
+@command("stat", vfs="disk", spec=SPECS["stat"], filetype=".zzz")
 async def stat_zzz_disk(
     accessor,
     paths: list[PathSpec],
@@ -47,13 +47,13 @@ async def stat_zzz_disk(
 @pytest.mark.asyncio
 async def test_cache_decoupled_from_root_mount():
     """The file cache is a hidden store reached via ``registry.file_cache``,
-    not the virtual root mount's resource. When no ``/`` is mounted the root
+    not the virtual root mount's VFS. When no ``/`` is mounted the root
     is an ordinary empty RAM mount at ``/`` (a normal entry in ``_mounts``)
     and never holds the cache."""
-    ws = Workspace({"/data/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     assert ws._registry.file_cache is ws.cache
-    assert ws._registry.root_mount.resource is not ws.cache
-    assert ws._registry.root_mount.resource.caches_reads is False
+    assert ws._registry.root_mount.vfs is not ws.cache
+    assert ws._registry.root_mount.vfs.caches_reads is False
     assert ws._registry.root_mount.prefix == "/"
     assert ws._registry.root_mount in ws._registry.mounts()
 
@@ -65,7 +65,7 @@ async def test_warm_read_stays_on_real_mount(tmp_path):
     the cached bytes while the command stays on its real mount and keeps its
     custom handler."""
     (tmp_path / "example.zzz").write_bytes(b"payload")
-    disk = DiskResource(root=str(tmp_path))
+    disk = DiskVFS(root=str(tmp_path))
     disk.caches_reads = True
     ws = Workspace({"/": disk}, mode=MountMode.READ)
     ws.mount("/").register_fns([stat_zzz_disk])
@@ -85,11 +85,11 @@ async def test_cross_mount_read_serves_cache(tmp_path):
     by mutating the file out-of-band: the cross-mount read still returns the
     cached v1."""
     (tmp_path / "a.txt").write_bytes(b"v1\n")
-    disk = DiskResource(root=str(tmp_path))
+    disk = DiskVFS(root=str(tmp_path))
     disk.caches_reads = True
     ws = Workspace({
         "/d/": disk,
-        "/r/": RAMResource()
+        "/r/": RAMVFS()
     },
                    mode=MountMode.WRITE,
                    consistency=ConsistencyPolicy.LAZY)
@@ -102,17 +102,14 @@ async def test_cross_mount_read_serves_cache(tmp_path):
 
 
 def _stat_scope(path):
-    return PathSpec(virtual=path,
-                    directory=path,
-                    resource_path="",
-                    resolved=True)
+    return PathSpec(virtual=path, directory=path, vfs_path="", resolved=True)
 
 
 @pytest.mark.asyncio
 async def test_stat_gcs_orphaned_overlay_under_always():
     """A remotely-deleted path leaves an orphaned attribute overlay. Under
     ALWAYS, a stat that the backend reports gone GCs the overlay node."""
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    consistency=ConsistencyPolicy.ALWAYS)
     await ws.namespace.ensure_loaded()
@@ -129,7 +126,7 @@ async def test_stat_gcs_orphaned_overlay_under_always():
 async def test_shell_stat_gcs_orphan_under_always():
     """A single-mount shell read (not the dispatcher) reconciles via the
     registry: under ALWAYS, a stat the backend reports gone GCs the overlay."""
-    ram = RAMResource()
+    ram = RAMVFS()
     ram.caches_reads = True
     ws = Workspace({"/r/": ram},
                    mode=MountMode.WRITE,
@@ -146,7 +143,7 @@ async def test_shell_stat_gcs_orphan_under_always():
 @pytest.mark.asyncio
 async def test_stat_keeps_overlay_under_lazy():
     """Under LAZY the overlay is left in place (no reconcile)."""
-    ws = Workspace({"/data/": RAMResource()},
+    ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
                    consistency=ConsistencyPolicy.LAZY)
     await ws.namespace.ensure_loaded()

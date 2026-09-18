@@ -31,7 +31,7 @@ from dotenv import load_dotenv
 
 from mirage import MountMode, Workspace
 from mirage.agents.claude_agent_sdk import build_options
-from mirage.resource.ram import RAMResource
+from mirage.vfs.ram import RAMVFS
 
 load_dotenv(".env.development")
 
@@ -54,7 +54,7 @@ EXPECTED = {
 
 
 async def main() -> None:
-    ws = Workspace({"/": RAMResource()}, mode=MountMode.WRITE)
+    ws = Workspace({"/": RAMVFS()}, mode=MountMode.WRITE)
     options = build_options(ws)
     options.model = "claude-sonnet-4-6"
     options.permission_mode = "bypassPermissions"

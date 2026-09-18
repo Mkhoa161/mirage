@@ -15,8 +15,8 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { cachesReads } from '../resource/base.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { cachesReads } from '../vfs/base.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser } from '../shell/parse/index.ts'
 import { ConsistencyPolicy, MountMode, PathSpec } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -30,15 +30,15 @@ const grammarWasm = readFileSync(require.resolve('tree-sitter-bash/tree-sitter-b
 describe('cache is a hidden store, not a mount', () => {
   it('is decoupled from the root mount', async () => {
     // The file cache is reached via `registry.fileCache`, not the root mount's
-    // resource. When no `/` is mounted the root is an ordinary empty RAM mount
+    // VFS. When no `/` is mounted the root is an ordinary empty RAM mount
     // at `/` (a normal entry in allMounts) and never holds the cache.
-    const ws = new Workspace({ '/data/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/data/': new RAMVFS() }, { mode: MountMode.WRITE })
     try {
       expect(ws.registry.fileCache).toBe(ws.cache)
       const root = ws.registry.rootMount
       expect(root).not.toBeNull()
-      expect(root?.resource).not.toBe(ws.cache)
-      expect(cachesReads(root?.resource ?? new RAMResource())).toBe(false)
+      expect(root?.vfs).not.toBe(ws.cache)
+      expect(cachesReads(root?.vfs ?? new RAMVFS())).toBe(false)
       expect(root?.prefix).toBe('/')
       expect(ws.registry.allMounts()).toContain(root)
     } finally {
@@ -47,10 +47,10 @@ describe('cache is a hidden store, not a mount', () => {
   })
 
   it('reuses a user-provided / mount as the root anchor (no synthetic root)', async () => {
-    const userRoot = new RAMResource()
+    const userRoot = new RAMVFS()
     const ws = new Workspace({ '/': userRoot }, { mode: MountMode.WRITE })
     try {
-      expect(ws.registry.rootMount?.resource).toBe(userRoot)
+      expect(ws.registry.rootMount?.vfs).toBe(userRoot)
       expect(ws.registry.fileCache).toBe(ws.cache)
     } finally {
       await ws.close()
@@ -60,7 +60,7 @@ describe('cache is a hidden store, not a mount', () => {
 
 describe('warm read serves from the hidden store, command stays on its mount', () => {
   it('serves a cached operand under LAZY after out-of-band mutation', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     // Force the cache on a local backend so the read is cached and, under LAZY,
     // never revalidated. A subsequent out-of-band mutation must NOT be seen:
     // the warm read serves the cached bytes from the hidden store while the
@@ -91,7 +91,7 @@ describe('warm read serves from the hidden store, command stays on its mount', (
 describe('namespace orphan GC on remote delete', () => {
   it('GCs an orphaned overlay when a stat reports the path gone under ALWAYS', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
     )
     try {
@@ -106,7 +106,7 @@ describe('namespace orphan GC on remote delete', () => {
   })
 
   it('a single-mount shell stat GCs an orphaned overlay under ALWAYS', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
     const ws = new Workspace(
       { '/r': ram },
@@ -129,7 +129,7 @@ describe('namespace orphan GC on remote delete', () => {
 
   it('leaves the overlay in place under LAZY', async () => {
     const ws = new Workspace(
-      { '/data': new RAMResource() },
+      { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, consistency: ConsistencyPolicy.LAZY },
     )
     try {

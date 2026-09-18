@@ -28,9 +28,9 @@ import { IOResult } from '../io/types.ts'
 import { PolicyDenied } from '../policy/errors.ts'
 import type { Policy } from '../policy/index.ts'
 import type { Action, SessionContext } from '../policy/types.ts'
-import { secretStr } from '../resource/secrets.ts'
+import { secretStr } from '../vfs/secrets.ts'
 import { OpsRegistry } from '../ops/registry.ts'
-import { RAMResource } from '../resource/ram/ram.ts'
+import { RAMVFS } from '../vfs/ram/ram.ts'
 import { type JobResult } from '../shell/job_table/index.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
 import { MountMode } from '../types.ts'
@@ -40,7 +40,7 @@ import {
   applyStateDict,
   buildMountArgs,
   restoresAsFreshRAM,
-  savedResourceBuild,
+  savedVfsBuild,
   toStateDict,
 } from './snapshot/state.ts'
 import type { MountSnapshot } from './snapshot/types.ts'
@@ -65,9 +65,9 @@ afterAll(() => {
 })
 
 function buildWorkspace(): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
-  ops.registerResource(ram)
+  ops.registerVfs(ram)
   return new Workspace({ '/data': ram }, { mode: MountMode.WRITE, ops, shellParser: parser })
 }
 
@@ -105,21 +105,21 @@ describe('toStateDict / applyStateDict', () => {
   })
 
   it('restores cache entries even when every mount has redacted config', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace({ '/data': ram }, { mode: MountMode.WRITE, ops, shellParser: parser })
     await ws.execute('echo "cached" | tee /data/x.txt > /dev/null')
     await ws.execute('cat /data/x.txt > /dev/null')
     const state = await toStateDict(ws)
     expect(state.cache.entries.length).toBeGreaterThan(0)
     for (const m of state.mounts) {
-      Object.assign(m.resource_state, { config: { token: '<REDACTED>' } })
+      Object.assign(m.vfs_state, { config: { token: '<REDACTED>' } })
     }
 
-    const overrides: Record<string, RAMResource> = {}
-    for (const m of state.mounts) overrides[m.prefix] = new RAMResource()
+    const overrides: Record<string, RAMVFS> = {}
+    for (const m of state.mounts) overrides[m.prefix] = new RAMVFS()
     const restored = await Workspace.fromState(
       state,
       { mode: MountMode.WRITE, ops: new OpsRegistry(), shellParser: parser },
@@ -201,7 +201,7 @@ describe('Workspace.snapshot / load — filenames with spaces and unicode', () =
   it('roundtrips RAM filenames containing spaces and unicode chars', async () => {
     const src = buildWorkspace()
     const srcMount = src.mount('/data/')
-    const srcRam = srcMount.resource as RAMResource
+    const srcRam = srcMount.vfs as RAMVFS
     const ENC = new TextEncoder()
     srcRam.store.files.set('/my file.txt', ENC.encode('with spaces'))
     srcRam.store.files.set('/dir with space/data.txt', ENC.encode('nested with space'))
@@ -216,7 +216,7 @@ describe('Workspace.snapshot / load — filenames with spaces and unicode', () =
       shellParser: parser,
     })
     const dstMount = loaded.mount('/data/')
-    const dstRam = dstMount.resource as RAMResource
+    const dstRam = dstMount.vfs as RAMVFS
     const DEC = new TextDecoder()
     expect(DEC.decode(dstRam.store.files.get('/my file.txt'))).toBe('with spaces')
     expect(DEC.decode(dstRam.store.files.get('/dir with space/data.txt'))).toBe('nested with space')
@@ -229,7 +229,7 @@ describe('Workspace.snapshot / load — filenames with spaces and unicode', () =
 describe('Workspace.snapshot / load — per-mount mode preservation', () => {
   it('preserves per-mount modes through save → load', async () => {
     const ws = new Workspace(
-      { '/': new RAMResource(), '/ro': [new RAMResource(), MountMode.READ] as const },
+      { '/': new RAMVFS(), '/ro': [new RAMVFS(), MountMode.READ] as const },
       { mode: MountMode.WRITE },
     )
     const tmp = join(mkdtempSync(join(tmpdir(), 'snap-')), 'ws.tar')
@@ -243,7 +243,7 @@ describe('Workspace.snapshot / load — per-mount mode preservation', () => {
   })
 
   it('load accepts an in-memory tar buffer', async () => {
-    const ws = new Workspace({ '/': new RAMResource() }, { mode: MountMode.WRITE })
+    const ws = new Workspace({ '/': new RAMVFS() }, { mode: MountMode.WRITE })
     const tmp = join(mkdtempSync(join(tmpdir(), 'snap-')), 'ws.tar')
     await ws.snapshot(tmp)
     const buf = readFileSync(tmp)
@@ -304,9 +304,9 @@ describe('Workspace.fromState — sessions and finished jobs', () => {
   })
 
   it('preserves a non-default default session id and agent id', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const ws = new Workspace(
       { '/data': ram },
       { mode: MountMode.WRITE, ops, shellParser: parser, sessionId: 'main', agentId: 'agent-7' },
@@ -344,17 +344,17 @@ describe('Workspace.fromState — sessions and finished jobs', () => {
 
   it('aggregates every redacted mount missing an override into one error', async () => {
     const ops = new OpsRegistry()
-    const ramA = new RAMResource()
-    const ramB = new RAMResource()
-    ops.registerResource(ramA)
-    ops.registerResource(ramB)
+    const ramA = new RAMVFS()
+    const ramB = new RAMVFS()
+    ops.registerVfs(ramA)
+    ops.registerVfs(ramB)
     const ws = new Workspace(
       { '/a': ramA, '/b': ramB },
       { mode: MountMode.WRITE, ops, shellParser: parser },
     )
     const state = await toStateDict(ws)
     for (const m of state.mounts) {
-      Object.assign(m.resource_state, { config: { token: '<REDACTED>' } })
+      Object.assign(m.vfs_state, { config: { token: '<REDACTED>' } })
     }
     let err: Error | null = null
     try {
@@ -426,7 +426,7 @@ describe('cli registry snapshot', () => {
 
   it('copy shares live cli secrets and the live spec', async () => {
     // The spec is deliberately NOT in the global registry: copy() must
-    // carry the live CLISpec like a live resource, not resolve by name.
+    // carry the live CLISpec like a live VFS, not resolve by name.
     const spec = makeCliSpec()
     const ws = buildWorkspace()
     ws.registerCli('snapcli', spec, { token: 'sek' })
@@ -508,7 +508,7 @@ describe('cli registry snapshot', () => {
   })
 })
 
-describe('savedResourceBuild', () => {
+describe('savedVfsBuild', () => {
   const known = (name: string): boolean => ['ram', 'disk', 'redis', 'seeded'].includes(name)
 
   function saved(type: string, ref: string | null, config?: unknown): MountSnapshot {
@@ -517,36 +517,36 @@ describe('savedResourceBuild', () => {
       prefix: '/s/',
       mode: MountMode.WRITE,
       consistency: 'lazy',
-      resource_class: type,
-      resource_ref: ref,
-      resource_state: config === undefined ? { type } : { type, config },
+      vfs_class: type,
+      vfs_ref: ref,
+      vfs_state: config === undefined ? { type } : { type, config },
     }
   }
 
   it('rebuilds through the recorded ref before a type the registry also knows', () => {
     // A subclass inherits `kind`, so an alias registered over a builtin
     // reports the builtin's type; the ref is the door it came through.
-    expect(savedResourceBuild(saved('redis', 'seeded'), known)?.name).toBe('seeded')
-    expect(savedResourceBuild(saved('ram', 'seeded'), known)?.name).toBe('seeded')
+    expect(savedVfsBuild(saved('redis', 'seeded'), known)?.name).toBe('seeded')
+    expect(savedVfsBuild(saved('ram', 'seeded'), known)?.name).toBe('seeded')
     expect(restoresAsFreshRAM(saved('ram', 'seeded'))).toBe(false)
   })
 
   it('falls back to the type only for a mount constructed in code', () => {
-    expect(savedResourceBuild(saved('redis', null), known)?.name).toBe('redis')
+    expect(savedVfsBuild(saved('redis', null), known)?.name).toBe('redis')
     // A v3 snapshot from before the key carries no ref at all.
     const preKey: Partial<MountSnapshot> = { ...saved('redis', null) }
-    delete preKey.resource_ref
-    expect(savedResourceBuild(preKey as MountSnapshot, known)?.name).toBe('redis')
+    delete preKey.vfs_ref
+    expect(savedVfsBuild(preKey as MountSnapshot, known)?.name).toBe('redis')
   })
 
   it('does not guess from the type when the recorded ref cannot be resolved', () => {
-    expect(savedResourceBuild(saved('redis', 'ghost'), known)).toBeNull()
-    expect(savedResourceBuild(saved('ram', 'ghost'), known)).toBeNull()
+    expect(savedVfsBuild(saved('redis', 'ghost'), known)).toBeNull()
+    expect(savedVfsBuild(saved('ram', 'ghost'), known)).toBeNull()
     expect(restoresAsFreshRAM(saved('ram', 'ghost'))).toBe(false)
   })
 
   it('hands a code reference to the registry as recorded', () => {
-    expect(savedResourceBuild(saved('redis', '/tmp/seeded.mjs:SeededRedis'), known)?.name).toBe(
+    expect(savedVfsBuild(saved('redis', '/tmp/seeded.mjs:SeededRedis'), known)?.name).toBe(
       '/tmp/seeded.mjs:SeededRedis',
     )
   })
@@ -561,15 +561,15 @@ describe('savedResourceBuild', () => {
     ]
     for (const entry of local) {
       expect(restoresAsFreshRAM(entry)).toBe(true)
-      expect(savedResourceBuild(entry, known)).toBeNull()
+      expect(savedVfsBuild(entry, known)).toBeNull()
     }
   })
 
   it('passes an object config through and drops any other shape', () => {
-    expect(savedResourceBuild(saved('redis', null, { url: 'redis://x' }), known)?.config).toEqual({
+    expect(savedVfsBuild(saved('redis', null, { url: 'redis://x' }), known)?.config).toEqual({
       url: 'redis://x',
     })
-    expect(savedResourceBuild(saved('redis', null, 'nope'), known)?.config).toEqual({})
+    expect(savedVfsBuild(saved('redis', null, 'nope'), known)?.config).toEqual({})
   })
 
   it('buildMountArgs refuses a mount nobody could build rather than substituting RAM', async () => {
@@ -579,10 +579,10 @@ describe('savedResourceBuild', () => {
     const [mount] = state.mounts
     if (mount === undefined) throw new Error('snapshot recorded no mounts')
     // As saved by a process holding an alias this one never registered.
-    mount.resource_ref = 'ghost'
-    expect(() => buildMountArgs(state)).toThrow(/resources= must include overrides for: \/data/)
+    mount.vfs_ref = 'ghost'
+    expect(() => buildMountArgs(state)).toThrow(/mounts= must include overrides for: \/data/)
     // The same mount handed back live loads.
-    expect(() => buildMountArgs(state, { [mount.prefix]: new RAMResource() })).not.toThrow()
+    expect(() => buildMountArgs(state, { [mount.prefix]: new RAMVFS() })).not.toThrow()
   })
 })
 
@@ -597,9 +597,9 @@ class DenyGate implements Policy {
 }
 
 function gatedWorkspace(prefix = '/data', sessionId?: string): Workspace {
-  const ram = new RAMResource()
+  const ram = new RAMVFS()
   const ops = new OpsRegistry()
-  ops.registerResource(ram)
+  ops.registerVfs(ram)
   return new Workspace(
     { [prefix]: ram },
     {
@@ -644,9 +644,9 @@ describe('applyStateDict and the deployment', () => {
   // mount's state loaded: a workspace matching no snapshot, and one a
   // close would then persist. Every table is vetted before anything lands.
   it('a refused session table leaves the workspace untouched', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const source = new Workspace(
       { '/data': ram },
       { mode: MountMode.WRITE, ops, shellParser: parser, sessionId: 'src' },
@@ -670,9 +670,9 @@ describe('applyStateDict and the deployment', () => {
   // The env template is vetted with the tables, so a refused template
   // lands no session either.
   it('a refused env template lands no session', async () => {
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const source = new Workspace(
       { '/data': ram },
       { mode: MountMode.WRITE, ops, shellParser: parser, env: { GATE_X: '1' } },
@@ -700,9 +700,9 @@ describe('applyStateDict and the deployment', () => {
     expect((await source.execute('export PUBLIC_A=1', { sessionId: 's2' })).exitCode).toBe(0)
     const state = await toStateDict(source)
     await source.close()
-    const ram = new RAMResource()
+    const ram = new RAMVFS()
     const ops = new OpsRegistry()
-    ops.registerResource(ram)
+    ops.registerVfs(ram)
     const target = new Workspace(
       { '/data': ram },
       {
@@ -739,9 +739,9 @@ describe('applyStateDict and the deployment', () => {
       const source = buildWorkspace()
       const state = await toStateDict(source)
       await source.close()
-      const other = new RAMResource()
+      const other = new RAMVFS()
       const ops = new OpsRegistry()
-      ops.registerResource(other)
+      ops.registerVfs(other)
       const target = new Workspace(
         { '/elsewhere': other },
         { mode: MountMode.WRITE, ops, shellParser: parser },
@@ -764,20 +764,20 @@ describe('applyStateDict and the deployment', () => {
   it('a live-only snapshot mount with no matching prefix is reported too', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      const data = new RAMResource()
-      const keep = new RAMResource()
+      const data = new RAMVFS()
+      const keep = new RAMVFS()
       const ops = new OpsRegistry()
-      ops.registerResource(data)
+      ops.registerVfs(data)
       const source = new Workspace(
         { '/data': data, '/keep': keep },
         { mode: MountMode.WRITE, ops, shellParser: parser },
       )
       const state = await toStateDict(source)
       await source.close()
-      for (const m of state.mounts) m.resource_state = { ...m.resource_state, needs_override: true }
-      const live = new RAMResource()
+      for (const m of state.mounts) m.vfs_state = { ...m.vfs_state, needs_override: true }
+      const live = new RAMVFS()
       const liveOps = new OpsRegistry()
-      liveOps.registerResource(live)
+      liveOps.registerVfs(live)
       const loadState = vi.spyOn(live, 'loadState')
       const target = new Workspace(
         { '/keep': live },
