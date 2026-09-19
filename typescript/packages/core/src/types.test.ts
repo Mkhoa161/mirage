@@ -17,10 +17,12 @@ import { describe, expect, it } from 'vitest'
 import {
   ConsistencyPolicy,
   ContentType,
+  DEFAULT_READ_TTL,
   FileStat,
   FileType,
   MountMode,
   PathSpec,
+  ReadPolicy,
   VFSName,
   wordText,
 } from './types.ts'
@@ -45,6 +47,22 @@ describe('ConsistencyPolicy', () => {
 
   it('is frozen at runtime', () => {
     expect(Object.isFrozen(ConsistencyPolicy)).toBe(true)
+  })
+})
+
+describe('ReadPolicy', () => {
+  it('exposes the three read policies with matching string values', () => {
+    expect(ReadPolicy.FRESH).toBe('fresh')
+    expect(ReadPolicy.BOUNDED).toBe('bounded')
+    expect(ReadPolicy.PINNED).toBe('pinned')
+  })
+
+  it('is frozen at runtime', () => {
+    expect(Object.isFrozen(ReadPolicy)).toBe(true)
+  })
+
+  it('bounds reads by the same default the index uses', () => {
+    expect(DEFAULT_READ_TTL).toBe(600)
   })
 })
 

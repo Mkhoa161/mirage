@@ -199,6 +199,60 @@ export const ConsistencyPolicy = Object.freeze({
 export type ConsistencyPolicy = (typeof ConsistencyPolicy)[keyof typeof ConsistencyPolicy]
 
 /**
+ * How a mount decides whether cached bytes may be served.
+ *
+ * FRESH revalidates against the backend's content token before serving a
+ * cached copy; BOUNDED serves without revalidating, within the staleness
+ * bound the mount declares.
+ *
+ * PINNED names the content a commit's fingerprint records. There is no
+ * version layer to pin to, so a mount declaring it is refused at mount time
+ * rather than quietly degraded to head: the vocabulary is published, so
+ * someone will type it, and an informative refusal costs one branch over a
+ * generic invalid-value error.
+ */
+export const ReadPolicy = Object.freeze({
+  FRESH: 'fresh',
+  BOUNDED: 'bounded',
+  PINNED: 'pinned',
+} as const)
+
+export type ReadPolicy = (typeof ReadPolicy)[keyof typeof ReadPolicy]
+
+/**
+ * Seconds. Matches IndexConfig.ttl (cache/index/config.ts) so bodies and
+ * listings expire together out of the box.
+ */
+export const DEFAULT_READ_TTL = 600
+
+/**
+ * One mount's read policy and the bound that goes with it.
+ *
+ * The bound is set under FRESH too, so every cache entry is
+ * self-describing. Two workspaces sharing one Redis cache under different
+ * policies would otherwise write entries the other cannot date, and bounce
+ * them between cold reads indefinitely.
+ */
+export interface ReadSpec {
+  readonly policy: ReadPolicy
+  readonly ttl: number
+}
+
+/**
+ * What the cache write path needs to know about a path's mount.
+ *
+ * Answered per path against the mount table pinned at command start, so a
+ * fill that lands after the command is stamped with the bound of the mount
+ * that produced the bytes rather than whatever holds the prefix by then.
+ * `cacheable` is read first and short-circuits, so `ttl` is never consulted
+ * for a path that is not being cached.
+ */
+export interface CacheFacts {
+  readonly cacheable: boolean
+  readonly ttl: number
+}
+
+/**
  * Behaviour when a remote VFS's live fingerprint differs from the
  * value recorded at snapshot time.
  */
