@@ -377,7 +377,7 @@ describe('Ops is one door with the dispatcher', () => {
     ops.registerVfs(vfs)
     const ws = new Workspace({ '/m': vfs }, { mode: MountMode.WRITE, ops })
     await ws.vfs.writeFile('/m/doc.gdoc.json', 'stored')
-    await ws.cache.set('/m/doc.gdoc.json', new TextEncoder().encode('rendered'))
+    await ws.cache.set('/m/doc.gdoc.json', new TextEncoder().encode('rendered'), { ttl: 600 })
     expect(await ws.vfs.readFileText('/m/doc.gdoc.json')).toBe('rendered')
     expect(DEC.decode(await ws.vfs.readFile('/m/doc.gdoc.json', { raw: true }))).toBe('stored')
   })
@@ -505,7 +505,7 @@ describe('Ops accounting survives the delegation', () => {
       { '/m': vfs },
       { mode: MountMode.WRITE, ops, policies: [new HardCapReadsTo3()] },
     )
-    await ws.cache.set('/m/a.txt', new TextEncoder().encode('0123456789'))
+    await ws.cache.set('/m/a.txt', new TextEncoder().encode('0123456789'), { ttl: 600 })
     ws.records.length = 0
     await expect(ws.vfs.readFile('/m/a.txt')).rejects.toThrow(LimitExceededError)
     const read = ws.records.find((r) => r.op === 'read')
@@ -526,7 +526,7 @@ describe('Ops accounting survives the delegation', () => {
       { '/m': vfs },
       { mode: MountMode.WRITE, ops, policies: [new DenyBigReads()] },
     )
-    await ws.cache.set('/m/a.txt', new TextEncoder().encode('0123456789'))
+    await ws.cache.set('/m/a.txt', new TextEncoder().encode('0123456789'), { ttl: 600 })
     ws.records.length = 0
     await expect(ws.vfs.readFile('/m/a.txt')).rejects.toThrow(PolicyDenied)
     const read = ws.records.find((r) => r.op === 'read')
@@ -578,7 +578,7 @@ describe('a warm cache still answers a ranged read with the window', () => {
     const ws = mkCaching()
     await ws.vfs.writeFile('/m/f.bin', '0123456789')
     const cold = await readAt(ws, 2, 3)
-    await ws.cache.set('/m/f.bin', new TextEncoder().encode('0123456789'))
+    await ws.cache.set('/m/f.bin', new TextEncoder().encode('0123456789'), { ttl: 600 })
     expect(await readAt(ws, 2, 3)).toBe(cold)
     expect(await readAt(ws, 2, 3)).toBe('234')
     expect(await readAt(ws, 7, null)).toBe('789')
@@ -589,7 +589,7 @@ describe('a warm cache still answers a ranged read with the window', () => {
   it('still serves the whole file when no window was asked for', async () => {
     const ws = mkCaching()
     await ws.vfs.writeFile('/m/f.bin', '0123456789')
-    await ws.cache.set('/m/f.bin', new TextEncoder().encode('CACHED-VAL'))
+    await ws.cache.set('/m/f.bin', new TextEncoder().encode('CACHED-VAL'), { ttl: 600 })
     expect(await ws.vfs.readFileText('/m/f.bin')).toBe('CACHED-VAL')
   })
 })

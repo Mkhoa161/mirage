@@ -163,7 +163,21 @@ export class Reconciler {
   // verify. The backends that really cannot be checked are answered by
   // probe's own UNKNOWN arm, one stat later.
   async mayServeCached(mount: MountEntry, path: string): Promise<boolean> {
-    if (mount.read.policy !== ReadPolicy.FRESH) return true
+    if (mount.read.policy !== ReadPolicy.FRESH) {
+      // Bounded: the store expires the entry on its own, except for one
+      // population it cannot. Nothing stamped a ttl before this policy
+      // existed, and setCachedLocked short-circuits a warm read rather
+      // than re-setting it, so a bound-less entry would never acquire one
+      // and never expire. Removing it -- not merely declining to serve it
+      // -- is what makes the cold read that follows stamp the bound;
+      // refusing alone would leave the entry in place and refetch on
+      // every read forever.
+      if (await this.cache.isUnbounded(path)) {
+        await this.cache.remove(path)
+        return false
+      }
+      return true
+    }
     const verdict = await this.probeOrUnknown(mount, path)
     if (verdict === Verdict.GONE) throw enoent(path)
     return verdict === Verdict.FRESH

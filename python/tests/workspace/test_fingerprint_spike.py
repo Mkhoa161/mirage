@@ -403,3 +403,99 @@ def test_metadata_command_reconciles_its_operand():
     assert client.calls["head_object"] == 3, (
         "ls must still reconcile its operand at routing; 2 means the one "
         "door a metadata command has to backend truth went dark")
+
+
+def _bounded_mount(objects, ttl=600):
+    config = S3Config(
+        bucket="test-bucket",
+        region="us-east-1",
+        aws_access_key_id="fake",
+        aws_secret_access_key="fake",
+    )
+    session = MultiBucketSession({"test-bucket": objects})
+    return session, Workspace(
+        {"/s3": (S3VFS(config), MountMode.WRITE)},
+        mode=MountMode.WRITE,
+        read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=ttl),
+    )
+
+
+def test_bounded_stamps_the_mounts_bound_on_the_cache_entry():
+    objects = {"a.txt": b"v1\n"}
+    session, ws = _bounded_mount(objects, ttl=30)
+
+    async def run() -> int | None:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            entry = ws.cache._entries["/s3/a.txt"]
+            await ws.close()
+            return entry.ttl
+
+    assert asyncio.run(run()) == 30, (
+        "the mount's bound must reach the cache entry, or `bounded` is "
+        "`lazy` renamed")
+
+
+def test_bounded_serves_within_the_bound_then_goes_cold():
+    """Cost is the contract: `bounded` costs no probe, and does expire.
+
+    `fresh` and `bounded` differ only in call count, so a functional
+    assertion alone cannot tell one from the other. The clock is advanced
+    by ageing the entry rather than sleeping: CacheEntry.expired reads
+    time.time() at property-read time and there is no clock seam.
+    """
+    objects = {"a.txt": b"v1\n"}
+    session, ws = _bounded_mount(objects, ttl=30)
+    client = session._client
+
+    async def run() -> tuple[bytes, dict[str, int], bytes]:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            client.calls.clear()
+            warm = (await ws.shell("cat /s3/a.txt")).stdout
+            warm_calls = dict(client.calls)
+            objects["a.txt"] = b"v2\n"
+            entry = ws.cache._entries["/s3/a.txt"]
+            entry.cached_at -= 31
+            cold = (await ws.shell("cat /s3/a.txt")).stdout
+            await ws.close()
+            return warm, warm_calls, cold
+
+    warm, warm_calls, cold = asyncio.run(run())
+    assert warm == b"v1\n"
+    assert warm_calls["head_object"] == 1, (
+        "a warm bounded read is cat's own stat and no gate probe; two "
+        "means bounded is revalidating like fresh")
+    assert warm_calls.get("get_object", 0) == 0
+    assert cold == b"v2\n", "past its bound, the entry must not be served"
+
+
+def test_bounded_drops_an_entry_that_carries_no_bound():
+    """The self-heal: entries written before the policy existed.
+
+    Nothing stamped a ttl before this, and a warm read short-circuits
+    rather than re-setting, so such an entry would never acquire a bound
+    and never expire. It has to be removed, not merely refused: refusing
+    alone leaves it in place and refetches on every read forever.
+    """
+    objects = {"a.txt": b"v1\n"}
+    session, ws = _bounded_mount(objects, ttl=30)
+    client = session._client
+
+    async def run() -> tuple[dict[str, int], int | None]:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            # An entry as a pre-D1 deployment left it: no bound.
+            ws.cache._entries["/s3/a.txt"].ttl = None
+            client.calls.clear()
+            assert (await ws.shell("cat /s3/a.txt")).stdout == b"v1\n"
+            replacement = ws.cache._entries["/s3/a.txt"].ttl
+            await ws.close()
+            return dict(client.calls), replacement
+
+    calls, replacement = asyncio.run(run())
+    assert calls["get_object"] == 1, (
+        "the bound-less entry is dropped and read cold, once")
+    assert replacement == 30, (
+        "the cold read must re-stamp the bound, or the drop repeats on "
+        "every read forever")

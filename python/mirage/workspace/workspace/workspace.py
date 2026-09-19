@@ -51,9 +51,9 @@ from mirage.secrets.sources import resolve_sources
 from mirage.secrets.types import ResolvedSource
 from mirage.shell import parse
 from mirage.shell.job_table import ConsoleFactory, JobTable
-from mirage.types import (ConsistencyPolicy, DriftPolicy, FileEvent, FileStat,
-                          JsonValue, MountBackend, MountMode, PathSpec,
-                          ReadSpec, parse_mount_mode)
+from mirage.types import (CacheFacts, ConsistencyPolicy, DriftPolicy,
+                          FileEvent, FileStat, JsonValue, MountBackend,
+                          MountMode, PathSpec, ReadSpec, parse_mount_mode)
 from mirage.utils.ids import new_session_id, new_workspace_id
 from mirage.vfs.base import BaseVFS
 from mirage.vfs.history import HISTORY_PREFIX, HistoryViewVFS
@@ -1284,10 +1284,10 @@ class Workspace:
             self,
             io: IOResult,
             records: list[OpRecord] | None = None,
-            is_cacheable: Callable[[str], bool] | None = None) -> None:
+            cache_facts: Callable[[str], CacheFacts] | None = None) -> None:
         await self._dispatcher.apply_io(io,
                                         records=records,
-                                        is_cacheable=is_cacheable)
+                                        cache_facts=cache_facts)
 
     async def _serialize_line(
         self,

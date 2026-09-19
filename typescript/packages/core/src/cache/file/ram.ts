@@ -208,6 +208,11 @@ export class RAMFileCacheStore extends RAMVFS implements FileCache {
     return Promise.resolve(entry.fingerprint === remoteFingerprint)
   }
 
+  isUnbounded(key: string): Promise<boolean> {
+    const entry = this.entries.get(key)
+    return Promise.resolve(entry?.ttl === null)
+  }
+
   clear(): Promise<void> {
     this.invalidation.invalidateAll()
     this.drainTasks.clear()

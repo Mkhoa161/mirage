@@ -495,6 +495,9 @@ describe('Workspace custom cache option', () => {
     isFresh(): Promise<boolean> {
       return Promise.resolve(false)
     }
+    isUnbounded(): Promise<boolean> {
+      return Promise.resolve(false)
+    }
     clear(): Promise<void> {
       this.store.clear()
       return Promise.resolve()

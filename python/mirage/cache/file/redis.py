@@ -135,6 +135,11 @@ class RedisFileCacheStore(RedisVFS, FileCacheMixin):
             fp = fp.decode()
         return fp == remote_fingerprint
 
+    async def is_unbounded(self, key: str) -> bool:
+        # Redis answers this natively and distinguishes the two cases
+        # that matter: -1 is present with no expiry, -2 is absent.
+        return await self._cache_client.ttl(self._data_key(key)) == -1
+
     async def clear(self) -> None:
         self._invalidation.invalidate_all()
         for task in self._drain_tasks.values():

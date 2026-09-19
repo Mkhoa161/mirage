@@ -168,6 +168,17 @@ class Reconciler:
             bool: True when the cached bytes may be served.
         """
         if mount.read.policy is not ReadPolicy.FRESH:
+            # Bounded: the store expires the entry on its own, except for
+            # one population it cannot. Nothing stamped a ttl before this
+            # policy existed, and `_set_cached_locked` short-circuits a
+            # warm read rather than re-setting it, so a bound-less entry
+            # would never acquire one and never expire. Removing it --
+            # not merely declining to serve it -- is what makes the cold
+            # read that follows stamp the bound; refusing alone would
+            # leave the entry in place and refetch on every read forever.
+            if await self._cache.is_unbounded(path):
+                await self._cache.remove(path)
+                return False
             return True
         verdict = await self._probe_or_unknown(mount, path)
         if verdict is Verdict.GONE:
