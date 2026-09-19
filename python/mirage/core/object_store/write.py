@@ -31,11 +31,11 @@ async def _put(driver: ObjectStoreDriver[A, C], conn: C, key: str, data: bytes,
     holds the PathSpec the message has to carry.
 
     Callers stamp ``meta.fingerprint`` on the op record and deliberately
-    leave ``meta.revision`` off it. Nothing reads a write record's
-    revision today -- ``capture_fingerprints`` still filters to reads --
-    but once it does, an entry carrying one is pinned by
-    ``install_fingerprints`` instead of drift-checked, and on a versioned
-    store that pin would name the revision preceding this write.
+    leave ``meta.revision`` off it. ``capture_fingerprints`` reads a write
+    record now, and an entry carrying a revision is pinned by
+    ``install_fingerprints`` instead of drift-checked, so on a versioned
+    store stamping one here would pin replay to the revision preceding
+    this write.
 
     Args:
         driver (ObjectStoreDriver): the store's native surface.

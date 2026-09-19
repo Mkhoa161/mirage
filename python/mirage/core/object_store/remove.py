@@ -17,6 +17,7 @@ from mirage.cache.context import (invalidate_after_unlink,
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.core.object_store.driver import (A, C, ObjectStoreDriver, PathFn,
                                              RmdirFn)
+from mirage.observe.context import record, start_op
 from mirage.types import PathSpec
 from mirage.utils import key_prefix as kp
 from mirage.utils.errors import enoent, enotempty
@@ -32,8 +33,17 @@ def make_unlink(driver: ObjectStoreDriver[A, C]) -> PathFn[A]:
     async def unlink(accessor: A, path_spec: PathSpec) -> None:
         path = path_spec.mount_path
         key = kp.apply(driver.key_prefix_of(accessor), path)
+        timer = start_op()
         async with driver.connect(accessor) as conn:
-            await driver.delete_file(conn, key)
+            try:
+                await driver.delete_file(conn, key)
+            finally:
+                # In `finally`, not on success: a delete that raises
+                # part-way has already removed keys, and a pin that
+                # outlives the object it names fails the next snapshot
+                # load. The connect is outside, because a connection that
+                # never opened removed nothing.
+                record("unlink", path, driver.vfs, 0, timer)
         await invalidate_after_unlink(path_spec)
         # Deleting the last key under a prefix makes every ancestor that
         # existed only as that prefix disappear, so their cached listings
@@ -57,8 +67,14 @@ def make_remove_prefix(driver: ObjectStoreDriver[A, C]) -> PathFn[A]:
     async def remove_prefix(accessor: A, path_spec: PathSpec) -> None:
         path = path_spec.mount_path
         pfx = kp.apply_dir(driver.key_prefix_of(accessor), path)
+        timer = start_op()
         async with driver.connect(accessor) as conn:
-            await driver.delete_prefix(conn, pfx)
+            try:
+                await driver.delete_prefix(conn, pfx)
+            finally:
+                # A prefix delete is a paginated walk, so a failure
+                # mid-walk has already removed keys.
+                record("rm_r", path, driver.vfs, 0, timer)
         # Not invalidate_after_unlink: a prefix delete takes every key
         # below with it, and each of those listings and bodies was
         # cached under its own key, so nothing above them evicts one.
@@ -106,23 +122,40 @@ def make_rmdir(driver: ObjectStoreDriver[A, C]) -> RmdirFn[A]:
         is_root = not path.strip("/")
         saw_key = False
         has_child = False
+        deleted = False
+        timer = start_op()
         async with driver.connect(accessor) as conn:
-            async for child in driver.list_children(conn, pfx):
-                saw_key = True
-                if child.kind != "marker":
-                    has_child = True
-                    break
-            if not has_child and saw_key:
-                # The marker only, never the prefix. Between the listing
-                # above and this delete another writer may have created a
-                # child, and a prefix delete would take it down too --
-                # the subtree loss this function exists to stop, in a
-                # smaller window. Deleting the one key that spells
-                # "empty directory" cannot reach a child no matter what
-                # arrived after the probe. A root holding no key has no
-                # marker to delete and falls through as the no-op the
-                # prefix delete already was.
-                await driver.delete_file(conn, pfx)
+            try:
+                async for child in driver.list_children(conn, pfx):
+                    saw_key = True
+                    if child.kind != "marker":
+                        has_child = True
+                        break
+                if not has_child and saw_key:
+                    # The marker only, never the prefix. Between the
+                    # listing above and this delete another writer may
+                    # have created a child, and a prefix delete would take
+                    # it down too -- the subtree loss this function exists
+                    # to stop, in a smaller window. Deleting the one key
+                    # that spells "empty directory" cannot reach a child
+                    # no matter what arrived after the probe. A root
+                    # holding no key has no marker to delete and falls
+                    # through as the no-op the prefix delete already was.
+                    await driver.delete_file(conn, pfx)
+                    deleted = True
+            finally:
+                # Gated on the delete having run, not on "did not raise":
+                # the keyless root above deletes nothing and raises
+                # nothing, and a listing that fails after its first
+                # marker reaches here having deleted nothing either.
+                # Recording in those cases would retract a pin -- and for
+                # a root, every pin on the mount -- for an object no one
+                # touched. A delete that raises is the one case `unlink`
+                # treats the other way; here it is immaterial, because
+                # what rmdir removes is the "d/" marker and a pin can
+                # only ever name the "d" object beside it.
+                if deleted:
+                    record("rmdir", path, driver.vfs, 0, timer)
         if has_child:
             raise enotempty(path_spec)
         if not saw_key and not is_root:

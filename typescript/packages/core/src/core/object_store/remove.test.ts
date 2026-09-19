@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { runWithCacheManager } from '../../cache/context.ts'
+import { runWithRecording } from '../../observe/context.ts'
 import { codeOf, FakeAccessor, FakeManager, FakeStore, makeDriver, spec } from './fakes.ts'
 import { makeRemovePrefix, makeRmdir, makeUnlink } from './remove.ts'
 
@@ -117,5 +118,61 @@ describe('object_store remove', () => {
     await managed(() => rmdir(accessor, spec('/a/b')))
     expect(store.contents()).toEqual({ 'a/b/late.txt': 'new' })
     expect(store.deletes).toEqual(['a/b/'])
+  })
+})
+
+async function recorded(fn: () => Promise<void>): Promise<[string, string][]> {
+  const [, records] = await runWithRecording(async () => {
+    await managed(fn)
+  })
+  return records.map((r) => [r.op, r.path])
+}
+
+describe('object_store remove retraction records', () => {
+  it('unlink records a retraction', async () => {
+    const store = new FakeStore()
+    store.objects.set('a/b.txt', new Uint8Array(1))
+    const records = await recorded(() => makeUnlink(makeDriver(store))(accessor, spec('/a/b.txt')))
+    expect(records).toEqual([['unlink', '/mnt/a/b.txt']])
+  })
+
+  it('removePrefix records a retraction', async () => {
+    const store = new FakeStore()
+    store.objects.set('a/b.txt', new Uint8Array(1))
+    const records = await recorded(() => makeRemovePrefix(makeDriver(store))(accessor, spec('/a')))
+    expect(records).toEqual([['rm_r', '/mnt/a']])
+  })
+
+  it('rmdir records a retraction when it deletes the marker', async () => {
+    const store = new FakeStore()
+    store.objects.set('a/', new Uint8Array(0))
+    const records = await recorded(() => makeRmdir(makeDriver(store))(accessor, spec('/a')))
+    expect(records).toEqual([['rmdir', '/mnt/a']])
+  })
+
+  it('rmdir on a keyless root records nothing', async () => {
+    // It deletes nothing and throws nothing, so a record there would
+    // retract every fingerprint on the mount.
+    const records = await recorded(() =>
+      makeRmdir(makeDriver(new FakeStore()))(accessor, spec('/')),
+    )
+    expect(records).toEqual([])
+  })
+})
+
+describe('a retraction records even when the driver call throws', () => {
+  it('unlink records regardless, so the pin cannot outlive the object', async () => {
+    // A delete that fails part-way has already removed keys; an
+    // over-drop costs a refetch, a surviving pin fails the next load.
+    const driver = {
+      ...makeDriver(new FakeStore()),
+      deleteFile: () => Promise.reject(new Error('store on fire')),
+    }
+    const [, records] = await runWithRecording(async () => {
+      await expect(managed(() => makeUnlink(driver)(accessor, spec('/a/b.txt')))).rejects.toThrow(
+        'store on fire',
+      )
+    })
+    expect(records.map((r) => [r.op, r.path])).toEqual([['unlink', '/mnt/a/b.txt']])
   })
 })

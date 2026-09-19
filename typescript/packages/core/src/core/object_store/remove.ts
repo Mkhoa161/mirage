@@ -18,6 +18,7 @@ import {
   invalidateAncestors,
   invalidateSubtree,
 } from '../../cache/context.ts'
+import { record, startOp } from '../../observe/context.ts'
 import { enoent, enotempty } from '../../utils/errors.ts'
 import * as kp from '../../utils/key_prefix.ts'
 import { rstripSlash } from '../../utils/slash.ts'
@@ -27,10 +28,15 @@ import type { ObjectStoreDriver, PathFn } from './driver.ts'
 export function makeUnlink<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>): PathFn<A> {
   return async function unlink(accessor, path) {
     const key = kp.apply(driver.keyPrefixOf(accessor), path.mountPath)
+    const timer = startOp()
     const { conn, close } = await driver.connect(accessor)
     try {
       await driver.deleteFile(conn, key)
     } finally {
+      // In the `finally`, not on success: a delete that raises part-way
+      // has already removed keys, and a pin that outlives the object it
+      // names fails the next snapshot load.
+      record('unlink', path.virtual, driver.vfs, 0, timer)
       await close()
     }
     await invalidateAfterUnlink(path)
@@ -53,10 +59,14 @@ export function makeRemovePrefix<A extends Accessor, C>(
 ): PathFn<A> {
   return async function removePrefix(accessor, path) {
     const pfx = kp.applyDir(driver.keyPrefixOf(accessor), path.mountPath)
+    const timer = startOp()
     const { conn, close } = await driver.connect(accessor)
     try {
       await driver.deletePrefix(conn, pfx)
     } finally {
+      // A prefix delete is a paginated walk, so a failure mid-walk has
+      // already removed keys.
+      record('rm_r', path.virtual, driver.vfs, 0, timer)
       await close()
     }
     // Not invalidateAfterUnlink: a prefix delete takes every key below
@@ -96,9 +106,11 @@ export function makeRmdir<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>
   return async function rmdir(accessor, path) {
     const pfx = kp.applyDir(driver.keyPrefixOf(accessor), path.mountPath)
     const isRoot = rstripSlash(path.mountPath) === ''
+    const timer = startOp()
     const { conn, close } = await driver.connect(accessor)
     let sawKey = false
     let hasChild = false
+    let deleted = false
     try {
       for await (const child of driver.listChildren(conn, pfx)) {
         sawKey = true
@@ -112,8 +124,21 @@ export function makeRmdir<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>
       // is the subtree loss this function exists to stop in a smaller
       // window. A root holding no key has no marker and falls through as
       // the no-op the prefix delete already was.
-      if (!hasChild && sawKey) await driver.deleteFile(conn, pfx)
+      if (!hasChild && sawKey) {
+        await driver.deleteFile(conn, pfx)
+        deleted = true
+      }
     } finally {
+      // Gated on the delete having run, not on "did not throw": the
+      // keyless root above deletes nothing and throws nothing, and a
+      // listing that fails after its first marker reaches here having
+      // deleted nothing either. Recording in those cases would retract a
+      // pin -- and for a root, every pin on the mount -- for an object
+      // no one touched. A delete that rejects is the one case `unlink`
+      // treats the other way; here it is immaterial, because what rmdir
+      // removes is the "d/" marker and a pin can only ever name the "d"
+      // object beside it.
+      if (deleted) record('rmdir', path.virtual, driver.vfs, 0, timer)
       await close()
     }
     if (hasChild) throw enotempty(path)
