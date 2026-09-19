@@ -1501,10 +1501,9 @@ export class Workspace {
   ): Promise<InstanceType<T>> {
     const rebuilt = await withRebuiltMounts(state, overrides, (m) => this.buildSavedVfs(m))
     const args = buildMountArgs(state, rebuilt, cliOverrides)
-    const mounts: Record<string, MountSpec> = {}
-    for (const [prefix, [vfs, mode]] of Object.entries(args.mountArgs)) {
-      mounts[prefix] = [vfs, mode]
-    }
+    // The Mounts ride through whole; flattening them to [vfs, mode]
+    // here is what would drop the restored read policy.
+    const mounts: Record<string, MountSpec> = { ...args.mountArgs }
     const mergedOptions: WorkspaceOptions = {
       ...(args.defaultSessionId !== undefined ? { sessionId: args.defaultSessionId } : {}),
       ...(args.defaultAgentId !== null ? { agentId: args.defaultAgentId } : {}),

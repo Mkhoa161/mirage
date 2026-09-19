@@ -965,8 +965,9 @@ class Workspace:
         | None = None
     ) -> "Workspace":
         args = build_mount_args(state, mounts, clis)
+        # No read= here: each restored Mount carries its own spec, and
+        # the state dict has no workspace-level default to pass.
         ws = cls(args.mount_args,
-                 consistency=args.consistency,
                  session_id=args.default_session_id,
                  agent_id=args.default_agent_id,
                  clis=args.clis,

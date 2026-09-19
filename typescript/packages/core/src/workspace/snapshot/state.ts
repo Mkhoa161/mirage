@@ -54,7 +54,8 @@ import {
   RAMConsoleStore,
   exitOutcome,
 } from '../../shell/console/index.ts'
-import { ConsistencyPolicy, MountMode } from '../../types.ts'
+import { type ReadSpec, DEFAULT_READ_TTL, MountMode, ReadPolicy } from '../../types.ts'
+import { Mount } from '../mount/spec.ts'
 import { VERSION } from '../../version.ts'
 import type { NodeMeta } from '../mount/namespace/namespace.ts'
 import { SessionState, varsFromFields, varsToFields } from '../session/session.ts'
@@ -94,7 +95,8 @@ export async function toStateDict(ws: Workspace): Promise<WorkspaceStateDict> {
       index: i,
       prefix: m.prefix,
       mode: m.mode,
-      consistency: ConsistencyPolicy.LAZY,
+      read: m.read.policy,
+      ttl: m.read.ttl,
       vfs_class: m.vfs.kind,
       vfs_ref: vfsRefOf(m.vfs),
       vfs_state: state,
@@ -241,10 +243,17 @@ export function buildMountArgs(
   overrides: Record<string, VFS> = {},
   cliOverrides: CLIOverrides = {},
 ): MountArgs {
-  if (state.version < FORMAT_VERSION) {
+  // An absent version is v3 or older, not "current". It used to be
+  // harmless because every key the loader read had a default; v4 makes
+  // the read policy required, so an unversioned dict would land on a
+  // bad ReadSpec instead of this message.
+  // Widened deliberately: the type says `version` is always present, but a
+  // dict written before the field existed comes back from JSON without it.
+  const saved = (state as { version?: number }).version
+  if (saved === undefined || saved < FORMAT_VERSION) {
+    const shown = saved === undefined ? 'unversioned' : `v${String(saved)}`
     throw new Error(
-      `snapshot format v${String(state.version)} not supported ` +
-        `(loader expects v${String(FORMAT_VERSION)})`,
+      `snapshot format ${shown} not supported (loader expects v${String(FORMAT_VERSION)})`,
     )
   }
   const normalized: Record<string, VFS> = {}
@@ -273,15 +282,25 @@ export function buildMountArgs(
         `factory (register) or pass a live instance.`,
     )
   }
-  const mountArgs: Record<string, [VFS, MountMode]> = {}
+  const mountArgs: Record<string, Mount> = {}
   for (const m of state.mounts) {
     if (!VALID_MODES.includes(m.mode)) {
       throw new Error(`Workspace.fromState: mount '${m.prefix}' has invalid mode '${m.mode}'`)
     }
-    mountArgs[m.prefix] = [
-      normalized[normMountPrefix(m.prefix)] ?? new RAMVFS(),
-      m.mode as MountMode,
-    ]
+    const saved = normalized[normMountPrefix(m.prefix)]
+    // A mount this package cannot rebuild is stood in for by an empty
+    // RAMVFS. The saved policy belongs to the backend that is not here,
+    // and carrying it onto the stand-in would make the mount-time
+    // verdict refuse a restore that used to succeed -- so the saved spec
+    // applies only when the real backend does.
+    const read: ReadSpec =
+      saved === undefined
+        ? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
+        : { policy: m.read as ReadPolicy, ttl: m.ttl }
+    mountArgs[m.prefix] = new Mount(saved ?? new RAMVFS(), {
+      mode: m.mode as MountMode,
+      read,
+    })
   }
   const cliEntries = state.clis ?? []
   const missingClis = cliEntries
@@ -308,7 +327,6 @@ export function buildMountArgs(
 
   return {
     mountArgs,
-    consistency: ConsistencyPolicy.LAZY,
     defaultSessionId: state.default_session_id,
     defaultAgentId: state.default_agent_id,
     ...(cliEntries.length > 0 ? { clis: cliArgs } : {}),

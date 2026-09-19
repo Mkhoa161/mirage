@@ -33,7 +33,7 @@ import { OpsRegistry } from '../ops/registry.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import { type JobResult } from '../shell/job_table/index.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
-import { MountMode } from '../types.ts'
+import { MountMode, ReadPolicy } from '../types.ts'
 import { VERSION } from '../version.ts'
 import { splitManifestAndBlobs } from './snapshot/manifest.ts'
 import {
@@ -516,7 +516,8 @@ describe('savedVfsBuild', () => {
       index: 0,
       prefix: '/s/',
       mode: MountMode.WRITE,
-      consistency: 'lazy',
+      read: 'bounded',
+      ttl: 600,
       vfs_class: type,
       vfs_ref: ref,
       vfs_state: config === undefined ? { type } : { type, config },
@@ -792,5 +793,48 @@ describe('applyStateDict and the deployment', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+})
+
+describe('the read policy survives a snapshot round trip', () => {
+  // Asserted off the reloaded registry, not off the serialized dict: the
+  // write side and the read side land independently, so checking the dict
+  // would pass while the loader still discarded the policy.
+  it('restores the per-mount spec', async () => {
+    const ws = new Workspace(
+      { '/d': new RAMVFS() },
+      { mode: MountMode.WRITE, read: { policy: ReadPolicy.BOUNDED, ttl: 45 } },
+    )
+    const state = await toStateDict(ws)
+    await ws.close()
+
+    const restored = await Workspace.fromState(
+      state,
+      { mode: MountMode.WRITE },
+      {
+        '/d/': new RAMVFS(),
+      },
+    )
+    const mount = restored.namespace.mountFor('/d/x')
+    expect(mount.read).toEqual({ policy: ReadPolicy.BOUNDED, ttl: 45 })
+    await restored.close()
+  })
+
+  it('refuses a v3 snapshot', async () => {
+    const ws = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    const state = await toStateDict(ws)
+    await ws.close()
+    expect(() => buildMountArgs({ ...state, version: 3 })).toThrow(/v3 not supported/)
+  })
+
+  // The absent-version hole, newly reachable: every key the loader read
+  // used to have a default, so an unversioned dict was merely odd.
+  it('refuses an unversioned snapshot rather than reading it as current', async () => {
+    const ws = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    const state = await toStateDict(ws)
+    await ws.close()
+    const unversioned: Partial<typeof state> = { ...state }
+    delete unversioned.version
+    expect(() => buildMountArgs(unversioned as typeof state)).toThrow(/unversioned/)
   })
 })

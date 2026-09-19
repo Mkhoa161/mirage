@@ -29,7 +29,7 @@ from mirage.policy.types import SessionContext
 from mirage.secrets import registry
 from mirage.secrets.registry import register_secrets
 from mirage.secrets.types import ResolvedSecret
-from mirage.types import ContentType, FileType
+from mirage.types import ContentType, FileType, ReadPolicy, ReadSpec
 from mirage.vfs import registry as vfs_registry
 from mirage.vfs.loader import SCRIPT_MODULE_NAME, load_backend_class
 from mirage.vfs.minio import MinIOConfig, MinIOVFS
@@ -202,7 +202,7 @@ async def test_a_generic_vfs_keeping_the_default_state_needs_an_override():
         build_mount_args(state)
     assert "/b/" in str(exc.value)
     args = build_mount_args(state, mounts={"/b/": Bare()})
-    assert isinstance(args.mount_args["/b/"][0], Bare)
+    assert isinstance(args.mount_args["/b/"].vfs, Bare)
 
 
 TAGGED_MODULE = '''
@@ -275,7 +275,7 @@ async def test_a_colon_reference_rebuilds_through_the_recorded_ref(
     assert mount[MountKey.VFS_CLASS] == "_mirage_user_backend.Tagged"
     assert mount[MountKey.VFS_REF] == ref
     args = build_mount_args(state)
-    rebuilt = args.mount_args["/t/"][0]
+    rebuilt = args.mount_args["/t/"].vfs
     assert type(rebuilt).__name__ == "Tagged"
     # The config class is the declared CONFIG_CLS, not the first name in
     # the module ending in Config (AlphaConfig would have been picked).
@@ -352,7 +352,7 @@ async def test_a_colon_reference_subclassing_a_builtin_keeps_the_subclass(
     finally:
         await ws.close()
     assert state[StateKey.MOUNTS][0][MountKey.VFS_STATE]["type"] == "ram"
-    rebuilt = build_mount_args(state).mount_args["/s/"][0]
+    rebuilt = build_mount_args(state).mount_args["/s/"].vfs
     assert type(rebuilt).__name__ == "SeededRAM"
     assert type(rebuilt) is not RAMVFS
 
@@ -585,3 +585,80 @@ async def test_to_state_dict_carries_no_entries_for_a_redis_cache():
         assert state[StateKey.CACHE][CacheKey.ENTRIES] == []
     finally:
         await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_the_read_policy_survives_a_snapshot_round_trip():
+    """Restored off the reloaded registry, not off the serialized dict.
+
+    The write side and the read side land independently, so asserting
+    that the state dict contains the policy would pass while the loader
+    still discarded it.
+    """
+    vfs = RAMVFS()
+    ws = Workspace({"/d/": vfs},
+                   mode=MountMode.WRITE,
+                   read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45))
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+
+    restored = await Workspace.from_state(state, mounts={"/d/": RAMVFS()})
+    try:
+        mount = restored._registry.mount_for_prefix("/d/")
+        assert mount.read == ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45)
+    finally:
+        await restored.close()
+
+
+@pytest.mark.asyncio
+async def test_a_v3_snapshot_is_refused_with_the_regenerate_message():
+    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    state[StateKey.VERSION] = 3
+    with pytest.raises(ValueError) as exc:
+        build_mount_args(state)
+    assert "v3 not supported" in str(exc.value)
+    assert "regenerate" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_an_unversioned_state_dict_is_refused_not_keyerrored():
+    """The absent-version hole, newly reachable.
+
+    Every key the loader read used to have a default, so a dict with no
+    version was merely odd. v4 makes the read policy required, so an
+    unversioned dict would land on a bare KeyError instead of a message
+    naming the fix.
+    """
+    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    del state[StateKey.VERSION]
+    with pytest.raises(ValueError) as exc:
+        build_mount_args(state)
+    assert "unversioned" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_a_v4_entry_missing_the_read_key_raises_rather_than_defaulting():
+    """Required, never `.get(default)`.
+
+    A dict labelled v4 with the key missing would otherwise install a
+    default on a mount that was saved carrying something else -- the
+    silent-downgrade failure the whole policy exists to remove.
+    """
+    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    del state[StateKey.MOUNTS][0][MountKey.READ]
+    with pytest.raises(KeyError):
+        build_mount_args(state)
