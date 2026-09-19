@@ -333,10 +333,18 @@ DEFAULT_READ_TTL: int = 600
 class ReadSpec:
     """One mount's read policy and the bound that goes with it.
 
-    The bound is set under FRESH too, so every cache entry is
-    self-describing. Two workspaces sharing one Redis cache under
-    different policies would otherwise write entries the other cannot
-    date, and bounce them between cold reads indefinitely.
+    The bound is set under FRESH too, so every cache entry carries one.
+    Two workspaces sharing one Redis cache under different policies would
+    otherwise write entries the other refuses to serve, and bounce them
+    between cold reads indefinitely.
+
+    It is stamped when the entry is written and enforced by the store, so
+    the bound that applies is the writing mount's, not the reading
+    mount's. Those are the same mount inside one workspace; they differ
+    across a shared cache, a lowered ``ttl`` and a restored snapshot, and
+    there the older bound stands until the entry expires. Making the
+    reader authoritative needs a write timestamp every store can read
+    back, which redis does not keep.
     """
 
     policy: ReadPolicy = ReadPolicy.BOUNDED

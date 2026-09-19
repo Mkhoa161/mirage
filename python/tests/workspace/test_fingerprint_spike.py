@@ -45,7 +45,7 @@ def test_disk_cannot_declare_fresh(tmp_path):
     assert "needs a resource that caches reads" in str(exc.value)
 
 
-def test_disk_lazy_keeps_stale_cache_after_external_mutation(tmp_path):
+def test_disk_under_bounded_reads_current_bytes(tmp_path):
     root = tmp_path / "disk"
     root.mkdir()
     (root / "file.txt").write_bytes(b"v1")
@@ -470,6 +470,37 @@ def test_bounded_serves_within_the_bound_then_goes_cold():
         "should have skipped did not")
     assert warm_calls.get("get_object", 0) == 0
     assert cold == b"v2\n", "past its bound, the entry must not be served"
+
+
+def test_bounded_walk_costs_no_per_file_stat():
+    """The other side of ``test_always_revalidates_a_walk_and_a_glob``.
+
+    The same two files under ``fresh`` cost two head_objects, one per
+    file walked. Under ``bounded`` they cost none, so those two probes
+    are exactly what the policy buys -- a claim only a call count can
+    make, since both policies print the same bytes here.
+    """
+    objects = {"a.txt": b"v1\n", "b.txt": b"v1\n"}
+    session, ws = _bounded_mount(objects, ttl=30)
+    client = session._client
+
+    async def run() -> tuple[bytes, dict[str, int]]:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            await ws.shell("cat /s3/b.txt")
+            client.calls.clear()
+            walk = (await ws.shell("grep -r v /s3/")).stdout
+            calls = dict(client.calls)
+            await ws.close()
+            return walk, calls
+
+    walk, calls = asyncio.run(run())
+    assert walk == b"/s3/a.txt:v1\n/s3/b.txt:v1\n"
+    assert calls.get(
+        "head_object",
+        0) == 0, ("a bounded walk must not revalidate; two means bounded is "
+                  "probing like fresh")
+    assert calls.get("get_object", 0) == 0
 
 
 def test_bounded_drops_an_entry_that_carries_no_bound():

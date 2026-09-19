@@ -27,7 +27,7 @@ from mirage.shell.console import (KILLED_OUTCOME, Channel, ConsoleChunk,
                                   JobConsole, RAMConsoleStore, exit_outcome)
 from mirage.shell.job_table import Job, JobStatus
 from mirage.shell.variable import ShellVar
-from mirage.types import JsonValue, MountMode, VFSName
+from mirage.types import JsonValue, MountMode, ReadSpec, VFSName
 from mirage.version import __version__
 from mirage.vfs.history import HISTORY_PREFIX
 from mirage.vfs.loader import SCRIPT_MODULE_NAME
@@ -313,11 +313,18 @@ def build_mount_args(state: dict[str, Any],
         # Subscripted, never `.get(default)`: a dict labelled v4 with the
         # key missing would silently install a default on a mount that
         # was saved otherwise, which is the whole failure this version
-        # bump exists to prevent.
-        # Through the coercer, so a v4 dict carrying a junk policy or a
-        # null/non-positive bound is refused here rather than restoring a
-        # mount whose bound can never expire.
+        # bump exists to prevent. Through the coercer, so a junk policy
+        # or a null/non-positive bound is refused here rather than
+        # restoring a mount whose bound can never expire.
         read = resolve_read_spec(m[MountKey.READ], m[MountKey.TTL])
+        # The saved policy belongs to the backend that was saved. A mount
+        # handed back through `mounts=` -- which a redacted-credential
+        # mount *must* be -- may be a different backend entirely, and
+        # carrying `fresh` onto one that cannot revalidate would refuse a
+        # restore that used to succeed. The override keeps the default;
+        # TypeScript applies the same rule to its stand-in.
+        if prefix in overrides:
+            read = ReadSpec()
         # command_limits is deliberately absent: a mount entry has never
         # carried one, so there is nothing to restore. Emitting Mount
         # objects makes the slot exist, but filling it needs a new

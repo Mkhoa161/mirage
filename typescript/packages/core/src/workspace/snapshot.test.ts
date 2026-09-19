@@ -33,7 +33,7 @@ import { OpsRegistry } from '../ops/registry.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import { type JobResult } from '../shell/job_table/index.ts'
 import { createShellParser, type ShellParser } from '../shell/parse/index.ts'
-import { MountMode, ReadPolicy } from '../types.ts'
+import { DEFAULT_READ_TTL, MountMode, ReadPolicy } from '../types.ts'
 import { VERSION } from '../version.ts'
 import { splitManifestAndBlobs } from './snapshot/manifest.ts'
 import {
@@ -552,6 +552,24 @@ describe('savedVfsBuild', () => {
     )
   })
 
+  // TypeScript alone stands a mount in with an empty RAMVFS when it has
+  // no override and nothing to rebuild from, and such a mount keeps its
+  // saved read spec. That is safe only while nothing that could carry
+  // `fresh` reaches the stand-in: `ram` and `disk` both report
+  // cachesReads false, so the mount-time verdict refused the policy long
+  // before the snapshot was written. A backend that became both
+  // readRevalidatable and restores-as-fresh-RAM would make a restore
+  // that used to succeed throw, so the invariant is pinned rather than
+  // left to a comment.
+  it('only lets a backend that cannot carry fresh reach the RAM stand-in', () => {
+    expect(restoresAsFreshRAM(saved('ram', null))).toBe(true)
+    expect(restoresAsFreshRAM(saved('disk', null))).toBe(true)
+    expect(new RAMVFS().cachesReads).toBe(false)
+    for (const revalidatable of ['s3', 'gridfs']) {
+      expect(restoresAsFreshRAM(saved(revalidatable, null))).toBe(false)
+    }
+  })
+
   it('leaves disk, and ram declared by name or in code, to buildMountArgs', () => {
     const local = [
       saved('ram', null),
@@ -799,7 +817,9 @@ describe('applyStateDict and the deployment', () => {
 describe('the read policy survives a snapshot round trip', () => {
   // Asserted off the reloaded registry, not off the serialized dict: the
   // write side and the read side land independently, so checking the dict
-  // would pass while the loader still discarded the policy.
+  // would pass while the loader still discarded the policy. Reloaded
+  // without overrides, so the loader rebuilds the saved backend itself --
+  // the one case where the saved policy still describes what is mounted.
   it('restores the per-mount spec', async () => {
     const ws = new Workspace(
       { '/d': new RAMVFS() },
@@ -808,13 +828,7 @@ describe('the read policy survives a snapshot round trip', () => {
     const state = await toStateDict(ws)
     await ws.close()
 
-    const restored = await Workspace.fromState(
-      state,
-      { mode: MountMode.WRITE },
-      {
-        '/d/': new RAMVFS(),
-      },
-    )
+    const restored = await Workspace.fromState(state, { mode: MountMode.WRITE })
     const mount = restored.namespace.mountFor('/d/x')
     expect(mount.read).toEqual({ policy: ReadPolicy.BOUNDED, ttl: 45 })
     await restored.close()
@@ -836,5 +850,93 @@ describe('the read policy survives a snapshot round trip', () => {
     const unversioned: Partial<typeof state> = { ...state }
     delete unversioned.version
     expect(() => buildMountArgs(unversioned as typeof state)).toThrow(/unversioned/)
+  })
+
+  // Both doors, or the same bytes get two answers: buildMountArgs builds
+  // a workspace from the state, applyStateDict restores into one that
+  // exists and is what `version checkout` and the sandbox hydrate call.
+  it('refuses a v3 snapshot at the applyStateDict door too', async () => {
+    const ws = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    const state = await toStateDict(ws)
+    await ws.close()
+    const target = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    try {
+      await expect(applyStateDict(target, { ...state, version: 3 })).rejects.toThrow(
+        /v3 not supported/,
+      )
+    } finally {
+      await target.close()
+    }
+  })
+
+  // Required, never defaulted: a dict labelled v4 with the key missing
+  // would install a default on a mount that was saved carrying something
+  // else -- the silent downgrade the whole policy exists to remove.
+  it('refuses a v4 entry that is missing its read key', async () => {
+    const ws = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    const state = await toStateDict(ws)
+    await ws.close()
+    for (const m of state.mounts) delete (m as { read?: string }).read
+    expect(() => buildMountArgs(state)).toThrow(/missing its read policy/)
+  })
+
+  it('refuses a restored policy it cannot name', async () => {
+    const ws = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    const state = await toStateDict(ws)
+    await ws.close()
+    for (const m of state.mounts) (m as { read?: string }).read = 'banana'
+    expect(() => buildMountArgs(state)).toThrow(/fresh, bounded, pinned/)
+  })
+
+  // TypeScript alone stands a mount in with an empty RAMVFS when it has
+  // no override and nothing to rebuild from. That is safe only while the
+  // gate above it lets through nothing that could carry `fresh`: `ram`
+  // and `disk` both report cachesReads false, so the verdict refused the
+  // policy long before the snapshot was written. A backend that became
+  // both readRevalidatable and restores-as-fresh-RAM would make a
+  // restore that used to succeed throw, so the invariant is pinned here
+  // rather than left to the comment.
+  it('only lets a backend that cannot carry fresh reach the RAM stand-in', () => {
+    for (const type of ['ram', 'disk']) {
+      const entry = { vfs_state: { type }, vfs_ref: null } as unknown as MountSnapshot
+      expect(restoresAsFreshRAM(entry)).toBe(true)
+    }
+    for (const type of ['s3', 'gridfs']) {
+      const entry = { vfs_state: { type }, vfs_ref: null } as unknown as MountSnapshot
+      expect(restoresAsFreshRAM(entry)).toBe(false)
+    }
+    expect(new RAMVFS().cachesReads).toBe(false)
+  })
+
+  // The saved policy belongs to the backend that was saved. An override
+  // hands back a different instance -- typically a stand-in with
+  // different capabilities -- so replaying the saved verdict onto it can
+  // refuse a restore that has nothing wrong with it.
+  it('gives an overridden mount the default spec rather than the saved one', async () => {
+    const ram = new RAMVFS()
+    Object.assign(ram, { cachesReads: true, readRevalidatable: true })
+    const ws = new Workspace(
+      { '/d': ram },
+      { mode: MountMode.WRITE, read: { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL } },
+    )
+    const state = await toStateDict(ws)
+    await ws.close()
+    expect(state.mounts[0]?.read).toBe(ReadPolicy.FRESH)
+
+    const restored = await Workspace.fromState(
+      state,
+      { mode: MountMode.WRITE },
+      {
+        '/d/': new RAMVFS(),
+      },
+    )
+    try {
+      expect(restored.namespace.mountFor('/d/x').read).toEqual({
+        policy: ReadPolicy.BOUNDED,
+        ttl: DEFAULT_READ_TTL,
+      })
+    } finally {
+      await restored.close()
+    }
   })
 })

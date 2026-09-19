@@ -432,11 +432,19 @@ function facts(ttl: number, cacheable = true): (path: string) => CacheFacts {
   return () => ({ cacheable, ttl })
 }
 
+// The value, not just its presence. `isUnbounded` alone would stay green
+// if every stamp wrote the same hardcoded bound, which is exactly the
+// regression that makes a per-mount `ttl:` cosmetic.
+function boundOf(cache: RAMFileCacheStore, key: string): number | null | undefined {
+  return cache.snapshotEntries().find((e) => e.key === key)?.entry.ttl
+}
+
 describe('applyIo bound stamping', () => {
   it('stamps the bound on a plain read', async () => {
     const cache = new RAMFileCacheStore()
     const io = new IOResult({ reads: { '/s3/f.txt': ENC.encode('hello') }, cache: ['/s3/f.txt'] })
     await applyIo(cache, io, facts(45))
+    expect(boundOf(cache, '/s3/f.txt')).toBe(45)
     expect(await cache.isUnbounded('/s3/f.txt')).toBe(false)
   })
 
@@ -454,6 +462,7 @@ describe('applyIo bound stamping', () => {
     await applyIo(cache, io, facts(30))
     await sleep(50)
     expect(DEC.decode((await cache.get('/s3/big.txt')) ?? undefined)).toBe('hello')
+    expect(boundOf(cache, '/s3/big.txt')).toBe(30)
     expect(await cache.isUnbounded('/s3/big.txt')).toBe(false)
   })
 

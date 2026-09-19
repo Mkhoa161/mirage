@@ -62,6 +62,20 @@ describe('readRevalidatable', () => {
   for (const [name, cls] of Object.entries(ALIASES)) {
     it(`${name} inherits it from S3VFS`, () => {
       expect(cls.prototype instanceof S3VFS).toBe(true)
+      // On the instance, not only the chain. A class field redeclared on
+      // the alias would shadow the inherited one and still satisfy the
+      // `instanceof` above, which is the one way this can regress
+      // without a provider leaving the hierarchy.
+      const vfs = new cls({
+        bucket: 'b',
+        endpoint: 'http://127.0.0.1:9000',
+        accountId: 'acct',
+        projectRef: 'proj',
+        // Browser GCS signs in the host, so its config requires one.
+        presignedUrlProvider: () => Promise.resolve('http://127.0.0.1/signed'),
+      })
+      expect(vfs.readRevalidatable).toBe(true)
+      expect(vfs.cachesReads).toBe(true)
     })
   }
 })

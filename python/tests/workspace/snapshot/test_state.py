@@ -593,7 +593,9 @@ async def test_the_read_policy_survives_a_snapshot_round_trip():
 
     The write side and the read side land independently, so asserting
     that the state dict contains the policy would pass while the loader
-    still discarded it.
+    still discarded it. Reloaded without ``mounts=``, so the loader
+    reconstructs the saved backend itself -- the one case where the
+    saved policy still describes what is being mounted.
     """
     vfs = RAMVFS()
     ws = Workspace({"/d/": vfs},
@@ -604,7 +606,7 @@ async def test_the_read_policy_survives_a_snapshot_round_trip():
     finally:
         await ws.close()
 
-    restored = await Workspace.from_state(state, mounts={"/d/": RAMVFS()})
+    restored = await Workspace.from_state(state)
     try:
         mount = restored._registry.mount_for_prefix("/d/")
         assert mount.read == ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45)
@@ -662,3 +664,61 @@ async def test_a_v4_entry_missing_the_read_key_raises_rather_than_defaulting():
     del state[StateKey.MOUNTS][0][MountKey.READ]
     with pytest.raises(KeyError):
         build_mount_args(state)
+
+
+@pytest.mark.asyncio
+async def test_apply_state_dict_runs_the_version_check_too():
+    """Both doors, or the same bytes get two answers.
+
+    ``build_mount_args`` builds a workspace from the state;
+    ``apply_state_dict`` restores into one that already exists and is
+    what ``version checkout`` and the agent sandbox's hydrate call.
+    Checking one door only meant a v3 commit was refused through
+    ``Workspace.load`` and half-restored through a checkout.
+    """
+    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    state[StateKey.VERSION] = 3
+
+    target = Workspace({}, mode=MountMode.WRITE)
+    try:
+        with pytest.raises(ValueError) as exc:
+            await apply_state_dict(target, state)
+        assert "v3 not supported" in str(exc.value)
+        assert target._registry.try_mount_for_prefix("/d/") is None
+    finally:
+        await target.close()
+
+
+@pytest.mark.asyncio
+async def test_an_overridden_mount_takes_the_default_read_spec():
+    """The saved policy belongs to the backend that was saved.
+
+    An override hands back a different instance -- typically a stand-in
+    with different capabilities -- so replaying the saved verdict onto
+    it can refuse a restore that has nothing wrong with it. A `fresh`
+    S3 mount overridden with a RAMVFS is exactly that case.
+    """
+    minio = MinIOVFS(
+        MinIOConfig(bucket="b",
+                    endpoint_url="http://localhost:9000",
+                    access_key_id="k",
+                    secret_access_key="s"))
+    ws = Workspace({"/s3/": minio},
+                   mode=MountMode.WRITE,
+                   read=ReadSpec(policy=ReadPolicy.FRESH))
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    assert state[StateKey.MOUNTS][0][MountKey.READ] == ReadPolicy.FRESH.value
+
+    restored = await Workspace.from_state(state, mounts={"/s3/": RAMVFS()})
+    try:
+        mount = restored._registry.mount_for_prefix("/s3/")
+        assert mount.read == ReadSpec()
+    finally:
+        await restored.close()

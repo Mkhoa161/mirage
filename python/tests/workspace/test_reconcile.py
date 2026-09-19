@@ -353,3 +353,54 @@ async def test_reconcile_read_never_raises_and_drops_the_entry(failure):
         assert not await ws.cache.exists("/data/f.txt")
     finally:
         await ws.close()
+
+
+async def test_bounded_removes_a_bound_less_entry_and_the_refill_stamps():
+    """The self-heal must remove, not merely decline to serve.
+
+    RAM stamps no fingerprint on a read record, so this is the case the
+    removal exists for: leave the entry in place and the cold read that
+    follows hits `_set_cached_locked`'s warm-read short-circuit
+    (`fingerprint is None and cache.get(path) == data`), returns without
+    re-setting, and the path refetches on every read forever. Deleting
+    the `remove` call makes the second assertion fail.
+    """
+    resource = RAMVFS()
+    resource.caches_reads = True
+    resource._store.files["/f.txt"] = b"v1"
+    ws = Workspace({"/data/": resource}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        # An entry as a pre-D1 deployment left it: bytes, no bound.
+        await ws.cache.set("/data/f.txt", b"v1")
+        assert await ws.cache.is_unbounded("/data/f.txt") is True
+
+        mount = ws.namespace.mount_for("/data/f.txt")
+        rec = Reconciler(ws.cache, ws.namespace)
+        assert await rec.may_serve_cached(mount, "/data/f.txt") is False
+        assert not await ws.cache.exists("/data/f.txt"), (
+            "the bound-less entry must be removed, not just refused")
+
+        assert (await ws.shell("cat /data/f.txt")).stdout == b"v1"
+        assert await ws.cache.is_unbounded("/data/f.txt") is False, (
+            "the cold read must re-stamp the bound, or the drop repeats "
+            "on every read forever")
+    finally:
+        await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_bounded_serves_an_entry_that_carries_a_bound():
+    """The other half: a properly stamped entry is served untouched."""
+    resource = RAMVFS()
+    resource.caches_reads = True
+    ws = Workspace({"/data/": resource}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        await ws.cache.set("/data/f.txt", b"v1", ttl=600)
+        mount = ws.namespace.mount_for("/data/f.txt")
+        rec = Reconciler(ws.cache, ws.namespace)
+        assert await rec.may_serve_cached(mount, "/data/f.txt") is True
+        assert await ws.cache.exists("/data/f.txt")
+    finally:
+        await ws.close()

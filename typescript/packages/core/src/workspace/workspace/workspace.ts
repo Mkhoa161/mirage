@@ -49,6 +49,7 @@ import {
   withRebuiltMounts,
 } from '../snapshot/state.ts'
 import { readSnapshotTar } from '../snapshot/tar_io.ts'
+import { normMountPrefix } from '../snapshot/utils.ts'
 import type { WorkspaceStateDict, MountSnapshot } from '../snapshot/types.ts'
 import type { FileEvent } from '../../types.ts'
 import {
@@ -1505,7 +1506,15 @@ export class Workspace {
     cliOverrides: CLIOverrides = {},
   ): Promise<InstanceType<T>> {
     const rebuilt = await withRebuiltMounts(state, overrides, (m) => this.buildSavedVfs(m))
-    const args = buildMountArgs(state, rebuilt, cliOverrides)
+    // The caller's own overrides, named before the rebuilds are merged
+    // in: past this point the two are one map, and only these are a
+    // backend other than the one the snapshot saved.
+    const args = buildMountArgs(
+      state,
+      rebuilt,
+      cliOverrides,
+      new Set(Object.keys(overrides).map(normMountPrefix)),
+    )
     // The Mounts ride through whole; flattening them to [vfs, mode]
     // here is what would drop the restored read policy.
     const mounts: Record<string, MountSpec> = { ...args.mountArgs }

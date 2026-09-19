@@ -244,10 +244,42 @@ describe('S3 cache consistency (mocked)', () => {
     const first = await ws.shell('cat /s3/c.txt')
     expect(DEC.decode(first.stdout)).toBe('v1')
     mock.store.set(BUCKET, 'c.txt', ENC.encode('v2'))
+    mock.resetCalls()
     const second = await ws.shell('cat /s3/c.txt')
     expect(DEC.decode(second.stdout)).toBe('v1')
+    // One HEAD, and it is the operand's own stat, not a revalidation --
+    // `cat` stats what it is given whatever the policy. No GET is the
+    // half that matters: the bytes came from the cache. Serving 'v1'
+    // alone would also be what a revalidation that fetched and compared
+    // produced, so the count is what distinguishes them.
+    expect(mock.commandCalls(HeadObjectCommand)).toBe(1)
+    expect(mock.commandCalls(GetObjectCommand)).toBe(0)
     await ws.close()
   })
+  it('a walk under bounded costs no per-file stat', async () => {
+    // The other side of 'a walk costs one backend stat per file'. The
+    // same shape under `fresh` is 3: the directory operand's own stat
+    // plus one per file. Under `bounded` only the operand's stat is
+    // paid, so the two per-file revalidations are exactly what the
+    // policy buys -- which is a claim only a call count can make.
+    mock.store.set(BUCKET, 'bcost/a.txt', ENC.encode('v1\n'))
+    mock.store.set(BUCKET, 'bcost/b.txt', ENC.encode('v1\n'))
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, read: BOUNDED },
+    )
+    try {
+      await ws.shell('cat /s3/bcost/a.txt')
+      await ws.shell('cat /s3/bcost/b.txt')
+      mock.resetCalls()
+      expect((await ws.shell('grep -r v /s3/bcost/')).exitCode).toBe(0)
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(1)
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+    } finally {
+      await ws.close()
+    }
+  })
+
   it('keeps stat type=text after tee and touch', async () => {
     const ws = new Workspace({ '/s3': new S3VFS(makeConfig()) }, { mode: MountMode.WRITE })
     try {

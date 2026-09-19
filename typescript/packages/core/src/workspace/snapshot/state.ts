@@ -239,15 +239,22 @@ function captureCliConfig(install: CLIInstall): Record<string, unknown> | null {
   return null
 }
 
-export function buildMountArgs(
-  state: WorkspaceStateDict,
-  overrides: Record<string, VFS> = {},
-  cliOverrides: CLIOverrides = {},
-): MountArgs {
-  // An absent version is v3 or older, not "current". It used to be
-  // harmless because every key the loader read had a default; v4 makes
-  // the read policy required, so an unversioned dict would land on a
-  // bad ReadSpec instead of this message.
+/**
+ * Refuse a snapshot this loader's format has moved past.
+ *
+ * An absent version is v3 or older, not "current". It used to be
+ * harmless because every key the loader read had a default; v4 makes the
+ * read policy required, so an unversioned dict would land on a bad
+ * ReadSpec instead of this message.
+ *
+ * Both doors run it, mirroring Python's `check_format_version`.
+ * `buildMountArgs` builds a workspace from the state; `applyStateDict`
+ * restores into one that already exists, and is what `version checkout`,
+ * `version restore` and the agent sandbox's hydrate call. Checking in one
+ * door only meant the same bytes were refused through `Workspace.load`
+ * and half-restored through a checkout.
+ */
+export function checkFormatVersion(state: WorkspaceStateDict): void {
   // Widened deliberately: the type says `version` is always present, but a
   // dict written before the field existed comes back from JSON without it.
   const saved = (state as { version?: number }).version
@@ -257,9 +264,20 @@ export function buildMountArgs(
       `snapshot format ${shown} not supported (loader expects v${String(FORMAT_VERSION)})`,
     )
   }
+}
+
+export function buildMountArgs(
+  state: WorkspaceStateDict,
+  overrides: Record<string, VFS> = {},
+  cliOverrides: CLIOverrides = {},
+  userOverrides?: ReadonlySet<string>,
+): MountArgs {
+  checkFormatVersion(state)
   const normalized: Record<string, VFS> = {}
+  const overridePrefixes = new Set<string>()
   for (const [prefix, vfs] of Object.entries(overrides)) {
     normalized[normMountPrefix(prefix)] = vfs
+    overridePrefixes.add(normMountPrefix(prefix))
   }
   // A mount with no override by now is one nobody can build: it asked to
   // be handed back live or was saved with a redacted secret, or the
@@ -289,11 +307,6 @@ export function buildMountArgs(
       throw new Error(`Workspace.fromState: mount '${m.prefix}' has invalid mode '${m.mode}'`)
     }
     const saved = normalized[normMountPrefix(m.prefix)]
-    // A mount this package cannot rebuild is stood in for by an empty
-    // RAMVFS. The saved policy belongs to the backend that is not here,
-    // and carrying it onto the stand-in would make the mount-time
-    // verdict refuse a restore that used to succeed -- so the saved spec
-    // applies only when the real backend does.
     // Required, never defaulted: a dict labelled v4 with the key missing
     // would install a default on a mount saved carrying something else,
     // and a junk policy or a null bound would restore a mount whose cache
@@ -308,8 +321,22 @@ export function buildMountArgs(
           `regenerate the snapshot`,
       )
     }
-    const read: ReadSpec =
-      saved === undefined ? DEFAULT_READ_SPEC : resolveReadSpec(entry.read, entry.ttl)
+    // Coerced whatever happens, so a junk policy or a non-positive bound
+    // is refused here rather than restoring a mount whose cache can
+    // never serve -- even on a prefix whose spec is then discarded.
+    const savedSpec = resolveReadSpec(entry.read, entry.ttl)
+    // The saved policy belongs to the backend that was saved, so it
+    // applies only where that backend is what is being mounted. A mount
+    // handed back through the caller's `mounts=` -- which a
+    // redacted-credential mount *must* be -- may be a different backend
+    // entirely, and carrying `fresh` onto one that cannot revalidate
+    // would refuse a restore that used to succeed. Everything else here
+    // the loader reconstructs from the saved state itself, which is the
+    // same backend. Python reads the line straight off the branch it
+    // took (`mounts=` vs `_construct_vfs`); here `fromState` merges its
+    // rebuilds into the same map first, so it names its callers' set.
+    const foreign = userOverrides ?? overridePrefixes
+    const read: ReadSpec = foreign.has(normMountPrefix(m.prefix)) ? DEFAULT_READ_SPEC : savedSpec
     mountArgs[m.prefix] = new Mount(saved ?? new RAMVFS(), {
       mode: m.mode as MountMode,
       read,
@@ -451,6 +478,7 @@ export async function applyStateDict(
   state: WorkspaceStateDict,
   options: { replaceCache?: boolean } = {},
 ): Promise<void> {
+  checkFormatVersion(state)
   const [sessions, seed] = await gateRestoredState(ws, state)
   if (options.replaceCache === true) await ws.cache.clear()
   for (const m of state.mounts) {

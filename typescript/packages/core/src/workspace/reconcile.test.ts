@@ -22,10 +22,13 @@ import {
   DEFAULT_READ_TTL,
   FileStat,
   FileType,
+  MountMode,
   PathSpec,
   ReadPolicy,
 } from '../types.ts'
 import type { MountEntry } from './mount/mount.ts'
+
+const ENC = new TextEncoder()
 import { enotsup } from '../utils/errors.ts'
 import { Reconciler } from './reconcile.ts'
 import { Workspace } from './workspace/workspace.ts'
@@ -112,6 +115,45 @@ describe('Reconciler', () => {
     const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry)
     expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(true)
     await ws.close()
+  })
+
+  // The self-heal, and it must remove rather than merely decline. Nothing
+  // stamped a bound before this policy existed, and a warm read short-
+  // circuits rather than re-setting, so a bound-less entry that is only
+  // refused would sit there and refetch on every read forever.
+  it('mayServeCached drops a bound-less entry under bounded rather than refusing it', async () => {
+    const ram = new RAMVFS()
+    await ram.writeFile(PathSpec.fromStrPath('/f.txt'), ENC.encode('v1'))
+    const ws = new Workspace({ '/data': ram }, { mode: MountMode.WRITE })
+    try {
+      await ws.cache.set('/data/f.txt', ENC.encode('v1'))
+      expect(await ws.cache.isUnbounded('/data/f.txt')).toBe(true)
+
+      const mount = mountOf(ws, '/data/f.txt')
+      expect(mount.read.policy).toBe(ReadPolicy.BOUNDED)
+      const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry)
+      expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(false)
+      expect(await ws.cache.exists('/data/f.txt')).toBe(false)
+
+      // The refill's other half -- that the cold read which follows
+      // stamps a bound -- needs a shell, so it lives in
+      // cache_mount.test.ts where a parser is already wired.
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('mayServeCached serves an entry that already carries a bound', async () => {
+    const ws = new Workspace({ '/data': new RAMVFS() }, { mode: MountMode.WRITE })
+    try {
+      await ws.cache.set('/data/f.txt', ENC.encode('v1'), { ttl: 600 })
+      const mount = mountOf(ws, '/data/f.txt')
+      const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry)
+      expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(true)
+      expect(await ws.cache.exists('/data/f.txt')).toBe(true)
+    } finally {
+      await ws.close()
+    }
   })
 
   it('mayServeCached forces a re-read when the stat carries no fingerprint', async () => {

@@ -29,7 +29,7 @@ import { globNameMatches, globPattern } from '../utils/glob_walk.ts'
 import { CLISpec } from '../commands/cli/types.ts'
 import { IOResult } from '../io/types.ts'
 import { op, OpsRegistry } from '../ops/registry.ts'
-import { FileType, MountMode, VFSName, PathSpec } from '../types.ts'
+import { DEFAULT_READ_TTL, FileType, MountMode, ReadPolicy, VFSName, PathSpec } from '../types.ts'
 import { BaseVFS, type VFS } from '../vfs/base.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import type { WorkspaceBinding } from '../runtime/binding.ts'
@@ -345,6 +345,51 @@ describe('Workspace lifecycle', () => {
     const ws = new Workspace({ '/data': new MockVFS() })
     await ws.close()
     await expect(ws.resolve('/data/x')).rejects.toThrow(/closed/)
+  })
+})
+
+describe('Workspace.addMount read policy', () => {
+  // The runtime door is a mount door too. Without the verdict here a
+  // mount added at runtime could declare a policy its backend cannot
+  // honour, which reads as enabled and does nothing -- the silent
+  // downgrade the mount-time check exists to refuse.
+  it('runs the same verdict the constructor does', async () => {
+    const ws = new Workspace({ '/a': new RAMVFS() }, { mode: MountMode.WRITE })
+    try {
+      const before = ws.mounts().length
+      expect(() =>
+        ws.addMount('/b', new RAMVFS(), MountMode.WRITE, {
+          policy: ReadPolicy.FRESH,
+          ttl: DEFAULT_READ_TTL,
+        }),
+      ).toThrow(/needs a resource that caches reads/)
+      expect(() =>
+        ws.addMount('/b', new RAMVFS(), MountMode.WRITE, {
+          policy: ReadPolicy.PINNED,
+          ttl: DEFAULT_READ_TTL,
+        }),
+      ).toThrow(/needs a version layer to pin to/)
+      expect(ws.mounts().length).toBe(before)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('carries the spec onto the entry, and defaults without one', async () => {
+    const ws = new Workspace({ '/a': new RAMVFS() }, { mode: MountMode.WRITE })
+    try {
+      const entry = ws.addMount('/b', new RAMVFS(), MountMode.WRITE, {
+        policy: ReadPolicy.BOUNDED,
+        ttl: 45,
+      })
+      expect(entry.read).toEqual({ policy: ReadPolicy.BOUNDED, ttl: 45 })
+      expect(ws.addMount('/c', new RAMVFS()).read).toEqual({
+        policy: ReadPolicy.BOUNDED,
+        ttl: DEFAULT_READ_TTL,
+      })
+    } finally {
+      await ws.close()
+    }
   })
 })
 

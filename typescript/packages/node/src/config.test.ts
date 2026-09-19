@@ -525,6 +525,60 @@ describe('configToWorkspaceArgs', () => {
     )
   })
 
+  it('accepts a read policy in any case, at either level', async () => {
+    const perMount = await configToWorkspaceArgs(
+      loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'BOUNDED', ttl: 30 } } }),
+    )
+    expect(perMount.mounts['/']?.options.read).toEqual({ policy: 'bounded', ttl: 30 })
+    const workspace = await configToWorkspaceArgs(
+      loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram' } }, read: 'BOUNDED' }),
+    )
+    expect(workspace.options.read).toEqual({ policy: 'bounded', ttl: 600 })
+  })
+
+  it('a mount that declares no policy takes the workspace default', async () => {
+    const args = await configToWorkspaceArgs(
+      loadWorkspaceConfig({
+        read: 'bounded',
+        mounts: { '/a': { vfs: 'ram' }, '/b': { vfs: 'ram', read: 'bounded', ttl: 30 } },
+      }),
+    )
+    expect(args.mounts['/a']?.options.read).toEqual({ policy: 'bounded', ttl: 600 })
+    expect(args.mounts['/b']?.options.read).toEqual({ policy: 'bounded', ttl: 30 })
+  })
+
+  // Both ride the one options object the carrier now holds, so a build
+  // that filled it for one key and overwrote it for the other would
+  // silently drop a mount's limits the moment it declared a policy.
+  it('carries a read policy and command_limits on the same mount', async () => {
+    const args = await configToWorkspaceArgs(
+      loadWorkspaceConfig({
+        mounts: {
+          '/': {
+            vfs: 'ram',
+            read: 'bounded',
+            ttl: 30,
+            command_limits: { cat: { max_lines: 10 } },
+          },
+        },
+      }),
+    )
+    expect(args.mounts['/']?.options.read).toEqual({ policy: 'bounded', ttl: 30 })
+    expect(args.mounts['/']?.options.commandLimits?.cat?.maxLines).toBe(10)
+  })
+
+  it('refuses a mount declaring fresh on a backend that cannot revalidate', async () => {
+    // The config door parses; the mount door judges. Keeping the verdict
+    // at mount time is what makes one rule cover YAML, addMount and a
+    // snapshot restore alike.
+    const args = await configToWorkspaceArgs(
+      loadWorkspaceConfig({ mounts: { '/a': { vfs: 'ram', read: 'fresh' } } }),
+    )
+    expect(() => new Workspace(args.mounts, args.options)).toThrow(
+      /needs a resource that caches reads/,
+    )
+  })
+
   it('refuses a mount block whose bound and policy disagree', () => {
     // Both rules live at the config door: once a ReadSpec exists its ttl
     // has defaulted, so `bounded` without a bound is indistinguishable

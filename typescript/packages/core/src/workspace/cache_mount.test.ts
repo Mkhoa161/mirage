@@ -88,6 +88,64 @@ describe('warm read serves from the hidden store, command stays on its mount', (
   })
 })
 
+describe('the mount bound reaches the cache through a shell read', () => {
+  it('stamps a per-mount ttl on the entry a cold read fills', async () => {
+    const ram = new RAMVFS()
+    ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
+    const ws = new Workspace(
+      { '/r': ram },
+      {
+        mode: MountMode.WRITE,
+        read: { policy: ReadPolicy.BOUNDED, ttl: 45 },
+        shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
+      },
+    )
+    try {
+      await ram.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v1\n'))
+      await ws.shell('cat /r/a.txt')
+      const store = ws.cache as unknown as {
+        snapshotEntries(): { key: string; entry: { ttl: number | null } }[]
+      }
+      // The value the mount declared, not merely "some bound". A stamp
+      // that hardcoded the default would leave `isUnbounded` false and
+      // make a per-mount `ttl:` cosmetic.
+      expect(store.snapshotEntries().find((e) => e.key === '/r/a.txt')?.entry.ttl).toBe(45)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  // The self-heal, end to end: an entry written before the bound existed
+  // is dropped on the next read and refilled with one. Only refusing to
+  // serve it would refetch forever without ever stamping.
+  it('drops and re-stamps a bound-less entry on the next read', async () => {
+    const ram = new RAMVFS()
+    ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
+    const ws = new Workspace(
+      { '/r': ram },
+      {
+        mode: MountMode.WRITE,
+        read: { policy: ReadPolicy.BOUNDED, ttl: 45 },
+        shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
+      },
+    )
+    try {
+      await ram.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v1\n'))
+      // The same bytes the backend holds: that is what an entry written
+      // before bounds existed looks like, and it is the case where a
+      // refusal alone cannot heal, because the refill short-circuits on
+      // equal bytes rather than re-setting.
+      await ws.cache.set('/r/a.txt', ENC.encode('v1\n'))
+      expect(await ws.cache.isUnbounded('/r/a.txt')).toBe(true)
+
+      expect(DEC.decode((await ws.shell('cat /r/a.txt')).stdout)).toContain('v1')
+      expect(await ws.cache.isUnbounded('/r/a.txt')).toBe(false)
+    } finally {
+      await ws.close()
+    }
+  })
+})
+
 describe('namespace orphan GC on remote delete', () => {
   it('GCs an orphaned overlay when a stat reports the path gone under fresh', async () => {
     // The subject is the reaction, not RAM: the instance declares the two

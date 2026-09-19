@@ -78,6 +78,19 @@ def test_declared_bound_is_kept():
     assert resolve_read_spec("bounded", 30).ttl == 30
 
 
+def test_a_bound_must_be_whole_positive_seconds():
+    """A zero or negative bound is an entry that is stale the instant
+    it is written, and a float or a bool is a bound the store cannot
+    compare against; the coercer is the one place that can say so
+    before a mount installs."""
+    for bad in (0, -1, -600):
+        with pytest.raises(ValueError, match="at least 1 second"):
+            resolve_read_spec("bounded", bad)
+    for junk in (1.5, True, "600"):
+        with pytest.raises(ValueError, match="whole seconds"):
+            resolve_read_spec("bounded", junk)
+
+
 def test_unknown_policy_names_the_known_ones():
     with pytest.raises(ValueError) as exc:
         resolve_read_spec("banana", None)
