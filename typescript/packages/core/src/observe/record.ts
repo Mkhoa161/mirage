@@ -29,6 +29,9 @@ import { VFSName } from '../types.ts'
 // op's token with another op's bytes.
 // 'append' is absent because no object store implements it and the
 // backends that record one stamp no token.
+// `truncate` would also need its record's `bytes` corrected before it
+// could join: it reports 0 while its token describes `length` bytes, so
+// the byte-identity guard in `latestFingerprint` would refuse every one.
 export const READ_FINGERPRINT_OPS: ReadonlySet<string> = new Set(['read'])
 export const WRITE_FINGERPRINT_OPS: ReadonlySet<string> = new Set(['write'])
 

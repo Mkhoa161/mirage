@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { CachableAsyncIterator, concat } from '../../io/cachable_iterator.ts'
-import { materialize, type IOResult } from '../../io/types.ts'
+import { materialize, type ByteSource, type IOResult } from '../../io/types.ts'
 import { READ_FINGERPRINT_OPS, WRITE_FINGERPRINT_OPS, type OpRecord } from '../../observe/record.ts'
 import { drainBudget, type FileCache } from './mixin.ts'
 import { KeyLock } from '../lock.ts'
@@ -124,12 +124,16 @@ export async function applyIo(
   const cacheSet = new Set(io.cache)
   for (const path of io.cache) {
     if (isCacheable !== undefined && !isCacheable(path)) continue
-    const fromRead = io.reads[path]
-    const source = fromRead ?? io.writes[path]
-    if (source === undefined) continue
     // The token has to describe the bytes actually stored, so the lookup
-    // asks about the side this branch took.
-    const ops = source === fromRead ? READ_FINGERPRINT_OPS : WRITE_FINGERPRINT_OPS
+    // asks about the side this branch took. Set in the branch rather
+    // than recovered from the result, so the two cannot disagree.
+    let source: ByteSource | undefined = io.reads[path]
+    let ops = READ_FINGERPRINT_OPS
+    if (source === undefined) {
+      source = io.writes[path]
+      ops = WRITE_FINGERPRINT_OPS
+    }
+    if (source === undefined) continue
     if (source instanceof Uint8Array) {
       await setCached(cache, path, source, records, isCacheable, ops)
     } else if (source instanceof CachableAsyncIterator) {
