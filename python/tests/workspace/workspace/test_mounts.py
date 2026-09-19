@@ -18,7 +18,7 @@ import pytest
 
 from mirage.cache.index import IndexConfig, RedisIndexConfig
 from mirage.cache.index.redis import RedisIndexCacheStore
-from mirage.types import Limit, MountBackend, MountMode
+from mirage.types import Limit, MountBackend, MountMode, ReadSpec
 from mirage.vfs.ram import RAMVFS
 from mirage.workspace.mount.registry import MountRegistry
 from mirage.workspace.mount.spec import Mount
@@ -28,7 +28,7 @@ from mirage.workspace.workspace.mounts import (install_mounts, kernel_targets,
 
 def test_bare_vfs_takes_the_default_mode():
     vfs = RAMVFS()
-    specs = normalize_mounts({"/a": vfs}, MountMode.WRITE)
+    specs = normalize_mounts({"/a": vfs}, MountMode.WRITE, ReadSpec())
     assert len(specs) == 1
     assert specs[0].vfs is vfs
     assert specs[0].mode == MountMode.WRITE
@@ -38,7 +38,7 @@ def test_bare_vfs_takes_the_default_mode():
 
 def test_pair_tuple_carries_its_own_mode():
     specs = normalize_mounts({"/a": (RAMVFS(), MountMode.READ)},
-                             MountMode.WRITE)
+                             MountMode.WRITE, ReadSpec())
     assert specs[0].mode == MountMode.READ
 
 
@@ -47,12 +47,13 @@ def test_triple_tuple_carries_limits():
     specs = normalize_mounts(
         {"/a": (RAMVFS(), MountMode.READ, {
             "curl": guard
-        })}, MountMode.WRITE)
+        })}, MountMode.WRITE, ReadSpec())
     assert specs[0].command_limits == {"curl": guard}
 
 
 def test_mount_without_a_mode_falls_back_to_the_default():
-    specs = normalize_mounts({"/a": Mount(vfs=RAMVFS())}, MountMode.EXEC)
+    specs = normalize_mounts({"/a": Mount(vfs=RAMVFS())}, MountMode.EXEC,
+                             ReadSpec())
     assert specs[0].mode == MountMode.EXEC
 
 
@@ -61,7 +62,7 @@ def test_mount_carries_backend_and_mountpoint():
                   mode=MountMode.WRITE,
                   backend=MountBackend.FUSE,
                   mountpoint="/tmp/mp")
-    specs = normalize_mounts({"/a": mount}, MountMode.READ)
+    specs = normalize_mounts({"/a": mount}, MountMode.READ, ReadSpec())
     assert specs[0].backend == MountBackend.FUSE
     assert specs[0].mountpoint == "/tmp/mp"
 
@@ -75,7 +76,7 @@ def test_a_mount_carries_no_permissions():
 
 def test_wrong_length_tuple_is_rejected():
     with pytest.raises(TypeError):
-        normalize_mounts({"/a": (RAMVFS(), )}, MountMode.READ)
+        normalize_mounts({"/a": (RAMVFS(), )}, MountMode.READ, ReadSpec())
 
 
 def test_kernel_targets_selects_only_real_mountpoints():
@@ -86,7 +87,7 @@ def test_kernel_targets_selects_only_real_mountpoints():
             "/fuse":
             Mount(
                 vfs=RAMVFS(), backend=MountBackend.FUSE, mountpoint="/tmp/mp"),
-        }, MountMode.WRITE)
+        }, MountMode.WRITE, ReadSpec())
     assert kernel_targets(specs) == [("/fuse", MountBackend.FUSE, "/tmp/mp")]
 
 
@@ -94,7 +95,7 @@ def test_limits_are_copied_not_aliased():
     guard = Limit(timeout_seconds=1)
     source = {"curl": guard}
     specs = normalize_mounts({"/a": (RAMVFS(), MountMode.READ, source)},
-                             MountMode.WRITE)
+                             MountMode.WRITE, ReadSpec())
     source["wget"] = guard
     assert set(specs[0].command_limits) == {"curl"}
 
@@ -107,7 +108,8 @@ def test_a_coroutine_is_refused_naming_the_await():
     coro = asyncio.sleep(0)
     try:
         with pytest.raises(TypeError) as excinfo:
-            normalize_mounts({"/gh": (coro, MountMode.READ)}, MountMode.WRITE)
+            normalize_mounts({"/gh": (coro, MountMode.READ)}, MountMode.WRITE,
+                             ReadSpec())
     finally:
         coro.close()
     message = str(excinfo.value)
@@ -118,7 +120,7 @@ def test_a_coroutine_is_refused_naming_the_await():
 @pytest.mark.parametrize("value", ["not-a-VFS", 42, None])
 def test_a_non_vfs_is_refused_naming_the_mount(value):
     with pytest.raises(TypeError, match=r"'/x'.*expected a BaseVFS"):
-        normalize_mounts({"/x": value}, MountMode.WRITE)
+        normalize_mounts({"/x": value}, MountMode.WRITE, ReadSpec())
 
 
 def test_the_guard_runs_before_any_mount_is_installed():
@@ -127,7 +129,7 @@ def test_the_guard_runs_before_any_mount_is_installed():
         normalize_mounts({
             "/good": RAMVFS(),
             "/bad": "nope",
-        }, MountMode.WRITE)
+        }, MountMode.WRITE, ReadSpec())
 
 
 # A VFS keeps the index it was given when the workspace passes none
@@ -139,8 +141,8 @@ def test_install_mounts_keeps_a_vfs_own_index_without_a_config():
         RedisIndexConfig(url="redis://127.0.0.1:1/0", key_prefix="own:"))
     own = vfs.index
     install_mounts(MountRegistry(),
-                   normalize_mounts({"/a": vfs}, MountMode.WRITE), None,
-                   MountMode.WRITE)
+                   normalize_mounts({"/a": vfs}, MountMode.WRITE, ReadSpec()),
+                   None, MountMode.WRITE, ReadSpec())
     assert vfs.index is own
     assert isinstance(vfs.index, RedisIndexCacheStore)
 
@@ -149,7 +151,7 @@ def test_install_mounts_applies_a_workspace_index_to_every_vfs():
     vfs = RAMVFS()
     own = vfs.index
     install_mounts(MountRegistry(),
-                   normalize_mounts({"/a": vfs}, MountMode.WRITE),
-                   IndexConfig(ttl=5), MountMode.WRITE)
+                   normalize_mounts({"/a": vfs}, MountMode.WRITE, ReadSpec()),
+                   IndexConfig(ttl=5), MountMode.WRITE, ReadSpec())
     assert vfs.index is not own
     assert vfs.index._ttl == 5

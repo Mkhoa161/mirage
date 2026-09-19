@@ -44,7 +44,7 @@ import { NO_FOLLOW_OPS, STAMP_WRITE_OPS } from '../../ops/config.ts'
 import { mergeReaddir, namespaceListing, namespaceStat } from '../../ops/namespace_view.ts'
 import { ebusy, isMissingPath } from '../../utils/errors.ts'
 import { cachesReads, type VFS } from '../../vfs/base.ts'
-import { ConsistencyPolicy, FileStat, FileType, MountMode, PathSpec, VFSName } from '../../types.ts'
+import { FileStat, FileType, MountMode, PathSpec, VFSName } from '../../types.ts'
 import type { DispatchFn } from '../../runtime/types.ts'
 import type { DriftQueue } from '../snapshot/drift.ts'
 import type { Namespace } from '../mount/namespace/namespace.ts'
@@ -155,7 +155,6 @@ export class Dispatcher {
     namespace: Namespace,
     cache: FileCache & VFS,
     opsRegistry: OpsRegistry,
-    consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
     policies?: Policies,
     drift?: DriftQueue,
   ) {
@@ -164,7 +163,7 @@ export class Dispatcher {
     this.opsRegistry = opsRegistry
     this.policies = policies ?? new Policies()
     this.drift = drift ?? null
-    this.reconciler = new Reconciler(cache, namespace, opsRegistry, consistency)
+    this.reconciler = new Reconciler(cache, namespace, opsRegistry)
   }
 
   /**
@@ -451,7 +450,7 @@ export class Dispatcher {
       } else {
         const fallback = isMissingPath(err) ? this.namespaceResult(opName, p.virtual) : null
         if (fallback === null) {
-          await this.reconciler.onOpMissing(opName, p.virtual, err)
+          await this.reconciler.onOpMissing(mount, opName, p.virtual, err)
           throw err
         }
         result = fallback

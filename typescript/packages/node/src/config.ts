@@ -19,7 +19,6 @@ import { parse as parseYaml } from 'yaml'
 import type { CacheConfig } from '@struktoai/mirage-core/cache/file/config'
 import type { IndexConfig, RedisIndexConfig } from '@struktoai/mirage-core/cache/index/config'
 import { CLISpec } from '@struktoai/mirage-core/commands/cli/types'
-import type { VFS } from '@struktoai/mirage-core/vfs/base'
 import { Runtime, type RuntimeEntry } from '@struktoai/mirage-core/runtime/base'
 import { ScriptSource } from '@struktoai/mirage-core/runtime/routing/index'
 import { buildRuntime, checkRuntimeOptions } from '@struktoai/mirage-core/runtime/table'
@@ -31,14 +30,18 @@ import {
   type SecretEntries,
 } from '@struktoai/mirage-core/secrets/config'
 import {
+  type ReadSpec,
   ConsistencyPolicy,
   KERNEL_BACKENDS,
   Limit,
   MountBackend,
   MountMode,
   OnExceed,
+  ReadPolicy,
   parseMountMode,
 } from '@struktoai/mirage-core/types'
+import { Mount } from '@struktoai/mirage-core/workspace/mount/spec'
+import { resolveReadSpec } from '@struktoai/mirage-core/workspace/mount/read_policy'
 import { snakeToCamel } from '@struktoai/mirage-core/utils/normalize'
 import { parseSessionProfile, type SessionProfile } from '@struktoai/mirage-core/policy/profile'
 import type { ResolvedSource } from '@struktoai/mirage-core/secrets/types'
@@ -201,6 +204,7 @@ const TOP_LEVEL_KEYS = [
   'profile',
   'mode',
   'consistency',
+  'read',
   'default_session_id',
   'default_agent_id',
   'workspace_id',
@@ -211,7 +215,16 @@ const TOP_LEVEL_KEYS = [
   'env',
   'secrets',
 ] as const
-const MOUNT_KEYS = ['vfs', 'mode', 'config', 'command_limits', 'backend', 'mountpoint'] as const
+const MOUNT_KEYS = [
+  'vfs',
+  'mode',
+  'config',
+  'command_limits',
+  'backend',
+  'mountpoint',
+  'read',
+  'ttl',
+] as const
 // A source instance is a type beside a config, the way a mount is. Its
 // `config:` block has no table for the same reason `mounts.*.config`
 // has none: each source owns its own model and validates there.
@@ -626,6 +639,14 @@ export interface MountBlock {
   /** workspace (default), fuse, or fskit. Mirrors Python's MountBlock.backend. */
   backend?: string
   mountpoint?: string
+  /**
+   * How cached bytes for this mount are revalidated, and the bound that
+   * goes with `bounded`. The bound lives only here, where no other `ttl`
+   * does: at workspace level it would sit beside `index: {ttl:}` and mean
+   * a different thing.
+   */
+  read?: string
+  ttl?: number
 }
 
 interface RamIndexBlock {
@@ -730,6 +751,7 @@ export interface WorkspaceConfigRaw {
   profile?: unknown
   mode?: string
   consistency?: string
+  read?: string
   defaultSessionId?: string
   defaultAgentId?: string
   workspaceId?: string
@@ -930,7 +952,11 @@ export function loadWorkspaceConfigFile(
 }
 
 export interface WorkspaceArgs {
-  mounts: Record<string, [VFS, MountMode, Record<string, Limit>]>
+  // A `Mount` rather than a tuple: the read policy has to reach the
+  // workspace, and every consumer that flattened the tuple would have
+  // dropped it. `Mount` is core's own carrier and already holds mode and
+  // commandLimits.
+  mounts: Record<string, Mount>
   /**
    * Exactly what `new Workspace` takes, minus the two the loader always
    * resolves. Spelling the fields out here instead is what once dropped
@@ -938,7 +964,7 @@ export interface WorkspaceArgs {
    * parsed and validated, then discarded by a list nobody remembered to
    * extend.
    */
-  options: WorkspaceOptions & { mode: MountMode; consistency: ConsistencyPolicy }
+  options: WorkspaceOptions & { mode: MountMode; consistency: ConsistencyPolicy; read: ReadSpec }
   kernelMounts: Record<string, [MountBackend, string | undefined]>
 }
 
@@ -1037,7 +1063,8 @@ function buildStateStore(block: StoreBlock | null | undefined): WorkspaceStateSt
 export async function configToWorkspaceArgs(cfg: WorkspaceConfigRaw): Promise<WorkspaceArgs> {
   const wsMode = coerceMountMode(cfg.mode, MountMode.WRITE)
   const consistency = coerceConsistency(cfg.consistency)
-  const mounts: Record<string, [VFS, MountMode, Record<string, Limit>]> = {}
+  const defaultRead = resolveReadSpec(cfg.read, undefined)
+  const mounts: Record<string, Mount> = {}
   const kernelMounts: Record<string, [MountBackend, string | undefined]> = {}
   // Built before the mounts, because a mount's config may point at one:
   // `resolveConfigSecrets` inside `buildVfs` fetches through these.
@@ -1049,7 +1076,22 @@ export async function configToWorkspaceArgs(cfg: WorkspaceConfigRaw): Promise<Wo
   for (const [prefix, block] of Object.entries(cfg.mounts)) {
     const r = await buildVfs(block.vfs, block.config ?? {}, sources)
     const m = coerceMountMode(block.mode, wsMode)
-    mounts[prefix] = [r, m, parseLimits(block.command_limits)]
+    // Two dependent-key rules, refused here rather than in the mount
+    // verdict: by the time a ReadSpec exists its ttl has already
+    // defaulted, so `bounded` written without a bound is
+    // indistinguishable from `read:` left out entirely.
+    if (block.ttl !== undefined && block.read === undefined) {
+      throw new Error(`mount '${prefix}': ttl pins the read bound; it takes read: bounded`)
+    }
+    if (block.read === ReadPolicy.BOUNDED && block.ttl === undefined) {
+      throw new Error(`mount '${prefix}': read: bounded needs a bound; set ttl:`)
+    }
+    const read = block.read === undefined ? defaultRead : resolveReadSpec(block.read, block.ttl)
+    mounts[prefix] = new Mount(r, {
+      mode: m,
+      read,
+      commandLimits: parseLimits(block.command_limits),
+    })
     const backend = (block.backend ?? MountBackend.WORKSPACE) as MountBackend
     if (KERNEL_BACKENDS.includes(backend)) kernelMounts[prefix] = [backend, block.mountpoint]
   }
@@ -1069,6 +1111,7 @@ export async function configToWorkspaceArgs(cfg: WorkspaceConfigRaw): Promise<Wo
     options: {
       mode: wsMode,
       consistency,
+      read: defaultRead,
       ...(cfg.defaultSessionId !== undefined ? { sessionId: cfg.defaultSessionId } : {}),
       ...(cfg.defaultAgentId !== undefined ? { agentId: cfg.defaultAgentId } : {}),
       ...(cfg.workspaceId !== undefined ? { workspaceId: cfg.workspaceId } : {}),

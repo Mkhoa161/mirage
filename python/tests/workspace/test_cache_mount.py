@@ -20,7 +20,7 @@ from mirage.core.disk.constants import SCOPE_ERROR
 from mirage.core.disk.read import read_bytes
 from mirage.core.disk.readdir import readdir
 from mirage.io.types import IOResult
-from mirage.types import ConsistencyPolicy, MountMode, PathSpec
+from mirage.types import MountMode, PathSpec, ReadPolicy, ReadSpec
 from mirage.utils.glob_walk import make_resolve_glob
 from mirage.vfs.disk import DiskVFS
 from mirage.vfs.ram import RAMVFS
@@ -92,7 +92,7 @@ async def test_cross_mount_read_serves_cache(tmp_path):
         "/r/": RAMVFS()
     },
                    mode=MountMode.WRITE,
-                   consistency=ConsistencyPolicy.LAZY)
+                   read=ReadSpec(policy=ReadPolicy.BOUNDED))
     await ws.shell("echo hi > /r/b.txt")
     await (await ws.shell("cat /d/a.txt")).stdout_str()
     (tmp_path / "a.txt").write_bytes(b"v2\n")
@@ -106,12 +106,20 @@ def _stat_scope(path):
 
 
 @pytest.mark.asyncio
-async def test_stat_gcs_orphaned_overlay_under_always():
+async def test_stat_gcs_orphaned_overlay_under_fresh():
     """A remotely-deleted path leaves an orphaned attribute overlay. Under
-    ALWAYS, a stat that the backend reports gone GCs the overlay node."""
-    ws = Workspace({"/data/": RAMVFS()},
+    ``read: fresh``, a stat the backend reports gone GCs the overlay node.
+
+    The subject is the reaction, not RAM: the instance declares the two
+    capabilities the verdict asks for so a RAM mount can legally carry
+    the policy.
+    """
+    ram = RAMVFS()
+    ram.caches_reads = True
+    ram.READ_REVALIDATABLE = True
+    ws = Workspace({"/data/": ram},
                    mode=MountMode.WRITE,
-                   consistency=ConsistencyPolicy.ALWAYS)
+                   read=ReadSpec(policy=ReadPolicy.FRESH))
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
     assert ws.namespace.meta_for("/data/gone.txt") is not None
@@ -123,14 +131,16 @@ async def test_stat_gcs_orphaned_overlay_under_always():
 
 
 @pytest.mark.asyncio
-async def test_shell_stat_gcs_orphan_under_always():
+async def test_shell_stat_gcs_orphan_under_fresh():
     """A single-mount shell read (not the dispatcher) reconciles via the
-    registry: under ALWAYS, a stat the backend reports gone GCs the overlay."""
+    registry: under ``read: fresh``, a stat the backend reports gone GCs
+    the overlay."""
     ram = RAMVFS()
     ram.caches_reads = True
+    ram.READ_REVALIDATABLE = True
     ws = Workspace({"/r/": ram},
                    mode=MountMode.WRITE,
-                   consistency=ConsistencyPolicy.ALWAYS)
+                   read=ReadSpec(policy=ReadPolicy.FRESH))
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/r/gone.txt", mode=0o600)
     assert ws.namespace.meta_for("/r/gone.txt") is not None
@@ -141,11 +151,11 @@ async def test_shell_stat_gcs_orphan_under_always():
 
 
 @pytest.mark.asyncio
-async def test_stat_keeps_overlay_under_lazy():
-    """Under LAZY the overlay is left in place (no reconcile)."""
+async def test_stat_keeps_overlay_under_bounded():
+    """Under ``read: bounded`` the overlay is left in place."""
     ws = Workspace({"/data/": RAMVFS()},
                    mode=MountMode.WRITE,
-                   consistency=ConsistencyPolicy.LAZY)
+                   read=ReadSpec(policy=ReadPolicy.BOUNDED))
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
 

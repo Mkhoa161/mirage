@@ -21,8 +21,7 @@ from mirage.context import reset_current_session, set_current_session
 from mirage.policy import (Action, CommandRule, Deny, OpsContext, Policies,
                            Policy, PolicyDenied)
 from mirage.policy.rule import RulePolicy
-from mirage.types import (ConsistencyPolicy, FileType, HiddenPaths, MountMode,
-                          PathSpec)
+from mirage.types import FileType, HiddenPaths, MountMode, PathSpec
 from mirage.utils.errors import ReadOnlyError
 from mirage.vfs.disk import DiskVFS
 from mirage.vfs.ram import RAMVFS
@@ -79,7 +78,7 @@ def _dispatcher(policies: Policies) -> tuple[Dispatcher, MagicMock]:
     namespace.registry.policies = policies
     cache = MagicMock()
     cache.get = AsyncMock(return_value=b"warm")
-    dispatcher = Dispatcher(namespace, cache, ConsistencyPolicy.LAZY)
+    dispatcher = Dispatcher(namespace, cache)
     reconciler = MagicMock()
     reconciler.may_serve_cached = AsyncMock(return_value=True)
     dispatcher._reconciler = reconciler

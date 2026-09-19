@@ -15,28 +15,33 @@
 import { describe, expect, it } from 'vitest'
 
 import { RAMVFS } from '../../vfs/ram/ram.ts'
-import { Limit, MountMode } from '../../types.ts'
+import { type ReadSpec, DEFAULT_READ_TTL, Limit, MountMode, ReadPolicy } from '../../types.ts'
 import { normalizeMounts } from './mounts.ts'
+
+const DEFAULT_READ: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
 
 describe('normalizeMounts', () => {
   it('keeps a bare VFS with no pinned mode', () => {
     const vfs = new RAMVFS()
-    const normalized = normalizeMounts({ '/a': vfs })
+    const normalized = normalizeMounts({ '/a': vfs }, DEFAULT_READ)
     expect(normalized.bare['/a']).toBe(vfs)
     expect(normalized.modes['/a']).toBeUndefined()
     expect(normalized.commandLimits['/a']).toBeUndefined()
   })
 
   it('pins the mode from a pair entry', () => {
-    const normalized = normalizeMounts({ '/a': [new RAMVFS(), MountMode.READ] })
+    const normalized = normalizeMounts({ '/a': [new RAMVFS(), MountMode.READ] }, DEFAULT_READ)
     expect(normalized.modes['/a']).toBe(MountMode.READ)
   })
 
   it('carries commandLimits from a triple entry', () => {
     const guard = new Limit({ timeoutSeconds: 1 })
-    const normalized = normalizeMounts({
-      '/a': [new RAMVFS(), MountMode.READ, { curl: guard }],
-    })
+    const normalized = normalizeMounts(
+      {
+        '/a': [new RAMVFS(), MountMode.READ, { curl: guard }],
+      },
+      DEFAULT_READ,
+    )
     expect(normalized.commandLimits['/a']).toEqual({ curl: guard })
   })
 })

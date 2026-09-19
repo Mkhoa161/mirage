@@ -51,7 +51,16 @@ import {
 import { readSnapshotTar } from '../snapshot/tar_io.ts'
 import type { WorkspaceStateDict, MountSnapshot } from '../snapshot/types.ts'
 import type { FileEvent } from '../../types.ts'
-import { ConsistencyPolicy, DriftPolicy, MountMode, PathSpec, parseMountMode } from '../../types.ts'
+import {
+  type ReadSpec,
+  ConsistencyPolicy,
+  DEFAULT_READ_TTL,
+  DriftPolicy,
+  MountMode,
+  PathSpec,
+  ReadPolicy,
+  parseMountMode,
+} from '../../types.ts'
 import type { Explanation, Policies } from '../../policy/index.ts'
 import type { RoutePolicy } from '../../runtime/routing/index.ts'
 import type { TSNodeLike } from '../../shell/types.ts'
@@ -59,6 +68,7 @@ import type { ExecuteFn } from '../expand/node.ts'
 import type { ProvisionResult } from '../../provision/types.ts'
 import { Ops } from '../../ops/ops.ts'
 import type { MountEntry } from '../mount/mount.ts'
+import { checkReadCapability } from '../mount/read_policy.ts'
 import { MountRegistry } from '../mount/registry.ts'
 import { PrefixResolver } from '../../runtime/resolver.ts'
 import { WorkspaceBinding, captureBinding } from '../../runtime/binding.ts'
@@ -136,6 +146,7 @@ export class Workspace {
    */
   readonly opsRegistry: OpsRegistry
   private readonly indexConfig: IndexConfig | undefined
+  private readonly readDefault: ReadSpec
   private shellParser: ShellParser | null
   private readonly shellParserFactory: (() => Promise<ShellParser>) | null
   private shellParserPromise: Promise<ShellParser> | null = null
@@ -189,12 +200,16 @@ export class Workspace {
   // can't mount), so the core Workspace carries no FUSE state.
 
   constructor(mounts: Record<string, MountSpec>, options: WorkspaceOptions = {}) {
-    const normalized = normalizeMounts(mounts)
+    // The workspace-level default a mount overrides, as `mode` is.
+    this.readDefault = options.read ?? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
+    const normalized = normalizeMounts(mounts, this.readDefault)
     this.indexConfig = options.index
     this.registry = new MountRegistry(
       normalized.bare,
       options.mode ?? MountMode.READ,
       normalized.modes,
+      this.readDefault,
+      normalized.read,
     )
     const consistency = options.consistency ?? ConsistencyPolicy.LAZY
     this.registry.setConsistency(consistency)
@@ -329,7 +344,14 @@ export class Workspace {
       this.registry.clis.install(cliName, cliSpec, cliConfig)
     }
     this.observer = new Observer(stores.observe)
-    this.registry.mount(HISTORY_PREFIX, new HistoryViewVFS(this.observer), MountMode.READ)
+    // Explicit at the construction site: the history view does not cache
+    // reads, so its policy can only ever be bounded.
+    this.registry.mount(
+      HISTORY_PREFIX,
+      new HistoryViewVFS(this.observer),
+      MountMode.READ,
+      this.readDefault,
+    )
     this.cache = buildFileCache(options.cache, options.cacheLimit)
     this.registry.attachFileCache(this.cache)
     // Only an explicit agentId claims the workspace user; a bare launch
@@ -344,7 +366,6 @@ export class Workspace {
       this.namespace,
       this.cache,
       this.opsRegistry,
-      consistency,
       this.registry.policies,
       this.drift,
     )
@@ -355,7 +376,7 @@ export class Workspace {
     // A synthetic anchor is internal to Mirage and must NOT be forwarded to Pyodide,
     // whose own `/` filesystem (holding the Python stdlib) would be hijacked.
     if (this.registry.rootMount === null) {
-      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ)
+      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ, this.readDefault)
       this.syntheticRootAnchor = true
     }
     // The workspace's own session is a session created without a name,
@@ -914,10 +935,21 @@ export class Workspace {
   /**
    * Add a mount to a running workspace. Registers the VFS's ops globally
    * on this workspace's OpsRegistry so dispatch can find them.
+   *
+   * The runtime door runs the same read-policy verdict the constructor
+   * does: a mount added here is no more able to declare a policy its
+   * backend cannot honour than one declared in config.
    */
-  addMount(prefix: string, vfs: VFS, mode: MountMode = MountMode.READ): MountEntry {
+  addMount(
+    prefix: string,
+    vfs: VFS,
+    mode: MountMode = MountMode.READ,
+    read?: ReadSpec,
+  ): MountEntry {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
     this.registry.checkVfsAvailable(vfs)
+    const resolvedRead = read ?? this.readDefault
+    checkReadCapability(prefix, vfs, resolvedRead)
     const previous = this.registry.allMounts()
     // Configure before mount() captures the index in its CacheManager.
     // An alias must retain the index used by the VFS's other mounts.
@@ -928,7 +960,7 @@ export class Workspace {
     ) {
       vfs.setIndex?.(this.indexConfig)
     }
-    const m = this.registry.mount(prefix, vfs, mode)
+    const m = this.registry.mount(prefix, vfs, mode, resolvedRead)
     prepareAddedMount(this.registry, m, previous)
     this.opsRegistry.registerVfs(vfs)
     return m

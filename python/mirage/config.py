@@ -38,9 +38,12 @@ from mirage.secrets.sources import (config_holds_pointer,
 from mirage.shell.console import JobConsole
 from mirage.shell.job_table import ConsoleFactory
 from mirage.types import (KERNEL_BACKENDS, ConsistencyPolicy, Limit,
-                          MountBackend, MountMode, parse_mount_mode)
+                          MountBackend, MountMode, ReadPolicy,
+                          parse_mount_mode)
 from mirage.vfs.loader import load_attr
 from mirage.vfs.registry import build_vfs
+from mirage.workspace.mount.read_policy import (coerce_read_policy,
+                                                resolve_read_spec)
 from mirage.workspace.mount.spec import Mount
 from mirage.workspace.store import (DEFAULT_STATE_ROOT,
                                     DiskWorkspaceStateStore,
@@ -338,6 +341,12 @@ class MountBlock(BaseModel):
     # only), fuse, or fskit. mountpoint is honored by the kernel backends.
     backend: MountBackend = MountBackend.WORKSPACE
     mountpoint: str | None = None
+    # How cached bytes for this mount are revalidated, and the bound
+    # that goes with `bounded`. The bound lives only here, where no
+    # other `ttl` does: at workspace level it would sit beside
+    # `index: {ttl:}` and mean a different thing.
+    read: ReadPolicy | None = None
+    ttl: int | None = None
 
     @field_validator("mode", mode="before")
     @classmethod
@@ -345,6 +354,26 @@ class MountBlock(BaseModel):
         if v is None:
             return v
         return _coerce_mount_mode(v)
+
+    @field_validator("read", mode="before")
+    @classmethod
+    def _v_read(cls, v):
+        if v is None:
+            return v
+        return coerce_read_policy(v)
+
+    @model_validator(mode="after")
+    def _v_bound(self) -> "MountBlock":
+        # Two dependent-key rules, refused here rather than in the mount
+        # verdict: by the time a ReadSpec exists its ttl has already
+        # defaulted, so `bounded` written without a bound is
+        # indistinguishable from `read:` left out entirely.
+        if self.ttl is not None and self.read is None:
+            raise ValueError("ttl pins the read bound; it takes "
+                             "read: bounded")
+        if self.read is ReadPolicy.BOUNDED and self.ttl is None:
+            raise ValueError("read: bounded needs a bound; set ttl:")
+        return self
 
 
 def _is_script_path(value: str) -> bool:
@@ -611,6 +640,10 @@ class WorkspaceConfig(BaseModel):
     profile: str | None = None
     mode: MountMode = MountMode.WRITE
     consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
+    # The read policy a mount inherits when it declares none. There is
+    # deliberately no workspace-level bound: `ttl:` exists only inside a
+    # mount block, where it cannot be confused with `index: {ttl:}`.
+    read: ReadPolicy | None = None
     default_session_id: str | None = None
     default_agent_id: str | None = None
     workspace_id: str | None = None
@@ -641,6 +674,13 @@ class WorkspaceConfig(BaseModel):
     def _v_cons(cls, v):
         return _coerce_consistency(v)
 
+    @field_validator("read", mode="before")
+    @classmethod
+    def _v_read_default(cls, v):
+        if v is None:
+            return v
+        return coerce_read_policy(v)
+
     @model_validator(mode="after")
     def _v_profile(self) -> "WorkspaceConfig":
         # The workspace's default profile must be one it defines; the
@@ -666,17 +706,22 @@ class WorkspaceConfig(BaseModel):
                 ``Workspace`` constructor expects.
         """
         mounts: dict[str, Mount] = {}
+        default_read = resolve_read_spec(self.read, None)
         for prefix, block in self.mounts.items():
             prov = build_vfs(block.vfs, block.config)
             mode = block.mode if block.mode is not None else self.mode
+            read = (default_read if block.read is None else resolve_read_spec(
+                block.read, block.ttl))
             mounts[prefix] = Mount(
                 vfs=prov,
                 mode=mode,
                 command_limits=block.command_limits,
+                read=read,
             )
         kwargs: dict[str, Any] = {
             "mounts": mounts,
             "mode": self.mode,
+            "read": default_read,
             "consistency": self.consistency,
             "session_id": self.default_session_id,
             "agent_id": self.default_agent_id,

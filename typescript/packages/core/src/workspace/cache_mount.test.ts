@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
 import { cachesReads } from '../vfs/base.ts'
 import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser } from '../shell/parse/index.ts'
-import { ConsistencyPolicy, MountMode, PathSpec } from '../types.ts'
+import { DEFAULT_READ_TTL, MountMode, PathSpec, ReadPolicy } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
 
 const ENC = new TextEncoder()
@@ -70,7 +70,7 @@ describe('warm read serves from the hidden store, command stays on its mount', (
       { '/r': ram },
       {
         mode: MountMode.WRITE,
-        consistency: ConsistencyPolicy.LAZY,
+        read: { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL },
         shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
       },
     )
@@ -89,10 +89,15 @@ describe('warm read serves from the hidden store, command stays on its mount', (
 })
 
 describe('namespace orphan GC on remote delete', () => {
-  it('GCs an orphaned overlay when a stat reports the path gone under ALWAYS', async () => {
+  it('GCs an orphaned overlay when a stat reports the path gone under fresh', async () => {
+    // The subject is the reaction, not RAM: the instance declares the two
+    // capabilities the verdict asks for so a RAM mount can legally carry
+    // the policy.
+    const ram = new RAMVFS()
+    Object.assign(ram, { cachesReads: true, readRevalidatable: true })
     const ws = new Workspace(
-      { '/data': new RAMVFS() },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { '/data': ram },
+      { mode: MountMode.WRITE, read: { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL } },
     )
     try {
       await ws.namespace.ensureLoaded()
@@ -105,14 +110,14 @@ describe('namespace orphan GC on remote delete', () => {
     }
   })
 
-  it('a single-mount shell stat GCs an orphaned overlay under ALWAYS', async () => {
+  it('a single-mount shell stat GCs an orphaned overlay under fresh', async () => {
     const ram = new RAMVFS()
-    ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
+    Object.assign(ram, { cachesReads: true, readRevalidatable: true })
     const ws = new Workspace(
       { '/r': ram },
       {
         mode: MountMode.WRITE,
-        consistency: ConsistencyPolicy.ALWAYS,
+        read: { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL },
         shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
       },
     )
@@ -130,7 +135,7 @@ describe('namespace orphan GC on remote delete', () => {
   it('leaves the overlay in place under LAZY', async () => {
     const ws = new Workspace(
       { '/data': new RAMVFS() },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.LAZY },
+      { mode: MountMode.WRITE, read: { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL } },
     )
     try {
       await ws.namespace.ensureLoaded()

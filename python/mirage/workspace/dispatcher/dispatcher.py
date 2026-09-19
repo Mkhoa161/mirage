@@ -34,8 +34,7 @@ from mirage.ops.namespace_view import (merge_readdir, namespace_listing,
                                        namespace_stat)
 from mirage.policy import post_ops_gate, pre_ops_gate
 from mirage.policy.errors import PolicyDenied, PolicyError
-from mirage.types import (ConsistencyPolicy, FileStat, FileType, PathSpec,
-                          VFSName)
+from mirage.types import FileStat, FileType, PathSpec, VFSName
 from mirage.utils.errors import MISS_ERRORS, no_mount
 from mirage.utils.hidden import move_reveals
 from mirage.utils.key_prefix import mount_key
@@ -187,11 +186,10 @@ class Dispatcher:
     def __init__(self,
                  namespace: Namespace,
                  cache,
-                 consistency: ConsistencyPolicy,
                  drift: DriftQueue | None = None) -> None:
         self._namespace = namespace
         self._cache = cache
-        self._reconciler = Reconciler(cache, namespace, consistency)
+        self._reconciler = Reconciler(cache, namespace)
         self._drift = drift
 
     @property
@@ -399,7 +397,7 @@ class Dispatcher:
         except FileNotFoundError:
             result = self._namespace_result(op, path.virtual)
             if result is None:
-                await self._reconciler.on_op_missing(op, path.virtual)
+                await self._reconciler.on_op_missing(mount, op, path.virtual)
                 raise
             _memory_answered(report)
         except OSError as exc:

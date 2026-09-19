@@ -16,7 +16,9 @@ import asyncio
 import errno
 import time
 
-from mirage.types import ConsistencyPolicy, MountMode
+import pytest
+
+from mirage.types import MountMode, ReadPolicy, ReadSpec
 from mirage.vfs.disk import DiskVFS
 from mirage.vfs.ram import RAMVFS
 from mirage.vfs.s3 import S3VFS, S3Config
@@ -24,31 +26,23 @@ from mirage.workspace import Workspace
 from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
 
 
-def test_disk_always_refetches_after_external_mutation(tmp_path):
+def test_disk_cannot_declare_fresh(tmp_path):
+    """Disk is answered by the first rule, not the token-quality one.
+
+    #1101 Q8 worried that refusing would leave the two commonest local
+    mounts with no read policy. Disk never reaches that question: it
+    does not cache reads, so there is no gate to revalidate at.
+    """
     root = tmp_path / "disk"
     root.mkdir()
     (root / "file.txt").write_bytes(b"v1")
-
-    vfs = DiskVFS(root=str(root))
-    ws = Workspace(
-        {"/data": (vfs, MountMode.WRITE)},
-        mode=MountMode.WRITE,
-        consistency=ConsistencyPolicy.ALWAYS,
-    )
-
-    async def run() -> tuple[bytes, bytes]:
-        io1 = await ws.shell("cat /data/file.txt")
-        first = await io1.materialize_stdout()
-        time.sleep(1.1)
-        (root / "file.txt").write_bytes(b"v2")
-        io2 = await ws.shell("cat /data/file.txt")
-        second = await io2.materialize_stdout()
-        return first, second
-
-    first, second = asyncio.run(run())
-    assert first == b"v1"
-    assert second == b"v2", (
-        "ALWAYS must refetch from disk after mtime changed; got stale cache")
+    with pytest.raises(ValueError) as exc:
+        Workspace(
+            {"/data": (DiskVFS(root=str(root)), MountMode.WRITE)},
+            mode=MountMode.WRITE,
+            read=ReadSpec(policy=ReadPolicy.FRESH),
+        )
+    assert "needs a resource that caches reads" in str(exc.value)
 
 
 def test_disk_lazy_keeps_stale_cache_after_external_mutation(tmp_path):
@@ -60,7 +54,7 @@ def test_disk_lazy_keeps_stale_cache_after_external_mutation(tmp_path):
     ws = Workspace(
         {"/data": (vfs, MountMode.WRITE)},
         mode=MountMode.WRITE,
-        consistency=ConsistencyPolicy.LAZY,
+        read=ReadSpec(policy=ReadPolicy.BOUNDED),
     )
 
     async def run() -> tuple[bytes, bytes]:
@@ -74,8 +68,11 @@ def test_disk_lazy_keeps_stale_cache_after_external_mutation(tmp_path):
 
     first, second = asyncio.run(run())
     assert first == b"v1"
-    assert second in (b"v1", b"v2"), (
-        "LAZY allowed to serve cached bytes; this test just confirms no crash")
+    # Disk does not cache reads at all, so `bounded` has nothing to
+    # serve stale and the second read is always current. The old
+    # assertion allowed either byte string, which no implementation
+    # could fail.
+    assert second == b"v2"
 
 
 def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
@@ -96,7 +93,7 @@ def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
         ws = Workspace(
             {"/s3": (S3VFS(config), MountMode.WRITE)},
             mode=MountMode.WRITE,
-            consistency=ConsistencyPolicy.ALWAYS,
+            read=ReadSpec(policy=ReadPolicy.FRESH),
         )
 
         async def run() -> tuple[bytes, bytes]:
@@ -126,7 +123,7 @@ def _always_mount(objects):
     return session, Workspace(
         {"/s3": (S3VFS(config), MountMode.WRITE)},
         mode=MountMode.WRITE,
-        consistency=ConsistencyPolicy.ALWAYS,
+        read=ReadSpec(policy=ReadPolicy.FRESH),
     )
 
 
@@ -267,7 +264,7 @@ def test_fanout_revalidates_a_descendant_mount():
             "/x/y": (mount("bucket-b"), MountMode.WRITE),
         },
         mode=MountMode.WRITE,
-        consistency=ConsistencyPolicy.ALWAYS,
+        read=ReadSpec(policy=ReadPolicy.FRESH),
     )
 
     async def run() -> bytes:
@@ -322,22 +319,25 @@ def test_a_flaky_probe_costs_a_refetch_not_the_walk():
         "the unverifiable file is re-read from the backend, not dropped")
 
 
-def test_ram_falls_back_to_lazy_when_fingerprint_absent():
+def test_ram_cannot_declare_fresh():
+    """The silent downgrade is refused, not accepted.
+
+    This test used to assert the opposite: that a RAM mount under ALWAYS
+    "must succeed (no fingerprint -> LAZY fallback)". That fallback is
+    the bug the read policy exists to remove -- a mount that asked to
+    revalidate and quietly did not. RAM does not cache reads, so the
+    gate could never fire, and the mount is refused at construction
+    rather than downgraded behind the operator's back.
+    """
     vfs = RAMVFS()
     vfs._store.files["/file.txt"] = b"v1"
-    ws = Workspace(
-        {"/data": (vfs, MountMode.WRITE)},
-        mode=MountMode.WRITE,
-        consistency=ConsistencyPolicy.ALWAYS,
-    )
-
-    async def run() -> bytes:
-        io1 = await ws.shell("cat /data/file.txt")
-        return await io1.materialize_stdout()
-
-    data = asyncio.run(run())
-    assert data == b"v1", (
-        "RAM read under ALWAYS must succeed (no fingerprint → LAZY fallback)")
+    with pytest.raises(ValueError) as exc:
+        Workspace(
+            {"/data": (vfs, MountMode.WRITE)},
+            mode=MountMode.WRITE,
+            read=ReadSpec(policy=ReadPolicy.FRESH),
+        )
+    assert "needs a resource that caches reads" in str(exc.value)
 
 
 def test_a_routing_probe_failure_never_takes_the_line():

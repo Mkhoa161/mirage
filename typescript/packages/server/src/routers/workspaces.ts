@@ -15,7 +15,6 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import type { Limit } from '@struktoai/mirage-core/types'
 import type { MountSpec } from '@struktoai/mirage-core/workspace/workspace/workspace'
 import type { VFS } from '@struktoai/mirage-core/vfs/base'
 import { DiskWorkspaceStateStore, Workspace } from '@struktoai/mirage-node'
@@ -101,12 +100,8 @@ export function registerWorkspacesRoutes(app: FastifyInstance, deps: WorkspaceRo
         }
         return reply.status(502).send({ detail: `VFS build failed: ${(e as Error).message}` })
       }
-      const vfsMap: Record<string, MountSpec> = {}
-      const commandLimits: Record<string, Record<string, Limit>> = {}
-      for (const [prefix, [vfs, mode, limits]] of Object.entries(args.mounts)) {
-        vfsMap[prefix] = [vfs, mode]
-        if (Object.keys(limits).length > 0) commandLimits[prefix] = limits
-      }
+      // The Mounts ride through whole; see workspace_config.ts.
+      const vfsMap: Record<string, MountSpec> = { ...args.mounts }
       // The registry id and the state-store scope must be the same identity,
       // so resolve it before construction: explicit REST id, then the
       // config's workspaceId, then a fresh mint.
@@ -128,7 +123,6 @@ export function registerWorkspacesRoutes(app: FastifyInstance, deps: WorkspaceRo
           // Whichever of the two built it, no sibling workspace shares
           // it, so this workspace is the one that closes it.
           ownsStore: true,
-          ...(Object.keys(commandLimits).length > 0 ? { commandLimits } : {}),
         })
       } catch (e) {
         return reply.status(400).send({ detail: (e as Error).message })

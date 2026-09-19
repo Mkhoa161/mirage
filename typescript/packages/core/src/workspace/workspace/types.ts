@@ -24,10 +24,18 @@ import type { VFS } from '../../vfs/base.ts'
 import type { EnvEntries, SecretEntries } from '../../secrets/config.ts'
 import type { ConsoleFactory } from '../../shell/job_table/index.ts'
 import type { ShellParser } from '../../shell/parse/index.ts'
-import type { Limit, ConsistencyPolicy, DriftPolicy, MountMode, Refusal } from '../../types.ts'
+import type {
+  Limit,
+  ConsistencyPolicy,
+  DriftPolicy,
+  MountMode,
+  ReadSpec,
+  Refusal,
+} from '../../types.ts'
 import type { AskHandler, Policy } from '../../policy/index.ts'
 import type { RouteDecision, RoutePolicy } from '../../runtime/routing/index.ts'
 import type { RuntimeEntry } from '../../runtime/base.ts'
+import type { Mount } from '../mount/spec.ts'
 import type { NamespaceStore } from '../mount/namespace/store.ts'
 import type { SessionProfile } from '../../policy/profile.ts'
 import type { SessionStore } from '../session/store.ts'
@@ -41,11 +49,18 @@ import type { WorkspaceStateStore } from '../store/base.ts'
  */
 export type MountSpec =
   | VFS
+  | Mount
   | readonly [VFS, MountMode]
   | readonly [VFS, MountMode, Record<string, Limit>]
 
 export interface WorkspaceOptions {
   mode?: MountMode
+  /**
+   * The read policy a mount inherits when it declares none. There is
+   * deliberately no workspace-level bound: `ttl:` exists only inside a
+   * mount block, where it cannot be confused with `index: {ttl:}`.
+   */
+  read?: ReadSpec
   consistency?: ConsistencyPolicy
   commandLimits?: Record<string, Record<string, Limit>>
   /**

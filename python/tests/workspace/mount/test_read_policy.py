@@ -37,6 +37,7 @@ from mirage.vfs.supabase.supabase import SupabaseVFS
 from mirage.vfs.tencent.tencent import TencentVFS
 from mirage.vfs.wasabi.wasabi import WasabiVFS
 from mirage.workspace.mount.read_policy import (check_read_capability,
+                                                coerce_read_policy,
                                                 resolve_read_spec)
 
 FRESH = ReadSpec(policy=ReadPolicy.FRESH)
@@ -58,6 +59,15 @@ def test_absent_policy_is_bounded_at_the_default_bound():
 
 def test_empty_policy_reads_as_absent():
     assert resolve_read_spec("", None).policy is ReadPolicy.BOUNDED
+
+
+def test_an_already_coerced_policy_passes_through():
+    # str() of a (str, Enum) member is "ReadPolicy.BOUNDED", so a second
+    # coercion of an already-coerced value would refuse it. The config
+    # door validates the field and then builds the spec, so it happens.
+    assert coerce_read_policy(ReadPolicy.FRESH) is ReadPolicy.FRESH
+    assert resolve_read_spec(ReadPolicy.BOUNDED,
+                             30) == ReadSpec(policy=ReadPolicy.BOUNDED, ttl=30)
 
 
 def test_policy_name_is_case_insensitive():

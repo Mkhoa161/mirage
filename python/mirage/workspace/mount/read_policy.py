@@ -16,6 +16,39 @@ from mirage.types import DEFAULT_READ_TTL, ReadPolicy, ReadSpec
 from mirage.vfs.base import BaseVFS
 
 
+def coerce_read_policy(value: "str | ReadPolicy | None") -> ReadPolicy:
+    """Coerce a declared read-policy name into a ReadPolicy.
+
+    Missing means bounded, everywhere: an absent ``read:`` in YAML,
+    ``None`` here, and the ``Mount`` dataclass default all resolve to
+    the same thing.
+
+    Args:
+        value (str | ReadPolicy | None): the requested policy; None and
+            the empty string mean bounded.
+
+    Returns:
+        ReadPolicy: the resolved policy.
+
+    Raises:
+        ValueError: the name is not a known policy.
+    """
+    if value is None or value == "":
+        return ReadPolicy.BOUNDED
+    # Already coerced: `str()` of a (str, Enum) member renders as
+    # "ReadPolicy.BOUNDED", so re-coercing one would refuse it. The
+    # config door validates the field and then builds the spec, so the
+    # value arrives here twice. Mirrors `_coerce_mount_mode`.
+    if isinstance(value, ReadPolicy):
+        return value
+    try:
+        return ReadPolicy(str(value).lower())
+    except ValueError:
+        known = ", ".join(p.value for p in ReadPolicy)
+        raise ValueError(
+            f"unknown read policy {value!r}; expected one of: {known}")
+
+
 def resolve_read_spec(policy: "str | ReadPolicy | None",
                       ttl: int | None) -> ReadSpec:
     """Coerce a declared read policy and bound into a ReadSpec.
@@ -43,16 +76,7 @@ def resolve_read_spec(policy: "str | ReadPolicy | None",
     Raises:
         ValueError: the policy name is not a known one.
     """
-    if policy is None or policy == "":
-        resolved = ReadPolicy.BOUNDED
-    else:
-        try:
-            resolved = ReadPolicy(str(policy).lower())
-        except ValueError:
-            known = ", ".join(p.value for p in ReadPolicy)
-            raise ValueError(
-                f"unknown read policy {policy!r}; expected one of: {known}")
-    return ReadSpec(policy=resolved,
+    return ReadSpec(policy=coerce_read_policy(policy),
                     ttl=DEFAULT_READ_TTL if ttl is None else ttl)
 
 

@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import type { VFS } from '../../vfs/base.ts'
-import type { Limit, MountBackend, MountMode } from '../../types.ts'
+import type { Limit, MountBackend, MountMode, ReadSpec } from '../../types.ts'
 
 export interface MountSpecOptions {
   /** Per-mount mode override; falls back to the workspace default when unset. */
@@ -29,6 +29,11 @@ export interface MountSpecOptions {
    */
   mountpoint?: string
   commandLimits?: Record<string, Limit>
+  /**
+   * How cached bytes for this mount are revalidated. Omitted takes the
+   * workspace default, as `mode` does.
+   */
+  read?: ReadSpec
 }
 
 export class Mount {

@@ -21,7 +21,7 @@ import pytest
 
 from mirage import MountMode, Workspace
 from mirage.cache.index.config import RedisIndexConfig
-from mirage.types import ConsistencyPolicy, FileStat, FileType
+from mirage.types import FileStat, FileType, ReadPolicy, ReadSpec
 from mirage.utils.errors import enotsup
 from mirage.vfs.ram import RAMVFS
 from mirage.vfs.s3 import S3VFS, S3Config
@@ -39,7 +39,7 @@ async def _ws_with_overlay():
 @pytest.mark.asyncio
 async def test_on_missing_evicts_and_gcs_overlay():
     ws = await _ws_with_overlay()
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+    rec = Reconciler(ws.cache, ws.namespace)
     await rec.on_missing("/data/f.txt")
     assert ws.namespace.meta_for("/data/f.txt") is None
 
@@ -49,32 +49,44 @@ async def test_on_missing_keeps_symlink():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     await ws.namespace.symlink("/data/link", "/data/t", 1.0)
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+    rec = Reconciler(ws.cache, ws.namespace)
     await rec.on_missing("/data/link")
     assert ws.namespace.readlink("/data/link") == "/data/t"
 
 
 @pytest.mark.asyncio
-async def test_on_op_missing_skips_under_lazy():
+async def test_on_op_missing_skips_under_bounded():
+    """A mount that declined to revalidate also declines to GC on a miss.
+
+    Not merely a cost choice: an ENOENT here is not proof the backend
+    said so, because object-store ``stat`` and several reads answer a
+    miss straight out of a live index. Reacting would drop an attribute
+    overlay nothing can restore.
+    """
     ws = await _ws_with_overlay()
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.LAZY)
-    await rec.on_op_missing("stat", "/data/f.txt")
+    mount = ws.namespace.mount_for("/data/f.txt")
+    rec = Reconciler(ws.cache, ws.namespace)
+    await rec.on_op_missing(mount, "stat", "/data/f.txt")
     assert ws.namespace.meta_for("/data/f.txt") is not None
 
 
 @pytest.mark.asyncio
 async def test_on_op_missing_skips_non_revalidate_op():
     ws = await _ws_with_overlay()
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
-    await rec.on_op_missing("write", "/data/f.txt")
+    mount = ws.namespace.mount_for("/data/f.txt")
+    mount.read = ReadSpec(policy=ReadPolicy.FRESH)
+    rec = Reconciler(ws.cache, ws.namespace)
+    await rec.on_op_missing(mount, "write", "/data/f.txt")
     assert ws.namespace.meta_for("/data/f.txt") is not None
 
 
 @pytest.mark.asyncio
-async def test_on_op_missing_gcs_on_always_stat():
+async def test_on_op_missing_gcs_on_a_fresh_mounts_stat():
     ws = await _ws_with_overlay()
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
-    await rec.on_op_missing("stat", "/data/f.txt")
+    mount = ws.namespace.mount_for("/data/f.txt")
+    mount.read = ReadSpec(policy=ReadPolicy.FRESH)
+    rec = Reconciler(ws.cache, ws.namespace)
+    await rec.on_op_missing(mount, "stat", "/data/f.txt")
     assert ws.namespace.meta_for("/data/f.txt") is None
 
 
@@ -83,7 +95,7 @@ async def test_may_serve_cached_trusts_cache_under_lazy():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     mount = ws.namespace.mount_for("/data/f.txt")
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.LAZY)
+    rec = Reconciler(ws.cache, ws.namespace)
     assert await rec.may_serve_cached(mount, "/data/f.txt") is True
 
 
@@ -102,10 +114,11 @@ async def test_may_serve_cached_no_fingerprint_forces_reread():
     try:
         await ws.namespace.ensure_loaded()
         mount = ws.namespace.mount_for("/data/f.txt")
+        mount.read = ReadSpec(policy=ReadPolicy.FRESH)
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
         stat = await mount.execute_op("stat", "/data/f.txt")
         assert stat is not None and stat.fingerprint is None
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        rec = Reconciler(ws.cache, ws.namespace)
         assert await rec.may_serve_cached(mount, "/data/f.txt") is False
         assert not await ws.cache.exists("/data/f.txt")
     finally:
@@ -127,6 +140,7 @@ async def test_may_serve_cached_serves_a_fingerprinted_live_only_backend():
     try:
         await ws.namespace.ensure_loaded()
         mount = ws.namespace.mount_for("/data/f.txt")
+        mount.read = ReadSpec(policy=ReadPolicy.FRESH)
         assert mount.vfs.SUPPORTS_SNAPSHOT is False
         real = mount.execute_op
 
@@ -137,7 +151,7 @@ async def test_may_serve_cached_serves_a_fingerprinted_live_only_backend():
 
         mount.execute_op = fingerprinted
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        rec = Reconciler(ws.cache, ws.namespace)
         assert await rec.may_serve_cached(mount, "/data/f.txt") is True
         assert await ws.cache.exists("/data/f.txt")
     finally:
@@ -150,7 +164,8 @@ async def test_reconcile_read_gcs_orphan_on_delete():
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
     mount = ws.namespace.mount_for("/data/gone.txt")
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+    mount.read = ReadSpec(policy=ReadPolicy.FRESH)
+    rec = Reconciler(ws.cache, ws.namespace)
     await rec.reconcile_read(mount, "/data/gone.txt")
     assert ws.namespace.meta_for("/data/gone.txt") is None
 
@@ -160,7 +175,8 @@ async def test_reconcile_read_noop_without_overlay_or_cache():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     mount = ws.namespace.mount_for("/data/plain.txt")
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+    mount.read = ReadSpec(policy=ReadPolicy.FRESH)
+    rec = Reconciler(ws.cache, ws.namespace)
     await rec.reconcile_read(mount, "/data/plain.txt")
 
 
@@ -170,7 +186,7 @@ async def test_reconcile_read_skips_under_lazy():
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
     mount = ws.namespace.mount_for("/data/gone.txt")
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.LAZY)
+    rec = Reconciler(ws.cache, ws.namespace)
     await rec.reconcile_read(mount, "/data/gone.txt")
     assert ws.namespace.meta_for("/data/gone.txt") is not None
 
@@ -193,6 +209,7 @@ async def test_an_unverifiable_probe_drops_the_entry(caplog, failure):
     try:
         await ws.namespace.ensure_loaded()
         mount = ws.namespace.mount_for("/data/f.txt")
+        mount.read = ReadSpec(policy=ReadPolicy.FRESH)
 
         async def failing(op, path, **_kwargs):
             if failure == "no_stat_op":
@@ -201,7 +218,7 @@ async def test_an_unverifiable_probe_drops_the_entry(caplog, failure):
 
         mount.execute_op = failing
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        rec = Reconciler(ws.cache, ws.namespace)
         with caplog.at_level(logging.DEBUG,
                              logger="mirage.workspace.reconcile"):
             assert await rec.may_serve_cached(mount, "/data/f.txt") is False
@@ -236,7 +253,7 @@ async def test_always_probes_live_s3_with_warm_index(index_type, surface,
     with patch_s3_multi({"test-bucket": objects}):
         ws = Workspace({"/s3": vfs},
                        index=index,
-                       consistency=ConsistencyPolicy.ALWAYS)
+                       read=ReadSpec(policy=ReadPolicy.FRESH))
         try:
             assert (await ws.shell("ls /s3/")).exit_code == 0
             assert (await vfs.index.get("/s3/f.txt")).entry is not None
@@ -269,6 +286,7 @@ async def test_unverified_probe_cannot_serve_cached_bytes(
     ws = Workspace({"/data": RAMVFS()})
     try:
         mount = ws.namespace.mount_for("/data/f.txt")
+        mount.read = ReadSpec(policy=ReadPolicy.FRESH)
         monkeypatch.setattr(mount.vfs, "SUPPORTS_SNAPSHOT", True)
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
 
@@ -282,7 +300,7 @@ async def test_unverified_probe_cannot_serve_cached_bytes(
                             fingerprint="fp1" if probe == "fresh" else None)
 
         monkeypatch.setattr(mount, "execute_op", stat)
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        rec = Reconciler(ws.cache, ws.namespace)
         if surface == "shell":
             # Routing-time reconcile drops what it could not verify and
             # lets the command run: it serves no bytes itself, and raising

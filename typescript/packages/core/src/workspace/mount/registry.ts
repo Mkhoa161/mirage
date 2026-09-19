@@ -22,7 +22,15 @@ import { GENERAL_COMMANDS } from '../../commands/builtin/general/index.ts'
 import { cachesReads, type VFS } from '../../vfs/base.ts'
 import { DevVFS } from '../../vfs/dev/dev.ts'
 import { Decisions, MountRootPolicy, OutputCapPolicy, Policies } from '../../policy/index.ts'
-import { type Limit, ConsistencyPolicy, MountMode, PathSpec } from '../../types.ts'
+import {
+  type Limit,
+  type ReadSpec,
+  ConsistencyPolicy,
+  DEFAULT_READ_TTL,
+  MountMode,
+  PathSpec,
+  ReadPolicy,
+} from '../../types.ts'
 import { CLIRegistry } from '../cli/registry.ts'
 import { effectivePathMode, strongestModeUnder } from '../../context/session_context.ts'
 import { MountEntry } from './mount.ts'
@@ -70,6 +78,7 @@ export class MountRegistry {
   readonly retiredMounts = new WeakSet<VFS>()
   private rootRef: MountEntry | null = null
   private consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
+  private defaultRead: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
   private cacheStore: FileCache | null = null
   private reconciler: ReadReconciler | null = null
   // The world's workspace runtime, set by Workspace after construction.
@@ -163,6 +172,8 @@ export class MountRegistry {
     mounts: Record<string, VFS>,
     defaultMode: MountMode,
     modeOverrides: Record<string, MountMode> = {},
+    defaultRead: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL },
+    readOverrides: Record<string, ReadSpec> = {},
   ) {
     const list: MountEntry[] = []
     const seen = new Set<string>()
@@ -170,7 +181,21 @@ export class MountRegistry {
     for (const [k, v] of Object.entries(modeOverrides)) {
       overrides[normalizePrefix(k)] = v
     }
-    list.push(new MountEntry({ prefix: DEV_PREFIX, vfs: new DevVFS(), mode: MountMode.WRITE }))
+    const readByPrefix: Record<string, ReadSpec> = {}
+    for (const [k, v] of Object.entries(readOverrides)) {
+      readByPrefix[normalizePrefix(k)] = v
+    }
+    this.defaultRead = defaultRead
+    // Explicit at the construction site: /dev does not cache reads, so
+    // its policy can only ever be bounded.
+    list.push(
+      new MountEntry({
+        prefix: DEV_PREFIX,
+        vfs: new DevVFS(),
+        mode: MountMode.WRITE,
+        read: defaultRead,
+      }),
+    )
     seen.add(DEV_PREFIX)
     for (const [rawPrefix, vfs] of Object.entries(mounts)) {
       const prefix = normalizePrefix(rawPrefix)
@@ -180,7 +205,8 @@ export class MountRegistry {
       if (vfs.isClosed === true) throw new Error('VFS is closed; create a new VFS instance')
       seen.add(prefix)
       const mode = overrides[prefix] ?? defaultMode
-      const entry = new MountEntry({ prefix, vfs, mode })
+      const read = readByPrefix[prefix] ?? defaultRead
+      const entry = new MountEntry({ prefix, vfs, mode, read })
       const alias = list.find((existing) => existing.vfs === vfs)
       if (alias !== undefined) entry.activity = alias.activity
       list.push(entry)
@@ -192,6 +218,11 @@ export class MountRegistry {
 
   setConsistency(consistency: ConsistencyPolicy): void {
     this.consistency = consistency
+  }
+
+  /** The workspace-level read policy a mount overrides. */
+  setDefaultRead(read: ReadSpec): void {
+    this.defaultRead = read
   }
 
   getConsistency(): ConsistencyPolicy {
@@ -217,6 +248,7 @@ export class MountRegistry {
     prefix: string,
     vfs: VFS,
     mode: MountMode = MountMode.READ,
+    read?: ReadSpec,
     consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
   ): MountEntry {
     this.checkVfsAvailable(vfs)
@@ -226,7 +258,13 @@ export class MountRegistry {
         throw new Error(`duplicate mount prefix: ${norm}`)
       }
     }
-    const m = new MountEntry({ prefix: norm, vfs, mode, consistency })
+    const m = new MountEntry({
+      prefix: norm,
+      vfs,
+      mode,
+      read: read ?? this.defaultRead,
+      consistency,
+    })
     const alias = this.mountList.find((existing) => existing.vfs === vfs)
     if (alias !== undefined) m.activity = alias.activity
     const cmds = vfs.commands?.()
@@ -506,7 +544,7 @@ export class MountRegistry {
       pathScopes.length > 0 &&
       cachesReads(mount.vfs) &&
       baseCmd?.write !== true &&
-      this.consistency === ConsistencyPolicy.ALWAYS
+      mount.read.policy === ReadPolicy.FRESH
     ) {
       for (const scope of pathScopes) {
         await this.reconciler.reconcileRead(mount, scope.virtual)

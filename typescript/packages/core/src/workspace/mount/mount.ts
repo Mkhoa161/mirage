@@ -44,7 +44,16 @@ import { uuid7 } from '../../utils/ids.ts'
 import { VFSActivity } from './activity.ts'
 import type { RegisteredOp } from '../../ops/registry.ts'
 import type { VFS } from '../../vfs/base.ts'
-import { type Limit, ConsistencyPolicy, FileType, MountMode, PathSpec } from '../../types.ts'
+import {
+  type Limit,
+  type ReadSpec,
+  ConsistencyPolicy,
+  DEFAULT_READ_TTL,
+  FileType,
+  MountMode,
+  PathSpec,
+  ReadPolicy,
+} from '../../types.ts'
 import { ebusy, enotsup, erofsReadOnly } from '../../utils/errors.ts'
 import { rstripSlash } from '../../utils/slash.ts'
 import {
@@ -87,6 +96,8 @@ export interface MountInit {
   vfs: VFS
   mode?: MountMode
   consistency?: ConsistencyPolicy
+  /** How this mount's cached bytes are revalidated. */
+  read?: ReadSpec
 }
 
 export class MountEntry {
@@ -95,6 +106,7 @@ export class MountEntry {
   readonly vfs: VFS
   mode: MountMode
   readonly consistency: ConsistencyPolicy
+  readonly read: ReadSpec
   activity = new VFSActivity()
   retiring = false
   beforeUse: (() => Promise<void>) | null = null
@@ -138,6 +150,7 @@ export class MountEntry {
     this.vfs = init.vfs
     this.mode = init.mode ?? MountMode.READ
     this.consistency = init.consistency ?? ConsistencyPolicy.LAZY
+    this.read = init.read ?? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
   }
 
   /** Prepare and retain the VFS while its glob hook reads metadata. */
