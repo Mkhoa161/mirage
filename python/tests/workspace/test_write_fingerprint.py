@@ -16,7 +16,7 @@ import asyncio
 import hashlib
 from contextlib import contextmanager
 
-from mirage.types import ConsistencyPolicy, MountMode
+from mirage.types import MountMode, ReadPolicy, ReadSpec
 from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
@@ -32,13 +32,13 @@ def _etag(data: bytes) -> str:
 
 
 @contextmanager
-def _workspace(store: dict[str, bytes], consistency: ConsistencyPolicy):
+def _workspace(store: dict[str, bytes], read: ReadSpec):
     """Mount the s3 mock at /s3 and yield the workspace and its client.
 
     Args:
         store (dict[str, bytes]): initial bucket contents, mutated in
             place so a test can read back what the line wrote.
-        consistency (ConsistencyPolicy): the workspace's policy.
+        read (ReadSpec): the workspace's read policy.
     """
     session = MultiBucketSession({"test-bucket": store}, etag_suffix=SUFFIX)
     with patch_s3_session(session):
@@ -51,14 +51,15 @@ def _workspace(store: dict[str, bytes], consistency: ConsistencyPolicy):
         ws = Workspace(
             {"/s3": (S3VFS(config), MountMode.WRITE)},
             mode=MountMode.WRITE,
-            consistency=consistency,
+            read=read,
         )
         yield ws, session._client
 
 
 def test_write_record_carries_the_backend_token():
     store: dict[str, bytes] = {}
-    with _workspace(store, ConsistencyPolicy.LAZY) as (ws, _client):
+    with _workspace(store,
+                    ReadSpec(policy=ReadPolicy.BOUNDED)) as (ws, _client):
 
         async def run() -> list[tuple[str, str, str | None]]:
             try:
@@ -79,7 +80,8 @@ def test_written_path_caches_the_backend_token_not_md5():
     answered. Holding md5(content) is only right by accident on a
     simple-PUT object, and never right on a multipart one."""
     store: dict[str, bytes] = {}
-    with _workspace(store, ConsistencyPolicy.LAZY) as (ws, _client):
+    with _workspace(store,
+                    ReadSpec(policy=ReadPolicy.BOUNDED)) as (ws, _client):
 
         async def run() -> tuple[bool, bool]:
             try:
@@ -104,7 +106,7 @@ def test_always_reads_a_written_path_from_cache():
     md5 default it never matches a suffixed ETag, so every read evicts
     and refetches."""
     store: dict[str, bytes] = {}
-    with _workspace(store, ConsistencyPolicy.ALWAYS) as (ws, client):
+    with _workspace(store, ReadSpec(policy=ReadPolicy.FRESH)) as (ws, client):
 
         async def run() -> bytes:
             try:
@@ -131,7 +133,7 @@ def test_read_then_write_on_one_line_keeps_the_read_token():
     token the entry would read as fresh forever and the stale bytes would
     serve; the next read must see the written content instead."""
     store = {"f.txt": b"old\n"}
-    with _workspace(store, ConsistencyPolicy.ALWAYS) as (ws, _client):
+    with _workspace(store, ReadSpec(policy=ReadPolicy.FRESH)) as (ws, _client):
 
         async def run() -> bytes:
             try:
@@ -155,7 +157,7 @@ def test_write_then_truncate_on_one_line_does_not_pin_stale_bytes():
     the entry would otherwise hold tee's content under truncate's token
     and serve it for the life of the entry."""
     store: dict[str, bytes] = {}
-    with _workspace(store, ConsistencyPolicy.ALWAYS) as (ws, _client):
+    with _workspace(store, ReadSpec(policy=ReadPolicy.FRESH)) as (ws, _client):
 
         async def run() -> bytes:
             try:
@@ -178,7 +180,7 @@ def test_write_then_copy_over_it_does_not_pin_stale_bytes():
     eviction marker while tee's write record stays the last one, so the
     token would land on bytes it does not describe."""
     store = {"a.txt": b"x\n"}
-    with _workspace(store, ConsistencyPolicy.ALWAYS) as (ws, _client):
+    with _workspace(store, ReadSpec(policy=ReadPolicy.FRESH)) as (ws, _client):
 
         async def run() -> bytes:
             try:

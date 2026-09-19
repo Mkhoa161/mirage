@@ -269,7 +269,7 @@ describe('S3 cache consistency (mocked)', () => {
     // after the `;` still runs.
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
     try {
@@ -298,7 +298,7 @@ describe('S3 cache consistency (mocked)', () => {
     // routing reconcile stopped firing for a command the gate never covers.
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /s3/c.txt')

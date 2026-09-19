@@ -31,7 +31,6 @@ import {
 } from '@struktoai/mirage-core/secrets/config'
 import {
   type ReadSpec,
-  ConsistencyPolicy,
   KERNEL_BACKENDS,
   Limit,
   MountBackend,
@@ -73,8 +72,6 @@ function coerceMountMode(value: string | undefined, fallback: MountMode): MountM
   if (value === undefined) return fallback
   return parseMountMode(value.toLowerCase())
 }
-
-const VALID_CONSISTENCY = new Set<string>([ConsistencyPolicy.LAZY, ConsistencyPolicy.ALWAYS])
 
 /** True for the docker-style single-line script path form (.py/.js/.mjs). */
 function isScriptPath(value: string): boolean {
@@ -155,13 +152,6 @@ async function buildRuntimeEntries(entries: unknown[]): Promise<RuntimeEntry[]> 
   return out
 }
 
-function coerceConsistency(value: string | undefined): ConsistencyPolicy {
-  if (value === undefined) return ConsistencyPolicy.LAZY
-  const lower = value.toLowerCase()
-  if (!VALID_CONSISTENCY.has(lower)) throw new Error(`invalid consistency: ${value}`)
-  return lower as ConsistencyPolicy
-}
-
 const VALID_ON_EXCEED = new Set<string>([OnExceed.ERROR, OnExceed.TRUNCATE])
 
 function coerceOnExceed(value: string): OnExceed {
@@ -203,7 +193,6 @@ const TOP_LEVEL_KEYS = [
   'profiles',
   'profile',
   'mode',
-  'consistency',
   'read',
   'default_session_id',
   'default_agent_id',
@@ -386,6 +375,26 @@ function asConfig(value: unknown): Readonly<Record<string, unknown>> {
 }
 
 /**
+ * Refuse a mount block whose read policy and bound disagree.
+ *
+ * Both rules live at the config door rather than in the mount-time
+ * verdict: once a ReadSpec exists its ttl has already defaulted, so
+ * `bounded` written without a bound is indistinguishable from `read:`
+ * left out entirely. Python refuses the same pair in `MountBlock`'s
+ * model validator, which is the same door.
+ */
+function validateReadBlock(prefix: string, block: Record<string, unknown>): void {
+  const read = block.read
+  if (read !== undefined) resolveReadSpec(read as string, undefined)
+  if (block.ttl !== undefined && read === undefined) {
+    throw new Error(`mount \`${prefix}\`: ttl pins the read bound; it takes read: bounded`)
+  }
+  if (read === ReadPolicy.BOUNDED && block.ttl === undefined) {
+    throw new Error(`mount \`${prefix}\`: read: bounded needs a bound; set ttl:`)
+  }
+}
+
+/**
  * Reject any key no Python config model declares, before normalization
  * folds snake_case into camelCase and the distinction is gone.
  */
@@ -395,6 +404,7 @@ function validateConfigKeys(raw: Record<string, unknown>): void {
     for (const [prefix, block] of Object.entries(raw.mounts)) {
       if (!isPlainObject(block)) throw new Error(`mount \`${prefix}\` must be a mapping`)
       rejectUnknownKeys(block, MOUNT_KEYS, `mount \`${prefix}\``)
+      validateReadBlock(prefix, block)
     }
   }
   if (isPlainObject(raw.clis)) {
@@ -750,7 +760,6 @@ export interface WorkspaceConfigRaw {
   /** Which profile shapes a session created without one. */
   profile?: unknown
   mode?: string
-  consistency?: string
   read?: string
   defaultSessionId?: string
   defaultAgentId?: string
@@ -964,7 +973,7 @@ export interface WorkspaceArgs {
    * parsed and validated, then discarded by a list nobody remembered to
    * extend.
    */
-  options: WorkspaceOptions & { mode: MountMode; consistency: ConsistencyPolicy; read: ReadSpec }
+  options: WorkspaceOptions & { mode: MountMode; read: ReadSpec }
   kernelMounts: Record<string, [MountBackend, string | undefined]>
 }
 
@@ -1062,7 +1071,6 @@ function buildStateStore(block: StoreBlock | null | undefined): WorkspaceStateSt
 
 export async function configToWorkspaceArgs(cfg: WorkspaceConfigRaw): Promise<WorkspaceArgs> {
   const wsMode = coerceMountMode(cfg.mode, MountMode.WRITE)
-  const consistency = coerceConsistency(cfg.consistency)
   const defaultRead = resolveReadSpec(cfg.read, undefined)
   const mounts: Record<string, Mount> = {}
   const kernelMounts: Record<string, [MountBackend, string | undefined]> = {}
@@ -1076,16 +1084,7 @@ export async function configToWorkspaceArgs(cfg: WorkspaceConfigRaw): Promise<Wo
   for (const [prefix, block] of Object.entries(cfg.mounts)) {
     const r = await buildVfs(block.vfs, block.config ?? {}, sources)
     const m = coerceMountMode(block.mode, wsMode)
-    // Two dependent-key rules, refused here rather than in the mount
-    // verdict: by the time a ReadSpec exists its ttl has already
-    // defaulted, so `bounded` written without a bound is
-    // indistinguishable from `read:` left out entirely.
-    if (block.ttl !== undefined && block.read === undefined) {
-      throw new Error(`mount '${prefix}': ttl pins the read bound; it takes read: bounded`)
-    }
-    if (block.read === ReadPolicy.BOUNDED && block.ttl === undefined) {
-      throw new Error(`mount '${prefix}': read: bounded needs a bound; set ttl:`)
-    }
+    // Already validated by the sync door (validateReadBlock).
     const read = block.read === undefined ? defaultRead : resolveReadSpec(block.read, block.ttl)
     mounts[prefix] = new Mount(r, {
       mode: m,
@@ -1110,7 +1109,6 @@ export async function configToWorkspaceArgs(cfg: WorkspaceConfigRaw): Promise<Wo
     mounts,
     options: {
       mode: wsMode,
-      consistency,
       read: defaultRead,
       ...(cfg.defaultSessionId !== undefined ? { sessionId: cfg.defaultSessionId } : {}),
       ...(cfg.defaultAgentId !== undefined ? { agentId: cfg.defaultAgentId } : {}),

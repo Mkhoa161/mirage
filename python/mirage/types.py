@@ -519,11 +519,6 @@ def parse_mount_mode(value: MountMode | str) -> MountMode:
     return alias if alias is not None else MountMode(value)
 
 
-class ConsistencyPolicy(str, Enum):
-    LAZY = "lazy"
-    ALWAYS = "always"
-
-
 class OnExceed(str, Enum):
     ERROR = "error"
     TRUNCATE = "truncate"

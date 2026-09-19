@@ -25,7 +25,6 @@ import { Decisions, MountRootPolicy, OutputCapPolicy, Policies } from '../../pol
 import {
   type Limit,
   type ReadSpec,
-  ConsistencyPolicy,
   DEFAULT_READ_TTL,
   MountMode,
   PathSpec,
@@ -77,7 +76,6 @@ export class MountRegistry {
   readonly retiringMounts = new Map<VFS, Promise<void>>()
   readonly retiredMounts = new WeakSet<VFS>()
   private rootRef: MountEntry | null = null
-  private consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
   private defaultRead: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
   private cacheStore: FileCache | null = null
   private reconciler: ReadReconciler | null = null
@@ -216,17 +214,9 @@ export class MountRegistry {
     this.rootRef = list.find((m) => m.prefix === '/') ?? null
   }
 
-  setConsistency(consistency: ConsistencyPolicy): void {
-    this.consistency = consistency
-  }
-
   /** The workspace-level read policy a mount overrides. */
   setDefaultRead(read: ReadSpec): void {
     this.defaultRead = read
-  }
-
-  getConsistency(): ConsistencyPolicy {
-    return this.consistency
   }
 
   /** A removed VFS instance cannot start a second lifecycle. */
@@ -244,13 +234,7 @@ export class MountRegistry {
    * Registers the VFS's commands and ops on the new mount and
    * re-sorts mounts by prefix length (longest first).
    */
-  mount(
-    prefix: string,
-    vfs: VFS,
-    mode: MountMode = MountMode.READ,
-    read?: ReadSpec,
-    consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
-  ): MountEntry {
+  mount(prefix: string, vfs: VFS, mode: MountMode = MountMode.READ, read?: ReadSpec): MountEntry {
     this.checkVfsAvailable(vfs)
     const norm = normalizePrefix(prefix)
     for (const existing of this.mountList) {
@@ -263,7 +247,6 @@ export class MountRegistry {
       vfs,
       mode,
       read: read ?? this.defaultRead,
-      consistency,
     })
     const alias = this.mountList.find((existing) => existing.vfs === vfs)
     if (alias !== undefined) m.activity = alias.activity

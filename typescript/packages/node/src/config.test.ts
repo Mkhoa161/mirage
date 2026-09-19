@@ -508,20 +508,33 @@ describe('configToWorkspaceArgs', () => {
     expect(buildFileCache(args.options.cache)).toBeInstanceOf(RedisFileCacheStore)
   })
 
-  it('coerces consistency (default lazy, accepts always, rejects junk)', async () => {
+  it('coerces the read policy and carries it onto the mount', async () => {
     const dflt = await configToWorkspaceArgs(
       loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram' } } }),
     )
-    expect(dflt.options.consistency).toBe('lazy')
-    const always = await configToWorkspaceArgs(
-      loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram' } }, consistency: 'ALWAYS' }),
+    expect(dflt.options.read).toEqual({ policy: 'bounded', ttl: 600 })
+    // The spec reaches the mount, not just the workspace default: the
+    // carrier used to be a [vfs, mode] tuple, which dropped it.
+    expect(dflt.mounts['/']?.options.read).toEqual({ policy: 'bounded', ttl: 600 })
+    const perMount = await configToWorkspaceArgs(
+      loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'bounded', ttl: 30 } } }),
     )
-    expect(always.options.consistency).toBe('always')
-    await expect(
-      configToWorkspaceArgs(
-        loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram' } }, consistency: 'soon' }),
-      ),
-    ).rejects.toThrow(/invalid consistency/)
+    expect(perMount.mounts['/']?.options.read).toEqual({ policy: 'bounded', ttl: 30 })
+    expect(() => loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'soon' } } })).toThrow(
+      /unknown read policy/,
+    )
+  })
+
+  it('refuses a mount block whose bound and policy disagree', () => {
+    // Both rules live at the config door: once a ReadSpec exists its ttl
+    // has defaulted, so `bounded` without a bound is indistinguishable
+    // from `read:` left out entirely.
+    expect(() => loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', ttl: 30 } } })).toThrow(
+      /ttl pins the read bound/,
+    )
+    expect(() => loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'bounded' } } })).toThrow(
+      /needs a bound/,
+    )
   })
 
   it('threads per-mount backend into top-level kernelMounts and yields {} otherwise', async () => {

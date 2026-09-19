@@ -88,8 +88,8 @@ export type {
 export { JobConsole } from './shell/console/index.ts'
 export type { ConsoleFactory } from './shell/job_table/index.ts'
 export {
-  ConsistencyPolicy,
   ContentType,
+  DEFAULT_READ_TTL,
   DriftPolicy,
   FileChangeKind,
   FileEvent,

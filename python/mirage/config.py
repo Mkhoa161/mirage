@@ -37,9 +37,8 @@ from mirage.secrets.sources import (config_holds_pointer,
                                     resolve_sources_for)
 from mirage.shell.console import JobConsole
 from mirage.shell.job_table import ConsoleFactory
-from mirage.types import (KERNEL_BACKENDS, ConsistencyPolicy, Limit,
-                          MountBackend, MountMode, ReadPolicy,
-                          parse_mount_mode)
+from mirage.types import (KERNEL_BACKENDS, Limit, MountBackend, MountMode,
+                          ReadPolicy, parse_mount_mode)
 from mirage.vfs.loader import load_attr
 from mirage.vfs.registry import build_vfs
 from mirage.workspace.mount.read_policy import (coerce_read_policy,
@@ -71,14 +70,6 @@ def _coerce_mount_mode(value):
         return value
     if isinstance(value, str):
         return parse_mount_mode(value.lower())
-    return value
-
-
-def _coerce_consistency(value):
-    if isinstance(value, ConsistencyPolicy):
-        return value
-    if isinstance(value, str):
-        return ConsistencyPolicy(value.lower())
     return value
 
 
@@ -639,7 +630,6 @@ class WorkspaceConfig(BaseModel):
     # and a profile of that name exists.
     profile: str | None = None
     mode: MountMode = MountMode.WRITE
-    consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
     # The read policy a mount inherits when it declares none. There is
     # deliberately no workspace-level bound: `ttl:` exists only inside a
     # mount block, where it cannot be confused with `index: {ttl:}`.
@@ -668,11 +658,6 @@ class WorkspaceConfig(BaseModel):
     @classmethod
     def _v_mode(cls, v):
         return _coerce_mount_mode(v)
-
-    @field_validator("consistency", mode="before")
-    @classmethod
-    def _v_cons(cls, v):
-        return _coerce_consistency(v)
 
     @field_validator("read", mode="before")
     @classmethod
@@ -722,7 +707,6 @@ class WorkspaceConfig(BaseModel):
             "mounts": mounts,
             "mode": self.mode,
             "read": default_read,
-            "consistency": self.consistency,
             "session_id": self.default_session_id,
             "agent_id": self.default_agent_id,
         }

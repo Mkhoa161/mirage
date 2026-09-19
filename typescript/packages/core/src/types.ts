@@ -191,13 +191,6 @@ export function parseMountMode(value: string): MountMode {
   throw new Error(`invalid mount mode: '${value}'`)
 }
 
-export const ConsistencyPolicy = Object.freeze({
-  LAZY: 'lazy',
-  ALWAYS: 'always',
-} as const)
-
-export type ConsistencyPolicy = (typeof ConsistencyPolicy)[keyof typeof ConsistencyPolicy]
-
 /**
  * How a mount decides whether cached bytes may be served.
  *

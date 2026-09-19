@@ -15,7 +15,6 @@
 import { mountKey, mountPrefixOf } from './utils/key_prefix.ts'
 import { describe, expect, it } from 'vitest'
 import {
-  ConsistencyPolicy,
   ContentType,
   DEFAULT_READ_TTL,
   FileStat,
@@ -36,17 +35,6 @@ describe('MountMode', () => {
 
   it('is frozen at runtime', () => {
     expect(Object.isFrozen(MountMode)).toBe(true)
-  })
-})
-
-describe('ConsistencyPolicy', () => {
-  it('exposes LAZY/ALWAYS with matching string values', () => {
-    expect(ConsistencyPolicy.LAZY).toBe('lazy')
-    expect(ConsistencyPolicy.ALWAYS).toBe('always')
-  })
-
-  it('is frozen at runtime', () => {
-    expect(Object.isFrozen(ConsistencyPolicy)).toBe(true)
   })
 })
 

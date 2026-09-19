@@ -53,7 +53,6 @@ import type { WorkspaceStateDict, MountSnapshot } from '../snapshot/types.ts'
 import type { FileEvent } from '../../types.ts'
 import {
   type ReadSpec,
-  ConsistencyPolicy,
   DEFAULT_READ_TTL,
   DriftPolicy,
   MountMode,
@@ -211,8 +210,6 @@ export class Workspace {
       this.readDefault,
       normalized.read,
     )
-    const consistency = options.consistency ?? ConsistencyPolicy.LAZY
-    this.registry.setConsistency(consistency)
     if (options.index !== undefined) {
       for (const vfs of Object.values(normalized.bare)) {
         vfs.setIndex?.(options.index)

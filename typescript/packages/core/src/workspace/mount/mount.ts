@@ -47,7 +47,6 @@ import type { VFS } from '../../vfs/base.ts'
 import {
   type Limit,
   type ReadSpec,
-  ConsistencyPolicy,
   DEFAULT_READ_TTL,
   FileType,
   MountMode,
@@ -95,7 +94,6 @@ export interface MountInit {
   prefix: string
   vfs: VFS
   mode?: MountMode
-  consistency?: ConsistencyPolicy
   /** How this mount's cached bytes are revalidated. */
   read?: ReadSpec
 }
@@ -105,7 +103,6 @@ export class MountEntry {
   readonly prefix: string
   readonly vfs: VFS
   mode: MountMode
-  readonly consistency: ConsistencyPolicy
   readonly read: ReadSpec
   activity = new VFSActivity()
   retiring = false
@@ -149,7 +146,6 @@ export class MountEntry {
     this.prefix = prefix
     this.vfs = init.vfs
     this.mode = init.mode ?? MountMode.READ
-    this.consistency = init.consistency ?? ConsistencyPolicy.LAZY
     this.read = init.read ?? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
   }
 

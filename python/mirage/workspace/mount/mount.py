@@ -40,8 +40,8 @@ from mirage.observe.context import (push_mount_context, push_revisions,
 from mirage.ops.host_io import host_io, with_host_io
 from mirage.ops.registry import RegisteredOp
 from mirage.policy import resolve_limit
-from mirage.types import (ConsistencyPolicy, FileType, Limit, MountMode,
-                          PathSpec, Producer, ReadSpec)
+from mirage.types import (FileType, Limit, MountMode, PathSpec, Producer,
+                          ReadSpec)
 from mirage.utils.errors import ReadOnlyError, ebusy, enotsup
 from mirage.utils.ids import uuid7
 from mirage.utils.key_prefix import mount_key
@@ -153,7 +153,6 @@ class MountEntry:
         vfs: BaseVFS,
         mode: MountMode = MountMode.READ,
         read: ReadSpec | None = None,
-        consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
     ) -> None:
         if not prefix.startswith("/"):
             raise ValueError(f"prefix must start with /: {prefix!r}")
@@ -169,7 +168,6 @@ class MountEntry:
         # gate (Reconciler.may_serve_cached) and by the cache write path
         # for its bound.
         self.read = read if read is not None else ReadSpec()
-        self.consistency = consistency
         self.activity = VFSActivity()
         self.retiring = False
         self.before_use: Callable[[], Awaitable[None]] | None = None

@@ -244,7 +244,7 @@ describe('Reconciler', () => {
       // a metadata command would serve a stale size from it with no check.
       const ws = new Workspace({ '/data': new RAMVFS() })
       await ws.namespace.ensureLoaded()
-      const mount = mountOf(ws, '/data/f.txt')
+      const mount = withFresh(mountOf(ws, '/data/f.txt'))
       vi.spyOn(console, 'debug').mockImplementation(() => undefined)
       vi.spyOn(ws.opsRegistry, 'call').mockImplementation(() =>
         Promise.reject(
@@ -255,7 +255,7 @@ describe('Reconciler', () => {
       )
       try {
         await ws.cache.set('/data/f.txt', new TextEncoder().encode('v1'), { fingerprint: 'fp1' })
-        const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
+        const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry)
         await rec.reconcileRead(mount, '/data/f.txt')
         expect(await ws.cache.exists('/data/f.txt')).toBe(false)
       } finally {

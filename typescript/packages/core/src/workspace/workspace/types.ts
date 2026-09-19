@@ -24,14 +24,7 @@ import type { VFS } from '../../vfs/base.ts'
 import type { EnvEntries, SecretEntries } from '../../secrets/config.ts'
 import type { ConsoleFactory } from '../../shell/job_table/index.ts'
 import type { ShellParser } from '../../shell/parse/index.ts'
-import type {
-  Limit,
-  ConsistencyPolicy,
-  DriftPolicy,
-  MountMode,
-  ReadSpec,
-  Refusal,
-} from '../../types.ts'
+import type { Limit, DriftPolicy, MountMode, ReadSpec, Refusal } from '../../types.ts'
 import type { AskHandler, Policy } from '../../policy/index.ts'
 import type { RouteDecision, RoutePolicy } from '../../runtime/routing/index.ts'
 import type { RuntimeEntry } from '../../runtime/base.ts'
@@ -61,7 +54,6 @@ export interface WorkspaceOptions {
    * mount block, where it cannot be confused with `index: {ttl:}`.
    */
   read?: ReadSpec
-  consistency?: ConsistencyPolicy
   commandLimits?: Record<string, Record<string, Limit>>
   /**
    * Behaviour for the post-load drift check on fingerprinted reads. Only

@@ -51,9 +51,9 @@ from mirage.secrets.sources import resolve_sources
 from mirage.secrets.types import ResolvedSource
 from mirage.shell import parse
 from mirage.shell.job_table import ConsoleFactory, JobTable
-from mirage.types import (CacheFacts, ConsistencyPolicy, DriftPolicy,
-                          FileEvent, FileStat, JsonValue, MountBackend,
-                          MountMode, PathSpec, ReadSpec, parse_mount_mode)
+from mirage.types import (CacheFacts, DriftPolicy, FileEvent, FileStat,
+                          JsonValue, MountBackend, MountMode, PathSpec,
+                          ReadSpec, parse_mount_mode)
 from mirage.utils.ids import new_session_id, new_workspace_id
 from mirage.vfs.base import BaseVFS
 from mirage.vfs.history import HISTORY_PREFIX, HistoryViewVFS
@@ -119,7 +119,6 @@ class Workspace:
         cache: CacheConfig | None = None,
         index: IndexConfig | None = None,
         mode: MountMode = MountMode.READ,
-        consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
         read: ReadSpec | None = None,
         session_id: str | None = None,
         agent_id: str | None = None,
@@ -256,8 +255,6 @@ class Workspace:
         self._meta = WorkspaceMeta(self._workspace_id, self._state_store,
                                    self._session_mgr, session_id,
                                    session_id_explicit)
-        self._consistency = consistency
-        self._registry.set_consistency(consistency)
         # The workspace-level default a mount overrides, as `mode` is.
         self._read_default = read if read is not None else ReadSpec()
         self._registry.set_default_read(self._read_default)

@@ -339,6 +339,7 @@ async def test_reconcile_read_never_raises_and_drops_the_entry(failure):
     try:
         await ws.namespace.ensure_loaded()
         mount = ws.namespace.mount_for("/data/f.txt")
+        mount.read = ReadSpec(policy=ReadPolicy.FRESH)
 
         async def failing(*_args, **_kwargs):
             if failure == "bug":
@@ -347,7 +348,7 @@ async def test_reconcile_read_never_raises_and_drops_the_entry(failure):
 
         mount.execute_op = failing
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        rec = Reconciler(ws.cache, ws.namespace)
         await rec.reconcile_read(mount, "/data/f.txt")
         assert not await ws.cache.exists("/data/f.txt")
     finally:

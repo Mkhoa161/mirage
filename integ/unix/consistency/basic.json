@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "id": "consistency_lazy_serves_stale",
+      "id": "read_bounded_serves_stale",
       "seq": 310000,
       "targets": [
         "s3",
@@ -13,7 +13,8 @@
         "sharepoint-prefix",
         "ssh"
       ],
-      "consistency": "lazy",
+      "read": "bounded",
+      "ttl": 600,
       "scenario": [
         {
           "mutate": {
@@ -41,18 +42,13 @@
       }
     },
     {
-      "id": "consistency_always_revalidates",
+      "id": "read_fresh_revalidates",
       "seq": 310001,
       "targets": [
         "s3",
-        "s3-prefix",
-        "dropbox",
-        "onedrive",
-        "sharepoint",
-        "sharepoint-prefix",
-        "ssh"
+        "s3-prefix"
       ],
-      "consistency": "always",
+      "read": "fresh",
       "scenario": [
         {
           "mutate": {

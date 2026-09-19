@@ -222,7 +222,7 @@ def test_snapshot_false_mount_still_serves_a_verified_cache():
     ws = Workspace(
         {"/s3": (_SnapshotFalseS3(config), MountMode.WRITE)},
         mode=MountMode.WRITE,
-        consistency=ConsistencyPolicy.ALWAYS,
+        read=ReadSpec(policy=ReadPolicy.FRESH),
     )
 
     async def run() -> bytes:
@@ -464,8 +464,10 @@ def test_bounded_serves_within_the_bound_then_goes_cold():
     warm, warm_calls, cold = asyncio.run(run())
     assert warm == b"v1\n"
     assert warm_calls["head_object"] == 1, (
-        "a warm bounded read is cat's own stat and no gate probe; two "
-        "means bounded is revalidating like fresh")
+        "a warm bounded read is cat's own stat and nothing else; the same "
+        "read under fresh costs three (the routing reconcile, cat's stat "
+        "and the gate's probe), so anything above one means a door that "
+        "should have skipped did not")
     assert warm_calls.get("get_object", 0) == 0
     assert cold == b"v2\n", "past its bound, the entry must not be served"
 

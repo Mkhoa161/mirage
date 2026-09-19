@@ -25,8 +25,7 @@ from mirage.ops.config import OpsMount
 from mirage.policy import Decisions, MountRootPolicy, OutputCapPolicy, Policies
 from mirage.runtime.base import Runtime
 from mirage.runtime.table import WorkspaceRuntime
-from mirage.types import (ConsistencyPolicy, Limit, MountMode, PathSpec,
-                          ReadPolicy, ReadSpec)
+from mirage.types import Limit, MountMode, PathSpec, ReadPolicy, ReadSpec
 from mirage.utils.errors import NoMountError, no_mount
 from mirage.utils.path import owner_prefix
 from mirage.vfs.base import BaseVFS
@@ -124,7 +123,6 @@ class MountRegistry:
         # that already reaches every dispatch site, same as the
         # runtime fields above.
         self.clis = CLIRegistry()
-        self._consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY
         # The workspace-level default a mount overrides, kept so the
         # runtime door (`Workspace.add_mount`) has something to resolve
         # an unset policy against.
@@ -145,9 +143,6 @@ class MountRegistry:
             else:
                 async with mount.use():
                     await mount.vfs.index.clear()
-
-    def set_consistency(self, consistency: ConsistencyPolicy) -> None:
-        self._consistency = consistency
 
     def set_default_read(self, read: ReadSpec) -> None:
         """Install the workspace-level read policy a mount overrides.
@@ -229,7 +224,6 @@ class MountRegistry:
         vfs: BaseVFS,
         mode: MountMode = MountMode.READ,
         read: ReadSpec | None = None,
-        consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
     ) -> MountEntry:
         """Mount a VFS and return the Mount object.
 
@@ -239,8 +233,6 @@ class MountRegistry:
             mode (MountMode): the mount's mode.
             read (ReadSpec | None): the mount's read policy; None takes
                 the workspace default.
-            consistency (ConsistencyPolicy): unused; removed with the
-                workspace-wide knob.
         """
         self.check_vfs_available(vfs)
         stripped = prefix.strip("/")
@@ -250,8 +242,7 @@ class MountRegistry:
                 raise ValueError(f"duplicate mount prefix: "
                                  f"{norm_prefix!r}")
         m = MountEntry(norm_prefix, vfs, mode,
-                       read if read is not None else self._default_read,
-                       consistency)
+                       read if read is not None else self._default_read)
         for existing in self._mounts:
             if existing.vfs is vfs:
                 m.activity = existing.activity

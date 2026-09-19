@@ -114,7 +114,7 @@
           }
         },
         "mode": "write",
-        "consistency": "lazy",
+        "read": "fresh",
         "default_session_id": "s1",
         "default_agent_id": "a1",
         "workspace_id": "w1",
@@ -147,7 +147,9 @@
               }
             },
             "backend": "workspace",
-            "mountpoint": "/mnt/d"
+            "mountpoint": "/mnt/d",
+            "read": "bounded",
+            "ttl": 600
           }
         }
       }

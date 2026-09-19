@@ -27,7 +27,6 @@ from mirage.runtime.types import ScriptSource
 from mirage.secrets.config import EnvVar, SecretRef
 from mirage.shell.console import JobConsole
 from mirage.shell.console.redis import RedisConsoleStore
-from mirage.types import ConsistencyPolicy
 from mirage.vfs.ram import RAMVFS
 from mirage.vfs.s3 import S3VFS
 from mirage.workspace.mount.namespace import RAMNamespaceStore
@@ -62,7 +61,7 @@ async def test_load_full_yaml_with_env_interpolation():
     }
     cfg = load_config(FIXTURES / "full.yaml", env=env)
     assert cfg.mode == MountMode.WRITE
-    assert cfg.consistency == ConsistencyPolicy.LAZY
+    assert cfg.read is None
     assert isinstance(cfg.cache, RamCacheBlock)
     assert cfg.cache.limit == "256MB"
     assert cfg.mounts["/s3"].config["bucket"] == "my-test-bucket"
