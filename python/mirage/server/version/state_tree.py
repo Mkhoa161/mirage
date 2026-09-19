@@ -172,10 +172,15 @@ def to_state(entries: dict[str, bytes], meta: dict[str,
             prefix,
             MountKey.MODE:
             mount[MountKey.MODE],
+            # Read defensively. A commit written before v4 carries
+            # neither key, and subscripting here would raise a bare
+            # KeyError on every checkout, diff and restore -- one frame
+            # before `build_mount_args` could answer with the version
+            # refusal this echo exists to reach.
             MountKey.READ:
-            mount[MountKey.READ],
+            mount.get(MountKey.READ),
             MountKey.TTL:
-            mount[MountKey.TTL],
+            mount.get(MountKey.TTL),
             MountKey.VFS_CLASS:
             mount[MountKey.VFS_CLASS],
             # ``get``: a meta committed before the ref was recorded reads

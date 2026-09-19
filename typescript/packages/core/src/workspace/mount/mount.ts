@@ -47,11 +47,10 @@ import type { VFS } from '../../vfs/base.ts'
 import {
   type Limit,
   type ReadSpec,
-  DEFAULT_READ_TTL,
+  DEFAULT_READ_SPEC,
   FileType,
   MountMode,
   PathSpec,
-  ReadPolicy,
 } from '../../types.ts'
 import { ebusy, enotsup, erofsReadOnly } from '../../utils/errors.ts'
 import { rstripSlash } from '../../utils/slash.ts'
@@ -146,7 +145,7 @@ export class MountEntry {
     this.prefix = prefix
     this.vfs = init.vfs
     this.mode = init.mode ?? MountMode.READ
-    this.read = init.read ?? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
+    this.read = init.read ?? DEFAULT_READ_SPEC
   }
 
   /** Prepare and retain the VFS while its glob hook reads metadata. */

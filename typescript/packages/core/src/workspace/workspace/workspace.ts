@@ -53,11 +53,10 @@ import type { WorkspaceStateDict, MountSnapshot } from '../snapshot/types.ts'
 import type { FileEvent } from '../../types.ts'
 import {
   type ReadSpec,
-  DEFAULT_READ_TTL,
+  DEFAULT_READ_SPEC,
   DriftPolicy,
   MountMode,
   PathSpec,
-  ReadPolicy,
   parseMountMode,
 } from '../../types.ts'
 import type { Explanation, Policies } from '../../policy/index.ts'
@@ -200,7 +199,7 @@ export class Workspace {
 
   constructor(mounts: Record<string, MountSpec>, options: WorkspaceOptions = {}) {
     // The workspace-level default a mount overrides, as `mode` is.
-    this.readDefault = options.read ?? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
+    this.readDefault = options.read ?? DEFAULT_READ_SPEC
     const normalized = normalizeMounts(mounts, this.readDefault)
     this.indexConfig = options.index
     this.registry = new MountRegistry(
@@ -347,7 +346,7 @@ export class Workspace {
       HISTORY_PREFIX,
       new HistoryViewVFS(this.observer),
       MountMode.READ,
-      this.readDefault,
+      DEFAULT_READ_SPEC,
     )
     this.cache = buildFileCache(options.cache, options.cacheLimit)
     this.registry.attachFileCache(this.cache)
@@ -373,7 +372,13 @@ export class Workspace {
     // A synthetic anchor is internal to Mirage and must NOT be forwarded to Pyodide,
     // whose own `/` filesystem (holding the Python stdlib) would be hijacked.
     if (this.registry.rootMount === null) {
-      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ, this.readDefault)
+      // Pinned bounded, not inherited. This anchor is synthesized after
+      // normalizeMounts has run, so it never meets the capability verdict
+      // -- and RAM does not cache reads, so a workspace-level `fresh`
+      // would stamp on it exactly the combination the verdict refuses. It
+      // is snapshotted like any other mount, so that stray policy came
+      // back as a refusal on restore.
+      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ, DEFAULT_READ_SPEC)
       this.syntheticRootAnchor = true
     }
     // The workspace's own session is a session created without a name,
@@ -398,9 +403,12 @@ export class Workspace {
         mount.registerGeneral(cmd)
       }
     }
+    // A Mount's own limits win, which is the order node's unwrap produced
+    // before it handed them to core: it spread options first and then
+    // overwrote per prefix from the Mount.
     for (const [prefix, commandLimits] of Object.entries({
-      ...normalized.commandLimits,
       ...(options.commandLimits ?? {}),
+      ...normalized.commandLimits,
     })) {
       const mount = this.registry.tryMountForPrefix(prefix)
       if (mount === null) {

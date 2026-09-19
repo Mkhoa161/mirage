@@ -384,12 +384,16 @@ function asConfig(value: unknown): Readonly<Record<string, unknown>> {
  * model validator, which is the same door.
  */
 function validateReadBlock(prefix: string, block: Record<string, unknown>): void {
-  const read = block.read
-  if (read !== undefined) resolveReadSpec(read as string, undefined)
-  if (block.ttl !== undefined && read === undefined) {
+  // Coerce once, then apply both dependent-key rules to the normalised
+  // value. Comparing the raw one let `read: BOUNDED` -- a spelling both
+  // languages accept -- skip the bound rule that Python enforces.
+  const declared = block.read ?? undefined
+  const policy = declared === undefined ? undefined : resolveReadSpec(declared, block.ttl).policy
+  const ttl = block.ttl ?? undefined
+  if (ttl !== undefined && policy === undefined) {
     throw new Error(`mount \`${prefix}\`: ttl pins the read bound; it takes read: bounded`)
   }
-  if (read === ReadPolicy.BOUNDED && block.ttl === undefined) {
+  if (policy === ReadPolicy.BOUNDED && ttl === undefined) {
     throw new Error(`mount \`${prefix}\`: read: bounded needs a bound; set ttl:`)
   }
 }
@@ -400,6 +404,9 @@ function validateReadBlock(prefix: string, block: Record<string, unknown>): void
  */
 function validateConfigKeys(raw: Record<string, unknown>): void {
   rejectUnknownKeys(raw, TOP_LEVEL_KEYS, 'config')
+  // At the sync door, as Python's WorkspaceConfig validator is, so the CLI
+  // refuses a bad value before it POSTs the document to the daemon.
+  if (raw.read !== undefined && raw.read !== null) resolveReadSpec(raw.read, undefined)
   if (isPlainObject(raw.mounts)) {
     for (const [prefix, block] of Object.entries(raw.mounts)) {
       if (!isPlainObject(block)) throw new Error(`mount \`${prefix}\` must be a mapping`)

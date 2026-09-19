@@ -74,10 +74,19 @@ def resolve_read_spec(policy: "str | ReadPolicy | None",
         ReadSpec: the resolved policy and bound.
 
     Raises:
-        ValueError: the policy name is not a known one.
+        ValueError: the policy name is not a known one, or the bound is
+            not a positive whole number of seconds.
     """
-    return ReadSpec(policy=coerce_read_policy(policy),
-                    ttl=DEFAULT_READ_TTL if ttl is None else ttl)
+    resolved = DEFAULT_READ_TTL if ttl is None else ttl
+    # A non-positive bound is not a very short one: the store marks such
+    # an entry expired the moment it is written (redis EXPIRE <= 0 deletes
+    # the key outright), so the mount silently caches nothing. Refusing it
+    # is the other half of the rule that refuses `bounded` with no bound.
+    if not isinstance(resolved, int) or isinstance(resolved, bool):
+        raise ValueError(f"ttl must be whole seconds, got {ttl!r}")
+    if resolved < 1:
+        raise ValueError(f"ttl must be at least 1 second, got {resolved}")
+    return ReadSpec(policy=coerce_read_policy(policy), ttl=resolved)
 
 
 def check_read_capability(prefix: str, vfs: BaseVFS, spec: ReadSpec) -> None:

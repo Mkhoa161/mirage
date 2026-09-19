@@ -54,7 +54,8 @@ import {
   RAMConsoleStore,
   exitOutcome,
 } from '../../shell/console/index.ts'
-import { type ReadSpec, DEFAULT_READ_TTL, MountMode, ReadPolicy } from '../../types.ts'
+import { type ReadSpec, DEFAULT_READ_SPEC, MountMode } from '../../types.ts'
+import { resolveReadSpec } from '../mount/read_policy.ts'
 import { Mount } from '../mount/spec.ts'
 import { VERSION } from '../../version.ts'
 import type { NodeMeta } from '../mount/namespace/namespace.ts'
@@ -293,10 +294,22 @@ export function buildMountArgs(
     // and carrying it onto the stand-in would make the mount-time
     // verdict refuse a restore that used to succeed -- so the saved spec
     // applies only when the real backend does.
+    // Required, never defaulted: a dict labelled v4 with the key missing
+    // would install a default on a mount saved carrying something else,
+    // and a junk policy or a null bound would restore a mount whose cache
+    // can never serve. `mode` three lines up is validated the same way.
+    // Widened deliberately: the type says both keys are present, but a
+    // dict written by a foreign or older writer comes back from JSON
+    // without them.
+    const entry = m as { read?: string; ttl?: number }
+    if (entry.read === undefined || entry.ttl === undefined) {
+      throw new Error(
+        `Workspace.fromState: mount '${m.prefix}' is missing its read policy; ` +
+          `regenerate the snapshot`,
+      )
+    }
     const read: ReadSpec =
-      saved === undefined
-        ? { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
-        : { policy: m.read as ReadPolicy, ttl: m.ttl }
+      saved === undefined ? DEFAULT_READ_SPEC : resolveReadSpec(entry.read, entry.ttl)
     mountArgs[m.prefix] = new Mount(saved ?? new RAMVFS(), {
       mode: m.mode as MountMode,
       read,

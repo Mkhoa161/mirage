@@ -13,7 +13,8 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { writeFileSync } from 'node:fs'
-import { DEFAULT_READ_TTL, ReadPolicy, type ReadSpec } from '@struktoai/mirage-node'
+import { type ReadSpec } from '@struktoai/mirage-node'
+import { resolveReadSpec } from '@struktoai/mirage-core/workspace/mount/read_policy'
 import { parseSessionProfile } from '@struktoai/mirage-core/policy/profile'
 import { ConcurrencyLimiter } from '@struktoai/mirage-core/concurrency/limiter'
 import { ADAPTERS, openConsistency } from './adapters/index.ts'
@@ -286,10 +287,10 @@ export async function runTarget(
     (c) => c.targets.includes(target.id) && c.read !== undefined && c.scenario !== undefined,
   )
   for (const c of scenarios) {
-    const spec: ReadSpec = {
-      policy: c.read === 'fresh' ? ReadPolicy.FRESH : ReadPolicy.BOUNDED,
-      ttl: c.ttl ?? DEFAULT_READ_TTL,
-    }
+    // Through the coercer, not a ternary: a typo'd or future policy name
+    // would otherwise run the bounded scenario and report it green, which
+    // is the silent downgrade this suite exists to catch.
+    const spec: ReadSpec = resolveReadSpec(c.read, c.ttl)
     const opened = await openConsistency(target, spec)
     if (opened === null) {
       // Loud on purpose: an adapter that cannot build a shadow workspace used

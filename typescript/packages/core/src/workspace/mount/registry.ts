@@ -25,7 +25,7 @@ import { Decisions, MountRootPolicy, OutputCapPolicy, Policies } from '../../pol
 import {
   type Limit,
   type ReadSpec,
-  DEFAULT_READ_TTL,
+  DEFAULT_READ_SPEC,
   MountMode,
   PathSpec,
   ReadPolicy,
@@ -76,7 +76,7 @@ export class MountRegistry {
   readonly retiringMounts = new Map<VFS, Promise<void>>()
   readonly retiredMounts = new WeakSet<VFS>()
   private rootRef: MountEntry | null = null
-  private defaultRead: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
+  private defaultRead: ReadSpec = DEFAULT_READ_SPEC
   private cacheStore: FileCache | null = null
   private reconciler: ReadReconciler | null = null
   // The world's workspace runtime, set by Workspace after construction.
@@ -170,7 +170,7 @@ export class MountRegistry {
     mounts: Record<string, VFS>,
     defaultMode: MountMode,
     modeOverrides: Record<string, MountMode> = {},
-    defaultRead: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL },
+    defaultRead: ReadSpec = DEFAULT_READ_SPEC,
     readOverrides: Record<string, ReadSpec> = {},
   ) {
     const list: MountEntry[] = []
@@ -191,7 +191,7 @@ export class MountRegistry {
         prefix: DEV_PREFIX,
         vfs: new DevVFS(),
         mode: MountMode.WRITE,
-        read: defaultRead,
+        read: DEFAULT_READ_SPEC,
       }),
     )
     seen.add(DEV_PREFIX)

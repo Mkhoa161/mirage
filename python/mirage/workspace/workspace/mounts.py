@@ -169,10 +169,13 @@ def install_mounts(registry: MountRegistry, specs: list[MountSpec],
             entry.command_limits.update(spec.command_limits)
     implicit_root = registry.root_mount is None
     if implicit_root:
-        # Explicit rather than inherited, so the value is visible where
-        # the mount is made. RAM does not cache reads, so `fresh` on this
-        # anchor could never fire anyway.
-        registry.mount("/", RAMVFS(), default_mode, default_read)
+        # Pinned bounded, not inherited. This anchor is synthesized after
+        # `normalize_mounts` has run, so it never meets the capability
+        # verdict -- and RAM does not cache reads, so a workspace-level
+        # `fresh` would stamp on it exactly the combination the verdict
+        # exists to refuse. It is snapshotted like any other mount, so
+        # that stray policy came back as a refusal on restore.
+        registry.mount("/", RAMVFS(), default_mode, ReadSpec())
     return implicit_root
 
 

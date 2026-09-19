@@ -240,6 +240,19 @@ export interface ReadSpec {
  * `cacheable` is read first and short-circuits, so `ttl` is never consulted
  * for a path that is not being cached.
  */
+/**
+ * The policy a mount takes when it declares none, and the one pinned onto the
+ * three synthetic anchors (`/dev`, the history view, the implicit `/` root).
+ *
+ * Those three are installed outside `normalizeMounts`, so they never meet the
+ * capability verdict; none of them caches reads, so inheriting a workspace-level
+ * `fresh` would stamp on them exactly the combination the verdict refuses.
+ */
+export const DEFAULT_READ_SPEC: ReadSpec = Object.freeze({
+  policy: ReadPolicy.BOUNDED,
+  ttl: DEFAULT_READ_TTL,
+})
+
 export interface CacheFacts {
   readonly cacheable: boolean
   readonly ttl: number

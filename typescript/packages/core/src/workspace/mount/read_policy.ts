@@ -28,11 +28,18 @@ import { cachesReads, readRevalidatable, type VFS } from '../../vfs/base.ts'
  * in YAML, `undefined` here, and the `Mount` options default all resolve to
  * the same thing.
  *
- * @throws if the policy name is not a known one.
+ * @throws if the policy name is not a known one, or the bound is not a
+ *   positive whole number of seconds.
  */
-export function resolveReadSpec(policy: string | undefined, ttl: number | undefined): ReadSpec {
+export function resolveReadSpec(policy: unknown, ttl: unknown): ReadSpec {
   let resolved: ReadPolicy = ReadPolicy.BOUNDED
-  if (policy !== undefined && policy !== '') {
+  // null and undefined both mean absent: YAML's bare `read:` parses as
+  // null, and reading it as a string would die on .toLowerCase() rather
+  // than answering with this door's own refusal.
+  if (policy !== undefined && policy !== null && policy !== '') {
+    if (typeof policy !== 'string') {
+      throw new Error(`unknown read policy ${JSON.stringify(policy)}; expected a policy name`)
+    }
     const lowered = policy.toLowerCase()
     const known = Object.values(ReadPolicy) as string[]
     if (!known.includes(lowered)) {
@@ -40,7 +47,18 @@ export function resolveReadSpec(policy: string | undefined, ttl: number | undefi
     }
     resolved = lowered as ReadPolicy
   }
-  return { policy: resolved, ttl: ttl ?? DEFAULT_READ_TTL }
+  const bound = ttl ?? DEFAULT_READ_TTL
+  // A non-positive bound is not a very short one: the store marks such an
+  // entry expired the moment it is written (redis EXPIRE <= 0 deletes the
+  // key outright), so the mount silently caches nothing. Refusing it is
+  // the other half of the rule that refuses `bounded` with no bound.
+  if (typeof bound !== 'number' || !Number.isInteger(bound)) {
+    throw new Error(`ttl must be whole seconds, got ${JSON.stringify(ttl)}`)
+  }
+  if (bound < 1) {
+    throw new Error(`ttl must be at least 1 second, got ${String(bound)}`)
+  }
+  return { policy: resolved, ttl: bound }
 }
 
 /**
