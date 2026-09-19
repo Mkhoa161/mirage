@@ -125,6 +125,21 @@ export interface VFS {
    * `BaseVFS.SIZES_ALWAYS_KNOWN`.
    */
   readonly sizesAlwaysKnown?: boolean
+  /**
+   * Whether a `read: fresh` mount can actually be revalidated against this
+   * backend: {@link VFS.stat} and the read record must stamp the *same kind*
+   * of content token, so the gate can compare them with `===`. False (the
+   * default) is refused at mount time rather than degraded, because a mount
+   * that declares fresh and silently serves bounded is the bug the policy
+   * exists to prevent.
+   *
+   * Distinct from {@link VFS.supportsSnapshot}, which asks whether a token
+   * exists at all: gdrive stamps one on both sides and still cannot honour
+   * fresh, because stat returns a timestamp where read returns an md5.
+   * Distinct from {@link VFS.cachesReads}, which asks whether the gate can
+   * fire. Mirrors Python's `BaseVFS.READ_REVALIDATABLE`.
+   */
+  readonly readRevalidatable?: boolean
   readonly index?: IndexCacheStore
   readonly accessor?: Accessor
   readonly opsMap?: Record<string, unknown>
@@ -175,6 +190,10 @@ export function cachesReads(vfs: VFS): boolean {
 
 export function sizesAlwaysKnown(vfs: VFS): boolean {
   return vfs.sizesAlwaysKnown === true
+}
+
+export function readRevalidatable(vfs: VFS): boolean {
+  return vfs.readRevalidatable === true
 }
 
 export abstract class BaseVFS {

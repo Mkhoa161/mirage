@@ -77,6 +77,19 @@ class BaseVFS:
     # docs/python/setup/fuse.mdx.
     SIZES_ALWAYS_KNOWN: bool = False
 
+    # Whether a `read: fresh` mount can actually be revalidated against
+    # this backend: stat() and read must stamp FileStat.fingerprint /
+    # the read record with the *same kind* of content token, so the gate
+    # can compare them with ==. False (the default) is refused at mount
+    # time rather than degraded, because a mount that declares fresh and
+    # silently serves bounded is the bug the policy exists to prevent.
+    #
+    # Distinct from SUPPORTS_SNAPSHOT, which asks whether a token exists
+    # at all: gdrive stamps one on both sides and still cannot honour
+    # fresh, because stat returns a timestamp where read returns an md5.
+    # Distinct from caches_reads, which asks whether the gate can fire.
+    READ_REVALIDATABLE: bool = False
+
     def __init__(
         self,
         index: IndexConfig | None = None,

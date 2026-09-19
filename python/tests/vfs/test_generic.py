@@ -160,15 +160,19 @@ def test_get_state():
 
 
 def test_declaration_flags_forwarded():
-    vfs = make_vfs(sizes_always_known=True, supports_snapshot=True)
+    vfs = make_vfs(sizes_always_known=True,
+                   supports_snapshot=True,
+                   read_revalidatable=True)
     assert vfs.SIZES_ALWAYS_KNOWN is True
     assert vfs.SUPPORTS_SNAPSHOT is True
+    assert vfs.READ_REVALIDATABLE is True
 
 
 def test_declaration_flags_default_off():
     vfs = make_vfs()
     assert vfs.SIZES_ALWAYS_KNOWN is False
     assert vfs.SUPPORTS_SNAPSHOT is False
+    assert vfs.READ_REVALIDATABLE is False
 
 
 def test_prompts_set():
