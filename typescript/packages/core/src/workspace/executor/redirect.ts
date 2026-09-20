@@ -399,7 +399,7 @@ function closedWriteLine(command: TSNodeLike): Uint8Array {
   return new TextEncoder().encode(`${name}: write error: Bad file descriptor\n`)
 }
 
-/** Shell-attributed IOResult for a `<` source that cannot be read. */
+/** Shell-attributed IOResult for a redirect target that cannot be opened. */
 function redirectFailure(scope: PathSpec, err: unknown): Result {
   return shellFailure(redirectErrorLine(scope, err))
 }
@@ -481,7 +481,8 @@ async function openRefusal(
     }
     const scope = ensureScope(r.target)
     if (scope.rawPath.endsWith('/')) {
-      await applyPendingOpens(dispatch, pending)
+      const earlier = await applyPendingOpens(dispatch, pending)
+      if (earlier !== null) return earlier
       return shellFailure(new TextEncoder().encode(`${scope.rawPath}: Is a directory\n`))
     }
     const path = scope.virtual
@@ -501,7 +502,8 @@ async function openRefusal(
       isDir = stat instanceof FileStat && stat.type === FileType.DIRECTORY
     }
     if (noclobber && exists && !r.append && !r.clobber) {
-      await applyPendingOpens(dispatch, pending)
+      const earlier = await applyPendingOpens(dispatch, pending)
+      if (earlier !== null) return earlier
       const detail = isDir ? 'Is a directory' : 'cannot overwrite existing file'
       const err = new TextEncoder().encode(`${scope.rawPath}: ${detail}\n`)
       const io = new IOResult({ exitCode: 1, stderr: err })
@@ -527,19 +529,25 @@ async function openRefusal(
  * scan found absent, or opened for truncation, are listed, so an append
  * onto an existing file keeps its bytes.
  *
- * A write that fails is swallowed rather than raised: the failure belongs
- * to that earlier redirect, which bash would have reported instead of the
- * noclobber refusal, and inventing that error here would replace the
- * refusal the caller is about to return.
+ * An earlier open that fails is the statement's refusal instead: bash stops
+ * at the first open it cannot perform, so `echo x > /nodir/f > reg/` reports
+ * `/nodir/f: No such file or directory` and never reaches the slashed target,
+ * and the opens after the failed one are not performed either. Returns that
+ * failure, or null when every open went through.
  */
-async function applyPendingOpens(dispatch: DispatchFn, pending: PathSpec[]): Promise<void> {
+async function applyPendingOpens(
+  dispatch: DispatchFn,
+  pending: PathSpec[],
+): Promise<Result | null> {
   for (const scope of pending) {
     try {
       await dispatch('write', scope, [new Uint8Array()])
     } catch (err) {
       if (!isFsError(err)) throw err
+      return redirectFailure(scope, err)
     }
   }
+  return null
 }
 
 /** The descriptors an `exec` closed for the shell, which a line's dup

@@ -819,7 +819,7 @@ export async function cpGeneric(
   const reads: Record<string, Uint8Array> = {}
   const lines: string[] = []
   const errors: string[] = []
-  for (const [src, target] of copyTargets(sources, dst, dstIsDir, dstExists)) {
+  for (const [src, target] of copyTargets(sources, dst, dstIsDir, dstExists, dstErr)) {
     const { exists: srcExists, isDir: srcIsDir, strerror: srcErr } = await sourceKind(stat, src)
     if (!srcExists) {
       errors.push(`cp: cannot stat '${src.rawPath}': ${String(srcErr)}`)

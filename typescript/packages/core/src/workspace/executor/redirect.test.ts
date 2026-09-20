@@ -797,4 +797,21 @@ describe('handleRedirect trailing slash', () => {
     expect(await runExit(ws, 'test -f /data/a')).toBe(0)
     expect(await run(ws, 'cat /data/a')).toBe('')
   })
+
+  it('reports an earlier failed open ahead of a later refusal', async () => {
+    // bash stops at the first open it cannot perform, so a redirect under
+    // an absent parent is reported ahead of a slashed or noclobbered
+    // target written after it, and nothing is created.
+    const { ws } = await makeIntegrationWS({ reg: 'y' })
+    for (const line of [
+      'echo hi > /data/nodir/f > /data/missing/',
+      'set -C; echo hi > /data/nodir/f > /data/reg',
+    ]) {
+      const [code, , err] = await runResult(ws, line)
+      expect([code, err], line).toEqual([1, '/data/nodir/f: No such file or directory\n'])
+    }
+    expect(await runExit(ws, 'test -e /data/nodir')).toBe(1)
+    expect(await runExit(ws, 'test -e /data/missing')).toBe(1)
+    expect(await run(ws, 'cat /data/reg')).toBe('y')
+  })
 })

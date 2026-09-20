@@ -833,6 +833,30 @@ async def test_slashed_missing_destination_refuses_a_file_source():
 
 
 @pytest.mark.asyncio
+async def test_many_sources_to_a_slashed_file_report_not_a_directory():
+    # GNU 9.7: `cp a b reg/` is `target 'reg/': Not a directory`, the
+    # destination probe's verdict, where only a genuinely absent target
+    # is `No such file or directory`.
+    files = {"/a.txt": b"AAA", "/b.txt": b"BBB", "/reg": b"R"}
+    stat, copy, find = _make_backend(files, set())
+    with pytest.raises(NotADirectoryError, match="target '/reg/'"):
+        await cp([_spec("/a.txt"),
+                  _spec("/b.txt"),
+                  _slashed("/reg")],
+                 strategy=NativeCopy(copy=copy, find=find),
+                 stat=stat,
+                 flags=CpFlags())
+    with pytest.raises(FileNotFoundError, match="target '/missing/'"):
+        await cp([_spec("/a.txt"),
+                  _spec("/b.txt"),
+                  _slashed("/missing")],
+                 strategy=NativeCopy(copy=copy, find=find),
+                 stat=stat,
+                 flags=CpFlags())
+    assert files == {"/a.txt": b"AAA", "/b.txt": b"BBB", "/reg": b"R"}
+
+
+@pytest.mark.asyncio
 async def test_slashed_missing_destination_takes_a_directory_source():
     files = {"/d/f": b"F"}
     stat, copy, find = _make_backend(files, {"/d"})

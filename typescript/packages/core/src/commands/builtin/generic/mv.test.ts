@@ -971,6 +971,30 @@ describe('mvGeneric trailing slash', () => {
     expect([...files.keys()]).toEqual(['/a.txt'])
   })
 
+  it('multiple sources with a slashed plain-file target report Not a directory', async () => {
+    // GNU 9.7: `mv a b reg/` is `target 'reg/': Not a directory`, the
+    // destination probe's verdict, where only a genuinely absent target is
+    // `No such file or directory`.
+    const files = new Map([
+      ['/a.txt', new Uint8Array([1])],
+      ['/b.txt', new Uint8Array([2])],
+      ['/reg', new Uint8Array([3])],
+    ])
+    const { stat, rename } = makeBackend(files, new Set())
+    await expect(
+      mvGeneric([spec('/a.txt'), spec('/b.txt'), slashed('/reg')], stat, { rename }, mvFlags({})),
+    ).rejects.toMatchObject({ code: 'ENOTDIR' })
+    await expect(
+      mvGeneric(
+        [spec('/a.txt'), spec('/b.txt'), slashed('/missing')],
+        stat,
+        { rename },
+        mvFlags({}),
+      ),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    expect([...files.keys()].sort()).toEqual(['/a.txt', '/b.txt', '/reg'])
+  })
+
   it('reports cannot stat for a slashed file destination', async () => {
     // `mv a.txt reg/` fails the destination's stat in GNU, and the stat
     // itself decides here whether or not the backend's is slash-aware.

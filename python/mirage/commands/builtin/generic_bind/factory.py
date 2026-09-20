@@ -152,10 +152,10 @@ def with_slash_guard(ops: CommandIO) -> CommandIO:
 
     A missing path is left alone on the read side: its own ENOENT is
     already GNU's answer (``cat dangle/`` is "No such file or
-    directory"). On the write side it is not: ``write`` and ``append``
-    refuse a slashed operand with EISDIR whether or not anything is
-    there, as open(2) does with O_CREAT, so ``tee missing/`` cannot
-    leave a regular file named ``missing`` behind. The link half is the
+    directory"). On the write side it is not: ``write``, ``append`` and
+    ``truncate`` refuse a slashed operand with EISDIR whether or not
+    anything is there, as open(2) does with O_CREAT, so ``tee missing/``
+    cannot leave a regular file named ``missing`` behind. The link half is the
     router's, not this wrapper's: by the time an operand arrives here a
     trailing slash has already resolved the final symlink, so ``dlink/``
     stats the directory it points at and passes.
@@ -175,6 +175,10 @@ def with_slash_guard(ops: CommandIO) -> CommandIO:
         guarded = replace(guarded,
                           append=functools.partial(_slash_checked_write,
                                                    ops.append))
+    if ops.truncate is not None:
+        guarded = replace(guarded,
+                          truncate=functools.partial(_slash_checked_write,
+                                                     ops.truncate))
     return guarded
 
 

@@ -207,6 +207,70 @@
         "stdout": "g.txt\ns.txt\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "guard_redirect_chain_reports_the_first_open",
+      "seq": 643,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs"
+      ],
+      "command": "echo x > /data/guard/nodir/f > /data/guard/sub/",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "/data/guard/nodir/f: No such file or directory\n"
+      }
+    },
+    {
+      "id": "guard_truncate_slashed_missing",
+      "seq": 644,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs"
+      ],
+      "command": "truncate -s 0 /data/guard/missing/",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "truncate: /data/guard/missing/: Is a directory\n"
+      }
+    },
+    {
+      "id": "guard_truncate_slashed_file",
+      "seq": 645,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs"
+      ],
+      "command": "truncate -s 0 /data/guard/g.txt/",
+      "expect": {
+        "exit": 1,
+        "stdout": "",
+        "stderr": "truncate: /data/guard/g.txt/: Is a directory\n"
+      }
+    },
+    {
+      "id": "guard_slashed_refusals_left_nothing",
+      "seq": 646,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs"
+      ],
+      "command": "test ! -e /data/guard/missing && test ! -e /data/guard/nodir && cat /data/guard/g.txt",
+      "expect": {
+        "exit": 0,
+        "stdout": "guard\n",
+        "stderr": ""
+      }
     }
   ]
 }

@@ -120,12 +120,12 @@ function slashCheckedReaddir<A extends Accessor>(
 // a parent that is itself absent GNU reports the parent first (ENOENT); the
 // spelling is refused here without a round trip, so that corner reads
 // EISDIR too.
-function slashCheckedWrite<A extends Accessor>(
-  write: NonNullable<CommandIO<A>['write']>,
-): NonNullable<CommandIO<A>['write']> {
-  return async (accessor: A, path: PathSpec, data: Uint8Array) => {
+function slashCheckedWrite<A extends Accessor, T>(
+  write: (accessor: A, path: PathSpec, arg: T) => Promise<void>,
+): (accessor: A, path: PathSpec, arg: T) => Promise<void> {
+  return async (accessor: A, path: PathSpec, arg: T) => {
     if (path.rawPath.endsWith('/')) throw eisdir(path)
-    return write(accessor, path, data)
+    return write(accessor, path, arg)
   }
 }
 
@@ -136,6 +136,7 @@ export function withSlashGuard<A extends Accessor>(ops: CommandIO<A>): CommandIO
     readdir: slashCheckedReaddir(ops.readdir, ops.stat),
     ...(ops.write === undefined ? {} : { write: slashCheckedWrite(ops.write) }),
     ...(ops.append === undefined ? {} : { append: slashCheckedWrite(ops.append) }),
+    ...(ops.truncate === undefined ? {} : { truncate: slashCheckedWrite(ops.truncate) }),
   }
 }
 

@@ -528,3 +528,20 @@ async def test_slashed_redirect_refusal_keeps_the_opens_before_it():
     assert io.exit_code == 1
     assert io.stderr == b"/data/missing/: Is a directory\n"
     assert await _out(ws, "cat /data/a") == ""
+
+
+@pytest.mark.asyncio
+async def test_an_earlier_failed_open_wins_over_a_later_refusal():
+    # bash stops at the first open it cannot perform, so a redirect under
+    # an absent parent is reported ahead of a slashed or noclobbered
+    # target written after it, and nothing is created.
+    ws = await _workspace()
+    await ws.shell("printf y > /data/reg")
+    for line in ("echo hi > /data/nodir/f > /data/missing/",
+                 "set -C; echo hi > /data/nodir/f > /data/reg"):
+        io = await ws.shell(line)
+        assert io.exit_code == 1, line
+        assert io.stderr == b"/data/nodir/f: No such file or directory\n", line
+    assert (await ws.shell("test -e /data/nodir")).exit_code == 1
+    assert (await ws.shell("test -e /data/missing")).exit_code == 1
+    assert await _out(ws, "cat /data/reg") == "y"

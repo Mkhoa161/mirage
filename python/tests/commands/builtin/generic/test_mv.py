@@ -814,6 +814,30 @@ async def test_slashed_missing_destination_refuses_a_file_source():
 
 
 @pytest.mark.asyncio
+async def test_many_sources_to_a_slashed_file_report_not_a_directory():
+    # GNU 9.7: `mv a b reg/` is `target 'reg/': Not a directory`, the
+    # destination probe's verdict, where only a genuinely absent target
+    # is `No such file or directory`.
+    files = {"/a.txt": b"AAA", "/b.txt": b"BBB", "/reg": b"R"}
+    stat, rename = _make_backend(files, set())
+    with pytest.raises(NotADirectoryError, match="target '/reg/'"):
+        await mv([_spec("/a.txt"),
+                  _spec("/b.txt"),
+                  _slashed("/reg")],
+                 strategy=NativeMove(rename=rename),
+                 stat=stat,
+                 flags=MvFlags())
+    with pytest.raises(FileNotFoundError, match="target '/missing/'"):
+        await mv([_spec("/a.txt"),
+                  _spec("/b.txt"),
+                  _slashed("/missing")],
+                 strategy=NativeMove(rename=rename),
+                 stat=stat,
+                 flags=MvFlags())
+    assert files == {"/a.txt": b"AAA", "/b.txt": b"BBB", "/reg": b"R"}
+
+
+@pytest.mark.asyncio
 async def test_slashed_missing_destination_refuses_under_t_too():
     files = {"/a.txt": b"AAA"}
     stat, rename = _make_backend(files, set())

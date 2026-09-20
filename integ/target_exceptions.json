@@ -433,6 +433,46 @@
       "sharepoint": "Only ram, disk and opfs declare a `/ro` mount in targets.json, so this case cannot run anywhere else: it exists to pin that --version and --help answer BEFORE the read-only refusal, which needs a read-only mount to refuse from. The directory's modal list is the two-mount cross-mount one (/data plus /data2), which every backend has; this case is the outlier because of the fixture it needs, not because of anything the backend cannot do.",
       "sharepoint-prefix": "Only ram, disk and opfs declare a `/ro` mount in targets.json, so this case cannot run anywhere else: it exists to pin that --version and --help answer BEFORE the read-only refusal, which needs a read-only mount to refuse from. The directory's modal list is the two-mount cross-mount one (/data plus /data2), which every backend has; this case is the outlier because of the fixture it needs, not because of anything the backend cannot do.",
       "ssh": "Only ram, disk and opfs declare a `/ro` mount in targets.json, so this case cannot run anywhere else: it exists to pin that --version and --help answer BEFORE the read-only refusal, which needs a read-only mount to refuse from. The directory's modal list is the two-mount cross-mount one (/data plus /data2), which every backend has; this case is the outlier because of the fixture it needs, not because of anything the backend cannot do."
+    },
+    "integ/unix/slash/dest.json :: slashdest_cp_file_to_file": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_cp_file_to_missing": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_cp_many_to_file": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_cp_slashed_source": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_mv_T_file_to_missing": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_mv_dir_to_file": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_mv_file_to_file": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_mv_file_to_missing": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_mv_many_to_file": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
+    },
+    "integ/unix/slash/dest.json :: slashdest_mv_slashed_source": {
+      "hf": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there.",
+      "hf-prefix": "hf has no rename op and no copy op: mv and cp on it answer `Operation not supported` before any operand is looked at (the same limit mv/backup.json and cp/backup.json carry), so the GNU refusal this case pins cannot be reached there."
     }
   }
 }

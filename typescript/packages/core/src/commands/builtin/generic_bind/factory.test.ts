@@ -158,7 +158,11 @@ describe('withSlashGuard on the write tier', () => {
       written.push(path.virtual)
       return Promise.resolve()
     }
-    const guarded = withSlashGuard(makeOps({ write, append: write }))
+    const truncate = (_accessor: unknown, path: PathSpec): Promise<void> => {
+      written.push(path.virtual)
+      return Promise.resolve()
+    }
+    const guarded = withSlashGuard(makeOps({ write, append: write, truncate }))
     await expect(
       guarded.write?.(new FakeAccessor(), slashed, new Uint8Array()),
     ).rejects.toMatchObject({
@@ -169,8 +173,12 @@ describe('withSlashGuard on the write tier', () => {
     ).rejects.toMatchObject({
       code: 'EISDIR',
     })
+    await expect(guarded.truncate?.(new FakeAccessor(), slashed, 0)).rejects.toMatchObject({
+      code: 'EISDIR',
+    })
     await guarded.write?.(new FakeAccessor(), spec('/a.txt'), new Uint8Array())
-    expect(written).toEqual(['/mnt/a.txt'])
+    await guarded.truncate?.(new FakeAccessor(), spec('/a.txt'), 0)
+    expect(written).toEqual(['/mnt/a.txt', '/mnt/a.txt'])
   })
 
   it('leaves write absent when the backend has none', () => {

@@ -445,11 +445,11 @@ def _redirect_word(r: Redirect) -> str:
 
 def _redirect_failure(scope: PathSpec,
                       exc: OSError) -> tuple[None, IOResult, ExecutionNode]:
-    """Shell-attributed IOResult for a ``<`` source that cannot be read.
+    """Shell-attributed IOResult for a redirect target that cannot be opened.
 
     Args:
-        scope (PathSpec): The redirect source that could not be read.
-        exc (OSError): The filesystem error raised by the read.
+        scope (PathSpec): The redirect target that could not be opened.
+        exc (OSError): The filesystem error raised by the open.
     """
     return _shell_failure(_redirect_error_line(scope, exc))
 
@@ -539,7 +539,9 @@ async def _open_refusal(
             continue
         scope = _ensure_scope(r.target)
         if scope.raw_path.endswith("/"):
-            await _apply_pending_opens(dispatch, pending)
+            earlier = await _apply_pending_opens(dispatch, pending)
+            if earlier is not None:
+                return earlier
             return _shell_failure(
                 f"{scope.raw_path}: Is a directory\n".encode())
         path = scope.virtual
@@ -555,7 +557,9 @@ async def _open_refusal(
             exists = stat is not None
             is_dir = stat is not None and stat.type == FileType.DIRECTORY
         if noclobber and exists and not r.append and not r.clobber:
-            await _apply_pending_opens(dispatch, pending)
+            earlier = await _apply_pending_opens(dispatch, pending)
+            if earlier is not None:
+                return earlier
             detail = ("Is a directory"
                       if is_dir else "cannot overwrite existing file")
             err = f"{scope.raw_path}: {detail}\n".encode()
@@ -572,8 +576,10 @@ async def _open_refusal(
     return None
 
 
-async def _apply_pending_opens(dispatch: DispatchFn,
-                               pending: list[PathSpec]) -> None:
+async def _apply_pending_opens(
+    dispatch: DispatchFn,
+    pending: list[PathSpec],
+) -> tuple[None, IOResult, ExecutionNode] | None:
     """Apply the opens a refused statement already performed.
 
     bash opens redirects left to right, so the ones before the refused
@@ -582,22 +588,26 @@ async def _apply_pending_opens(dispatch: DispatchFn,
     targets the scan found absent, or opened for truncation, are listed,
     so an append onto an existing file keeps its bytes.
 
-    A write that fails is logged rather than raised: the failure belongs
-    to that earlier redirect, which bash would have reported instead of
-    the noclobber refusal, and inventing that error here would replace
-    the refusal the caller is about to return.
+    An earlier open that fails is the statement's refusal instead: bash
+    stops at the first open it cannot perform, so ``echo x > /nodir/f >
+    reg/`` reports ``/nodir/f: No such file or directory`` and never
+    reaches the slashed target, and the opens after the failed one are
+    not performed either.
 
     Args:
         dispatch (DispatchFn): op dispatcher.
         pending (list[PathSpec]): targets to create or truncate, in the
             order they were opened.
+
+    Returns:
+        The earlier open's failure, or None when every open went through.
     """
     for scope in pending:
         try:
             await dispatch("write", scope, data=b"")
         except FS_ERRORS as exc:
-            logger.debug("noclobber pre-open write failed for %s: %s",
-                         scope.raw_path, exc)
+            return _redirect_failure(scope, exc)
+    return None
 
 
 async def _read_existing(dispatch, scope) -> bytes:

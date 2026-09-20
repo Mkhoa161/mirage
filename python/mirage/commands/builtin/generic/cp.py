@@ -940,7 +940,8 @@ async def cp(
     reads: dict[str, ByteSource] = {}
     lines: list[str] = []
     errors: list[str] = []
-    for src, target in copy_targets(sources, dst, dst_is_dir, dst_exists):
+    for src, target in copy_targets(sources, dst, dst_is_dir, dst_exists,
+                                    dst_err):
         src_exists, src_is_dir, src_err = await source_kind(stat, src)
         if not src_exists:
             errors.append(f"cp: cannot stat '{src.raw_path}': {src_err}")
