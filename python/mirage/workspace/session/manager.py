@@ -81,9 +81,6 @@ class SessionManager:
         self._store = store if store is not None else RAMSessionStore()
         self._sessions: dict[str, SessionState] = {}
         self._locks: dict[str, asyncio.Lock] = {}
-        # One line of a session at a time, as one bash process runs one
-        # line at a time. Apart from ``_locks``: a line holds this one
-        # for its whole run and flushes under that one at its end.
         self._line_locks: dict[str, asyncio.Lock] = {}
         # What the store last saw from us, per session id. Flush
         # compares against this to skip clean sessions without a
@@ -513,6 +510,10 @@ class SessionManager:
 
     def line_lock_for(self, session_id: str) -> asyncio.Lock:
         """The lock a top-level line on ``session_id`` holds while it runs.
+
+        One line of a session at a time, as one bash process runs one line
+        at a time. Kept apart from ``lock_for``: a line holds this lock
+        for its whole run and flushes under that one at its end.
 
         Args:
             session_id (str): an existing session.
