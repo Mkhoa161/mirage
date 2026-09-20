@@ -35,6 +35,31 @@ from dataclasses import dataclass, field
 READ_FINGERPRINT_OPS = frozenset({"read"})
 WRITE_FINGERPRINT_OPS = frozenset({"write"})
 
+# What snapshot drift capture asks instead, and it is a different question
+# from the cache's, so these are deliberately not the two sets above.
+# `STAMP_FINGERPRINT_OPS` is a superset: capture reads the record, not the
+# bytes, so it has none of the pairing problem that narrowed
+# `WRITE_FINGERPRINT_OPS` to one member. The three overlap on purpose --
+# a write both describes and changes, and whether it carries a token is
+# what tells capture which.
+#
+# All three hold the op names a `record()` call spells, not the op-table
+# slots: the recursive delete is the `rm_recursive` slot but records as
+# "rm_r", and the rename op records as "rename" or "rename_prefix"
+# depending on which of its two paths ran.
+STAMP_FINGERPRINT_OPS = frozenset({"read", "write", "create", "truncate"})
+CONTENT_CHANGING_OPS = frozenset({"write", "create", "truncate", "append"})
+RETRACT_FINGERPRINT_OPS = frozenset(
+    {"unlink", "rm_r", "rmdir", "rename", "rename_prefix", "copy"})
+# The subset that moved a whole prefix, and so takes every pin beneath
+# it. Membership is what the op *did*, never what it could have done:
+# rename has two code paths and only one of them is a prefix walk, so it
+# spells them with two names. A point op must not take a subtree, because
+# on a keyed store `a` and `a/b` are both objects -- `rm a` leaves `a/b`
+# alone, and so does `mv a b`, which moves the single object at `a` and
+# never touches `a/b`.
+SUBTREE_RETRACT_OPS = frozenset({"rm_r", "rename_prefix"})
+
 
 @dataclass
 class OpRecord:

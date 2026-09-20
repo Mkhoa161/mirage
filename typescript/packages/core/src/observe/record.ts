@@ -35,6 +35,47 @@ import { VFSName } from '../types.ts'
 export const READ_FINGERPRINT_OPS: ReadonlySet<string> = new Set(['read'])
 export const WRITE_FINGERPRINT_OPS: ReadonlySet<string> = new Set(['write'])
 
+// What snapshot drift capture asks instead, and it is a different question
+// from the cache's, so these are deliberately not the two sets above.
+// `STAMP_FINGERPRINT_OPS` is a superset: capture reads the record, not the
+// bytes, so it has none of the pairing problem that narrowed
+// `WRITE_FINGERPRINT_OPS` to one member. The three overlap on purpose -- a
+// write both describes and changes, and whether it carries a token is what
+// tells capture which.
+//
+// All three hold the op names a `record()` call spells, not the op-table
+// slots: the recursive delete is the `rm_recursive` slot but records as
+// 'rm_r', and the rename op records as 'rename' or 'rename_prefix'
+// depending on which of its two paths ran.
+export const STAMP_FINGERPRINT_OPS: ReadonlySet<string> = new Set([
+  'read',
+  'write',
+  'create',
+  'truncate',
+])
+export const CONTENT_CHANGING_OPS: ReadonlySet<string> = new Set([
+  'write',
+  'create',
+  'truncate',
+  'append',
+])
+export const RETRACT_FINGERPRINT_OPS: ReadonlySet<string> = new Set([
+  'unlink',
+  'rm_r',
+  'rmdir',
+  'rename',
+  'rename_prefix',
+  'copy',
+])
+// The subset that moved a whole prefix, and so takes every pin beneath
+// it. Membership is what the op *did*, never what it could have done:
+// rename has two code paths and only one of them is a prefix walk, so it
+// spells them with two names. A point op must not take a subtree,
+// because on a keyed store `a` and `a/b` are both objects -- `rm a`
+// leaves `a/b` alone, and so does `mv a b`, which moves the single
+// object at `a` and never touches `a/b`.
+export const SUBTREE_RETRACT_OPS: ReadonlySet<string> = new Set(['rm_r', 'rename_prefix'])
+
 export interface OpRecordInit {
   op: string
   path: string
