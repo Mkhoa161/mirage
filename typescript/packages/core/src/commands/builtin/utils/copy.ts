@@ -39,8 +39,8 @@ export function copyTargets(
   dstExists = true,
 ): [PathSpec, PathSpec][] {
   if (sources.length > 1 && !dstIsDir) {
-    if (!dstExists) throw enoent(`target '${dst.virtual}'`)
-    throw enotdir(`target '${dst.virtual}'`)
+    if (!dstExists) throw enoent(`target '${dst.rawPath}'`)
+    throw enotdir(`target '${dst.rawPath}'`)
   }
   if (!dstIsDir) {
     const first = sources[0]

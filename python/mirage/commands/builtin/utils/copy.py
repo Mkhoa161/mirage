@@ -53,8 +53,8 @@ def copy_targets(sources: list[PathSpec],
     """
     if len(sources) > 1 and not dst_is_dir:
         if not dst_exists:
-            raise FileNotFoundError(f"target '{dst.virtual}'")
-        raise NotADirectoryError(f"target '{dst.virtual}'")
+            raise FileNotFoundError(f"target '{dst.raw_path}'")
+        raise NotADirectoryError(f"target '{dst.raw_path}'")
     if not dst_is_dir:
         return [(sources[0], dst)]
     pairs: list[tuple[PathSpec, PathSpec]] = []

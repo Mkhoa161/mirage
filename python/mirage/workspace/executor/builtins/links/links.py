@@ -349,6 +349,19 @@ async def prepare_mv(
         if src.raw_path.endswith("/"):
             return items, None, None, await _slashed_link_refusal(
                 namespace, dispatch, src, dst, stat)
+        if not into_dir and dst.raw_path.endswith("/"):
+            # rename(2) never follows the source, so a link is not a
+            # directory whatever it points at, and a slashed destination
+            # asks for one: GNU 9.7 refuses `mv dlnk missing/` at the
+            # rename and `mv dlnk reg/` at the destination's stat, the
+            # same two wordings a regular source gets from the generic.
+            if stat is not None:
+                return items, None, None, fail(
+                    "mv", f"mv: cannot stat '{dst.raw_path}': "
+                    "Not a directory\n")
+            return items, None, None, fail(
+                "mv", f"mv: cannot move '{src.raw_path}' to "
+                f"'{dst.raw_path}': Not a directory\n")
         # The move is a node-table rename, which the door answers: a
         # link has no backend entry for the generic mv to move. Reaching
         # the table directly from here would skip the admission gates

@@ -306,6 +306,18 @@ export async function prepareMv(
       const early = await slashedLinkRefusal(namespace, dispatch, src, dst, stat)
       return { items, postUnlink: null, postRename: null, early }
     }
+    if (!intoDir && dst.rawPath.endsWith('/')) {
+      // rename(2) never follows the source, so a link is not a directory
+      // whatever it points at, and a slashed destination asks for one:
+      // GNU 9.7 refuses `mv dlnk missing/` at the rename and `mv dlnk reg/`
+      // at the destination's stat, the same two wordings a regular source
+      // gets from the generic.
+      const early =
+        stat !== null
+          ? fail('mv', `mv: cannot stat '${dst.rawPath}': Not a directory\n`)
+          : fail('mv', `mv: cannot move '${src.rawPath}' to '${dst.rawPath}': Not a directory\n`)
+      return { items, postUnlink: null, postRename: null, early }
+    }
     // The move is a node-table rename, which the door answers: a link
     // has no backend entry for the generic mv to move. Reaching the
     // table directly from here would skip the admission gates every

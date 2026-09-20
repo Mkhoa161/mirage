@@ -493,6 +493,21 @@ export async function makeLink(
     errors.push(`ln: failed to create ${kind} '${typed}': File exists\n`)
     return
   }
+  if (
+    typed.endsWith('/') &&
+    !visibleLink(namespace, plan.linkAbs) &&
+    (await pathStat(dispatch, plan.linkAbs)) === null
+  ) {
+    // A link name typed with a slash asks for a directory the link can
+    // never be: symlink(2) and link(2) answer `missing/` with ENOENT, so
+    // GNU refuses and creates nothing, where the normalized name would
+    // have made a link called `missing`. A directory standing there took
+    // the link inside it in planLinks, and a file behind the slash is the
+    // door's "File exists" below, so only the absent name is refused here.
+    const arrow = flags.symbolic ? '' : ` => '${targetTyped}'`
+    errors.push(`ln: failed to create ${kind} '${typed}'${arrow}: No such file or directory\n`)
+    return
+  }
   try {
     if (linkTarget !== null) {
       await dispatch('symlink', linkSpec, [], { target: linkTarget })

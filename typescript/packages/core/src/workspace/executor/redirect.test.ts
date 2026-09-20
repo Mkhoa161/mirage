@@ -764,3 +764,37 @@ describe('descriptor identities survive dups', () => {
     }
   })
 })
+
+describe('handleRedirect trailing slash', () => {
+  it('refuses a slashed target before the command runs', async () => {
+    // GNU bash 5.2: open(2) with O_CREAT answers `missing/` with EISDIR
+    // before looking anything up, so the line prints `missing/: Is a
+    // directory`, exits 1, and the command never runs; a plain file behind
+    // the slash gets the same answer and keeps its bytes.
+    const { ws } = await makeIntegrationWS({ reg: 'y' })
+    for (const line of [
+      'echo hi > /data/missing/',
+      'echo hi >> /data/missing/',
+      'echo hi > /data/reg/',
+      'echo hi >> /data/reg/',
+      'touch /data/marker > /data/missing/',
+    ]) {
+      const [code, , err] = await runResult(ws, line)
+      const target = line.split(' ').pop() ?? ''
+      expect([code, err], line).toEqual([1, `${target}: Is a directory\n`])
+    }
+    expect(await runExit(ws, 'test -e /data/missing')).toBe(1)
+    expect(await runExit(ws, 'test -e /data/marker')).toBe(1)
+    expect(await run(ws, 'cat /data/reg')).toBe('y')
+  })
+
+  it('keeps the opens before a slashed refusal', async () => {
+    // bash opens left to right, so `> a > missing/` has created `a`
+    // (empty) by the time the second open refuses.
+    const { ws } = await makeIntegrationWS()
+    const [code, , err] = await runResult(ws, 'echo hi > /data/a > /data/missing/')
+    expect([code, err]).toEqual([1, '/data/missing/: Is a directory\n'])
+    expect(await runExit(ws, 'test -f /data/a')).toBe(0)
+    expect(await run(ws, 'cat /data/a')).toBe('')
+  })
+})

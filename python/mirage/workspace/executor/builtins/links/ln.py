@@ -534,6 +534,19 @@ async def make_link(
     if occupied:
         errors.append(f"ln: failed to create {kind} '{typed}': File exists\n")
         return
+    if (typed.endswith("/") and not _visible_link(namespace, plan.link_abs)
+            and await path_stat(dispatch, plan.link_abs) is None):
+        # A link name typed with a slash asks for a directory the link
+        # can never be: symlink(2) and link(2) answer `missing/` with
+        # ENOENT, so GNU refuses and creates nothing, where the
+        # normalized name would have made a link called `missing`. A
+        # directory standing there took the link inside it in
+        # plan_links, and a file behind the slash is the door's "File
+        # exists" below, so only the absent name is refused here.
+        arrow = "" if flags.symbolic else f" => '{target_typed}'"
+        errors.append(f"ln: failed to create {kind} '{typed}'{arrow}: "
+                      "No such file or directory\n")
+        return
     try:
         if link_target is not None:
             await dispatch("symlink", link_spec, target=link_target)

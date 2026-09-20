@@ -251,7 +251,7 @@ async def handle_redirect(
     # contents and nothing else, so a refused redirect still let `rm`
     # delete its own target -- and then the probe found nothing there
     # and did not even refuse.
-    refusal = await _noclobber_refusal(dispatch, session, redirects)
+    refusal = await _open_refusal(dispatch, session, redirects)
     if refusal is not None:
         return refusal
 
@@ -471,12 +471,12 @@ def _shell_failure(line: bytes) -> tuple[None, IOResult, ExecutionNode]:
     return None, io, ExecutionNode(command="redirect", exit_code=1)
 
 
-async def _noclobber_refusal(
+async def _open_refusal(
     dispatch: DispatchFn,
     session: SessionState,
     redirects: list[Redirect],
 ) -> tuple[None, IOResult, ExecutionNode] | None:
-    """Refuse the whole statement when `set -C` bars one of its opens.
+    """Refuse the whole statement when one of its opens cannot happen.
 
     Returned *instead of* running the command, because that is what bash
     does: it opens every redirect before it forks, so a refusal means
@@ -485,6 +485,16 @@ async def _noclobber_refusal(
     contents, and on `rm f > f` it did not even do that -- the command
     deleted its own target first, so the probe found nothing there and
     let the line succeed.
+
+    Two opens refuse. A target typed with a trailing slash is one
+    whatever is there: open(2) with O_CREAT answers `missing/` and
+    `reg/` alike with EISDIR before looking anything up, so bash prints
+    `missing/: Is a directory` and creates nothing, where writing the
+    normalized name would have left a regular file called `missing`.
+    That test is on the spelling alone and costs no round trip, which is
+    a deliberate divergence for a slashed target under a parent that is
+    itself absent: bash reports the parent first (ENOENT), this reads
+    `Is a directory` too. The other is `set -C`, described next.
 
     `set -C` refuses a truncating open onto anything that already exists
     -- an empty file counts, since the test is existence and not size --
@@ -501,12 +511,11 @@ async def _noclobber_refusal(
     pre-command snapshot passed both and wrote the output. `>>` and `>|`
     never refuse but do create, so they count as opens too.
 
-    The whole scan is skipped unless the option is on, so the ordinary
-    redirect path costs no extra round trip. That leaves
-    `> <a directory>` with the option off silently succeeding, which is
-    a separate pre-existing gap: GNU answers `Is a directory` and exit 1
-    whichever operator asked, and closing it means a stat on every
-    output redirect.
+    The stat is skipped unless the option is on, so the ordinary
+    redirect path costs no extra round trip. A directory typed without
+    a slash needs none here: the open itself answers `Is a directory`,
+    from the kernel on a real filesystem and from the store's own
+    directory table on a keyed one, and the write path renders it.
 
     Targets are stat'd through the op dispatcher rather than a backend,
     so a redirect that lands on another mount is answered by the mount
@@ -521,8 +530,7 @@ async def _noclobber_refusal(
     Returns:
         The refusal result, or None when every open is allowed.
     """
-    if not session.shell_options.get("noclobber"):
-        return None
+    noclobber = bool(session.shell_options.get("noclobber"))
     opened: set[str] = set()
     pending: list[PathSpec] = []
     for r in redirects:
@@ -530,11 +538,14 @@ async def _noclobber_refusal(
                        RedirectKind.HERESTRING) or isinstance(r.target, int)):
             continue
         scope = _ensure_scope(r.target)
+        if scope.raw_path.endswith("/"):
+            await _apply_pending_opens(dispatch, pending)
+            return _shell_failure(
+                f"{scope.raw_path}: Is a directory\n".encode())
         path = scope.virtual
         is_dir = False
-        if path in opened:
-            exists = True
-        else:
+        exists = path in opened
+        if noclobber and not exists:
             try:
                 stat, _ = await dispatch("stat", scope)
             except FS_ERRORS as exc:
@@ -543,7 +554,7 @@ async def _noclobber_refusal(
                 stat = None
             exists = stat is not None
             is_dir = stat is not None and stat.type == FileType.DIRECTORY
-        if exists and not r.append and not r.clobber:
+        if noclobber and exists and not r.append and not r.clobber:
             await _apply_pending_opens(dispatch, pending)
             detail = ("Is a directory"
                       if is_dir else "cannot overwrite existing file")
@@ -552,8 +563,11 @@ async def _noclobber_refusal(
             return None, io, ExecutionNode(command="redirect", exit_code=1)
         # This open succeeds, so the target exists for every redirect
         # after it, and a truncating one leaves it empty to be found.
+        # Without the option nothing was stat'd, so an append target of
+        # unknown standing is not listed: pre-opening it with an empty
+        # write would truncate a file that is there.
         opened.add(path)
-        if not exists or not r.append:
+        if not r.append or (noclobber and not exists):
             pending.append(scope)
     return None
 
