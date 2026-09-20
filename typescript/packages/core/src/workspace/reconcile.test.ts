@@ -151,39 +151,13 @@ describe('Reconciler', () => {
     await ws.close()
   })
 
-  it('reconcileRead skips a cached path the gate will probe', async () => {
-    // The gate owns cached-byte freshness; this owns overlay GC. Probing
-    // here as well would stat twice for one warm read.
-    const ws = new Workspace({ '/data': new RAMVFS() })
-    await ws.namespace.ensureLoaded()
-    const mount = mountOf(ws, '/data/f.txt')
-    const probed: string[] = []
-    vi.spyOn(ws.opsRegistry, 'call').mockImplementation((_op, _res, _acc, scope) => {
-      probed.push(scope.virtual)
-      return Promise.resolve(null)
-    })
-    try {
-      await ws.cache.set('/data/f.txt', new TextEncoder().encode('v1'), { fingerprint: 'fp1' })
-      const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
-
-      await rec.reconcileRead(mount, '/data/f.txt', true)
-      expect(probed).toEqual([])
-
-      await rec.reconcileRead(mount, '/data/f.txt', false)
-      expect(probed).toEqual(['/data/f.txt'])
-    } finally {
-      vi.restoreAllMocks()
-      await ws.close()
-    }
-  })
-
-  it('reconcileRead still probes an overlay the gate cannot see', async () => {
+  it('reconcileRead GCs an overlay whose path the backend no longer has', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() })
     await ws.namespace.ensureLoaded()
     await ws.namespace.setAttrs('/data/gone.txt', { mode: 0o600 })
     const mount = mountOf(ws, '/data/gone.txt')
     const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
-    await rec.reconcileRead(mount, '/data/gone.txt', true)
+    await rec.reconcileRead(mount, '/data/gone.txt')
     expect(ws.namespace.metaFor('/data/gone.txt')).toBeNull()
     await ws.close()
   })
@@ -200,7 +174,7 @@ describe('Reconciler', () => {
       const ram = new RAMVFS()
       await ram.writeFile(PathSpec.fromStrPath('/f.txt'), new TextEncoder().encode('v1'))
       const ws = new Workspace({ '/data': ram })
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const logged = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
       try {
         const mount = mountOf(ws, '/data/f.txt')
         vi.spyOn(ws.opsRegistry, 'call').mockImplementation(() =>
@@ -216,7 +190,7 @@ describe('Reconciler', () => {
         const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
         expect(await rec.mayServeCached(mount, '/data/f.txt')).toBe(false)
         expect(await ws.cache.exists('/data/f.txt')).toBe(false)
-        expect(warn.mock.calls.length > 0).toBe(failure === 'flaky')
+        expect(logged.mock.calls.length > 0).toBe(failure === 'flaky')
       } finally {
         vi.restoreAllMocks()
         await ws.close()

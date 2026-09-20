@@ -361,22 +361,29 @@ describe('chat/KB provision helpers', () => {
 
 describe('withDefaultProvisions preserves every field', () => {
   // It rebuilt the command field by field until this test existed, which
-  // silently dropped anything new -- and it runs on every generic command
-  // without a provision of its own, so `read` arriving false here would
-  // turn off the registry's probe deduplication with no test going red.
+  // silently dropped anything the rebuild forgot. `withOverrides` is itself an
+  // enumeration, so this does not make a drop impossible -- it centralises one
+  // list instead of two. The guard is therefore structural rather than about
+  // any one field: every own property in must come out.
   const stat = () => Promise.resolve(new FileStat({ name: 'f', type: FileType.FILE, size: 1 }))
 
-  it('carries read through', () => {
+  it('carries every field through', () => {
     const cat = new RegisteredCommand({
       name: 'cat',
       spec: new CommandSpec({}),
       vfs: 's3',
       fn: () => Promise.resolve(null),
-      read: true,
+      write: true,
+      limit: { timeoutSeconds: 7 } as never,
+      src: 'a',
+      dst: 'b',
     })
     const [out] = withDefaultProvisions([cat], stat as never)
     expect(out?.provisionFn).not.toBeNull()
-    expect(out?.read).toBe(true)
+    for (const key of Object.keys(cat) as (keyof typeof cat)[]) {
+      if (key === 'provisionFn') continue
+      expect([key, out?.[key]]).toEqual([key, cat[key]])
+    }
   })
 
   it('leaves a command that already has a provision untouched', () => {
@@ -386,7 +393,6 @@ describe('withDefaultProvisions preserves every field', () => {
       vfs: 's3',
       fn: () => Promise.resolve(null),
       provisionFn: (() => Promise.resolve(null)) as never,
-      read: true,
     })
     const [out] = withDefaultProvisions([provisioned], stat as never)
     expect(out).toBe(provisioned)

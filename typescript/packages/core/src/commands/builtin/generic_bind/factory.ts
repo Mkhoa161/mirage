@@ -252,7 +252,6 @@ export function makeGenericCommands<A extends Accessor = Accessor>(
         provision,
         aggregate,
         write: b.write === true,
-        read: b.read === true,
       }),
     )
   }

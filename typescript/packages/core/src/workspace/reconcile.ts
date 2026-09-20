@@ -52,10 +52,12 @@ enum Verdict {
  * (RAM local, Redis shared across runtimes), so this is a thin coordinator
  * holding references, not config.
  *
- * The gate and reconcileRead divide the work rather than duplicating it: the
- * gate owns the freshness of cached *bytes*, wherever they are served from,
- * and reconcileRead owns orphaned-overlay GC plus the metadata freshness of
- * commands that never read bytes at all (ls, stat, du, find).
+ * The gate and reconcileRead overlap deliberately: a warm named operand is
+ * probed once at routing and again at the gate. Deduplicating them needs a
+ * fact neither tier owns -- routing runs before any handler, the gate inside
+ * one -- so the cheap version was a flag on the command that went stale the
+ * moment a backend registered its own reader. Paying the second probe is the
+ * honest price until the two tiers share a scope.
  */
 export class Reconciler {
   private readonly cache: FileCache & VFS
@@ -143,11 +145,11 @@ export class Reconciler {
       if (isEnoent(err)) throw err
       // A backend that cannot answer is one thing; a bug in the probe path
       // is another, and degrading it to "cannot verify" would hide it behind
-      // a warning and a lifetime of cold reads.
+      // a log line and a lifetime of cold reads.
       if (err instanceof TypeError || err instanceof ReferenceError) throw err
       await this.cache.remove(path)
       await mount.index?.clear()
-      console.warn(`probe failed for ${path}: ${String(err)}`)
+      console.debug(`probe failed for ${path}: ${String(err)}`)
       return Verdict.UNKNOWN
     }
   }
@@ -175,26 +177,26 @@ export class Reconciler {
   }
 
   // Reconcile a single-mount shell read before the command runs.
-  // ls/stat on one mount resolve here (not through the dispatcher), so this
-  // is where their reads reconcile against backend truth. Only paths that
-  // carry an overlay or a cached copy are probed (a plain read pays
+  // cat/ls/stat on one mount resolve here (not through the dispatcher), so
+  // this is where their reads reconcile against backend truth. Only paths
+  // that carry an overlay or a cached copy are probed (a plain read pays
   // nothing); a remote delete then evicts the cache AND GCs the orphaned
   // overlay, and a stale entry is dropped.
   //
-  // A probe failure drops the entry and lets the command run, the same answer
-  // the gate gives: what cannot be verified is not served, and the backend
-  // read that follows reports any real failure in the command's own voice.
-  // Throwing from here would be worse than from the gate, because this runs
-  // during routing rather than inside a handler.
-  //
-  // cachedGated says the command about to run reads its bytes through the
-  // cache gate, which probes the same path itself; then only an overlay is
-  // worth probing for here, or one warm read would stat twice.
-  async reconcileRead(mount: MountEntry, path: string, cachedGated = false): Promise<void> {
+  // Nothing escapes. This runs during routing, before any handler exists, so
+  // an exception here does not fail one command -- it takes the whole line,
+  // later pipeline stages and `;` chains included, and reports itself with no
+  // operand to name. probeOrUnknown still rethrows a programming error for
+  // the gate's benefit, which is correct there because the gate runs inside a
+  // handler; here that same throw is only a way to lose output.
+  async reconcileRead(mount: MountEntry, path: string): Promise<void> {
     if (this.consistency !== ConsistencyPolicy.ALWAYS) return
-    const hasOverlay = this.namespace.metaFor(path) !== null
-    if (!hasOverlay && (cachedGated || !(await this.cache.exists(path)))) return
-    await this.probeOrUnknown(mount, path)
+    if (this.namespace.metaFor(path) === null && !(await this.cache.exists(path))) return
+    try {
+      await this.probeOrUnknown(mount, path)
+    } catch (err) {
+      console.debug(`reconcile probe failed for ${path}: ${String(err)}`)
+    }
   }
 
   // React to a read/stat op that the backend reported gone (ENOENT).

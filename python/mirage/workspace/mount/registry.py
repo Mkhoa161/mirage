@@ -44,11 +44,7 @@ class ReadReconciler(Protocol):
     layer, not the other way round. The Reconciler satisfies it structurally.
     """
 
-    async def reconcile_read(self,
-                             mount: MountEntry,
-                             path: str,
-                             *,
-                             cached_gated: bool = False) -> None:
+    async def reconcile_read(self, mount: MountEntry, path: str) -> None:
         ...
 
     async def may_serve_cached(self, mount: MountEntry, path: str) -> bool:
@@ -488,12 +484,8 @@ class MountRegistry:
                 and resolved is not None and not resolved.write
                 and mount.vfs.caches_reads
                 and self._consistency == ConsistencyPolicy.ALWAYS):
-            # A gated command probes each operand at the gate, so probing
-            # here too would stat twice for one warm read. The orphaned
-            # overlay is the part the gate never sees.
             for scope in path_scopes:
-                await self._reconciler.reconcile_read(
-                    mount, scope.virtual, cached_gated=resolved.read)
+                await self._reconciler.reconcile_read(mount, scope.virtual)
 
         return mount
 

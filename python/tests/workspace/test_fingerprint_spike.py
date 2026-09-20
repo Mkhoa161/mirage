@@ -164,15 +164,14 @@ def test_always_revalidates_a_walk_and_a_glob():
         "revalidated, which is the bug this test exists for")
 
 
-def test_always_warm_read_probes_once():
-    """Cost is the contract: a warm read probes once, not twice.
+def test_always_warm_read_costs_a_gate_probe():
+    """Cost is the contract, and the gate's probe is the cost.
 
-    ``cat`` stats its own operand before reading it, so a warm read costs
-    two head_objects: that stat and the gate's probe. A third means the
-    registry reconciled an operand the gate was going to probe anyway, and
-    every named warm read silently doubled its stats. Counting has to start
-    after the warm-up, because a cold+warm total is the same number before
-    and after this change.
+    A warm ``cat`` is three backend stats: the routing reconcile, ``cat``'s
+    own operand stat, and the gate's probe. Two means the gate stopped
+    probing a named warm operand -- which is what ``main`` does, so this
+    number is what separates the two. Counting starts after the warm-up,
+    because a cold+warm total is the same either way.
     """
     objects = {"a.txt": b"name,age\n"}
     session, ws = _always_mount(objects)
@@ -186,36 +185,62 @@ def test_always_warm_read_probes_once():
             await ws.close()
 
     asyncio.run(run())
-    assert client.calls["head_object"] == 2, (
-        "one warm read is cat's own stat plus one gate probe; three means "
-        "the registry's pre-command reconcile stopped deduplicating")
+    assert client.calls["head_object"] == 3, (
+        "routing reconcile + cat's own stat + the gate's probe; two means "
+        "the gate no longer revalidates a named warm operand")
     assert client.calls["get_object"] == 0, (
         "an unchanged object must still be served from cache")
 
 
-def test_metadata_command_keeps_its_own_reconcile():
-    """`ls` reads no bytes, so the gate never fires for it.
+class _SnapshotFalseS3(S3VFS):
+    """A caching, fingerprint-bearing mount that cannot be snapshotted.
 
-    The dedup skips the pre-command reconcile only for commands whose
-    byte reads go through the gate. A metadata command is not one, so it
-    must still pay its own probe -- cat's stat, ls's stat, and the
-    reconcile that would otherwise be dropped.
+    Subclassed rather than patching ``S3VFS.SUPPORTS_SNAPSHOT``: that is a
+    class attribute, and mutating it leaks into every other test in the
+    session.
+    """
+
+    SUPPORTS_SNAPSHOT: bool = False
+
+
+def test_snapshot_false_mount_still_serves_a_verified_cache():
+    """The ``SUPPORTS_SNAPSHOT`` short-circuit is gone, and must stay gone.
+
+    It dropped every cached copy on a mount declaring the flag False,
+    without probing -- a proxy for "the stat carries no content token" and
+    the wrong one, since this mount's stat and read tokens are both the
+    ETag. Restoring it turns ``get_object`` from 0 to 1 and wipes the
+    mount's whole index, so the GET is the assertion that matters; the
+    stat count moves for unrelated reasons.
     """
     objects = {"a.txt": b"v1\n"}
-    session, ws = _always_mount(objects)
+    session = MultiBucketSession({"test-bucket": objects})
     client = session._client
+    config = S3Config(
+        bucket="test-bucket",
+        region="us-east-1",
+        aws_access_key_id="fake",
+        aws_secret_access_key="fake",
+    )
+    ws = Workspace(
+        {"/s3": (_SnapshotFalseS3(config), MountMode.WRITE)},
+        mode=MountMode.WRITE,
+        consistency=ConsistencyPolicy.ALWAYS,
+    )
 
-    async def run() -> None:
+    async def run() -> bytes:
         with patch_s3_session(session):
             await ws.shell("cat /s3/a.txt")
             client.calls.clear()
-            assert (await ws.shell("ls -l /s3/a.txt")).exit_code == 0
+            out = (await ws.shell("cat /s3/a.txt")).stdout
             await ws.close()
+            return out
 
-    asyncio.run(run())
-    assert client.calls["head_object"] == 3, (
-        "ls must still reconcile its operand; 2 means the skip leaked to "
-        "a command the gate does not cover")
+    out = asyncio.run(run())
+    assert out == b"v1\n"
+    assert client.calls["get_object"] == 0, (
+        "a verified cache entry must be served, not refetched, however the "
+        "mount answers SUPPORTS_SNAPSHOT")
 
 
 def test_fanout_revalidates_a_descendant_mount():

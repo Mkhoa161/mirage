@@ -34,7 +34,7 @@ import { compareCodePoints } from '../../utils/sort.ts'
 // `reconcile` imports the mount layer, not the other way round. The Reconciler
 // satisfies it structurally.
 interface ReadReconciler {
-  reconcileRead(mount: MountEntry, path: string, cachedGated?: boolean): Promise<void>
+  reconcileRead(mount: MountEntry, path: string): Promise<void>
   mayServeCached(mount: MountEntry, path: string): Promise<boolean>
 }
 
@@ -508,14 +508,8 @@ export class MountRegistry {
       baseCmd?.write !== true &&
       this.consistency === ConsistencyPolicy.ALWAYS
     ) {
-      // A command whose byte reads go through the cache gate probes each
-      // operand there, so reconciling it here too would stat twice for one
-      // warm read. What the gate never sees is an orphaned overlay, which
-      // reconcileRead still collects. `=== true` is the safe spelling: an
-      // unresolved command reads as not-gated and keeps its probe.
-      const cachedGated = baseCmd?.read === true
       for (const scope of pathScopes) {
-        await this.reconciler.reconcileRead(mount, scope.virtual, cachedGated)
+        await this.reconciler.reconcileRead(mount, scope.virtual)
       }
     }
     return mount

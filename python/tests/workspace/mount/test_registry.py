@@ -506,7 +506,7 @@ class _StubReconciler:
         self.raises = raises
         self.asked: list[str] = []
 
-    async def reconcile_read(self, mount, path, *, cached_gated=False) -> None:
+    async def reconcile_read(self, mount, path) -> None:
         return None
 
     async def may_serve_cached(self, mount, path: str) -> bool:

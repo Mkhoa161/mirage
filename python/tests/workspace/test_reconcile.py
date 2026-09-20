@@ -202,56 +202,15 @@ async def test_an_unverifiable_probe_drops_the_entry(caplog, failure):
         mount.execute_op = failing
         await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
         rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
-        with caplog.at_level(logging.WARNING,
+        with caplog.at_level(logging.DEBUG,
                              logger="mirage.workspace.reconcile"):
             assert await rec.may_serve_cached(mount, "/data/f.txt") is False
         assert not await ws.cache.exists("/data/f.txt")
-        assert bool(caplog.records) is (failure == "flaky")
-    finally:
-        await ws.close()
-
-
-@pytest.mark.asyncio
-async def test_reconcile_read_skips_a_cached_path_the_gate_will_probe():
-    """The gate owns cached-byte freshness; this owns overlay GC.
-
-    A command whose reads go through the cache gate probes each operand
-    there, so probing it here as well would stat twice for one warm read.
-    An overlay is still probed, because the gate never sees one.
-    """
-    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
-    try:
-        await ws.namespace.ensure_loaded()
-        mount = ws.namespace.mount_for("/data/f.txt")
-        probed: list[str] = []
-
-        async def stat(_op, path, **_kwargs):
-            probed.append(path)
-            return None
-
-        mount.execute_op = stat
-        await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
-
-        await rec.reconcile_read(mount, "/data/f.txt", cached_gated=True)
-        assert probed == [], "the gate probes this path itself"
-
-        await rec.reconcile_read(mount, "/data/f.txt", cached_gated=False)
-        assert probed == ["/data/f.txt"]
-    finally:
-        await ws.close()
-
-
-@pytest.mark.asyncio
-async def test_reconcile_read_still_probes_an_overlay_the_gate_cannot_see():
-    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
-    try:
-        await ws.namespace.ensure_loaded()
-        await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)
-        mount = ws.namespace.mount_for("/data/gone.txt")
-        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
-        await rec.reconcile_read(mount, "/data/gone.txt", cached_gated=True)
-        assert ws.namespace.meta_for("/data/gone.txt") is None
+        # DEBUG collects every logger, so filter to ours before counting.
+        ours = [
+            r for r in caplog.records if r.name == "mirage.workspace.reconcile"
+        ]
+        assert bool(ours) is (failure == "flaky")
     finally:
         await ws.close()
 

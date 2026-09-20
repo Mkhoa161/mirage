@@ -51,11 +51,12 @@ class Reconciler:
     (RAM local, Redis shared across runtimes), so this is a thin coordinator
     holding references, not config.
 
-    The gate and ``reconcile_read`` divide the work rather than duplicating
-    it: the gate owns the freshness of cached *bytes*, wherever they are
-    served from, and ``reconcile_read`` owns orphaned-overlay GC plus the
-    metadata freshness of commands that never read bytes at all (``ls``,
-    ``stat``, ``du``, ``find``).
+    The gate and ``reconcile_read`` overlap deliberately: a warm named
+    operand is probed once at routing and again at the gate. Deduplicating
+    them needs a fact neither tier owns -- routing runs before any handler,
+    the gate inside one -- so the cheap version was a flag on the command
+    that went stale the moment a backend registered its own reader. Paying
+    the second probe is the honest price until the two tiers share a scope.
     """
 
     def __init__(self, cache: FileCacheMixin, namespace: Namespace,
@@ -119,15 +120,25 @@ class Reconciler:
             return await self._probe(mount, path)
         except FileNotFoundError:
             raise
-        except (TypeError, AttributeError, NameError, RuntimeError):
+        except (TypeError, AttributeError, NameError):
             # A backend that cannot answer is one thing; a bug in the probe
             # path is another, and degrading it to "cannot verify" would
-            # hide it behind a warning and a lifetime of cold reads.
+            # hide it behind a log line and a lifetime of cold reads.
+            #
+            # `RuntimeError` is deliberately absent, and this is the one
+            # place it would be tempting: asyncio raises it for "Event loop
+            # is closed" and "cannot reuse already awaited coroutine", both
+            # reachable from a mount retiring under a walk. Re-raising it
+            # would abort the traversal -- the failure this gate exists to
+            # prevent -- and only on python, since JavaScript has no twin.
+            # CLAUDE.md's rule is still met: it is not swallowed, it is
+            # logged and turned into a verdict that drops the entry and
+            # re-reads.
             raise
         except Exception as exc:
             await self._cache.remove(path)
             await mount.index.clear()
-            logger.warning("probe failed for %s: %s", path, exc)
+            logger.debug("probe failed for %s: %s", path, exc)
             return Verdict.UNKNOWN
 
     async def may_serve_cached(self, mount: MountEntry, path: str) -> bool:
@@ -163,43 +174,38 @@ class Reconciler:
             raise FileNotFoundError(path)
         return verdict is Verdict.FRESH
 
-    async def reconcile_read(self,
-                             mount: MountEntry,
-                             path: str,
-                             *,
-                             cached_gated: bool = False) -> None:
+    async def reconcile_read(self, mount: MountEntry, path: str) -> None:
         """Reconcile a single-mount shell read before the command runs.
 
-        ``ls``/``stat`` on one mount resolve here (not through the
+        ``cat``/``ls``/``stat`` on one mount resolve here (not through the
         dispatcher), so this is where their reads reconcile against backend
         truth. Only paths that carry an overlay or a cached copy are probed
         (a plain read pays nothing); a remote delete then evicts the cache
         AND GCs the orphaned overlay, and a stale entry is dropped.
 
-        A probe failure drops the entry and lets the command run, the same
-        answer the gate gives: what cannot be verified is not served, and
-        the backend read that follows reports any real failure in the
-        command's own voice. Raising from here would be worse than from
-        the gate, because this runs during routing rather than inside a
-        handler -- a failed probe took out later pipeline stages and `;`
-        chains, and reported the error with no operand at all.
+        **Nothing escapes.** This runs during routing, before any handler
+        exists, so an exception here does not fail one command -- it takes
+        the whole line, later pipeline stages and `;` chains included, and
+        reports itself with no operand to name. ``_probe_or_unknown`` still
+        re-raises a programming error for the gate's benefit, which is
+        correct there because the gate runs inside a handler; here that same
+        raise is only a way to lose output. So the probe is best-effort: drop
+        what could not be verified, log it, and let the command read the
+        backend itself.
 
         Args:
             mount (MountEntry): the resolved mount for ``path``.
             path (str): absolute virtual path the command will read.
-            cached_gated (bool): whether the command about to run reads its
-                bytes through the cache gate, which probes the same path
-                itself. When it does, only an overlay is worth probing for
-                here; probing the cached copy as well would stat twice for
-                one warm read.
         """
         if self._consistency != ConsistencyPolicy.ALWAYS:
             return
-        has_overlay = self._namespace.meta_for(path) is not None
-        if not has_overlay and (cached_gated
-                                or not await self._cache.exists(path)):
+        if (self._namespace.meta_for(path) is None
+                and not await self._cache.exists(path)):
             return
-        await self._probe_or_unknown(mount, path)
+        try:
+            await self._probe_or_unknown(mount, path)
+        except Exception as exc:
+            logger.debug("reconcile probe failed for %s: %s", path, exc)
 
     async def on_op_missing(self, op: str, path: str) -> None:
         """React to a read/stat op that the backend reported gone.

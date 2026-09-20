@@ -184,29 +184,35 @@ describe('S3 cache consistency (mocked)', () => {
     }
   })
 
-  it('a metadata command keeps its own reconcile', async () => {
-    // `ls` reads no bytes, so the gate never fires for it and the registry's
-    // pre-command reconcile must not be skipped.
+  it('a snapshot-false mount still serves a verified cache', async () => {
+    // The supportsSnapshot short-circuit is gone and must stay gone: it
+    // dropped every cached copy on a mount declaring the flag false without
+    // probing, though this mount's stat and read tokens are both the ETag.
+    // Restoring it turns GetObject from 0 to 1, so the GET is the assertion
+    // that matters; the stat count moves for unrelated reasons.
+    class SnapshotFalseS3 extends S3VFS {
+      override readonly supportsSnapshot: boolean = false
+    }
     const ws = new Workspace(
-      { '/s3/': new S3VFS(makeConfig()) },
+      { '/s3/': new SnapshotFalseS3(makeConfig()) },
       { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
     )
     try {
       await ws.shell('cat /s3/c.txt')
       mock.resetCalls()
-      expect((await ws.shell('ls -l /s3/c.txt')).exitCode).toBe(0)
-      expect(mock.commandCalls(HeadObjectCommand)).toBe(3)
+      expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
     } finally {
       await ws.close()
     }
   })
 
-  it('a warm read probes once, not twice', async () => {
-    // Cost is the contract. `cat` stats its own operand before reading it,
-    // so a warm read costs two HeadObjects: that stat plus the gate's
-    // probe. Three means the registry reconciled an operand the gate was
-    // going to probe anyway. Counting starts after the warm-up, because a
-    // cold+warm total is the same number with and without the gate.
+  it('a warm read costs a gate probe', async () => {
+    // A warm `cat` is three stats: the routing reconcile, cat's own operand
+    // stat, and the gate's probe. Two means the gate stopped probing a named
+    // warm operand -- which is what main does, so this number is what
+    // separates the two. Counting starts after the warm-up, because a
+    // cold+warm total is the same either way.
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
       { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
@@ -215,7 +221,7 @@ describe('S3 cache consistency (mocked)', () => {
       await ws.shell('cat /s3/c.txt')
       mock.resetCalls()
       expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
-      expect(mock.commandCalls(HeadObjectCommand)).toBe(2)
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(3)
       expect(mock.commandCalls(GetObjectCommand)).toBe(0)
     } finally {
       await ws.close()

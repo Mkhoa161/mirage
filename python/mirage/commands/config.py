@@ -472,9 +472,6 @@ class RegisteredCommand:
     src: str | None = None
     dst: str | None = None
     write: bool = False
-    # Byte reads go through the read-through cache. Exact when True;
-    # False only means "not known to be gated".
-    read: bool = False
     limit: Limit | None = None
 
     def with_overrides(
@@ -502,7 +499,6 @@ def command(
     dry_run: Callable[..., Any] | None = None,
     aggregate: Callable[..., Any] | None = None,
     write: bool = False,
-    read: bool = False,
     limit: Limit | None = None,
 ) -> Callable[..., Any]:
 
@@ -524,7 +520,6 @@ def command(
                 provision_fn=provision_fn,
                 aggregate=aggregate,
                 write=write,
-                read=read,
                 limit=limit,
             )
             cmds.append(rc)
