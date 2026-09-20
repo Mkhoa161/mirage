@@ -18,13 +18,15 @@ import {
   type RedisIndexConfig,
 } from '@struktoai/mirage-core/cache/index/config'
 import { ConsistencyPolicy, MountMode } from '@struktoai/mirage-core/types'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { Workspace } from '../../workspace.ts'
 import type { S3Config } from './config.ts'
 import { installS3Mock, type S3Mock } from './mock.ts'
 import { S3VFS } from './s3.ts'
 
 const BUCKET = 'cons-bucket'
+const CHILD_BUCKET = 'cons-child-bucket'
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
 
@@ -104,6 +106,128 @@ describe('S3 cache consistency (mocked)', () => {
     })
   }
 
+  it('ALWAYS revalidates a walk and a glob, not just a named operand', async () => {
+    // The second door, the one every shell read uses. A recursive walk and
+    // a glob never named their files as operands, so the registry's
+    // pre-command reconcile never saw them. Warming has to go through
+    // `cat`: `grep -r` fills no file cache of its own, so warming with it
+    // would leave the cache empty and this would pass either way.
+    mock.store.set(BUCKET, 'walk/a.txt', ENC.encode('v1\n'))
+    mock.store.set(BUCKET, 'walk/b.txt', ENC.encode('v1\n'))
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /s3/walk/a.txt')
+      await ws.shell('cat /s3/walk/b.txt')
+      mock.store.set(BUCKET, 'walk/b.txt', ENC.encode('v2\n'))
+      expect(DEC.decode((await ws.shell('grep -r v /s3/walk/')).stdout)).toBe(
+        '/s3/walk/a.txt:v1\n/s3/walk/b.txt:v2\n',
+      )
+      expect(DEC.decode((await ws.shell('cat /s3/walk/*.txt')).stdout)).toBe('v1\nv2\n')
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a walk costs one backend stat per file', async () => {
+    // Zero without the gate: the walk never revalidated at all. This is the
+    // assertion that distinguishes this PR from base, where the named-operand
+    // cost does not.
+    //
+    // Three, not two: the two files plus the directory operand's own stat.
+    // The python twin walks the mount root instead, where there is no
+    // operand to stat, so its number is 2 for the same two files -- verified
+    // that both languages cost 3 for this same subdirectory shape.
+    mock.store.set(BUCKET, 'cost/a.txt', ENC.encode('v1\n'))
+    mock.store.set(BUCKET, 'cost/b.txt', ENC.encode('v1\n'))
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /s3/cost/a.txt')
+      await ws.shell('cat /s3/cost/b.txt')
+      mock.resetCalls()
+      expect((await ws.shell('grep -r v /s3/cost/')).exitCode).toBe(0)
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(3)
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a fan-out revalidates a descendant mount', async () => {
+    // The fan-out calls mount.executeCmd per leg, bypassing the registry's
+    // pre-command reconcile entirely, so before the gate a descendant
+    // mount's cached bytes were never revalidated at all.
+    mock.store.set(BUCKET, 'p.txt', ENC.encode('v1\n'))
+    mock.store.set(CHILD_BUCKET, 'c.txt', ENC.encode('v1\n'))
+    const ws = new Workspace(
+      {
+        '/x/': new S3VFS(makeConfig()),
+        '/x/y/': new S3VFS({ ...makeConfig(), bucket: CHILD_BUCKET }),
+      },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /x/p.txt')
+      await ws.shell('cat /x/y/c.txt')
+      mock.store.set(BUCKET, 'p.txt', ENC.encode('v2\n'))
+      mock.store.set(CHILD_BUCKET, 'c.txt', ENC.encode('v2\n'))
+      const out = DEC.decode((await ws.shell('grep -r v /x/')).stdout)
+      expect(out).toContain('/x/p.txt:v2')
+      expect(out).toContain('/x/y/c.txt:v2')
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a snapshot-false mount still serves a verified cache', async () => {
+    // The supportsSnapshot short-circuit is gone and must stay gone: it
+    // dropped every cached copy on a mount declaring the flag false without
+    // probing, though this mount's stat and read tokens are both the ETag.
+    // Restoring it turns GetObject from 0 to 1, so the GET is the assertion
+    // that matters; the stat count moves for unrelated reasons.
+    class SnapshotFalseS3 extends S3VFS {
+      override readonly supportsSnapshot: boolean = false
+    }
+    const ws = new Workspace(
+      { '/s3/': new SnapshotFalseS3(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /s3/c.txt')
+      mock.resetCalls()
+      expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a warm read costs a gate probe', async () => {
+    // A warm `cat` is three stats: the routing reconcile, cat's own operand
+    // stat, and the gate's probe. Two means the gate stopped probing a named
+    // warm operand -- which is what main does, so this number is what
+    // separates the two. Counting starts after the warm-up, because a
+    // cold+warm total is the same either way.
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /s3/c.txt')
+      mock.resetCalls()
+      expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(3)
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+    } finally {
+      await ws.close()
+    }
+  })
+
   it('LAZY keeps serving the cached bytes after an out-of-band change', async () => {
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
@@ -123,6 +247,56 @@ describe('S3 cache consistency (mocked)', () => {
       expect(result.exitCode).toBe(0)
       expect(DEC.decode(result.stdout)).toContain('name=c.txt size=2')
       expect(DEC.decode(result.stdout)).toContain('type=text')
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a routing probe failure never takes the line', async () => {
+    // reconcileRead probes a warm named operand at routing, before any
+    // handler exists. If that probe threw, the whole line would fail --
+    // later `;` stages included -- with no operand named. It is best-effort
+    // instead: the entry is dropped and the command reads the backend
+    // itself, so `ls` lists, `cat` prints current bytes, and the stage
+    // after the `;` still runs.
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+    try {
+      await ws.shell('cat /s3/c.txt')
+      const real = ws.opsRegistry.call.bind(ws.opsRegistry)
+      vi.spyOn(ws.opsRegistry, 'call').mockImplementation((...args) =>
+        args[0] === 'stat' ? Promise.reject(new TypeError('probe bug')) : real(...args),
+      )
+      const ls = await ws.shell('ls -l /s3/c.txt; echo survived')
+      expect(ls.exitCode).toBe(0)
+      expect(DEC.decode(ls.stdout).endsWith('/s3/c.txt\nsurvived\n')).toBe(true)
+      const cat = await ws.shell('cat /s3/c.txt; echo survived')
+      expect(cat.exitCode).toBe(0)
+      expect(DEC.decode(cat.stdout)).toBe('v1survived\n')
+      expect(debug.mock.calls.length > 0).toBe(true)
+    } finally {
+      vi.restoreAllMocks()
+      await ws.close()
+    }
+  })
+
+  it('a metadata command reconciles its operand', async () => {
+    // `ls` reads no bytes, so the cache gate never fires for it. Routing is
+    // the one door a metadata command has to backend truth and must keep
+    // probing there: a warm `ls -l` is three stats, and two means the
+    // routing reconcile stopped firing for a command the gate never covers.
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /s3/c.txt')
+      mock.resetCalls()
+      expect((await ws.shell('ls -l /s3/c.txt')).exitCode).toBe(0)
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(3)
     } finally {
       await ws.close()
     }

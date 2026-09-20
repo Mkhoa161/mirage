@@ -12,6 +12,8 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import errno
+import logging
 import os
 from uuid import uuid4
 
@@ -20,6 +22,7 @@ import pytest
 from mirage import MountMode, Workspace
 from mirage.cache.index.config import RedisIndexConfig
 from mirage.types import ConsistencyPolicy, FileStat, FileType
+from mirage.utils.errors import enotsup
 from mirage.vfs.ram import RAMVFS
 from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace.reconcile import Reconciler
@@ -86,12 +89,59 @@ async def test_may_serve_cached_trusts_cache_under_lazy():
 
 @pytest.mark.asyncio
 async def test_may_serve_cached_no_fingerprint_forces_reread():
-    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
-    await ws.namespace.ensure_loaded()
-    mount = ws.namespace.mount_for("/data/f.txt")
-    assert mount.vfs.SUPPORTS_SNAPSHOT is False
-    rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
-    assert await rec.may_serve_cached(mount, "/data/f.txt") is False
+    """A stat that carries no content token cannot verify the copy.
+
+    The path exists and is cached, so the only reason to refuse is the
+    verdict: RAM stats without a fingerprint, which is UNKNOWN, which
+    evicts. This used to be answered by a ``SUPPORTS_SNAPSHOT``
+    short-circuit that never probed at all.
+    """
+    resource = RAMVFS()
+    resource._store.files["/f.txt"] = b"v1"
+    ws = Workspace({"/data/": resource}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        mount = ws.namespace.mount_for("/data/f.txt")
+        await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
+        stat = await mount.execute_op("stat", "/data/f.txt")
+        assert stat is not None and stat.fingerprint is None
+        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        assert await rec.may_serve_cached(mount, "/data/f.txt") is False
+        assert not await ws.cache.exists("/data/f.txt")
+    finally:
+        await ws.close()
+
+
+@pytest.mark.asyncio
+async def test_may_serve_cached_serves_a_fingerprinted_live_only_backend():
+    """A live-only backend that DOES stamp a fingerprint keeps its cache.
+
+    ``SUPPORTS_SNAPSHOT`` is about whether a mount can be snapshotted, not
+    about whether its stat carries a content token; box, dropbox, github,
+    ssh and dify stamp one without setting the flag. Reading the flag here
+    threw their verified entries away.
+    """
+    resource = RAMVFS()
+    resource._store.files["/f.txt"] = b"v1"
+    ws = Workspace({"/data/": resource}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        mount = ws.namespace.mount_for("/data/f.txt")
+        assert mount.vfs.SUPPORTS_SNAPSHOT is False
+        real = mount.execute_op
+
+        async def fingerprinted(op, path, **kwargs):
+            stat = await real(op, path, **kwargs)
+            return (stat.model_copy(update={"fingerprint": "fp1"})
+                    if op == "stat" and stat is not None else stat)
+
+        mount.execute_op = fingerprinted
+        await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
+        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        assert await rec.may_serve_cached(mount, "/data/f.txt") is True
+        assert await ws.cache.exists("/data/f.txt")
+    finally:
+        await ws.close()
 
 
 @pytest.mark.asyncio
@@ -123,6 +173,46 @@ async def test_reconcile_read_skips_under_lazy():
     rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.LAZY)
     await rec.reconcile_read(mount, "/data/gone.txt")
     assert ws.namespace.meta_for("/data/gone.txt") is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["no_stat_op", "flaky"])
+async def test_an_unverifiable_probe_drops_the_entry(caplog, failure):
+    """Both ways of failing to verify end at UNKNOWN; only one is logged.
+
+    A backend with no stat op and a backend whose stat is throwing reach
+    the same verdict -- drop the entry, read cold -- and that is the whole
+    behavioural contract. What separates them is the log: a missing op is
+    a permanent capability of the mount, so warning on every read would be
+    noise, while a throwing stat is an anomaly worth surfacing. Asserting
+    the log is what keeps the carve-out from being dead weight.
+    """
+    resource = RAMVFS()
+    resource._store.files["/f.txt"] = b"v1"
+    ws = Workspace({"/data/": resource}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        mount = ws.namespace.mount_for("/data/f.txt")
+
+        async def failing(op, path, **_kwargs):
+            if failure == "no_stat_op":
+                raise enotsup("stubborn", op, path)
+            raise OSError(errno.EIO, "backend stat unavailable")
+
+        mount.execute_op = failing
+        await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
+        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        with caplog.at_level(logging.DEBUG,
+                             logger="mirage.workspace.reconcile"):
+            assert await rec.may_serve_cached(mount, "/data/f.txt") is False
+        assert not await ws.cache.exists("/data/f.txt")
+        # DEBUG collects every logger, so filter to ours before counting.
+        ours = [
+            r for r in caplog.records if r.name == "mirage.workspace.reconcile"
+        ]
+        assert bool(ours) is (failure == "flaky")
+    finally:
+        await ws.close()
 
 
 @pytest.mark.asyncio
@@ -194,14 +284,53 @@ async def test_unverified_probe_cannot_serve_cached_bytes(
         monkeypatch.setattr(mount, "execute_op", stat)
         rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
         if surface == "shell":
+            # Routing-time reconcile drops what it could not verify and
+            # lets the command run: it serves no bytes itself, and raising
+            # from here would abort the whole line. The gate is where a
+            # failed probe refuses -- the "gate" surface below.
             await rec.reconcile_read(mount, "/data/f.txt")
             assert await ws.cache.exists("/data/f.txt") == (probe == "fresh")
         elif probe == "failed":
-            with pytest.raises(OSError, match="probe unavailable"):
-                await rec.may_serve_cached(mount, "/data/f.txt")
+            # A probe that cannot run is "cannot verify", not a refusal:
+            # the entry is dropped and the caller reads cold, so one
+            # flaky stat costs a refetch rather than the whole command.
+            assert await rec.may_serve_cached(mount, "/data/f.txt") is False
+            assert not await ws.cache.exists("/data/f.txt")
         else:
             assert await rec.may_serve_cached(
                 mount, "/data/f.txt") == (probe == "fresh")
             assert await ws.cache.exists("/data/f.txt") == (probe == "fresh")
+    finally:
+        await ws.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["bug", "flaky"])
+async def test_reconcile_read_never_raises_and_drops_the_entry(failure):
+    """Routing runs before any handler exists, so nothing may escape.
+
+    A raise here does not fail one command; it takes the whole line,
+    later pipeline stages and ``;`` chains included, and reports itself
+    with no operand to name. So every failure is absorbed -- including
+    the programming-error classes the gate is allowed to re-raise -- and
+    whatever could not be verified is dropped, the same reaction the
+    flaky arm already has. Keeping the entry would let a metadata command
+    serve a stale size from it with no check at all.
+    """
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        mount = ws.namespace.mount_for("/data/f.txt")
+
+        async def failing(*_args, **_kwargs):
+            if failure == "bug":
+                raise TypeError("probe bug")
+            raise OSError(errno.EIO, "backend stat unavailable")
+
+        mount.execute_op = failing
+        await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
+        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        await rec.reconcile_read(mount, "/data/f.txt")
+        assert not await ws.cache.exists("/data/f.txt")
     finally:
         await ws.close()
