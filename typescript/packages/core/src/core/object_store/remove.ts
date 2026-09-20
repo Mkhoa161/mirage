@@ -31,19 +31,27 @@ export function makeUnlink<A extends Accessor, C>(driver: ObjectStoreDriver<A, C
     const timer = startOp()
     const { conn, close } = await driver.connect(accessor)
     try {
-      await driver.deleteFile(conn, key)
+      try {
+        await driver.deleteFile(conn, key)
+      } finally {
+        // In the `finally`, not on success: a delete that raises part-way
+        // has already removed keys, and a pin that outlives the object it
+        // names fails the next snapshot load.
+        record('unlink', path.virtual, driver.vfs, 0, timer)
+        await close()
+      }
     } finally {
-      // In the `finally`, not on success: a delete that raises part-way
-      // has already removed keys, and a pin that outlives the object it
-      // names fails the next snapshot load.
-      record('unlink', path.virtual, driver.vfs, 0, timer)
-      await close()
+      // The eviction rides with the record: a retracted pin and a cached
+      // body for the same path must not both survive, or a restored
+      // snapshot serves the body with nothing left to check it.
+      // Over-dropping costs one refetch. Outside the inner `finally` so a
+      // cache that rejects cannot skip `close()`.
+      await invalidateAfterUnlink(path)
+      // Deleting the last key under a prefix makes every ancestor that
+      // existed only as that prefix disappear, so their cached listings
+      // are stale symmetrically to the write case.
+      await invalidateAncestors(path)
     }
-    await invalidateAfterUnlink(path)
-    // Deleting the last key under a prefix makes every ancestor that
-    // existed only as that prefix disappear, so their cached listings are
-    // stale symmetrically to the write case.
-    await invalidateAncestors(path)
   }
 }
 
@@ -62,20 +70,24 @@ export function makeRemovePrefix<A extends Accessor, C>(
     const timer = startOp()
     const { conn, close } = await driver.connect(accessor)
     try {
-      await driver.deletePrefix(conn, pfx)
+      try {
+        await driver.deletePrefix(conn, pfx)
+      } finally {
+        // A prefix delete is a paginated walk, so a failure mid-walk has
+        // already removed keys. The eviction rides with the record, as in
+        // unlink.
+        record('rm_r', path.virtual, driver.vfs, 0, timer)
+        await close()
+      }
     } finally {
-      // A prefix delete is a paginated walk, so a failure mid-walk has
-      // already removed keys.
-      record('rm_r', path.virtual, driver.vfs, 0, timer)
-      await close()
+      // Not invalidateAfterUnlink: a prefix delete takes every key below
+      // with it, and each of those listings and bodies was cached under
+      // its own key, so nothing above them evicts one.
+      await invalidateSubtree(path)
+      // Same rationale as unlink: ancestors that existed only as this
+      // prefix are gone now.
+      await invalidateAncestors(path)
     }
-    // Not invalidateAfterUnlink: a prefix delete takes every key below
-    // with it, and each of those listings and bodies was cached under
-    // its own key, so nothing above them evicts one.
-    await invalidateSubtree(path)
-    // Same rationale as unlink: ancestors that existed only as this
-    // prefix are gone now.
-    await invalidateAncestors(path)
   }
 }
 
@@ -133,11 +145,10 @@ export function makeRmdir<A extends Accessor, C>(driver: ObjectStoreDriver<A, C>
       // keyless root above deletes nothing and throws nothing, and a
       // listing that fails after its first marker reaches here having
       // deleted nothing either. Recording in those cases would retract a
-      // pin -- and for a root, every pin on the mount -- for an object
-      // no one touched. A delete that rejects is the one case `unlink`
-      // treats the other way; here it is immaterial, because what rmdir
-      // removes is the "d/" marker and a pin can only ever name the "d"
-      // object beside it.
+      // pin for an object no one touched. A delete that rejects is the
+      // one case `unlink` treats the other way; here it is immaterial,
+      // because what rmdir removes is the "d/" marker and a pin can only
+      // ever name the "d" object beside it.
       if (deleted) record('rmdir', path.virtual, driver.vfs, 0, timer)
       await close()
     }

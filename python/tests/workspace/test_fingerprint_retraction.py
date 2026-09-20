@@ -22,7 +22,8 @@ from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
 from mirage.workspace.snapshot.drift import ContentDriftError
 from mirage.workspace.snapshot.state import to_state_dict
-from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
+from tests.e2e.s3_mock import (MultiBucketS3Client, MultiBucketSession,
+                               patch_s3_session)
 
 BUCKET = "test-bucket"
 
@@ -119,6 +120,48 @@ def test_a_written_path_serves_current_state_under_drift_policy_off():
                 await loaded.close()
 
         assert asyncio.run(run()) == b"v2\n"
+
+
+def test_a_refused_removal_leaves_no_stale_bytes_for_a_strict_load(
+        monkeypatch):
+    """A delete the store refused before touching anything still retracts
+    the pin, so the cached body has to go with it: left behind, a
+    restored snapshot would serve the pre-change bytes with nothing left
+    to check them, the hole #1018 reported."""
+    store = {"x.txt": b"v1\n"}
+
+    async def refuse(self, **kwargs):
+        raise RuntimeError("AccessDenied")
+
+    monkeypatch.setattr(MultiBucketS3Client, "delete_object", refuse)
+    with _mounted(store):
+
+        async def run() -> tuple[bytes, list[str], bytes]:
+            ws = _ws()
+            try:
+                await (await ws.shell("cat /s3/x.txt")).materialize_stdout()
+                rm = await (
+                    await
+                    ws.shell("rm /s3/x.txt; echo rm=$?")).materialize_stdout()
+                state = await to_state_dict(ws)
+            finally:
+                await ws.close()
+            assert store["x.txt"] == b"v1\n"
+            store["x.txt"] = b"v2\n"
+            loaded = await Workspace.from_state(
+                state, mounts={"/s3": S3VFS(_config())})
+            try:
+                io = await loaded.shell("cat /s3/x.txt")
+                return rm, [f["path"] for f in state["fingerprints"]
+                            ], (await io.materialize_stdout())
+            finally:
+                await loaded.close()
+
+        rm, pins, served = asyncio.run(run())
+
+    assert rm == b"rm=1\n"
+    assert pins == []
+    assert served == b"v2\n"
 
 
 def test_write_then_move_leaves_no_pin_to_fail_the_load():

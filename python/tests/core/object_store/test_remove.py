@@ -184,7 +184,7 @@ def test_rmdir_records_a_retraction_when_it_deletes_the_marker(accessor):
 
 def test_rmdir_on_a_keyless_root_records_nothing(accessor):
     """It deletes nothing and raises nothing, so a record there would
-    retract every fingerprint on the mount."""
+    retract a pin for an object no one touched."""
     assert _recorded(
         make_rmdir(make_driver(FakeStore()))(accessor, spec("/"))) == []
 
@@ -204,3 +204,30 @@ def test_unlink_records_even_when_the_delete_raises(accessor):
 
 async def _boom(conn: FakeStore, key: str) -> None:
     raise RuntimeError("store on fire")
+
+
+def test_unlink_evicts_the_cache_even_when_the_delete_raises(accessor):
+    """The eviction rides with the record: with the pin gone, a cached
+    body left behind would be served by a restored snapshot with nothing
+    left to check it."""
+
+    async def run():
+        driver = replace(make_driver(FakeStore()), delete_file=_boom)
+        with pytest.raises(RuntimeError):
+            await make_unlink(driver)(accessor, spec("/a/b.txt"))
+
+    manager = _managed(run())
+    assert manager.unlinks == ["/a/b.txt"]
+    assert manager.writes == ["/a"]
+
+
+def test_remove_prefix_evicts_the_subtree_even_when_the_walk_raises(accessor):
+
+    async def run():
+        driver = replace(make_driver(FakeStore()), delete_prefix=_boom)
+        with pytest.raises(RuntimeError):
+            await make_remove_prefix(driver)(accessor, spec("/a/b"))
+
+    manager = _managed(run())
+    assert manager.subtrees == ["/a/b"]
+    assert manager.writes == ["/a"]

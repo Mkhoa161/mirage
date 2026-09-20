@@ -132,6 +132,20 @@ def test_copy_records_the_retraction_when_the_store_throws(accessor):
         RuntimeError, "boom") == [("copy", "/b.txt")]
 
 
+def test_copy_evicts_the_destination_when_the_store_throws(accessor):
+    """The eviction rides with the record, on the same condition."""
+
+    async def run():
+        driver = replace(make_driver(FakeStore({"a.txt": b"x"})),
+                         copy_file=_boom)
+        with pytest.raises(RuntimeError):
+            await make_copy(driver, _exists)(accessor, spec("/a.txt"),
+                                             spec("/b.txt"))
+
+    manager = _managed(run())
+    assert manager.writes == ["/b.txt"]
+
+
 def test_copy_of_a_missing_source_records_nothing(accessor):
     """A clean False is the store saying nothing was copied."""
     assert _recorded_failure(

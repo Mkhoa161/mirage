@@ -53,21 +53,28 @@ export function makeCopy<A extends Accessor, C>(
     // throw may have left a partial object behind.
     let copied: boolean | null = null
     try {
-      copied = await copyFile(conn, srcKey, dstKey)
+      try {
+        copied = await copyFile(conn, srcKey, dstKey)
+      } finally {
+        if (copied !== false) {
+          // The destination, not the source: a copy replaces dst's bytes
+          // and leaves src untouched, so only dst's token stops
+          // describing its object. (dropbox records a copy against src;
+          // that is inert there only because dropbox emits no read record
+          // at all, so no dropbox path is ever pinned.)
+          record('copy', dst.virtual, driver.vfs, 0, timer)
+        }
+        await close()
+      }
     } finally {
       if (copied !== false) {
-        // The destination, not the source: a copy replaces dst's bytes
-        // and leaves src untouched, so only dst's token stops describing
-        // its object. (dropbox records a copy against src; that is inert
-        // there only because dropbox emits no read record at all, so no
-        // dropbox path is ever pinned.)
-        record('copy', dst.virtual, driver.vfs, 0, timer)
+        // The eviction rides with the record, on the same condition, as
+        // in unlink.
+        await invalidateAfterWrite(dst)
+        // The copy can materialize the destination's missing ancestors.
+        await invalidateAncestors(dst)
       }
-      await close()
     }
     if (!copied) throw enoent(src)
-    await invalidateAfterWrite(dst)
-    // The copy can materialize the destination's missing ancestors.
-    await invalidateAncestors(dst)
   }
 }

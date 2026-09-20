@@ -44,11 +44,16 @@ def make_unlink(driver: ObjectStoreDriver[A, C]) -> PathFn[A]:
                 # load. The connect is outside, because a connection that
                 # never opened removed nothing.
                 record("unlink", path, driver.vfs, 0, timer)
-        await invalidate_after_unlink(path_spec)
-        # Deleting the last key under a prefix makes every ancestor that
-        # existed only as that prefix disappear, so their cached listings
-        # are stale symmetrically to the write case.
-        await invalidate_ancestors(path_spec)
+                # The eviction rides with the record: a retracted pin and
+                # a cached body for the same path must not both survive,
+                # or a restored snapshot serves the body with nothing
+                # left to check it. Over-dropping costs one refetch.
+                await invalidate_after_unlink(path_spec)
+                # Deleting the last key under a prefix makes every
+                # ancestor that existed only as that prefix disappear, so
+                # their cached listings are stale symmetrically to the
+                # write case.
+                await invalidate_ancestors(path_spec)
 
     return unlink
 
@@ -73,15 +78,17 @@ def make_remove_prefix(driver: ObjectStoreDriver[A, C]) -> PathFn[A]:
                 await driver.delete_prefix(conn, pfx)
             finally:
                 # A prefix delete is a paginated walk, so a failure
-                # mid-walk has already removed keys.
+                # mid-walk has already removed keys. The eviction rides
+                # with the record, as in unlink.
                 record("rm_r", path, driver.vfs, 0, timer)
-        # Not invalidate_after_unlink: a prefix delete takes every key
-        # below with it, and each of those listings and bodies was
-        # cached under its own key, so nothing above them evicts one.
-        await invalidate_subtree(path_spec)
-        # Same rationale as unlink: ancestors that existed only as this
-        # prefix are gone now.
-        await invalidate_ancestors(path_spec)
+                # Not invalidate_after_unlink: a prefix delete takes
+                # every key below with it, and each of those listings
+                # and bodies was cached under its own key, so nothing
+                # above them evicts one.
+                await invalidate_subtree(path_spec)
+                # Same rationale as unlink: ancestors that existed only
+                # as this prefix are gone now.
+                await invalidate_ancestors(path_spec)
 
     return remove_prefix
 
@@ -148,12 +155,12 @@ def make_rmdir(driver: ObjectStoreDriver[A, C]) -> RmdirFn[A]:
                 # the keyless root above deletes nothing and raises
                 # nothing, and a listing that fails after its first
                 # marker reaches here having deleted nothing either.
-                # Recording in those cases would retract a pin -- and for
-                # a root, every pin on the mount -- for an object no one
-                # touched. A delete that raises is the one case `unlink`
-                # treats the other way; here it is immaterial, because
-                # what rmdir removes is the "d/" marker and a pin can
-                # only ever name the "d" object beside it.
+                # Recording in those cases would retract a pin for an
+                # object no one touched. A delete that raises is the one
+                # case `unlink` treats the other way; here it is
+                # immaterial, because what rmdir removes is the "d/"
+                # marker and a pin can only ever name the "d" object
+                # beside it.
                 if deleted:
                     record("rmdir", path, driver.vfs, 0, timer)
         if has_child:

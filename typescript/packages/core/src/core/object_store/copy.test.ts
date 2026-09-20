@@ -115,6 +115,20 @@ describe('object_store copy retraction record', () => {
     expect(records).toEqual([['copy', '/mnt/b.txt']])
   })
 
+  it('evicts the destination when the store throws', async () => {
+    // The eviction rides with the record, on the same condition.
+    const store = new FakeStore()
+    store.objects.set('a.txt', new Uint8Array(1))
+    const driver = makeDriver(store)
+    driver.copyFile = () => Promise.reject(Object.assign(new Error('boom'), { code: 'EIO' }))
+    const manager = await managed(async () => {
+      expect(
+        await codeOf(makeCopy(driver, alwaysExists)(accessor, spec('/a.txt'), spec('/b.txt'))),
+      ).toBe('EIO')
+    })
+    expect(manager.writes).toEqual(['/b.txt'])
+  })
+
   it('records nothing when the source is missing', async () => {
     // A clean false is the store saying nothing was copied.
     const { code, records } = await recordedFailure(() =>

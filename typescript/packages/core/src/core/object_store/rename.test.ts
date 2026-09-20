@@ -133,6 +133,20 @@ describe('object_store rename retraction records', () => {
     ])
   })
 
+  it('evicts both subtrees when the prefix walk rejects', async () => {
+    // The eviction rides with the records, on the same condition.
+    const store = new FakeStore()
+    store.objects.set('d/f.txt', new Uint8Array(1))
+    const driver = makeDriver(store)
+    driver.movePrefix = () => Promise.reject(Object.assign(new Error('boom'), { code: 'EIO' }))
+    const manager = await managed(async () => {
+      expect(await codeOf(makeRename(driver, alwaysExists)(accessor, spec('/d'), spec('/e')))).toBe(
+        'EIO',
+      )
+    })
+    expect(manager.subtrees).toEqual(['/e', '/d'])
+  })
+
   it('records nothing when the source is missing', async () => {
     // Both calls answering a clean false is the store saying nothing
     // moved at all, which is the one outcome safe to skip.

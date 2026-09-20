@@ -69,10 +69,13 @@ def make_copy(driver: ObjectStoreDriver[A, C],
                     # because dropbox emits no read record at all, so no
                     # dropbox path is ever pinned.)
                     record("copy", dst, driver.vfs, 0, timer)
+                    # The eviction rides with the record, on the same
+                    # condition, as in unlink.
+                    await invalidate_after_write(dst_spec)
+                    # The copy can materialize the destination's missing
+                    # ancestors.
+                    await invalidate_ancestors(dst_spec)
         if not copied:
             raise enoent(src_spec.virtual)
-        await invalidate_after_write(dst_spec)
-        # The copy can materialize the destination's missing ancestors.
-        await invalidate_ancestors(dst_spec)
 
     return copy

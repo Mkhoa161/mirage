@@ -15,7 +15,7 @@
 import { ContentDriftError } from '@struktoai/mirage-core/workspace/snapshot/drift'
 import { DriftPolicy, MountMode } from '@struktoai/mirage-core/types'
 import { toStateDict } from '@struktoai/mirage-core/workspace/snapshot/state'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { S3Config } from '../vfs/s3/config.ts'
 import { installS3Mock, type S3Mock } from '../vfs/s3/mock.ts'
 import { S3VFS } from '../vfs/s3/s3.ts'
@@ -129,6 +129,38 @@ describe('fingerprint retraction (mocked S3)', () => {
     try {
       const read = await loaded.shell('cat /s3/x.txt')
       expect(DEC.decode(read.stdout)).toBe('v1\n')
+    } finally {
+      await loaded.close()
+    }
+  })
+
+  it('a refused removal leaves no stale bytes for a STRICT load', async () => {
+    // A delete the store refused before touching anything still retracts
+    // the pin, so the cached body has to go with it: left behind, a
+    // restored snapshot would serve the pre-change bytes with nothing
+    // left to check them, the hole #1018 reported.
+    mock.store.set(BUCKET, 'x.txt', ENC.encode('v1\n'))
+    const refused = vi.spyOn(mock.store, 'delete').mockImplementation(() => {
+      throw new Error('AccessDenied')
+    })
+    const ws = makeWorkspace()
+    let state
+    try {
+      await ws.shell('cat /s3/x.txt')
+      const rm = await ws.shell('rm /s3/x.txt; echo rm=$?')
+      expect(DEC.decode(rm.stdout)).toBe('rm=1\n')
+      state = await toStateDict(ws)
+    } finally {
+      refused.mockRestore()
+      await ws.close()
+    }
+    expect(state.fingerprints).toEqual([])
+    expect(mock.store.get(BUCKET, 'x.txt')).toEqual(ENC.encode('v1\n'))
+    mock.store.set(BUCKET, 'x.txt', ENC.encode('v2\n'))
+    const loaded = await Workspace.fromState(state, {}, { '/s3': new S3VFS(makeConfig()) })
+    try {
+      const read = await loaded.shell('cat /s3/x.txt')
+      expect(DEC.decode(read.stdout)).toBe('v2\n')
     } finally {
       await loaded.close()
     }

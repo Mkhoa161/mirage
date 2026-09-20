@@ -92,17 +92,20 @@ def make_rename(driver: ObjectStoreDriver[A, C],
                     # but it stops being free if either carries a token.
                     record(op, src, driver.vfs, 0, timer)
                     record(op, dst, driver.vfs, 0, timer)
+                    # The eviction rides with the records, on the same
+                    # condition, as in unlink. Subtrees, not single
+                    # paths: move_prefix relocates every key under src,
+                    # so each listing and body cached below the old name
+                    # names something that is no longer there, and each
+                    # one below the new name predates the move.
+                    await invalidate_subtree(dst_spec)
+                    await invalidate_subtree(src_spec)
+                    # The move can create the destination's missing
+                    # ancestors and erase the source's prefix-only ones
+                    # in the same call.
+                    await invalidate_ancestors(dst_spec)
+                    await invalidate_ancestors(src_spec)
         if not moved:
             raise enoent(src_spec.virtual)
-        # Subtrees, not single paths: move_prefix relocates every key
-        # under src, so each listing and body cached below the old name
-        # names something that is no longer there, and each one below
-        # the new name predates the move.
-        await invalidate_subtree(dst_spec)
-        await invalidate_subtree(src_spec)
-        # The move can create the destination's missing ancestors and
-        # erase the source's prefix-only ones in the same call.
-        await invalidate_ancestors(dst_spec)
-        await invalidate_ancestors(src_spec)
 
     return rename

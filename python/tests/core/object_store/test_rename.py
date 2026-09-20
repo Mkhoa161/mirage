@@ -148,6 +148,20 @@ def test_rename_records_both_retractions_when_the_prefix_walk_fails(accessor):
                                   ("rename_prefix", "/e")]
 
 
+def test_rename_evicts_both_subtrees_when_the_prefix_walk_raises(accessor):
+    """The eviction rides with the records, on the same condition."""
+
+    async def run():
+        driver = replace(make_driver(FakeStore({"d/f.txt": b"x"})),
+                         move_prefix=_boom)
+        with pytest.raises(RuntimeError):
+            await make_rename(driver, _exists)(accessor, spec("/d"),
+                                               spec("/e"))
+
+    manager = _managed(run())
+    assert manager.subtrees == ["/e", "/d"]
+
+
 def test_rename_of_a_missing_source_records_nothing(accessor):
     """Both calls answering a clean False is the store saying nothing
     moved at all, which is the one outcome safe to skip."""

@@ -60,45 +60,51 @@ export function makeRename<A extends Accessor, C>(
     // nothing under the prefix can have moved.
     let op = 'rename'
     try {
-      moved = await moveFile(conn, srcKey, kp.apply(kpfx, dst.mountPath))
-      if (!moved) {
-        // A directory owns no object of its own, so a clean false here
-        // is the ordinary way into the prefix walk, not an answer about
-        // it. Back to unanswered before asking, or a walk that rejects
-        // having already moved keys reads as "nothing moved" and skips
-        // the record it is in `finally` for.
-        moved = null
-        op = 'rename_prefix'
-        moved = await movePrefix(
-          conn,
-          kp.applyDir(kpfx, src.mountPath),
-          kp.applyDir(kpfx, dst.mountPath),
-        )
+      try {
+        moved = await moveFile(conn, srcKey, kp.apply(kpfx, dst.mountPath))
+        if (!moved) {
+          // A directory owns no object of its own, so a clean false here
+          // is the ordinary way into the prefix walk, not an answer about
+          // it. Back to unanswered before asking, or a walk that rejects
+          // having already moved keys reads as "nothing moved" and skips
+          // the record it is in `finally` for.
+          moved = null
+          op = 'rename_prefix'
+          moved = await movePrefix(
+            conn,
+            kp.applyDir(kpfx, src.mountPath),
+            kp.applyDir(kpfx, dst.mountPath),
+          )
+        }
+      } finally {
+        if (moved !== false) {
+          // Two records for one op, because a move invalidates the token
+          // of both paths: src's object left, dst's was replaced by it.
+          // In the `finally` because movePrefix is a paginated walk that
+          // can fail having already moved keys; skipped only on a clean
+          // false, where nothing moved at all. Order is free -- both are
+          // pure retractions and deletions commute -- but it stops being
+          // free if either carries a token.
+          record(op, src.virtual, driver.vfs, 0, timer)
+          record(op, dst.virtual, driver.vfs, 0, timer)
+        }
+        await close()
       }
     } finally {
       if (moved !== false) {
-        // Two records for one op, because a move invalidates the token
-        // of both paths: src's object left, dst's was replaced by it. In
-        // the `finally` because movePrefix is a paginated walk that can
-        // fail having already moved keys; skipped only on a clean false,
-        // where nothing moved at all. Order is free -- both are pure
-        // retractions and deletions commute -- but it stops being free
-        // if either carries a token.
-        record(op, src.virtual, driver.vfs, 0, timer)
-        record(op, dst.virtual, driver.vfs, 0, timer)
+        // The eviction rides with the records, on the same condition, as
+        // in unlink. Subtrees, not single paths: movePrefix relocates
+        // every key under src, so each listing and body cached below the
+        // old name names something that is no longer there, and each one
+        // below the new name predates the move.
+        await invalidateSubtree(dst)
+        await invalidateSubtree(src)
+        // The move can create the destination's missing ancestors and
+        // erase the source's prefix-only ones in the same call.
+        await invalidateAncestors(dst)
+        await invalidateAncestors(src)
       }
-      await close()
     }
     if (!moved) throw enoent(src)
-    // Subtrees, not single paths: movePrefix relocates every key under
-    // src, so each listing and body cached below the old name names
-    // something that is no longer there, and each one below the new name
-    // predates the move.
-    await invalidateSubtree(dst)
-    await invalidateSubtree(src)
-    // The move can create the destination's missing ancestors and erase
-    // the source's prefix-only ones in the same call.
-    await invalidateAncestors(dst)
-    await invalidateAncestors(src)
   }
 }
