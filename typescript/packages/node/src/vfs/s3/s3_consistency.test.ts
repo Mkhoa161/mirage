@@ -18,7 +18,7 @@ import {
   type RedisIndexConfig,
 } from '@struktoai/mirage-core/cache/index/config'
 import { ConsistencyPolicy, MountMode } from '@struktoai/mirage-core/types'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { Workspace } from '../../workspace.ts'
 import type { S3Config } from './config.ts'
@@ -247,6 +247,56 @@ describe('S3 cache consistency (mocked)', () => {
       expect(result.exitCode).toBe(0)
       expect(DEC.decode(result.stdout)).toContain('name=c.txt size=2')
       expect(DEC.decode(result.stdout)).toContain('type=text')
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a routing probe failure never takes the line', async () => {
+    // reconcileRead probes a warm named operand at routing, before any
+    // handler exists. If that probe threw, the whole line would fail --
+    // later `;` stages included -- with no operand named. It is best-effort
+    // instead: the entry is dropped and the command reads the backend
+    // itself, so `ls` lists, `cat` prints current bytes, and the stage
+    // after the `;` still runs.
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+    try {
+      await ws.shell('cat /s3/c.txt')
+      const real = ws.opsRegistry.call.bind(ws.opsRegistry)
+      vi.spyOn(ws.opsRegistry, 'call').mockImplementation((...args) =>
+        args[0] === 'stat' ? Promise.reject(new TypeError('probe bug')) : real(...args),
+      )
+      const ls = await ws.shell('ls -l /s3/c.txt; echo survived')
+      expect(ls.exitCode).toBe(0)
+      expect(DEC.decode(ls.stdout).endsWith('/s3/c.txt\nsurvived\n')).toBe(true)
+      const cat = await ws.shell('cat /s3/c.txt; echo survived')
+      expect(cat.exitCode).toBe(0)
+      expect(DEC.decode(cat.stdout)).toBe('v1survived\n')
+      expect(debug.mock.calls.length > 0).toBe(true)
+    } finally {
+      vi.restoreAllMocks()
+      await ws.close()
+    }
+  })
+
+  it('a metadata command reconciles its operand', async () => {
+    // `ls` reads no bytes, so the cache gate never fires for it. Routing is
+    // the one door a metadata command has to backend truth and must keep
+    // probing there: a warm `ls -l` is three stats, and two means the
+    // routing reconcile stopped firing for a command the gate never covers.
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+    )
+    try {
+      await ws.shell('cat /s3/c.txt')
+      mock.resetCalls()
+      expect((await ws.shell('ls -l /s3/c.txt')).exitCode).toBe(0)
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(3)
     } finally {
       await ws.close()
     }

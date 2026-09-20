@@ -88,7 +88,7 @@ class Reconciler:
             # A backend that registers no stat op cannot be revalidated at
             # all. `_probe_or_unknown` would reach the same verdict, but it
             # would also log every read: this is a permanent capability of
-            # the mount, not an anomaly worth a warning each time.
+            # the mount, not an anomaly worth a log line each time.
             await self._cache.remove(path)
             await mount.index.clear()
             return Verdict.UNKNOWN
@@ -205,6 +205,8 @@ class Reconciler:
         try:
             await self._probe_or_unknown(mount, path)
         except Exception as exc:
+            await self._cache.remove(path)
+            await mount.index.clear()
             logger.debug("reconcile probe failed for %s: %s", path, exc)
 
     async def on_op_missing(self, op: str, path: str) -> None:

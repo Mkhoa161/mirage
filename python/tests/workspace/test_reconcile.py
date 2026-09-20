@@ -302,3 +302,35 @@ async def test_unverified_probe_cannot_serve_cached_bytes(
             assert await ws.cache.exists("/data/f.txt") == (probe == "fresh")
     finally:
         await ws.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["bug", "flaky"])
+async def test_reconcile_read_never_raises_and_drops_the_entry(failure):
+    """Routing runs before any handler exists, so nothing may escape.
+
+    A raise here does not fail one command; it takes the whole line,
+    later pipeline stages and ``;`` chains included, and reports itself
+    with no operand to name. So every failure is absorbed -- including
+    the programming-error classes the gate is allowed to re-raise -- and
+    whatever could not be verified is dropped, the same reaction the
+    flaky arm already has. Keeping the entry would let a metadata command
+    serve a stale size from it with no check at all.
+    """
+    ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        await ws.namespace.ensure_loaded()
+        mount = ws.namespace.mount_for("/data/f.txt")
+
+        async def failing(*_args, **_kwargs):
+            if failure == "bug":
+                raise TypeError("probe bug")
+            raise OSError(errno.EIO, "backend stat unavailable")
+
+        mount.execute_op = failing
+        await ws.cache.set("/data/f.txt", b"v1", fingerprint="fp1")
+        rec = Reconciler(ws.cache, ws.namespace, ConsistencyPolicy.ALWAYS)
+        await rec.reconcile_read(mount, "/data/f.txt")
+        assert not await ws.cache.exists("/data/f.txt")
+    finally:
+        await ws.close()

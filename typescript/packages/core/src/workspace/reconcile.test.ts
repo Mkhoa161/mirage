@@ -208,6 +208,37 @@ describe('Reconciler', () => {
     expect(ws.namespace.metaFor('/data/gone.txt')).not.toBeNull()
     await ws.close()
   })
+
+  it.each(['bug', 'flaky'])(
+    'reconcileRead never throws and drops the entry (%s)',
+    async (failure) => {
+      // Routing runs before any handler exists, so a throw here does not fail
+      // one command: it takes the whole line, later pipeline stages and `;`
+      // chains included. Every failure is absorbed -- including the classes
+      // the gate may rethrow -- and what could not be verified is dropped, or
+      // a metadata command would serve a stale size from it with no check.
+      const ws = new Workspace({ '/data': new RAMVFS() })
+      await ws.namespace.ensureLoaded()
+      const mount = mountOf(ws, '/data/f.txt')
+      vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+      vi.spyOn(ws.opsRegistry, 'call').mockImplementation(() =>
+        Promise.reject(
+          failure === 'bug'
+            ? new TypeError('probe bug')
+            : Object.assign(new Error('backend stat unavailable'), { code: 'EIO' }),
+        ),
+      )
+      try {
+        await ws.cache.set('/data/f.txt', new TextEncoder().encode('v1'), { fingerprint: 'fp1' })
+        const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry, ConsistencyPolicy.ALWAYS)
+        await rec.reconcileRead(mount, '/data/f.txt')
+        expect(await ws.cache.exists('/data/f.txt')).toBe(false)
+      } finally {
+        vi.restoreAllMocks()
+        await ws.close()
+      }
+    },
+  )
 })
 
 describe('unverified freshness probes', () => {

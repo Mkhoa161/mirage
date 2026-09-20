@@ -107,7 +107,7 @@ export class Reconciler {
       // A backend that registers no stat op cannot be revalidated at all.
       // probeOrUnknown would reach the same verdict, but it would also log
       // every read: this is a permanent capability of the mount, not an
-      // anomaly worth a warning each time. isMissingOp, not a bare ENOTSUP
+      // anomaly worth a log line each time. isMissingOp, not a bare ENOTSUP
       // check: python catches OperationNotSupportedError, which only the op
       // door raises, and `stat` is the only op probed here -- so a backend
       // that stamps ENOTSUP itself takes the logged path on both sides.
@@ -195,6 +195,8 @@ export class Reconciler {
     try {
       await this.probeOrUnknown(mount, path)
     } catch (err) {
+      await this.cache.remove(path)
+      await mount.index?.clear()
       console.debug(`reconcile probe failed for ${path}: ${String(err)}`)
     }
   }

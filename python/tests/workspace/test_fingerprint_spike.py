@@ -338,3 +338,68 @@ def test_ram_falls_back_to_lazy_when_fingerprint_absent():
     data = asyncio.run(run())
     assert data == b"v1", (
         "RAM read under ALWAYS must succeed (no fingerprint → LAZY fallback)")
+
+
+def test_a_routing_probe_failure_never_takes_the_line():
+    """Routing runs before any handler, so a raise there loses the line.
+
+    ``reconcile_read`` probes a warm named operand at routing. If that
+    probe raised, there would be no command yet to report it: the whole
+    line fails, later ``;`` stages included, with no operand named. The
+    probe is best-effort instead. The entry is dropped and the command
+    reads the backend itself, so ``ls`` lists and ``cat`` prints current
+    bytes, and the stage after the ``;`` still runs.
+    """
+    objects = {"a.txt": b"v1\n"}
+    session, ws = _always_mount(objects)
+
+    async def run() -> list[tuple[int, bytes]]:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            mount = ws.namespace.mount_for("/s3/a.txt")
+            real = mount.execute_op
+
+            async def broken(op, path, **kwargs):
+                if op == "stat":
+                    raise TypeError("probe bug")
+                return await real(op, path, **kwargs)
+
+            mount.execute_op = broken
+            results = []
+            for line in ("ls -l /s3/a.txt; echo survived",
+                         "cat /s3/a.txt; echo survived"):
+                io = await ws.shell(line)
+                results.append((io.exit_code, await io.materialize_stdout()))
+            await ws.close()
+            return results
+
+    (ls_exit, ls_out), (cat_exit, cat_out) = asyncio.run(run())
+    assert ls_exit == 0 and ls_out.endswith(b"/s3/a.txt\nsurvived\n"), (
+        "a routing probe failure must not take a metadata command's line")
+    assert cat_exit == 0 and cat_out == b"v1\nsurvived\n", (
+        "a routing probe failure drops the entry and the read goes cold")
+
+
+def test_metadata_command_reconciles_its_operand():
+    """``ls`` reads no bytes, so the cache gate never fires for it.
+
+    Routing is the one door a metadata command has to backend truth, and
+    it must keep probing there: a warm ``ls -l`` costs three backend
+    stats, and two means the routing reconcile stopped firing for a
+    command the gate does not cover.
+    """
+    objects = {"a.txt": b"v1\n"}
+    session, ws = _always_mount(objects)
+    client = session._client
+
+    async def run() -> None:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            client.calls.clear()
+            assert (await ws.shell("ls -l /s3/a.txt")).exit_code == 0
+            await ws.close()
+
+    asyncio.run(run())
+    assert client.calls["head_object"] == 3, (
+        "ls must still reconcile its operand at routing; 2 means the one "
+        "door a metadata command has to backend truth went dark")
