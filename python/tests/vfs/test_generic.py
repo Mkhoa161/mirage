@@ -28,11 +28,13 @@ from mirage.commands.builtin.utils.wrap import stream_from_bytes
 from mirage.commands.config import command
 from mirage.commands.spec import CommandSpec
 from mirage.io.types import IOResult
-from mirage.types import ContentType, FileStat, FileType, PathSpec
+from mirage.types import (ContentType, FileStat, FileType, PathSpec,
+                          ReadPolicy, ReadSpec)
 from mirage.vfs.generic import _DIRECT_OPS, GenericVFS, direct_ops
 from mirage.vfs.ram.ram import RAMVFS
 from mirage.vfs.ram.store import RAMStore
 from mirage.vfs.s3.s3 import S3VFS
+from mirage.workspace.mount.read_policy import check_read_capability
 
 PAGES = {
     "guides": {
@@ -369,3 +371,17 @@ def test_only_a_reshaped_table_field_is_adapted():
             inspect.signature(table_fn).parameters))
         assert (ops[op] is table_fn) is same_arity, op
     assert checked > 5
+
+
+def test_a_script_registered_vfs_is_named_in_the_read_refusal():
+    """`vfs.name` is a plain string here, not a `VFSName`.
+
+    ``str()`` of the enum renders its repr, so the refusal builds the
+    name through a getattr fallback; only a script-registered backend
+    exercises the other side of it.
+    """
+    vfs = make_vfs(caches_reads=True)
+    assert vfs.READ_REVALIDATABLE is False
+    with pytest.raises(ValueError) as exc:
+        check_read_capability("/w/", vfs, ReadSpec(policy=ReadPolicy.FRESH))
+    assert "wiki does not" in str(exc.value)

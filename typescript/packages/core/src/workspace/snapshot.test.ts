@@ -861,12 +861,44 @@ describe('the read policy survives a snapshot round trip', () => {
     await ws.close()
     const target = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
     try {
-      await expect(applyStateDict(target, { ...state, version: 3 })).rejects.toThrow(
-        /v3 not supported/,
-      )
+      await target.cache.set('/d/live.txt', new TextEncoder().encode('live'))
+      // With replaceCache, which is the `version checkout` path. The
+      // check sits above `cache.clear()`; moved one line below it a
+      // refused checkout would already have wiped the live cache while
+      // still rejecting, so the rejection alone does not pin the order.
+      await expect(
+        applyStateDict(target, { ...state, version: 3 }, { replaceCache: true }),
+      ).rejects.toThrow(/v3 not supported/)
+      expect(await target.cache.exists('/d/live.txt')).toBe(true)
     } finally {
       await target.close()
     }
+  })
+
+  // `resolveReadSpec` accepts `pinned` by design -- coercion only -- so
+  // a snapshot carrying it passes the loader and must be stopped by the
+  // mount-time verdict. The constructor door is the same rule reached a
+  // different way, and neither was covered.
+  it('refuses pinned at the constructor door', async () => {
+    const ws = new Workspace({ '/a': new RAMVFS() }, { mode: MountMode.WRITE })
+    await ws.close()
+    expect(
+      () =>
+        new Workspace(
+          { '/a': new RAMVFS() },
+          { mode: MountMode.WRITE, read: { policy: ReadPolicy.PINNED, ttl: DEFAULT_READ_TTL } },
+        ),
+    ).toThrow(/needs a version layer to pin to/)
+  })
+
+  it('refuses a snapshot whose mount was saved pinned', async () => {
+    const ws = new Workspace({ '/d': new RAMVFS() }, { mode: MountMode.WRITE })
+    const state = await toStateDict(ws)
+    await ws.close()
+    for (const m of state.mounts) (m as { read?: string }).read = ReadPolicy.PINNED
+    await expect(Workspace.fromState(state, { mode: MountMode.WRITE })).rejects.toThrow(
+      /needs a version layer to pin to/,
+    )
   })
 
   // Required, never defaulted: a dict labelled v4 with the key missing
@@ -888,24 +920,35 @@ describe('the read policy survives a snapshot round trip', () => {
     expect(() => buildMountArgs(state)).toThrow(/fresh, bounded, pinned/)
   })
 
-  // TypeScript alone stands a mount in with an empty RAMVFS when it has
-  // no override and nothing to rebuild from. That is safe only while the
-  // gate above it lets through nothing that could carry `fresh`: `ram`
-  // and `disk` both report cachesReads false, so the verdict refused the
-  // policy long before the snapshot was written. A backend that became
-  // both readRevalidatable and restores-as-fresh-RAM would make a
-  // restore that used to succeed throw, so the invariant is pinned here
-  // rather than left to the comment.
-  it('only lets a backend that cannot carry fresh reach the RAM stand-in', () => {
-    for (const type of ['ram', 'disk']) {
-      const entry = { vfs_state: { type }, vfs_ref: null } as unknown as MountSnapshot
-      expect(restoresAsFreshRAM(entry)).toBe(true)
-    }
-    for (const type of ['s3', 'gridfs']) {
-      const entry = { vfs_state: { type }, vfs_ref: null } as unknown as MountSnapshot
-      expect(restoresAsFreshRAM(entry)).toBe(false)
-    }
-    expect(new RAMVFS().cachesReads).toBe(false)
+  // The distinction the 4th argument to buildMountArgs exists for, and
+  // the only shape that can see it. `fromState` merges the mounts it
+  // rebuilt into the same map the caller's overrides live in, so without
+  // that argument a rebuilt mount -- an s3 mount, a `vfs_ref` script
+  // backend -- reads as caller-supplied and is silently reset to the
+  // default. Every other test here uses a RAM mount, which is neither
+  // rebuilt nor overridden, so both readings agree and the argument
+  // could be deleted with nothing red.
+  it('keeps the saved spec on a rebuilt mount and drops it on a supplied one', async () => {
+    const ws = new Workspace(
+      { '/reb': new RAMVFS(), '/sup': new RAMVFS() },
+      { mode: MountMode.WRITE, read: { policy: ReadPolicy.BOUNDED, ttl: 45 } },
+    )
+    const state = await toStateDict(ws)
+    await ws.close()
+
+    // As `fromState` hands them over: one map, the caller's own prefixes
+    // named separately.
+    const merged = { '/reb/': new RAMVFS(), '/sup/': new RAMVFS() }
+    const args = buildMountArgs(state, merged, {}, new Set(['/sup/']))
+
+    expect(args.mountArgs['/reb/']?.options.read).toEqual({
+      policy: ReadPolicy.BOUNDED,
+      ttl: 45,
+    })
+    expect(args.mountArgs['/sup/']?.options.read).toEqual({
+      policy: ReadPolicy.BOUNDED,
+      ttl: DEFAULT_READ_TTL,
+    })
   })
 
   // The saved policy belongs to the backend that was saved. An override

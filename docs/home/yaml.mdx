@@ -76,6 +76,20 @@ Two shapes are refused, because a `read`/`ttl` pair that disagrees is almost alw
 
 An unset `read:` is a different thing and is fine: it takes the default.
 
+### Across a snapshot
+
+A snapshot records each mount's policy and bound, and a restore keeps them --
+but only for a mount the loader rebuilds from the saved state itself. A mount
+handed back through `mounts=` takes the default (`bounded`, 600s) instead.
+
+That is deliberate: a mount saved with redacted credentials *has* to be handed
+back, and what comes back may be a different backend entirely. Replaying a saved
+`fresh` onto one that cannot revalidate would refuse a restore that had nothing
+wrong with it. The saved policy still has to be a policy mirage knows -- a
+snapshot naming an unknown one is refused whether or not the mount is overridden.
+
+Declare `read:` again on an overridden mount if you want it back.
+
 ### What the bound promises
 
 The bound is stamped on a cache entry when that entry is written, and the store

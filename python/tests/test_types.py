@@ -12,6 +12,8 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 from pydantic import ValidationError
 
@@ -179,12 +181,12 @@ def test_read_spec_carries_a_bound_under_fresh_too():
 
 
 def test_read_spec_is_frozen():
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         ReadSpec().policy = ReadPolicy.FRESH
 
 
 def test_cache_facts_is_frozen():
     facts = CacheFacts(cacheable=True, ttl=30)
     assert (facts.cacheable, facts.ttl) == (True, 30)
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         facts.ttl = 1

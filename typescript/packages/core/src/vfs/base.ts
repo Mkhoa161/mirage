@@ -137,7 +137,19 @@ export interface VFS {
    * exists at all: gdrive stamps one on both sides and still cannot honour
    * fresh, because stat returns a timestamp where read returns an md5.
    * Distinct from {@link VFS.cachesReads}, which asks whether the gate can
-   * fire. Mirrors Python's `BaseVFS.READ_REVALIDATABLE`.
+   * fire.
+   *
+   * onedrive and sharepoint look like they qualify and do not: both stamp
+   * a cTag on stat and on read, so on token kind alone the refusal reads
+   * as unnecessary. It is correct for a second reason this flag does not
+   * name -- both label the read record with the slashless `vfsPath`, so
+   * the record key comes out malformed (`/oda/b.txt` rather than
+   * `/od/a/b.txt`) and the cTag can never be matched against the cache
+   * entry. The backends that do qualify pass the mount path instead.
+   * gdrive carries the same slashless label on top of its token-kind
+   * mismatch. Fix the label before reconsidering the flag.
+   *
+   * Mirrors Python's `BaseVFS.READ_REVALIDATABLE`.
    */
   readonly readRevalidatable?: boolean
   readonly index?: IndexCacheStore

@@ -18,11 +18,14 @@ import time
 
 import pytest
 
-from mirage.types import MountMode, ReadPolicy, ReadSpec
+from mirage.io import IOResult
+from mirage.types import (DEFAULT_READ_TTL, CacheFacts, MountMode, ReadPolicy,
+                          ReadSpec)
 from mirage.vfs.disk import DiskVFS
 from mirage.vfs.ram import RAMVFS
 from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.workspace import Workspace
+from mirage.workspace.mount.spec import Mount
 from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
 
 
@@ -532,3 +535,105 @@ def test_bounded_drops_an_entry_that_carries_no_bound():
     assert replacement == 30, (
         "the cold read must re-stamp the bound, or the drop repeats on "
         "every read forever")
+
+
+def test_two_mounts_carry_two_different_bounds():
+    """The headline claim: the bound is per mount, not per workspace.
+
+    Every other bounded test declares one workspace-level bound, so the
+    per-mount value and the default are the same number and a stamp that
+    read the workspace default would pass them all. Two mounts with two
+    bounds is the only shape that tells them apart.
+    """
+    config = S3Config(
+        bucket="test-bucket",
+        region="us-east-1",
+        aws_access_key_id="fake",
+        aws_secret_access_key="fake",
+    )
+    objects = {"a.txt": b"v1\n"}
+    session = MultiBucketSession({"test-bucket": objects})
+    ws = Workspace(
+        {
+            "/fast":
+            Mount(vfs=S3VFS(config),
+                  mode=MountMode.WRITE,
+                  read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=30)),
+            "/slow":
+            Mount(vfs=S3VFS(config),
+                  mode=MountMode.WRITE,
+                  read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=90)),
+        },
+        mode=MountMode.WRITE,
+    )
+
+    async def run() -> tuple[int | None, int | None]:
+        with patch_s3_session(session):
+            await ws.shell("cat /fast/a.txt")
+            await ws.shell("cat /slow/a.txt")
+            fast = ws.cache._entries["/fast/a.txt"].ttl
+            slow = ws.cache._entries["/slow/a.txt"].ttl
+            await ws.close()
+            return fast, slow
+
+    assert asyncio.run(run()) == (30, 90)
+
+
+def test_the_live_cache_facts_door_reads_the_mounts_bound():
+    """``apply_io`` with no captured function is the embedder's door.
+
+    ``cache_facts_for`` resolves the mount live and is what the public
+    ``Workspace.apply_io`` (FUSE and facade fills) uses. Only
+    ``capture_cache_facts``, reached through a shell line, is covered by
+    the tests above, so a door returning ``DEFAULT_READ_TTL`` here would
+    go unnoticed.
+    """
+    config = S3Config(
+        bucket="test-bucket",
+        region="us-east-1",
+        aws_access_key_id="fake",
+        aws_secret_access_key="fake",
+    )
+    ws = Workspace(
+        {
+            "/s3":
+            Mount(vfs=S3VFS(config),
+                  mode=MountMode.WRITE,
+                  read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45))
+        },
+        mode=MountMode.WRITE,
+    )
+
+    async def run() -> tuple[int | None, CacheFacts]:
+        await ws.apply_io(
+            IOResult(reads={"/s3/f.txt": b"x"}, cache=["/s3/f.txt"]))
+        entry = ws.cache._entries["/s3/f.txt"].ttl
+        unmounted = ws._dispatcher.cache_facts_for("/nowhere/f.txt")
+        await ws.close()
+        return entry, unmounted
+
+    ttl, unmounted = asyncio.run(run())
+    assert ttl == 45, ("the live door must read the mount's bound, not the "
+                       "package default")
+    assert unmounted.cacheable is False
+
+
+def test_a_fresh_mount_still_stamps_a_bound():
+    """`fresh` entries carry a bound too.
+
+    Two workspaces can share one Redis cache under different policies,
+    so an entry written by a `fresh` mount must still expire for the
+    `bounded` one reading it. Keying the stamp on the policy would leave
+    only the dataclass test standing.
+    """
+    objects = {"a.txt": b"v1\n"}
+    session, ws = _always_mount(objects)
+
+    async def run() -> int | None:
+        with patch_s3_session(session):
+            await ws.shell("cat /s3/a.txt")
+            ttl = ws.cache._entries["/s3/a.txt"].ttl
+            await ws.close()
+            return ttl
+
+    assert asyncio.run(run()) == DEFAULT_READ_TTL

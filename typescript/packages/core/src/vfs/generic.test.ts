@@ -251,10 +251,25 @@ describe('GenericVFS wires a backend from one CommandIO table', () => {
     expect(reads[0]?.fn).toBe(myRead.fn)
   })
 
-  it('declares the FSKit and snapshot flags it was given', () => {
-    const vfs = makeVfs({ sizesAlwaysKnown: true, supportsSnapshot: true })
+  it('declares the FSKit, snapshot and revalidation flags it was given', () => {
+    const vfs = makeVfs({
+      sizesAlwaysKnown: true,
+      supportsSnapshot: true,
+      readRevalidatable: true,
+    })
     expect(vfs.sizesAlwaysKnown).toBe(true)
     expect(vfs.supportsSnapshot).toBe(true)
+    expect(vfs.readRevalidatable).toBe(true)
+  })
+
+  // Without the default a script backend reads as `undefined`, which is
+  // falsy in the verdict but is not the declared answer -- and no test
+  // said so for any of the three flags.
+  it('leaves every declaration flag off when it was given none', () => {
+    const vfs = makeVfs({})
+    expect(vfs.sizesAlwaysKnown).toBe(false)
+    expect(vfs.supportsSnapshot).toBe(false)
+    expect(vfs.readRevalidatable).toBe(false)
   })
 
   it('serves a mount end to end', async () => {

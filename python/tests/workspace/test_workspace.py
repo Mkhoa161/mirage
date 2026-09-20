@@ -2766,11 +2766,17 @@ def test_add_mount_runs_the_same_read_verdict_as_the_constructor():
 
 
 def test_add_mount_carries_the_read_spec_onto_the_entry():
-    ws = Workspace({"/a": RAMVFS()}, mode=MountMode.WRITE)
+    # The workspace default is a non-default bound, so the last line can
+    # tell "took the workspace default" from "took the dataclass
+    # default" -- with a plain ReadSpec() workspace the two coincide and
+    # the assertion holds however the code is written.
+    ws = Workspace({"/a": RAMVFS()},
+                   mode=MountMode.WRITE,
+                   read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=90))
     entry = ws.add_mount("/b", RAMVFS(), MountMode.WRITE,
                          ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45))
     assert entry.read == ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45)
-    assert ws.add_mount("/c", RAMVFS()).read == ReadSpec()
+    assert ws.add_mount("/c", RAMVFS()).read.ttl == 90
     asyncio.run(ws.close())
 
 

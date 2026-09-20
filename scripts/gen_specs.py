@@ -254,6 +254,7 @@ def _capabilities() -> dict[str, dict[str, Any]]:
         out[name] = {
             "index_ttl": cls.index_ttl,
             "caches_reads": cls.caches_reads,
+            "read_revalidatable": cls.READ_REVALIDATABLE,
             "supports_snapshot": cls.SUPPORTS_SNAPSHOT,
             "sizes_always_known": cls.SIZES_ALWAYS_KNOWN,
             "storage_id": cls.storage_id is not BaseVFS.storage_id,

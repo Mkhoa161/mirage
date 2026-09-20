@@ -18,7 +18,7 @@ import pytest
 
 from mirage.cache.index import IndexConfig, RedisIndexConfig
 from mirage.cache.index.redis import RedisIndexCacheStore
-from mirage.types import Limit, MountBackend, MountMode, ReadSpec
+from mirage.types import Limit, MountBackend, MountMode, ReadPolicy, ReadSpec
 from mirage.vfs.ram import RAMVFS
 from mirage.workspace.mount.registry import MountRegistry
 from mirage.workspace.mount.spec import Mount
@@ -34,6 +34,32 @@ def test_bare_vfs_takes_the_default_mode():
     assert specs[0].mode == MountMode.WRITE
     assert specs[0].backend == MountBackend.WORKSPACE
     assert specs[0].command_limits == {}
+
+
+def test_a_bare_vfs_and_a_tuple_both_take_the_default_read():
+    # The bound is one the dataclass default is not, so this can tell
+    # "took `default_read`" from "took `ReadSpec()`" -- the two coincide
+    # whenever the caller passes a plain `ReadSpec()`.
+    default = ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45)
+    specs = normalize_mounts({
+        "/a": RAMVFS(),
+        "/b": (RAMVFS(), MountMode.READ)
+    }, MountMode.WRITE, default)
+    assert [s.read for s in specs] == [default, default]
+
+
+def test_a_mount_object_keeps_its_own_read_over_the_default():
+    spec = Mount(vfs=RAMVFS(),
+                 mode=MountMode.WRITE,
+                 read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=30),
+                 command_limits={"cat": Limit(max_lines=10)})
+    (out, ) = normalize_mounts({"/a": spec}, MountMode.WRITE,
+                               ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45))
+    assert out.read == ReadSpec(policy=ReadPolicy.BOUNDED, ttl=30)
+    # Both ride the one options object the carrier now holds, so a build
+    # that filled it for one and overwrote it for the other would drop a
+    # mount's limits the moment it declared a policy.
+    assert out.command_limits["cat"].max_lines == 10
 
 
 def test_pair_tuple_carries_its_own_mode():

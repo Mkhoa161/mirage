@@ -68,6 +68,32 @@ async def test_exists(cache):
 
 
 @pytest.mark.asyncio
+async def test_is_unbounded_distinguishes_absent_from_boundless(cache):
+    """Redis answers this as a ttl probe, so the two sentinels matter.
+
+    ``-1`` is present with no expiry and ``-2`` is absent; reading one as
+    the other makes every warm bounded read either drop and refetch its
+    entry forever, or never self-heal a bound-less one. The RAM store's
+    twin cannot catch it: only redis encodes the answer this way.
+    """
+    assert await cache.is_unbounded("/absent") is False
+    await cache.set("/no-bound", b"x")
+    assert await cache.is_unbounded("/no-bound") is True
+    await cache.set("/bounded", b"x", ttl=30)
+    assert await cache.is_unbounded("/bounded") is False
+
+
+@pytest.mark.asyncio
+async def test_a_bound_set_on_redis_actually_expires_the_key(cache):
+    # The stamp has to reach redis itself, not just the client's view:
+    # a `set` that dropped the ttl would leave `is_unbounded` answering
+    # off a key redis never expires.
+    await cache.set("/bounded.txt", b"x", ttl=30)
+    remaining = await cache._cache_client.ttl(cache._data_key("/bounded.txt"))
+    assert 0 < remaining <= 30
+
+
+@pytest.mark.asyncio
 async def test_is_fresh(cache):
     await cache.set("/file.txt", b"data", fingerprint="abc123")
     assert await cache.is_fresh("/file.txt", "abc123") is True

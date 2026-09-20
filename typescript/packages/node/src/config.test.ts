@@ -536,6 +536,25 @@ describe('configToWorkspaceArgs', () => {
     expect(workspace.options.read).toEqual({ policy: 'bounded', ttl: 600 })
   })
 
+  // The bound rule must be applied to the COERCED policy. Comparing the
+  // raw one let `read: BOUNDED` -- a spelling both languages accept --
+  // skip a rule Python enforces, so the same document loaded on one host
+  // and was refused on the other.
+  it('applies the bound rule to an uppercase policy too', () => {
+    expect(() => loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'BOUNDED' } } })).toThrow(
+      /needs a bound/,
+    )
+  })
+
+  // At the SYNC door. `loadWorkspaceConfig` is what the CLI runs before
+  // it POSTs the document to the daemon; validating only in the async
+  // builder means junk survives that hop.
+  it('refuses a junk top-level read policy at the sync door', () => {
+    expect(() => loadWorkspaceConfig({ read: 'banana', mounts: { '/': { vfs: 'ram' } } })).toThrow(
+      /fresh, bounded, pinned/,
+    )
+  })
+
   it('a mount that declares no policy takes the workspace default', async () => {
     const args = await configToWorkspaceArgs(
       loadWorkspaceConfig({

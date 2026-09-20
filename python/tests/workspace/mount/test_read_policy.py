@@ -23,12 +23,15 @@ from mirage.vfs.disk.disk import DiskVFS
 from mirage.vfs.gcs.gcs import GCSVFS
 from mirage.vfs.gridfs.gridfs import GridFSVFS
 from mirage.vfs.hf_buckets import HfBucketsConfig, HfBucketsVFS
+from mirage.vfs.lancedb import LanceDBConfig, LanceDBVFS
+from mirage.vfs.loader import load_attr
 from mirage.vfs.minio.config import MinIOConfig
 from mirage.vfs.minio.minio import MinIOVFS
 from mirage.vfs.oci.oci import OCIVFS
 from mirage.vfs.qingstor.qingstor import QingStorVFS
 from mirage.vfs.r2.r2 import R2VFS
 from mirage.vfs.ram.ram import RAMVFS
+from mirage.vfs.registry import REGISTRY, known_vfs_names
 from mirage.vfs.s3 import S3VFS, S3Config
 from mirage.vfs.scaleway.scaleway import ScalewayVFS
 from mirage.vfs.seaweedfs.seaweedfs import SeaweedFSVFS
@@ -164,3 +167,42 @@ def test_gridfs_declares_the_capability():
 
 def test_bounded_is_allowed_on_a_backend_that_cannot_revalidate():
     assert check_read_capability("/d/", RAMVFS(), ReadSpec()) is None
+
+
+# The allowlist, spelled out. Asserting the flag on the classes that set
+# it only re-reads the line it claims to cover; walking the registry and
+# comparing against this set means a new backend cannot quietly declare
+# it. That matters because the failure is silent in both directions: a
+# backend claiming revalidation it cannot do refetches on every read
+# forever, and one that could but does not is refused for no reason.
+REVALIDATABLE = {
+    "s3", "aliyun", "backblaze", "ceph", "digitalocean", "gcs", "minio", "oci",
+    "qingstor", "r2", "scaleway", "seaweedfs", "supabase", "tencent", "wasabi",
+    "gridfs"
+}
+
+
+def test_the_revalidatable_roster_is_exactly_these_backends():
+    declared = set()
+    for name in known_vfs_names():
+        entry = REGISTRY.get(name)
+        if entry is None:
+            continue
+        if getattr(load_attr(entry.vfs_path), "READ_REVALIDATABLE", False):
+            declared.add(name)
+    assert declared == REVALIDATABLE
+
+
+def test_lancedb_decides_per_config_not_per_class():
+    # The one backend whose `caches_reads` is an instance attribute: a
+    # remote uri caches, a local path does not, so the two refusals differ
+    # although the class is the same.
+    local = LanceDBVFS(LanceDBConfig(uri="/tmp/lance"))
+    assert local.caches_reads is False
+    with pytest.raises(ValueError, match="needs a resource that caches reads"):
+        check_read_capability("/l/", local, FRESH)
+
+    remote = LanceDBVFS(LanceDBConfig(uri="db://acme"))
+    assert remote.caches_reads is True
+    with pytest.raises(ValueError, match="comparable content token"):
+        check_read_capability("/l/", remote, FRESH)

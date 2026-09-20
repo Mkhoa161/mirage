@@ -13,7 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_READ_TTL, ReadPolicy, type ReadSpec } from '../../types.ts'
+import { DEFAULT_READ_SPEC, DEFAULT_READ_TTL, ReadPolicy, type ReadSpec } from '../../types.ts'
 import type { VFS } from '../../vfs/base.ts'
 import { checkReadCapability, resolveReadSpec } from './read_policy.ts'
 
@@ -50,6 +50,35 @@ describe('resolveReadSpec', () => {
 
   it('names the known policies when refusing an unknown one', () => {
     expect(() => resolveReadSpec('banana', undefined)).toThrow(/fresh, bounded, pinned/)
+  })
+
+  it('reads a null policy as absent, the way a bare YAML `read:` parses', () => {
+    // Reading it as a string would die on .toLowerCase() rather than
+    // answering with this door's own refusal.
+    expect(resolveReadSpec(null, undefined)).toEqual(DEFAULT_READ_SPEC)
+  })
+
+  it('refuses a policy that is not a name at all', () => {
+    expect(() => resolveReadSpec(123, undefined)).toThrow(/expected a policy name/)
+  })
+
+  // A non-positive bound is not a very short one: the store marks such an
+  // entry expired the moment it is written (redis EXPIRE <= 0 deletes the
+  // key), so the mount silently caches nothing. A non-integer is a bound
+  // the store cannot compare against. Python pins the same table.
+  it.each([0, -1, -600])('refuses a bound of %s', (bad) => {
+    expect(() => resolveReadSpec('bounded', bad)).toThrow(/at least 1 second/)
+  })
+
+  it.each([1.5, true, '600'])('refuses a bound of %o as not whole seconds', (junk) => {
+    expect(() => resolveReadSpec('bounded', junk)).toThrow(/whole seconds/)
+  })
+})
+
+describe('DEFAULT_READ_SPEC', () => {
+  it('is bounded at the default bound, and frozen', () => {
+    expect(DEFAULT_READ_SPEC).toEqual({ policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL })
+    expect(Object.isFrozen(DEFAULT_READ_SPEC)).toBe(true)
   })
 })
 

@@ -3,6 +3,7 @@
     "aliyun": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -11,6 +12,7 @@
     "backblaze": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -19,6 +21,7 @@
     "box": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -27,6 +30,7 @@
     "ceph": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -35,6 +39,7 @@
     "chroma": {
       "caches_reads": false,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -43,6 +48,7 @@
     "dify": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -51,6 +57,7 @@
     "digitalocean": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -59,6 +66,7 @@
     "discord": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -67,6 +75,7 @@
     "dropbox": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -76,6 +85,7 @@
     "gcal": {
       "caches_reads": true,
       "index_ttl": 300,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -84,6 +94,7 @@
     "gcs": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -92,6 +103,7 @@
     "gdocs": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -100,6 +112,7 @@
     "gdrive": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -108,6 +121,7 @@
     "github": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -116,6 +130,7 @@
     "gmail": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -124,6 +139,7 @@
     "gsheets": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -132,6 +148,7 @@
     "gslides": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -141,6 +158,7 @@
     "langfuse": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -149,6 +167,7 @@
     "linear": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -157,6 +176,7 @@
     "mem0": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -165,6 +185,7 @@
     "minio": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -173,6 +194,7 @@
     "mongodb": {
       "caches_reads": false,
       "index_ttl": 0,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -181,6 +203,7 @@
     "notion": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -189,6 +212,7 @@
     "oci": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -197,6 +221,7 @@
     "onedrive": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -205,6 +230,7 @@
     "opfs": {
       "caches_reads": false,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -213,6 +239,7 @@
     "postgres": {
       "caches_reads": false,
       "index_ttl": 0,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -221,6 +248,7 @@
     "qdrant": {
       "caches_reads": false,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -229,6 +257,7 @@
     "qingstor": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -237,6 +266,7 @@
     "r2": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -245,6 +275,7 @@
     "ram": {
       "caches_reads": false,
       "index_ttl": 0,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -253,6 +284,7 @@
     "redis": {
       "caches_reads": false,
       "index_ttl": 0,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -261,6 +293,7 @@
     "s3": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -269,6 +302,7 @@
     "scaleway": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -277,6 +311,7 @@
     "seaweedfs": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -285,6 +320,7 @@
     "sharepoint": {
       "caches_reads": true,
       "index_ttl": 86400,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -293,6 +329,7 @@
     "slack": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": false,
@@ -301,6 +338,7 @@
     "supabase": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -309,6 +347,7 @@
     "tencent": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,
@@ -317,6 +356,7 @@
     "trello": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -325,6 +365,7 @@
     "wandb": {
       "caches_reads": false,
       "index_ttl": 600,
+      "read_revalidatable": false,
       "sizes_always_known": false,
       "statfs": false,
       "storage_id": false,
@@ -333,6 +374,7 @@
     "wasabi": {
       "caches_reads": true,
       "index_ttl": 600,
+      "read_revalidatable": true,
       "sizes_always_known": true,
       "statfs": false,
       "storage_id": true,

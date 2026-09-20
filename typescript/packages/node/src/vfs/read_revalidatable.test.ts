@@ -28,6 +28,12 @@ import { SeaweedFSVFS } from './seaweedfs/seaweedfs.ts'
 import { SupabaseVFS } from './supabase/supabase.ts'
 import { TencentVFS } from './tencent/tencent.ts'
 import { WasabiVFS } from './wasabi/wasabi.ts'
+import { GDriveVFS } from './gdrive/gdrive.ts'
+import { GridFSVFS } from './gridfs/gridfs.ts'
+import { SSHVFS } from './ssh/ssh.ts'
+import { readRevalidatable, type VFS } from '@struktoai/mirage-core/vfs/base'
+import { checkReadCapability } from '@struktoai/mirage-core/workspace/mount/read_policy'
+import { DEFAULT_READ_TTL, ReadPolicy } from '@struktoai/mirage-core/types'
 
 // Python declares READ_REVALIDATABLE as a class attribute, so its twin asserts
 // it straight off each alias class. A TypeScript class field is per-instance,
@@ -78,6 +84,37 @@ describe('readRevalidatable', () => {
       })
       expect(vfs.readRevalidatable).toBe(true)
       expect(vfs.cachesReads).toBe(true)
+    })
+  }
+
+  it('GridFS declares it on its own', () => {
+    const vfs = new GridFSVFS({ uri: 'mongodb://127.0.0.1:27017', database: 'd' })
+    expect(vfs.readRevalidatable).toBe(true)
+    expect(vfs.cachesReads).toBe(true)
+  })
+})
+
+// Rule 3 of the verdict -- `fresh` refused on a backend that caches but
+// stamps no comparable token -- is otherwise exercised only against a
+// stub object cast to VFS. Rule 2 has real backends behind it
+// (fingerprint_spike.test.ts uses DiskVFS and RAMVFS), so this is the
+// hole. Roughly 25 node backends set cachesReads and not readRevalidatable;
+// these two are the documented cases: ssh stamps nothing on a read, and
+// gdrive's stat returns a timestamp where its read returns an md5.
+describe('a backend that caches but cannot revalidate refuses fresh', () => {
+  const CASES: [string, () => VFS][] = [
+    ['ssh', () => new SSHVFS({ host: 'h', username: 'u' })],
+    ['gdrive', () => new GDriveVFS({ clientId: 'c', clientSecret: 's', refreshToken: 'r' })],
+  ]
+
+  for (const [name, make] of CASES) {
+    it(`${name} caches reads, does not revalidate, and is refused`, () => {
+      const vfs = make()
+      expect(vfs.cachesReads).toBe(true)
+      expect(readRevalidatable(vfs)).toBe(false)
+      expect(() => {
+        checkReadCapability('/r/', vfs, { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL })
+      }).toThrow(/comparable content token/)
     })
   }
 })

@@ -214,11 +214,6 @@ export class MountRegistry {
     this.rootRef = list.find((m) => m.prefix === '/') ?? null
   }
 
-  /** The workspace-level read policy a mount overrides. */
-  setDefaultRead(read: ReadSpec): void {
-    this.defaultRead = read
-  }
-
   /** A removed VFS instance cannot start a second lifecycle. */
   checkVfsAvailable(vfs: VFS): void {
     if (this.retiringMounts.has(vfs) || this.mountList.some((m) => m.vfs === vfs && m.retiring)) {

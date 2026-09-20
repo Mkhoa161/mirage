@@ -20,6 +20,16 @@ import { RAMVFS } from '../vfs/ram/ram.ts'
 import { createShellParser } from '../shell/parse/index.ts'
 import { DEFAULT_READ_TTL, MountMode, PathSpec, ReadPolicy } from '../types.ts'
 import { Workspace } from './workspace/workspace.ts'
+import { IOResult } from '../io/types.ts'
+import { Mount } from './mount/spec.ts'
+import type { Dispatcher } from './dispatcher/dispatcher.ts'
+
+function boundOf(ws: Workspace, key: string): number | null | undefined {
+  const store = ws.cache as unknown as {
+    snapshotEntries(): { key: string; entry: { ttl: number | null } }[]
+  }
+  return store.snapshotEntries().find((e) => e.key === key)?.entry.ttl
+}
 
 const ENC = new TextEncoder()
 const DEC = new TextDecoder()
@@ -110,6 +120,74 @@ describe('the mount bound reaches the cache through a shell read', () => {
       // that hardcoded the default would leave `isUnbounded` false and
       // make a per-mount `ttl:` cosmetic.
       expect(store.snapshotEntries().find((e) => e.key === '/r/a.txt')?.entry.ttl).toBe(45)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  // The headline claim: the bound is per mount, not per workspace. Every
+  // other stamping test declares one workspace-level bound, so the
+  // mount's value and the default are the same number and a stamp that
+  // read `registry.defaultRead.ttl` would pass them all.
+  it('stamps each mount its own bound, not the workspace default', async () => {
+    const fast = new RAMVFS()
+    const slow = new RAMVFS()
+    for (const vfs of [fast, slow]) {
+      ;(vfs as unknown as { cachesReads: boolean }).cachesReads = true
+    }
+    const ws = new Workspace(
+      {
+        '/fast': new Mount(fast, {
+          mode: MountMode.WRITE,
+          read: { policy: ReadPolicy.BOUNDED, ttl: 30 },
+        }),
+        '/slow': new Mount(slow, {
+          mode: MountMode.WRITE,
+          read: { policy: ReadPolicy.BOUNDED, ttl: 90 },
+        }),
+      },
+      {
+        mode: MountMode.WRITE,
+        read: { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL },
+        shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
+      },
+    )
+    try {
+      await fast.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v1\n'))
+      await slow.writeFile(PathSpec.fromStrPath('/a.txt'), ENC.encode('v1\n'))
+      await ws.shell('cat /fast/a.txt')
+      await ws.shell('cat /slow/a.txt')
+      expect(boundOf(ws, '/fast/a.txt')).toBe(30)
+      expect(boundOf(ws, '/slow/a.txt')).toBe(90)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  // `applyIo` with no captured function is the embedder's door
+  // (`cacheFactsFor`, resolved live). Only `captureCacheFacts`, reached
+  // through a shell line, is exercised by the tests above.
+  it('reads the mount bound at the live cache-facts door too', async () => {
+    const ram = new RAMVFS()
+    ;(ram as unknown as { cachesReads: boolean }).cachesReads = true
+    const ws = new Workspace(
+      {
+        '/r': new Mount(ram, {
+          mode: MountMode.WRITE,
+          read: { policy: ReadPolicy.BOUNDED, ttl: 45 },
+        }),
+      },
+      { mode: MountMode.WRITE },
+    )
+    try {
+      // `dispatcher` is private; the embedder reaches this door through
+      // `applyIo`, which defaults to `cacheFactsFor`.
+      const disp = (ws as unknown as { dispatcher: Dispatcher }).dispatcher
+      await disp.applyIo(
+        new IOResult({ reads: { '/r/f.txt': ENC.encode('x') }, cache: ['/r/f.txt'] }),
+      )
+      expect(boundOf(ws, '/r/f.txt')).toBe(45)
+      expect(disp.cacheFactsFor('/nowhere/f.txt').cacheable).toBe(false)
     } finally {
       await ws.close()
     }

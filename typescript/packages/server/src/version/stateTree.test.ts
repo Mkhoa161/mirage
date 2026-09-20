@@ -139,6 +139,17 @@ describe('stateTree', () => {
     expect(toState(entries, blobToMeta(metaToBlob(meta))).version).toBe(3)
   })
 
+  it('reads a meta with no version key back as unversioned, not as current', () => {
+    // Python's twin answers 3 here and TypeScript answers undefined;
+    // both then refuse at the loader, with different wording. What must
+    // not happen either side is reading it as the current format, which
+    // would let a pre-v4 commit past the version check.
+    const { entries, meta } = treeInputsFromState(makeState())
+    delete (meta as { version?: number }).version
+    const back = toState(entries, blobToMeta(metaToBlob(meta)))
+    expect(back.version).not.toBe(4)
+  })
+
   it('reads a pre-v4 mount meta back without the read keys rather than inventing them', () => {
     const { entries, meta } = treeInputsFromState(makeState())
     for (const mount of meta.mounts) {

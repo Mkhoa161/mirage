@@ -1216,10 +1216,40 @@ def test_a_mount_block_read_and_ttl_reach_the_mount():
 
 
 def test_the_workspace_read_default_is_what_an_undeclared_mount_takes():
-    cfg = load_config({"read": "bounded", "mounts": {"/a": {"vfs": "ram"}}})
+    """Declared with `fresh`, not `bounded`.
+
+    `read: bounded` resolves to exactly `ReadSpec()`, so asserting that
+    cannot tell "carried the declared default" from "dropped it and took
+    the dataclass default": gutting the key to `resolve_read_spec(None,
+    None)` leaves such a test green.
+    """
+    s3 = {"vfs": "s3", "config": {"bucket": "b"}}
+    cfg = load_config({
+        "read": "fresh",
+        "mounts": {
+            "/a": s3,
+            "/b": {
+                **s3, "read": "bounded",
+                "ttl": 30
+            }
+        },
+    })
     kwargs = cfg.to_workspace_kwargs()
-    assert kwargs["read"] == ReadSpec()
-    assert kwargs["mounts"]["/a"].read == ReadSpec()
+    assert kwargs["read"].policy is ReadPolicy.FRESH
+    assert kwargs["mounts"]["/a"].read.policy is ReadPolicy.FRESH
+    assert kwargs["mounts"]["/b"].read == ReadSpec(policy=ReadPolicy.BOUNDED,
+                                                   ttl=30)
+
+
+def test_a_workspace_level_read_is_judged_at_every_mount_it_lands_on():
+    """The default is a real policy, so it faces the same verdict.
+
+    A top-level `read: fresh` that silently became `bounded` would mount
+    a RAM backend happily; the refusal is what proves the key arrived.
+    """
+    cfg = load_config({"read": "fresh", "mounts": {"/a": {"vfs": "ram"}}})
+    with pytest.raises(ValueError, match="needs a resource that caches reads"):
+        Workspace(**cfg.to_workspace_kwargs())
 
 
 def test_the_two_dependent_read_keys_are_refused_at_the_door():

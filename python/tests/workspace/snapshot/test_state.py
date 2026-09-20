@@ -662,7 +662,7 @@ async def test_a_v4_entry_missing_the_read_key_raises_rather_than_defaulting():
     finally:
         await ws.close()
     del state[StateKey.MOUNTS][0][MountKey.READ]
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="read"):
         build_mount_args(state)
 
 
@@ -722,3 +722,69 @@ async def test_an_overridden_mount_takes_the_default_read_spec():
         assert mount.read == ReadSpec()
     finally:
         await restored.close()
+
+
+@pytest.mark.asyncio
+async def test_a_v4_entry_missing_only_the_ttl_raises_too():
+    """A separate subscript from ``read``, so a separate case."""
+    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    del state[StateKey.MOUNTS][0][MountKey.TTL]
+    with pytest.raises(KeyError, match="ttl"):
+        build_mount_args(state)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("key", "value", "message"), [
+    (MountKey.READ, "banana", "fresh, bounded, pinned"),
+    (MountKey.TTL, 0, "at least 1 second"),
+])
+async def test_a_saved_spec_is_coerced_even_on_an_overridden_mount(
+        key, value, message):
+    """The coercion runs before the override resets the spec.
+
+    ``docs/home/yaml.mdx`` states this ("a snapshot naming an unknown
+    one is refused whether or not the mount is overridden"), so swapping
+    the two statements would break documented behaviour in silence: the
+    junk would be discarded along with the spec rather than reported.
+    """
+    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
+    try:
+        state = await to_state_dict(ws)
+    finally:
+        await ws.close()
+    state[StateKey.MOUNTS][0][key] = value
+    with pytest.raises(ValueError, match=message):
+        build_mount_args(state, {"/d/": RAMVFS()})
+
+
+@pytest.mark.asyncio
+async def test_a_restore_into_a_live_workspace_keeps_the_live_read_policy():
+    """``apply_state_dict`` restores content, not mount configuration.
+
+    It loads state into mounts that already exist and never re-reads
+    their `read`/`ttl`, exactly as it never re-reads `mode`. A
+    ``version checkout`` therefore keeps the running workspace's policy.
+    Written down here because the saved keys are right there in the
+    state dict and the omission otherwise reads as an oversight.
+    """
+    source = Workspace({"/d/": RAMVFS()},
+                       mode=MountMode.WRITE,
+                       read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=45))
+    try:
+        state = await to_state_dict(source)
+    finally:
+        await source.close()
+    assert state[StateKey.MOUNTS][0][MountKey.TTL] == 45
+
+    target = Workspace({"/d/": RAMVFS()},
+                       mode=MountMode.WRITE,
+                       read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=90))
+    try:
+        await apply_state_dict(target, state)
+        assert target._registry.mount_for_prefix("/d/").read.ttl == 90
+    finally:
+        await target.close()
