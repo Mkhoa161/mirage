@@ -224,3 +224,34 @@ def test_a_subtree_retraction_spares_a_nested_mount():
                 await ws.close()
 
         assert asyncio.run(run()) == ["/s3/d/inner/y.txt"]
+
+
+def test_moving_one_object_spares_an_independent_descendant_pin():
+    """`a` and `a/child` are independent keys on a keyed store, so
+    `mv a b` moves the single object at `a` and never touches `a/child`.
+
+    The end-to-end case the unit tests could not see: both rename paths
+    used to record the same op name, so capture treated a one-object
+    move as a prefix move and dropped a pin for an object that had not
+    moved.
+    """
+    store: dict[str, bytes] = {}
+    with _mounted(store):
+
+        async def run() -> tuple[list[str], list[str]]:
+            ws = _ws()
+            try:
+                await (await ws.shell("tee /s3/a",
+                                      stdin=b"A\n")).materialize_stdout()
+                await (await ws.shell("tee /s3/a/child",
+                                      stdin=b"C\n")).materialize_stdout()
+                await ws.shell("mv /s3/a /s3/b")
+                state = await to_state_dict(ws)
+                return sorted(store), sorted(f["path"]
+                                             for f in state["fingerprints"])
+            finally:
+                await ws.close()
+
+        keys, pins = asyncio.run(run())
+        assert keys == ["a/child", "b"]
+        assert pins == ["/s3/a/child"]

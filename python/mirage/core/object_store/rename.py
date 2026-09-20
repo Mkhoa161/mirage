@@ -61,6 +61,11 @@ def make_rename(driver: ObjectStoreDriver[A, C],
         # None until the store answers: False means it told us cleanly
         # that nothing moved, and only a clean "nothing" is safe to skip.
         moved: bool | None = None
+        # Which of the two paths ran, because only the prefix walk moves
+        # a subtree and capture retracts on the op name. A raise from
+        # move_file leaves this "rename": the walk below never ran, so
+        # nothing under the prefix can have moved.
+        op = "rename"
         async with driver.connect(accessor) as conn:
             try:
                 moved = await move_file(conn, src_key, kp.apply(kpfx, dst))
@@ -72,6 +77,7 @@ def make_rename(driver: ObjectStoreDriver[A, C],
                     # already moved keys reads as "nothing moved" and
                     # skips the record it is in `finally` for.
                     moved = None
+                    op = "rename_prefix"
                     moved = await move_prefix(conn, kp.apply_dir(kpfx, src),
                                               kp.apply_dir(kpfx, dst))
             finally:
@@ -84,8 +90,8 @@ def make_rename(driver: ObjectStoreDriver[A, C],
                     # False, where nothing moved at all. Order is free --
                     # both are pure retractions and deletions commute --
                     # but it stops being free if either carries a token.
-                    record("rename", src, driver.vfs, 0, timer)
-                    record("rename", dst, driver.vfs, 0, timer)
+                    record(op, src, driver.vfs, 0, timer)
+                    record(op, dst, driver.vfs, 0, timer)
         if not moved:
             raise enoent(src_spec.virtual)
         # Subtrees, not single paths: move_prefix relocates every key

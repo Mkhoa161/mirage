@@ -182,4 +182,23 @@ describe('fingerprint retraction (mocked S3)', () => {
       await ws.close()
     }
   })
+
+  it('moving one object spares an independent descendant pin', async () => {
+    // `a` and `a/child` are independent keys on a keyed store, so
+    // `mv a b` moves the single object at `a` and never touches
+    // `a/child`. Both rename paths used to record the same op name, so
+    // capture treated a one-object move as a prefix move and dropped a
+    // pin for an object that had not moved.
+    const ws = makeWorkspace()
+    try {
+      await ws.shell('tee /s3/a <<< A')
+      await ws.shell('tee /s3/a/child <<< C')
+      await ws.shell('mv /s3/a /s3/b')
+      const state = await toStateDict(ws)
+      expect([...mock.store.objects(BUCKET).keys()].sort()).toEqual(['a/child', 'b'])
+      expect(state.fingerprints?.map((f) => f.path).sort()).toEqual(['/s3/a/child'])
+    } finally {
+      await ws.close()
+    }
+  })
 })

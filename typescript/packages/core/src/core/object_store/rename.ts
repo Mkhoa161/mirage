@@ -54,6 +54,11 @@ export function makeRename<A extends Accessor, C>(
     // null until the store answers: false means it told us cleanly that
     // nothing moved, and only a clean "nothing" is safe to skip.
     let moved: boolean | null = null
+    // Which of the two paths ran, because only the prefix walk moves a
+    // subtree and capture retracts on the op name. A rejection from
+    // moveFile leaves this 'rename': the walk below never ran, so
+    // nothing under the prefix can have moved.
+    let op = 'rename'
     try {
       moved = await moveFile(conn, srcKey, kp.apply(kpfx, dst.mountPath))
       if (!moved) {
@@ -63,6 +68,7 @@ export function makeRename<A extends Accessor, C>(
         // having already moved keys reads as "nothing moved" and skips
         // the record it is in `finally` for.
         moved = null
+        op = 'rename_prefix'
         moved = await movePrefix(
           conn,
           kp.applyDir(kpfx, src.mountPath),
@@ -78,8 +84,8 @@ export function makeRename<A extends Accessor, C>(
         // where nothing moved at all. Order is free -- both are pure
         // retractions and deletions commute -- but it stops being free
         // if either carries a token.
-        record('rename', src.virtual, driver.vfs, 0, timer)
-        record('rename', dst.virtual, driver.vfs, 0, timer)
+        record(op, src.virtual, driver.vfs, 0, timer)
+        record(op, dst.virtual, driver.vfs, 0, timer)
       }
       await close()
     }

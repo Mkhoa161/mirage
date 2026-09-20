@@ -128,8 +128,8 @@ describe('object_store rename retraction records', () => {
     )
     expect(code).toBe('EIO')
     expect(records).toEqual([
-      ['rename', '/mnt/d'],
-      ['rename', '/mnt/e'],
+      ['rename_prefix', '/mnt/d'],
+      ['rename_prefix', '/mnt/e'],
     ])
   })
 

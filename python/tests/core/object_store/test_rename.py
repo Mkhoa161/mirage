@@ -99,7 +99,8 @@ def _recorded(coro):
 
 def test_rename_records_a_retraction_for_both_paths(accessor):
     """A move invalidates the token of both: src's object left, dst's was
-    replaced by it."""
+    replaced by it. A single object moved, so the op is the point one and
+    nothing under the name is retracted."""
     store = FakeStore({"a.txt": b"x"})
     assert _recorded(
         make_rename(make_driver(store),
@@ -143,7 +144,8 @@ def test_rename_records_both_retractions_when_the_prefix_walk_fails(accessor):
     driver = replace(make_driver(store), move_prefix=_boom)
     assert _recorded_failure(
         make_rename(driver, _exists)(accessor, spec("/d"), spec("/e")),
-        RuntimeError, "boom") == [("rename", "/d"), ("rename", "/e")]
+        RuntimeError, "boom") == [("rename_prefix", "/d"),
+                                  ("rename_prefix", "/e")]
 
 
 def test_rename_of_a_missing_source_records_nothing(accessor):

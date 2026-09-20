@@ -320,11 +320,12 @@ describe('captureFingerprints op sets', () => {
     expect([...RETRACT_FINGERPRINT_OPS].sort()).toEqual([
       'copy',
       'rename',
+      'rename_prefix',
       'rm_r',
       'rmdir',
       'unlink',
     ])
-    expect([...SUBTREE_RETRACT_OPS].sort()).toEqual(['rename', 'rm_r'])
+    expect([...SUBTREE_RETRACT_OPS].sort()).toEqual(['rename_prefix', 'rm_r'])
   })
 
   it.each([...SUBTREE_RETRACT_OPS])('%s takes a descendant pin with it', (op) => {

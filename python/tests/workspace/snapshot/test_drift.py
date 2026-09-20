@@ -263,9 +263,9 @@ def test_the_four_op_sets_hold_exactly_what_the_ladder_needs():
     assert STAMP_FINGERPRINT_OPS == {"read", "write", "create", "truncate"}
     assert CONTENT_CHANGING_OPS == {"write", "create", "truncate", "append"}
     assert RETRACT_FINGERPRINT_OPS == {
-        "unlink", "rm_r", "rmdir", "rename", "copy"
+        "unlink", "rm_r", "rmdir", "rename", "rename_prefix", "copy"
     }
-    assert SUBTREE_RETRACT_OPS == {"rm_r", "rename"}
+    assert SUBTREE_RETRACT_OPS == {"rm_r", "rename_prefix"}
 
 
 @pytest.mark.parametrize("op", sorted(RETRACT_FINGERPRINT_OPS))
