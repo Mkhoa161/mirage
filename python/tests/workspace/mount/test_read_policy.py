@@ -12,6 +12,9 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import json
+from pathlib import Path
+
 import pytest
 
 from mirage.types import DEFAULT_READ_TTL, ReadPolicy, ReadSpec
@@ -21,6 +24,7 @@ from mirage.vfs.ceph.ceph import CephVFS
 from mirage.vfs.digitalocean.digitalocean import DigitalOceanVFS
 from mirage.vfs.disk.disk import DiskVFS
 from mirage.vfs.gcs.gcs import GCSVFS
+from mirage.vfs.gridfs import GridFSConfig
 from mirage.vfs.gridfs.gridfs import GridFSVFS
 from mirage.vfs.hf_buckets import HfBucketsConfig, HfBucketsVFS
 from mirage.vfs.lancedb import LanceDBConfig, LanceDBVFS
@@ -44,6 +48,7 @@ from mirage.workspace.mount.read_policy import (check_read_capability,
                                                 resolve_read_spec)
 
 FRESH = ReadSpec(policy=ReadPolicy.FRESH)
+SPEC_ROOT = Path(__file__).parents[4] / "spec"
 
 # Every S3-compatible provider reaches the verdict through S3VFS, so the
 # flag is declared once and inherited. Listing them is what catches a new
@@ -161,8 +166,16 @@ def test_every_s3_alias_inherits_the_capability(cls):
     assert cls.caches_reads is True
 
 
-def test_gridfs_declares_the_capability():
+def test_gridfs_is_allowed_fresh_on_a_constructed_instance():
+    # The flag on the class is one line asserting itself; running the
+    # verdict on an instance is what proves gridfs can actually declare
+    # `fresh`. The token behind the claim is pinned separately, in
+    # tests/core/gridfs/test_read_fingerprint.py.
     assert GridFSVFS.READ_REVALIDATABLE is True
+    vfs = GridFSVFS(GridFSConfig(uri="mongodb://127.0.0.1:27017",
+                                 database="d"))
+    assert vfs.caches_reads is True
+    assert check_read_capability("/g/", vfs, FRESH) is None
 
 
 def test_bounded_is_allowed_on_a_backend_that_cannot_revalidate():
@@ -191,6 +204,28 @@ def test_the_revalidatable_roster_is_exactly_these_backends():
         if getattr(load_attr(entry.vfs_path), "READ_REVALIDATABLE", False):
             declared.add(name)
     assert declared == REVALIDATABLE
+
+
+@pytest.mark.parametrize("host", ["typescript/node", "typescript/browser"])
+def test_the_typescript_roster_is_the_same_list(host):
+    """The absolute value, on the other side too.
+
+    ``check_spec_parity.py`` pins that the two languages agree, and the
+    test above pins python's answer, so a backend gaining the flag in
+    both at once is caught -- but only for a name python has. A
+    browser-only backend (``opfs``) has no python row, so nothing would
+    catch it. Reading the committed spec is exact and costs no
+    construction, which is why the TypeScript facts are generated rather
+    than probed in the first place.
+    """
+    spec = json.loads((SPEC_ROOT / host / "vfs.json").read_text())
+    declared = {
+        name
+        for name, caps in spec["capabilities"].items()
+        if caps and caps.get("read_revalidatable") is True
+    }
+    # gridfs has no browser implementation; nothing else differs.
+    assert declared == {n for n in REVALIDATABLE if n in spec["capabilities"]}
 
 
 def test_lancedb_decides_per_config_not_per_class():

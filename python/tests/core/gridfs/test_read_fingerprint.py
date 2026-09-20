@@ -55,19 +55,18 @@ async def test_stat_and_read_stamp_the_same_token(monkeypatch):
     assert meta is not None
 
     records = []
-    monkeypatch.setitem(read_bytes.__globals__, "latest_file", fake_latest_file)
-    monkeypatch.setitem(read_bytes.__globals__, "bucket",
+    monkeypatch.setitem(read_bytes.__globals__, "latest_file",
+                        fake_latest_file)
+    monkeypatch.setitem(read_bytes.__globals__,
+                        "bucket",
                         lambda _a, _c=None: _Bucket())
-    monkeypatch.setitem(
-        read_bytes.__globals__, "record",
-        lambda *a, **kw: records.append(kw.get("fingerprint")))
+    monkeypatch.setitem(read_bytes.__globals__, "record",
+                        lambda *a, **kw: records.append(kw.get("fingerprint")))
 
     from mirage.accessor.gridfs import GridFSConfig
     from mirage.types import PathSpec
-    accessor = type("A", (), {
-        "config":
-        GridFSConfig(uri="mongodb://h", database="d")
-    })()
+    accessor = type(
+        "A", (), {"config": GridFSConfig(uri="mongodb://h", database="d")})()
     data = await read_bytes(accessor, PathSpec.from_str_path("/a.txt"))
 
     assert data == b"hello"

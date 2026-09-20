@@ -87,10 +87,16 @@ describe('readRevalidatable', () => {
     })
   }
 
-  it('GridFS declares it on its own', () => {
+  // The flag on the class is one line asserting itself; running the
+  // verdict on an instance is what proves gridfs can actually declare
+  // `fresh`.
+  it('GridFS declares it on its own and is allowed fresh', () => {
     const vfs = new GridFSVFS({ uri: 'mongodb://127.0.0.1:27017', database: 'd' })
     expect(vfs.readRevalidatable).toBe(true)
     expect(vfs.cachesReads).toBe(true)
+    expect(() => {
+      checkReadCapability('/g/', vfs, { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL })
+    }).not.toThrow()
   })
 })
 
