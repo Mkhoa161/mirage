@@ -98,6 +98,11 @@ function concat(chunks: readonly Uint8Array[]): Uint8Array {
   return out
 }
 
+// The stamp every member carries: 1980-01-01 00:00, the DOS epoch and
+// Python zipfile's default, which Info-ZIP lists as `80-Jan-01 00:00`.
+// A zero date has month 0 and day 0, which is no date at all.
+const DOS_EPOCH_DATE = (1 << 5) | 1
+
 function buildZip(items: ZipItem[]): Uint8Array {
   const parts: Uint8Array[] = []
   let offset = 0
@@ -110,7 +115,7 @@ function buildZip(items: ZipItem[]): Uint8Array {
     writeU16LE(header, 6, 0)
     writeU16LE(header, 8, item.method)
     writeU16LE(header, 10, 0)
-    writeU16LE(header, 12, 0)
+    writeU16LE(header, 12, DOS_EPOCH_DATE)
     writeU32LE(header, 14, item.crc)
     writeU32LE(header, 18, item.compressed.byteLength)
     writeU32LE(header, 22, item.data.byteLength)
@@ -132,7 +137,7 @@ function buildZip(items: ZipItem[]): Uint8Array {
     writeU16LE(central, 8, 0)
     writeU16LE(central, 10, item.method)
     writeU16LE(central, 12, 0)
-    writeU16LE(central, 14, 0)
+    writeU16LE(central, 14, DOS_EPOCH_DATE)
     writeU32LE(central, 16, item.crc)
     writeU32LE(central, 20, item.compressed.byteLength)
     writeU32LE(central, 24, item.data.byteLength)
