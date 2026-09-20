@@ -425,6 +425,8 @@ describe('the token describes the bytes stored', () => {
     const io = new IOResult({ reads: { '/s3/f.txt': ENC.encode('abcdef') }, cache: ['/s3/f.txt'] })
     await applyIo(cache, io, undefined, [opRecord('read', '/s3/f.txt', 'etag-2', 1)])
     expect(await cache.isFresh('/s3/f.txt', 'etag-2')).toBe(true)
+  })
+})
 
 // ── the mount's staleness bound reaches the entry ───────────────────────
 

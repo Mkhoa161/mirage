@@ -355,6 +355,7 @@ async def test_reconcile_read_never_raises_and_drops_the_entry(failure):
         await ws.close()
 
 
+@pytest.mark.asyncio
 async def test_bounded_removes_a_bound_less_entry_and_the_refill_stamps():
     """The self-heal must remove, not merely decline to serve.
 

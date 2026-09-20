@@ -209,8 +209,7 @@ async def _background_drain(
                     await cache.add(path,
                                     materialized,
                                     fingerprint=latest_fingerprint(
-                                        records, path, ops,
-                                        len(materialized)),
+                                        records, path, ops, len(materialized)),
                                     ttl=facts.ttl if facts else None)
         else:
             logger.info(
