@@ -944,6 +944,32 @@ describe('unzip archive validation', () => {
     )
   })
 
+  it('an entry reaching past the directory exits 3', async () => {
+    const vfs = await makeMulti()
+    const bytes = vfs.store.files.get('/m.zip')
+    if (bytes === undefined) throw new Error('no archive')
+    const bad = bytes.slice()
+    const at = findSig(bad, [0x50, 0x4b, 0x01, 0x02])
+    bad.set([0xff, 0xff], at + 28)
+    vfs.store.files.set('/m.zip', bad)
+    const r = await runCmd(RAM_UNZIP, vfs, [PathSpec.fromStrPath('/m.zip')], { args_l: true })
+    expect(r.exitCode).toBe(3)
+    expect(DEC.decode(r.stderr)).toContain('start of central directory not found')
+  })
+
+  it('an entry count short of the directory exits 3', async () => {
+    const vfs = await makeMulti()
+    const bytes = vfs.store.files.get('/m.zip')
+    if (bytes === undefined) throw new Error('no archive')
+    const bad = bytes.slice()
+    const at = findSig(bad, [0x50, 0x4b, 0x05, 0x06])
+    bad.set([0x02, 0x00], at + 10)
+    vfs.store.files.set('/m.zip', bad)
+    const r = await runCmd(RAM_UNZIP, vfs, [PathSpec.fromStrPath('/m.zip')], { Z: true })
+    expect(r.exitCode).toBe(3)
+    expect(DEC.decode(r.stderr)).toContain('start of central directory not found')
+  })
+
   it('bytes before the archive shift every offset, and it lists with a warning', async () => {
     const vfs = await makeMulti()
     const bytes = vfs.store.files.get('/m.zip')

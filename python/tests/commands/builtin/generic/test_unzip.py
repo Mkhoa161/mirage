@@ -345,6 +345,28 @@ async def test_corrupt_central_directory_exits_3():
 
 
 @pytest.mark.asyncio
+async def test_entry_reaching_past_the_directory_exits_3():
+    data = bytearray(_stored(MULTI))
+    at = data.find(b"PK\x01\x02")
+    data[at + 28:at + 30] = (0xFFFF).to_bytes(2, "little")
+    out, res, _ = await _run((), data=bytes(data), args_l=True)
+    assert out is None
+    assert res.exit_code == 3
+    assert _stderr_text(res) == CORRUPT_CDIR.format("/a.zip")
+
+
+@pytest.mark.asyncio
+async def test_entry_count_short_of_the_directory_exits_3():
+    data = bytearray(_stored(MULTI))
+    at = data.rfind(b"PK\x05\x06")
+    data[at + 10:at + 12] = (2).to_bytes(2, "little")
+    out, res, _ = await _run((), data=bytes(data), Z=True)
+    assert out is None
+    assert res.exit_code == 3
+    assert _stderr_text(res) == CORRUPT_CDIR.format("/a.zip")
+
+
+@pytest.mark.asyncio
 async def test_prefixed_archive_lists_with_the_extra_bytes_warning():
     out, res, _ = await _run((),
                              data=b"#!/bin/sh\n" + _stored(MULTI),

@@ -274,7 +274,12 @@ function dosDateTime(date: number, time: number): ZipRow['dateTime'] {
 // an empty archive, and never saw a data descriptor. Bytes prepended to
 // the archive (a self-extractor stub) shift every offset by the same
 // amount, which the record's own position reveals; Info-ZIP warns about
-// them and mirage, like zipfile, adjusts silently.
+// them and mirage, like zipfile, adjusts silently. The directory ends
+// where the record begins, and the record's entry count must tile it
+// exactly: an entry reaching past the end, or a count that leaves bytes
+// over, is a corrupt directory. Info-ZIP and zipfile read the truncated
+// entry anyway (Info-ZIP lists it and exits 1 or 51; a short count makes
+// Info-ZIP exit 3 after listing); mirage refuses up front on both hosts.
 function readZipEntries(data: Uint8Array): { entries: ZipEntry[]; count: number; slack: number } {
   const eocd = findEocd(data)
   if (eocd === -1) throw new ZipFormatError('no_eocd')
@@ -285,11 +290,7 @@ function readZipEntries(data: Uint8Array): { entries: ZipEntry[]; count: number;
   let offset = cdOffset + shift
   const entries: ZipEntry[] = []
   for (let i = 0; i < count; i++) {
-    if (
-      offset < 0 ||
-      offset + 46 > data.byteLength ||
-      readU32LE(data, offset) !== CENTRAL_HEADER_SIG
-    ) {
+    if (offset < 0 || offset + 46 > eocd || readU32LE(data, offset) !== CENTRAL_HEADER_SIG) {
       throw new ZipFormatError('corrupt_cdir')
     }
     const madeBy = readU16LE(data, offset + 4)
@@ -305,6 +306,8 @@ function readZipEntries(data: Uint8Array): { entries: ZipEntry[]; count: number;
     const internalAttr = readU16LE(data, offset + 36)
     const externalAttr = readU32LE(data, offset + 38)
     const localOffset = readU32LE(data, offset + 42) + shift
+    const next = offset + 46 + nameLen + extraLen + commentLen
+    if (next > eocd) throw new ZipFormatError('corrupt_cdir')
     const name = DEC.decode(data.subarray(offset + 46, offset + 46 + nameLen))
     let inflated: Promise<Uint8Array> | null = null
     const content = (): Promise<Uint8Array> => {
@@ -325,8 +328,9 @@ function readZipEntries(data: Uint8Array): { entries: ZipEntry[]; count: number;
       hasExtra: extraLen > 0,
       content,
     })
-    offset += 46 + nameLen + extraLen + commentLen
+    offset = next
   }
+  if (offset !== eocd) throw new ZipFormatError('corrupt_cdir')
   return { entries, count, slack: shift }
 }
 

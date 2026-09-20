@@ -30,6 +30,7 @@ EXCLUDED_CAUTION_PREFIX = "caution: excluded filename not matched:  "
 # file without one is not an archive at all, whatever its name says.
 EOCD_SIGNATURE = b"PK\x05\x06"
 EOCD_SEARCH = 65557
+CENTRAL_SIGNATURE = b"PK\x01\x02"
 # Info-ZIP's refusals verbatim (process.c). The paragraph is shared;
 # unzip signs it below, zipinfo signs it below under its own name, and
 # -p names the archive above it and does not sign. The exit codes are
@@ -162,6 +163,39 @@ def _slack_warning(slack: int, archive: str) -> tuple[str, int]:
         return MISSING_BYTES.format(archive, -slack), MISSING_EXIT
     return EXTRA_BYTES.format(archive, slack,
                               "" if slack == 1 else "s"), WARN_EXIT
+
+
+def _central_directory_tiles(data: bytes) -> bool:
+    """Whether the end record's entry count fills its directory exactly.
+
+    Each central entry is a 46-byte header plus a name, an extra field
+    and a comment of the lengths it declares, and the directory ends where
+    the end record begins. A record that reaches past that end, or a count
+    that leaves bytes over, is a corrupt directory. Info-ZIP and zipfile
+    both read the truncated record anyway (Info-ZIP lists it and exits 1
+    or 51; a short count makes Info-ZIP exit 3 after listing); mirage
+    refuses up front so the two hosts answer the same.
+
+    Args:
+        data (bytes): the operand's bytes.
+    """
+    at = data.rfind(EOCD_SIGNATURE, max(0, len(data) - EOCD_SEARCH))
+    if at < 0 or at + 20 > len(data):
+        return False
+    count = int.from_bytes(data[at + 10:at + 12], "little")
+    cd_size = int.from_bytes(data[at + 12:at + 16], "little")
+    offset = at - cd_size
+    for _ in range(count):
+        if offset < 0 or offset + 46 > at or not data.startswith(
+                CENTRAL_SIGNATURE, offset):
+            return False
+        name_len = int.from_bytes(data[offset + 28:offset + 30], "little")
+        extra_len = int.from_bytes(data[offset + 30:offset + 32], "little")
+        comment_len = int.from_bytes(data[offset + 32:offset + 34], "little")
+        offset += 46 + name_len + extra_len + comment_len
+        if offset > at:
+            return False
+    return offset == at
 
 
 def _refusal(data: bytes, archive: str, *, zipinfo: bool,
@@ -316,6 +350,8 @@ async def unzip(
         # accessor stamped.
         archive_path = PathSpec.from_str_path(archive_path.virtual)
     data = await read_bytes(archive_path)
+    if not _central_directory_tiles(data):
+        return None, _refusal(data, archive_path.virtual, zipinfo=Z, pipe=p)
     try:
         zf = zipfile.ZipFile(io.BytesIO(data), "r")
     except zipfile.BadZipFile:
