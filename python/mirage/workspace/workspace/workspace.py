@@ -1271,6 +1271,48 @@ class Workspace:
                                         records=records,
                                         is_cacheable=is_cacheable)
 
+    async def _serialize_line(
+        self,
+        session_id: str | None,
+        run: Callable[[], Awaitable[IOResult | ProvisionResult]],
+    ) -> IOResult | ProvisionResult:
+        """Run one line of a session at a time, as one bash process does.
+
+        Two top-level lines on one session share its env, cwd and ``$?``,
+        so letting them interleave hands one line the loop variable the
+        other just set: two ``for f`` loops both exit 0 and both print
+        the other's values. A nested line (``eval``, ``source``, ``$()``,
+        ``xargs``, a host callback fired mid-line) is the same shell
+        continuing and runs inline: it already holds the session, and
+        waiting on itself would deadlock. The ambient binding decides,
+        by the same rule ``execute_line`` uses to pick the session a
+        line runs as, so the lock key and the executed session never
+        disagree; a background job's fork keeps its parent's id and
+        continues inline too.
+
+        Args:
+            session_id (str | None): the session the caller named, or
+                None for the default.
+            run (Callable[[], Awaitable[IOResult | ProvisionResult]]):
+                the line, started only once the session is held.
+        """
+        ambient = get_current_session_for(self._session_mgr)
+        if ambient is not None and session_id in (None, ambient.session_id):
+            return await run()
+        # Hydrate first: a workspace on a shared store adopts the
+        # persisted default id there, and a key taken before that names
+        # a session no later line would wait on.
+        await self.ensure_sessions_loaded()
+        if session_id is None:
+            session_id = self._session_mgr.default_id
+        async with self._session_mgr.line_lock_for(session_id):
+            # A line queued behind a running one wakes after close may
+            # have started; it runs nothing, like a line that arrived
+            # after.
+            if self._shutting_down:
+                raise RuntimeError("Workspace is closed")
+            return await run()
+
     @overload
     async def shell(self,
                     command: str,
@@ -1371,9 +1413,11 @@ class Workspace:
         frame = LineFrame()
         try:
             return await run_cancellable(
-                execute_line(self, command, session_id, stdin, provision,
-                             agent_id, cwd, env, cancel, record, runtime,
-                             routing_decision, handed, frame), cancel)
+                self._serialize_line(
+                    session_id,
+                    partial(execute_line, self, command, session_id, stdin,
+                            provision, agent_id, cwd, env, cancel, record,
+                            runtime, routing_decision, handed, frame)), cancel)
         except (MirageAbortError, asyncio.CancelledError):
             # An abandoned invocation is the caller's outcome, not the
             # shell's, whether it arrived on the event or as a cancel
