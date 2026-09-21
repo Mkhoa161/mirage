@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { RAMIndexCacheStore } from '../../cache/index/ram.ts'
+import { KeyLock } from '../../cache/lock.ts'
 import { checkCliVerbs } from '../session/validate.ts'
 import type { FileCache } from '../../cache/file/mixin.ts'
 import type { IndexConfig } from '../../cache/index/config.ts'
@@ -84,6 +85,7 @@ import { explainLine } from '../node/explain.ts'
 import { provisionNode } from '../node/provision_node.ts'
 import { buildFilePrompt } from '../file_prompt.ts'
 import { getCurrentSessionFor } from '../../context/session_context.ts'
+import { abortable, hasAborted, makeAbortError } from '../abort.ts'
 import { SecretSourceSchema, type SecretSource } from '../../secrets/config.ts'
 import { SecretsError } from '../../secrets/errors.ts'
 import { sourceFor } from '../../secrets/registry.ts'
@@ -147,6 +149,7 @@ export class Workspace {
   readonly observer: Observer
   readonly vfs: Ops
   private closed = false
+  private readonly lineLock = new KeyLock()
   private readonly closers: (() => Promise<void>)[] = []
   private closing: Promise<void> | null = null
 
@@ -1325,7 +1328,65 @@ export class Workspace {
     // A line admitted before close may still recurse through eval/source/$(),
     // but no continuation can start after teardown has finished.
     if (this.closed) throw new Error('Workspace is closed')
-    return executeLine(this.executeEnv(), command, options)
+    return this.serializeLine(options.sessionId, options.signal, () =>
+      executeLine(this.executeEnv(), command, options),
+    )
+  }
+
+  /**
+   * Run one line of a session at a time, as one bash process does.
+   *
+   * Two top-level lines on one session share its env, cwd and `$?`, so
+   * letting them interleave hands one line the loop variable the other
+   * just set: two `for f` loops both exit 0 and both print the other's
+   * values. A nested line (`eval`, `source`, `$()`, `xargs`, a host
+   * callback fired mid-line) is the same shell continuing and runs
+   * inline: it already holds the session, and waiting on itself would
+   * deadlock. The ambient binding decides, by the same rule
+   * `executeLine` uses to pick the session a line runs as, so the lock
+   * key and the executed session never disagree; a background job's
+   * fork keeps its parent's id and continues inline too.
+   *
+   * @param sessionId the session named by the caller, or undefined for
+   *   the default.
+   * @param run the line, started only once the session is held.
+   */
+  private async serializeLine<T>(
+    sessionId: string | undefined,
+    signal: AbortSignal | undefined,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const ambient = getCurrentSessionFor(this.sessionManager)
+    if (ambient !== null && (sessionId === undefined || sessionId === ambient.sessionId)) {
+      return run()
+    }
+    // Hydrate first: a workspace on a shared store adopts the persisted
+    // default id there, and a key taken before that names a session no
+    // later line would wait on.
+    await abortable(this.ensureSessionsLoaded(), signal)
+    let started = false
+    const gate = this.lineLock.withLock(sessionId ?? this.sessionManager.defaultId, async () => {
+      // A line queued behind a running one wakes after close may have
+      // started, or after its caller was released; it runs nothing,
+      // like a line that arrived after.
+      if (this.isShuttingDown()) throw new Error('Workspace is closed')
+      if (hasAborted(signal)) throw makeAbortError(signal)
+      started = true
+      return run()
+    })
+    if (signal === undefined) return gate
+    // The wait is the caller's to abandon; the run is not. Once the line
+    // has started, its own abort handling joins the tree under the grace
+    // and restores `$?`, and releasing the caller here would skip that.
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = (): void => {
+        if (!started) reject(makeAbortError(signal))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      gate.then(resolve, reject).finally(() => {
+        signal.removeEventListener('abort', onAbort)
+      })
+    })
   }
 
   /**
@@ -1342,7 +1403,9 @@ export class Workspace {
       throw new Error('no evaluator runtime bound for the repl')
     }
     try {
-      return await bound.eval(code, { session: sessionId })
+      return await this.serializeLine(sessionId, undefined, () =>
+        bound.eval(code, { session: sessionId }),
+      )
     } catch (err) {
       const unavailable =
         err instanceof PyodideUnavailableError || err instanceof MontyUnavailableError
