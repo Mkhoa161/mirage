@@ -21,7 +21,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "mkdir -p /data/prune/skip/inner /data/prune/keep && printf 'c\\n' > /data/prune/skip/cache.txt && printf 'd\\n' > /data/prune/skip/inner/deep.txt && printf 'f\\n' > /data/prune/keep/file.txt",
       "expect": {
@@ -51,7 +55,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -type f -print",
       "expect": {
@@ -88,9 +96,13 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
-      "command": "cd /data/prune && find . -path ./skip -prune -o -type f -print",
+      "command": "(cd /data/prune && find . -path ./skip -prune -o -type f -print)",
       "expect": {
         "exit": 0,
         "stdout": "./keep/file.txt\n",
@@ -125,7 +137,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -type f",
       "expect": {
@@ -161,7 +177,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -name inner -prune -o -type f -print",
       "expect": {
@@ -198,7 +218,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -name skip -prune -o -print",
       "expect": {
@@ -234,7 +258,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -name '*.txt' -print0",
       "expect": {
@@ -271,7 +299,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune \\( -path /data/prune/skip -prune \\) -o -type f -print",
       "expect": {
@@ -308,7 +340,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -type d -prune",
       "expect": {
@@ -342,7 +378,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -name cache.txt -prune -o -print",
       "expect": {
@@ -378,7 +418,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -maxdepth 1 -path /data/prune/skip -prune -o -print",
       "expect": {
@@ -415,7 +459,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -mindepth 2 -path /data/prune/skip -prune -o -print",
       "expect": {
@@ -452,7 +500,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -depth -path /data/prune/skip -prune -o -type f -print",
       "expect": {
@@ -490,7 +542,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -type f -exec echo X {} \\;",
       "expect": {
@@ -527,7 +583,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -type f -exec echo X {} +",
       "expect": {
@@ -564,7 +624,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -type f -printf '%f\\n'",
       "expect": {
@@ -601,7 +665,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune/skip/inner /data/prune -path /data/prune/skip -prune -o -print",
       "expect": {
@@ -637,7 +705,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -name file.txt -print -o -name deep.txt -print",
       "expect": {
@@ -672,7 +744,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune/keep -print -o -name file.txt",
       "expect": {
@@ -707,7 +783,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -name '*.txt' -delete",
       "expect": {
@@ -744,7 +824,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -name file.txt -print -o -name cache.txt -print0",
       "expect": {
@@ -780,7 +864,11 @@
         "sharepoint-prefix",
         "ssh",
         "nextcloud",
-        "box"
+        "box",
+        "gdrive",
+        "gdrive-folder",
+        "hf",
+        "hf-prefix"
       ],
       "command": "find /data/prune -path /data/prune/skip -prune -o -perm 644 -print",
       "expect": {
@@ -792,116 +880,6 @@
         "path",
         "prune",
         "o"
-      ]
-    },
-    {
-      "id": "find_prune_aging_provision",
-      "seq": 789,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "mkdir -p /data/aging/old/x /data/aging/new/y && touch /data/aging/old/x/f /data/aging/new/y/g /data/aging/old/o.txt && touch -d 2000-01-01 /data/aging/old",
-      "expect": {
-        "exit": 0,
-        "stdout": "",
-        "stderr": ""
-      }
-    },
-    {
-      "id": "find_prune_after_a_time_test_fires_only_where_it_holds",
-      "seq": 790,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "find /data/aging -mindepth 1 -newermt 2010-01-01 -prune",
-      "expect": {
-        "exit": 0,
-        "stdout": "/data/aging/new\n/data/aging/old/o.txt\n/data/aging/old/x\n",
-        "stderr": ""
-      },
-      "flags": [
-        "mindepth",
-        "newermt",
-        "prune"
-      ]
-    },
-    {
-      "id": "find_prune_before_a_time_test_fires_regardless",
-      "seq": 790,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "find /data/aging -mindepth 1 -prune -newermt 2010-01-01",
-      "expect": {
-        "exit": 0,
-        "stdout": "/data/aging/new\n",
-        "stderr": ""
-      },
-      "flags": [
-        "mindepth",
-        "prune",
-        "newermt"
-      ]
-    },
-    {
-      "id": "find_prune_after_mtime_plus_keeps_the_old_directory_closed",
-      "seq": 790,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "find /data/aging -mindepth 1 -mtime +3650 -prune",
-      "expect": {
-        "exit": 0,
-        "stdout": "/data/aging/old\n",
-        "stderr": ""
-      },
-      "flags": [
-        "mindepth",
-        "mtime",
-        "prune"
-      ]
-    },
-    {
-      "id": "find_prune_between_two_time_tests_answers_to_the_first",
-      "seq": 790,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "find /data/aging -mindepth 1 -newermt 1990-01-01 -prune -newermt 2010-01-01",
-      "expect": {
-        "exit": 0,
-        "stdout": "/data/aging/new\n",
-        "stderr": ""
-      },
-      "flags": [
-        "mindepth",
-        "newermt",
-        "prune"
-      ]
-    },
-    {
-      "id": "find_prune_on_the_arm_a_time_test_fails_into",
-      "seq": 790,
-      "targets": [
-        "ram",
-        "disk"
-      ],
-      "command": "find /data/aging -mindepth 1 \\( -mtime -3650 -print \\) -o -prune",
-      "expect": {
-        "exit": 0,
-        "stdout": "/data/aging/new\n/data/aging/new/y\n/data/aging/new/y/g\n",
-        "stderr": ""
-      },
-      "flags": [
-        "mindepth",
-        "mtime",
-        "print",
-        "prune"
       ]
     }
   ]

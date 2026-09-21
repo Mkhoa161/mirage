@@ -43,18 +43,11 @@ def start_basename(path: PathSpec) -> str:
 
 @dataclass(frozen=True, slots=True)
 class FindEntry:
-    """One walked entry, as the predicate tree sees it.
-
-    Args:
-        key (str): mount-relative key.
-        name (str): basename, or the start point's own name at depth 0.
-        kind (str): ``f``, ``d``, ``l`` or ``c``.
-        depth (int): depth below the start point, which is 0.
-        is_empty (bool | None): whether ``-empty`` holds, None when the
-            walk did not ask.
-        mtime (float | None): modification time in epoch seconds, None
-            when the walk did not fetch it; a time test then defers to
-            the expression's flat window.
+    """One walked entry, as the predicate tree sees it: a mount-relative
+    key, the basename (the start point's own name at depth 0) and the
+    kind ``f``, ``d``, ``l`` or ``c``. ``mtime`` is None when the walk did
+    not fetch it, and a time test then defers to the expression's flat
+    window.
     """
     key: str
     name: str
@@ -77,14 +70,8 @@ class Path:
     The row is the mount prefix plus the entry's key, respelled under
     the operand as typed (``find . -path ./skip`` prints and matches
     ``./skip``), so ``bind_tree`` stamps all three onto the node before
-    evaluation and entry keys stay mount-relative (#396).
-
-    Args:
-        pattern (str): the glob as typed.
-        prefix (str): the mount prefix rows carry.
-        root (str): the start point's resolved absolute path; "" leaves
-            the row as the display path.
-        raw (str): the start point as typed (``PathSpec.raw_path``).
+    evaluation and entry keys stay mount-relative (#396). An empty
+    ``root`` leaves the row as the display path.
     """
     pattern: str
     prefix: str = ""
@@ -138,11 +125,8 @@ class Action:
     action itself, once per kept row, so the parser admits one distinct
     action to a tree holding any. GNU's ``-exec ... ;`` alone is false
     when its command fails, which the executor learns only after the
-    walk, so the parser lets it stand only where nothing follows it.
-
-    Args:
-        kind (ActionKind): the action, named by its word without the dash.
-        batch (bool): ``-exec ... {} +``, true whatever the command exits.
+    walk, so the parser lets it stand only where nothing follows it;
+    ``batch`` marks ``-exec ... {} +``, true whatever the command exits.
     """
     kind: ActionKind
     batch: bool = False
@@ -162,10 +146,6 @@ class Mtime:
     as GNU orders them. A prune reached past an undecided test is
     recorded as pending (``PendingPrune``) for the caller to settle once
     it has statted the directory.
-
-    Args:
-        lo (float | None): inclusive lower bound.
-        hi (float | None): inclusive upper bound.
     """
     lo: float | None
     hi: float | None
@@ -181,9 +161,6 @@ class PendingPrune:
     evaluating the expression again with the directory's mtime, since a
     failing test may send GNU down another arm that prunes anyway
     (``( -mtime 1 -o -type d ) -prune``).
-
-    Args:
-        entry (FindEntry): the directory, as the walk saw it.
     """
     entry: FindEntry
 
@@ -200,11 +177,6 @@ class Prune:
     entry could not answer lands in ``pending``; until ``settle_prunes``
     evaluates the directory again with its mtime, it counts as pruned,
     the most a walk without times can say.
-
-    Args:
-        pruned (list[str]): mount-relative keys of the directories
-            pruned so far.
-        pending (list[PendingPrune]): prunes waiting on a time test.
     """
     pruned: list[str] = field(default_factory=list)
     pending: list[PendingPrune] = field(default_factory=list)
