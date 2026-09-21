@@ -62,7 +62,7 @@ export function rangeValues(range: A1Range): string[][] {
 }
 
 export function tabToCsv(tab: SheetTab): string {
-  const rows = rangeValues({ tab, startRow: 0, startCol: 0, endRow: null, endCol: null })
+  const rows = rangeValues(wholeTab(tab))
   return rows.map((r) => r.join(',')).join('\n') + (rows.length > 0 ? '\n' : '')
 }
 
@@ -153,27 +153,35 @@ export function cellData(text: string): JsonObj {
   return { userEnteredValue: value, effectiveValue: value, formattedValue: text }
 }
 
-// One GridData per tab, in the shape `includeGridData=true` returns: row
-// entries up to the last written row, cell entries up to the last written
-// column of that row, `{}` for a row with nothing in it, and metadata for
-// every row and column of the grid. `startRow`/`startColumn` are absent
-// because the live API omits them at zero.
-export function gridData(tab: SheetTab): JsonObj[] {
-  const rows = rangeValues({ tab, startRow: 0, startCol: 0, endRow: null, endCol: null })
+// One GridData for one range, in the shape `includeGridData=true` returns:
+// row entries up to the last written row inside the range, cell entries up
+// to the last written column of that row, `{}` for a row with nothing in
+// it, and metadata for every row and column the range covers, clipped to
+// the grid. `startRow`/`startColumn` are absent at zero because the live
+// API omits them there, and present for a range that starts further in.
+export function gridData(range: A1Range): JsonObj {
+  const tab = range.tab
   const grid = tabGrid(tab)
-  return [
-    {
-      rowData: rows.map(
-        (row): JsonValue => (row.length === 0 ? {} : { values: row.map(cellData) }),
-      ),
-      rowMetadata: Array.from({ length: grid.rows }, (_, i) => ({
-        pixelSize: tab.rowPixels?.[i] ?? ROW_PIXELS,
-      })),
-      columnMetadata: Array.from({ length: grid.cols }, (_, i) => ({
-        pixelSize: tab.columnPixels?.[i] ?? COLUMN_PIXELS,
-      })),
-    },
-  ]
+  const rowEnd = Math.min(range.endRow ?? grid.rows - 1, grid.rows - 1)
+  const colEnd = Math.min(range.endCol ?? grid.cols - 1, grid.cols - 1)
+  const span = (start: number, end: number): number => Math.max(end - start + 1, 0)
+  return {
+    ...(range.startRow > 0 ? { startRow: range.startRow } : {}),
+    ...(range.startCol > 0 ? { startColumn: range.startCol } : {}),
+    rowData: rangeValues(range).map(
+      (row): JsonValue => (row.length === 0 ? {} : { values: row.map(cellData) }),
+    ),
+    rowMetadata: Array.from({ length: span(range.startRow, rowEnd) }, (_, i) => ({
+      pixelSize: tab.rowPixels?.[range.startRow + i] ?? ROW_PIXELS,
+    })),
+    columnMetadata: Array.from({ length: span(range.startCol, colEnd) }, (_, i) => ({
+      pixelSize: tab.columnPixels?.[range.startCol + i] ?? COLUMN_PIXELS,
+    })),
+  }
+}
+
+function wholeTab(tab: SheetTab): A1Range {
+  return { tab, startRow: 0, startCol: 0, endRow: null, endCol: null }
 }
 
 export function tabProperties(tab: SheetTab, index: number): JsonObj {
@@ -187,7 +195,21 @@ export function tabProperties(tab: SheetTab, index: number): JsonObj {
   }
 }
 
-export function fmtSpreadsheet(sheet: Spreadsheet, id: string, includeGridData = false): JsonObj {
+// `ranges` narrows the reply the way the live API does: only the tabs a
+// range names come back, and each carries one GridData per range asked of
+// it, in request order. With no ranges every tab comes back whole.
+export function fmtSpreadsheet(
+  sheet: Spreadsheet,
+  id: string,
+  includeGridData = false,
+  ranges: readonly A1Range[] = [],
+): JsonObj {
+  const tabs =
+    ranges.length === 0 ? sheet.tabs : sheet.tabs.filter((t) => ranges.some((r) => r.tab === t))
+  const dataOf = (tab: SheetTab): JsonObj[] =>
+    ranges.length === 0
+      ? [gridData(wholeTab(tab))]
+      : ranges.filter((r) => r.tab === tab).map(gridData)
   return {
     spreadsheetId: id,
     // The live API also carries defaultFormat and spreadsheetTheme here,
@@ -199,11 +221,11 @@ export function fmtSpreadsheet(sheet: Spreadsheet, id: string, includeGridData =
       autoRecalc: 'ON_CHANGE',
       timeZone: 'Etc/GMT',
     },
-    sheets: sheet.tabs.map((tab, index) => ({
-      properties: tabProperties(tab, index),
+    sheets: tabs.map((tab) => ({
+      properties: tabProperties(tab, sheet.tabs.indexOf(tab)),
       // Real Sheets omits `data` entirely without includeGridData, which
       // is the whole reason mirage asks for it.
-      ...(includeGridData ? { data: gridData(tab) } : {}),
+      ...(includeGridData ? { data: dataOf(tab) } : {}),
     })),
     spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${id}/edit`,
   }
