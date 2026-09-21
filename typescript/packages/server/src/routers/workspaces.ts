@@ -85,6 +85,17 @@ export function registerWorkspacesRoutes(app: FastifyInstance, deps: WorkspaceRo
       let cfg: WorkspaceConfigRaw
       try {
         cfg = loadWorkspaceConfig(config as Record<string, unknown>)
+        for (const entry of cfg.runtimes ?? []) {
+          if (typeof entry === 'string') continue
+          const runtimeConfig = entry.config
+          if (
+            runtimeConfig !== null &&
+            typeof runtimeConfig === 'object' &&
+            Object.hasOwn(runtimeConfig, 'initModule')
+          ) {
+            throw new Error('runtime initModule is only allowed in operator-owned configuration')
+          }
+        }
       } catch (e) {
         return reply.status(400).send({ detail: (e as Error).message })
       }

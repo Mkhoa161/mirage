@@ -1,21 +1,62 @@
-// ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-// ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
-
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { PyodideRuntime } from './runtime.ts'
+import * as interrupt from './interrupt.ts'
 
 describe('PyodideRuntime host initializer', () => {
+  it('declares process reach only when a host initializer is configured', () => {
+    expect(new PyodideRuntime().capabilities.reach).toBe('workspace')
+    const rt = new PyodideRuntime({ config: { initModule: 'file:///trusted/init.mjs' } })
+    expect(rt.reach).toBe('process')
+    expect(rt.capabilities.reach).toBe('process')
+  })
+
+  it.each(['sync', 'async'])(
+    'finishes teardown after %s cleanup fails',
+    async (kind) => {
+      const ref =
+        'data:text/javascript,' +
+        encodeURIComponent(`
+export let installs = 0
+export let disposals = 0
+export const failure = new Error('cleanup failed')
+export default function(py) {
+  installs++
+  return ${kind === 'async' ? 'async' : ''} () => { disposals++; throw failure }
+}`)
+      const module = (await import(ref)) as { installs: number; disposals: number; failure: Error }
+      const closeInterrupt = vi.fn()
+      const factory = vi.spyOn(interrupt, 'createPyodideInterrupter').mockResolvedValue({
+        view: new Int32Array(new SharedArrayBuffer(16)),
+        arm: () => ({ disarm: () => null }),
+        close: closeInterrupt,
+      })
+      const rt = new PyodideRuntime({
+        config: { initModule: ref, bootstrapCode: 'import builtins; builtins.ready = 42' },
+      })
+      try {
+        expect((await rt.eval('ready')).value).toBe(42)
+        await expect(rt.close()).rejects.toBe(module.failure)
+        expect(closeInterrupt).toHaveBeenCalledTimes(1)
+        await rt.close()
+        expect(module.disposals).toBe(1)
+        expect(closeInterrupt).toHaveBeenCalledTimes(1)
+        expect((await rt.eval('ready')).value).toBe(42)
+        expect(module.installs).toBe(2)
+        await expect(rt.close()).rejects.toBe(module.failure)
+        expect(module.disposals).toBe(2)
+        expect(closeInterrupt).toHaveBeenCalledTimes(2)
+      } finally {
+        factory.mockRestore()
+        try {
+          await rt.close()
+        } catch (error) {
+          expect(error).toBe(module.failure)
+        }
+      }
+    },
+    60_000,
+  )
+
   it('initializes once before bootstrap and disposes with the runtime', async () => {
     const ref =
       'data:text/javascript,' +
@@ -52,3 +93,17 @@ export default function(py) {
     expect(module.disposals).toBe(1)
   }, 60_000)
 })
+
+// ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========

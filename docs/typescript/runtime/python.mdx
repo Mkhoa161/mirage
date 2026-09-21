@@ -175,6 +175,10 @@ registering narrow JavaScript capabilities with `registerJsModule` without
 exposing host globals through `import js`. The initializer also runs inside
 the execution worker; it must not depend on caller-thread state. It has host
 privileges and belongs in deployment configuration, never agent input.
+`POST /v1/workspaces` rejects it in request-supplied runtime configuration.
+Configuring an initializer changes the runtime's declared reach from
+`workspace` to `process`, because registered host capabilities can bypass
+the workspace gate even while `import js` remains sealed.
 Worker termination destroys its isolate; only in-process shutdown invokes
 the returned cleanup function, so extensions must tolerate abrupt shutdown.
 

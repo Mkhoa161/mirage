@@ -26,6 +26,7 @@ import type {
   RuntimeContext,
   RunResult,
   RuntimeOptions,
+  RuntimeReach,
 } from '../../types.ts'
 import {
   createPyodideInterrupter,
@@ -229,8 +230,8 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   // so file effects pass the workspace gate, and loader.ts seals the
   // `js` module (null-prototype jsglobals) so guest code cannot reach
   // js.process or js.fetch either. Both doors closed is what makes this
-  // 'workspace'; jsglobals.test.ts pins the seal.
-  override readonly reach = 'workspace'
+  // 'workspace' unless a trusted initializer installs host capabilities.
+  override readonly reach: RuntimeReach
   override readonly filesystem = ['read', 'write', 'list', 'stat', 'glob'] as const
   readonly [EVALUATOR] = true as const
   private pyodide: PyodideInterface | null = null
@@ -276,6 +277,7 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   ) {
     super(options, PYODIDE_CONFIG_KEYS)
     const config = this.config as PyodideConfig
+    this.reach = config.initModule === undefined ? 'workspace' : 'process'
     this.autoLoadFromImports = config.autoLoadFromImports ?? true
     this.bootstrapCode = config.bootstrapCode ?? null
     this.denyPackages = new Set(config.denyPackages ?? [])
@@ -396,18 +398,26 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
     }
     this.guest?.close()
     this.guest = null
-    await this.disposeModule?.()
+    const dispose = this.disposeModule
     this.disposeModule = null
-    this.bootstrapPromise = null
-    this.pyodide = null
-    ;(await this.worker)?.close()
-    this.worker = null
-    this.initPromise = null
-    this.vfs = null
-    this.mounted.clear()
-    this.interrupter?.close()
-    this.interrupter = null
-    this.interrupterTried = false
+    try {
+      await dispose?.()
+    } finally {
+      this.bootstrapPromise = null
+      this.pyodide = null
+      const worker = this.worker
+      this.worker = null
+      this.initPromise = null
+      this.vfs = null
+      this.mounted.clear()
+      try {
+        ;(await worker)?.close()
+      } finally {
+        this.interrupter?.close()
+        this.interrupter = null
+        this.interrupterTried = false
+      }
+    }
   }
 
   private async wireInterruptIfNeeded(pyodide: PyodideInterface): Promise<void> {
