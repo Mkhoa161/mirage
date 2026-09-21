@@ -64,6 +64,33 @@ function sameAction(a: FindAction, b: FindAction): boolean {
   )
 }
 
+function holdsExecResult(node: PredNode): boolean {
+  if (node.op === 'action') return node.kind === 'exec' && node.batch !== true
+  if (node.op === 'not') return holdsExecResult(node.kid)
+  if (node.op === 'and' || node.op === 'or') return node.kids.some(holdsExecResult)
+  return false
+}
+
+// Refuse an `-exec ... ;` whose exit status picks the next arm. GNU's
+// `-exec ... ;` is false when its command fails, so an `-o` arm ending in
+// one hands the failing rows to the next arm (`-type d -exec false ; -o
+// -prune` prunes exactly the directories the command rejects). The executor
+// learns the status only after the walk, once the tree has decided every
+// row, so such an -exec may stand only where nothing follows it. `-exec ...
+// +` is true whatever the command exits, as GNU's is, and sits anywhere an
+// action may.
+function checkExecResult(node: PredNode): void {
+  if (node.op === 'or') {
+    for (const kid of node.kids.slice(0, -1)) {
+      if (holdsExecResult(kid)) {
+        throw new FindParseError(`find: -exec must end the expression ${POSITIONAL}`)
+      }
+    }
+  }
+  if (node.op === 'not') checkExecResult(node.kid)
+  else if (node.op === 'and' || node.op === 'or') for (const kid of node.kids) checkExecResult(kid)
+}
+
 function firstAction(node: PredNode): string {
   if (node.op === 'action') return `-${node.kind}`
   if (node.op === 'not') return firstAction(node.kid)
@@ -121,6 +148,7 @@ function settleActions(tree: PredNode, actions: readonly FindAction[]): FindActi
       `find: ${actionWord(first)} and ${actionWord(second)} cannot be combined ${POSITIONAL}`,
     )
   }
+  checkExecResult(tree)
   return distinct
 }
 
@@ -319,9 +347,9 @@ export function parseFindExpression(tokens: string[]): FindExpr {
       )
     }
   }
-  const actionNode = (kind: ActionKind): PredNode => {
+  const actionNode = (kind: ActionKind, batch = false): PredNode => {
     if (nested > 0) shape.positional = true
-    return { op: 'action', kind }
+    return batch ? { op: 'action', kind, batch } : { op: 'action', kind }
   }
   // Fold one mtime window into the expression's single window. The flat
   // window cannot evaluate a time test per predicate node, so repeated
@@ -467,8 +495,9 @@ export function parseFindExpression(tokens: string[]): FindExpr {
       return { op: 'mtime', lo: mtLo, hi: mtHi }
     }
     if (FIND_EXEC_PREDICATES.has(tok)) {
-      g.actions.push(parseExec())
-      return actionNode('exec')
+      const action = parseExec()
+      g.actions.push(action)
+      return actionNode('exec', action.batch)
     }
     if (tok === '-empty') {
       g.usesEmpty = true

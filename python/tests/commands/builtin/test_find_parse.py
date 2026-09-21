@@ -294,6 +294,7 @@ def test_exec_per_match_and_batched():
     assert expr.tree == And([Name("*.txt"), Action("exec")])
     expr = parse_find_expression(["-exec", "echo", "{}", "+"])
     assert expr.execs == [ExecAction(("echo", "{}"), batch=True)]
+    assert expr.tree == Action("exec", batch=True)
 
 
 @pytest.mark.parametrize("tokens,message", [
@@ -314,6 +315,12 @@ def test_exec_per_match_and_batched():
       ], "find: -exec may run only one command under -o, ! or parentheses"),
     (["-name", "a", "-o", "-exec", "echo", "{}", ";", "-name", "b"
       ], "find: -exec must end its -a chain under -o, ! or parentheses"),
+    (["-type", "d", "-exec", "false", "{}", ";", "-o", "-prune"
+      ], "find: -exec must end the expression under -o, ! or parentheses"),
+    (["-exec", "echo", "{}", ";", "-o", "-exec", "echo", "{}", ";"
+      ], "find: -exec must end the expression under -o, ! or parentheses"),
+    (["(", "-name", "a", "-exec", "echo", "{}", ";", ")", "-o", "-name", "b"
+      ], "find: -exec must end the expression under -o, ! or parentheses"),
     (["-exec", "echo", "{}", ";", "-printf", "%p"
       ], "find: -exec cannot be combined with -printf"),
     (["-newermt", "nope"],
@@ -323,6 +330,16 @@ def test_exec_per_match_and_batched():
 def test_exec_and_newer_refusals(tokens, message):
     with pytest.raises(FindParseError, match=re.escape(message)):
         parse_find_expression(tokens)
+
+
+def test_batched_exec_is_true_whatever_the_command_exits():
+    # GNU: `-exec ... {} +` always returns true, so the next arm never
+    # sees a row through it and the executor's late status is harmless.
+    expr = parse_find_expression(
+        ["-type", "d", "-exec", "echo", "{}", "+", "-o", "-prune"])
+    assert expr.tree == Or(
+        [And([Type("d"), Action("exec", batch=True)]),
+         Prune()])
 
 
 def test_exec_allowed_after_a_parenthesized_or():

@@ -13,7 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 from mirage.commands.builtin.types import RowActionKind
@@ -136,12 +136,16 @@ class Action:
     past a ``-print`` (``-path ./skip -prune -o -type f -print`` never
     reaches the print for ``./skip``). The executor still runs the
     action itself, once per kept row, so the parser admits one distinct
-    action to a tree holding any.
+    action to a tree holding any. GNU's ``-exec ... ;`` alone is false
+    when its command fails, which the executor learns only after the
+    walk, so the parser lets it stand only where nothing follows it.
 
     Args:
         kind (ActionKind): the action, named by its word without the dash.
+        batch (bool): ``-exec ... {} +``, true whatever the command exits.
     """
     kind: ActionKind
+    batch: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,13 +175,15 @@ class Mtime:
 class PendingPrune:
     """A ``-prune`` reached past time tests the walk could not decide.
 
+    The entry is kept whole: whether the prune stands is settled by
+    evaluating the expression again with the directory's mtime, since a
+    failing test may send GNU down another arm that prunes anyway
+    (``( -mtime 1 -o -type d ) -prune``).
+
     Args:
-        key (str): mount-relative key of the directory.
-        tests (tuple[Mtime, ...]): the undecided tests, all of which must
-            hold for the prune to stand.
+        entry (FindEntry): the directory, as the walk saw it.
     """
-    key: str
-    tests: tuple[Mtime, ...]
+    entry: FindEntry
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,8 +196,8 @@ class Prune:
     applies it to what the walk returned. ``bind_tree`` hands every
     start point a fresh ledger. A prune reached past a time test the
     entry could not answer lands in ``pending``; until ``settle_prunes``
-    decides it, it counts as pruned, the most a walk without times can
-    say.
+    evaluates the directory again with its mtime, it counts as pruned,
+    the most a walk without times can say.
 
     Args:
         pruned (list[str]): mount-relative keys of the directories
@@ -212,8 +218,9 @@ class Effects:
 
     Args:
         acted (bool): whether an ``Action`` node was reached.
-        deferred (list[Mtime]): the time tests reached so far that the
-            entry carried no mtime for.
+        deferred (list[Mtime]): the time tests the entry carried no mtime
+            for on the path that decided the answer so far; a branch
+            whose outcome they could not have changed drops them again.
     """
     acted: bool = False
     deferred: list[Mtime] = field(default_factory=list)
@@ -294,8 +301,7 @@ def evaluate(node: PredNode, entry: FindEntry, effects: Effects) -> bool:
         # a directory prefix (an object store allows both) must not
         # drop what sits under the directory.
         if entry.kind == "d" and effects.deferred:
-            node.pending.append(
-                PendingPrune(entry.key, tuple(effects.deferred)))
+            node.pending.append(PendingPrune(entry))
         elif entry.kind == "d":
             node.pruned.append(entry.key)
         return True
@@ -320,9 +326,25 @@ def evaluate(node: PredNode, entry: FindEntry, effects: Effects) -> bool:
     if isinstance(node, Not):
         return not evaluate(node.kid, entry, effects)
     if isinstance(node, And):
-        return all(evaluate(kid, entry, effects) for kid in node.kids)
+        mark = len(effects.deferred)
+        for kid in node.kids:
+            before = len(effects.deferred)
+            if not evaluate(kid, entry, effects):
+                # Had an earlier factor's undecided test failed, the
+                # chain would have ended there with this same answer, so
+                # those tests decide nothing; the failing factor's own
+                # may (`! -mtime 1` flips with its mtime).
+                del effects.deferred[mark:before]
+                return False
+        return True
     if isinstance(node, Or):
-        return any(evaluate(kid, entry, effects) for kid in node.kids)
+        mark = len(effects.deferred)
+        for kid in node.kids:
+            before = len(effects.deferred)
+            if evaluate(kid, entry, effects):
+                del effects.deferred[mark:before]
+                return True
+        return False
     raise TypeError(f"unknown predicate node: {node!r}")
 
 
@@ -375,7 +397,7 @@ def pruned_keys(node: PredNode) -> list[str]:
         node (PredNode): the predicate tree, after evaluation.
     """
     if isinstance(node, Prune):
-        return [*node.pruned, *(p.key for p in node.pending)]
+        return [*node.pruned, *(p.entry.key for p in node.pending)]
     if isinstance(node, Not):
         return pruned_keys(node.kid)
     if isinstance(node, (And, Or)):
@@ -398,34 +420,63 @@ def pending_prunes(node: PredNode) -> list[PendingPrune]:
     return []
 
 
+def _prune_nodes(node: PredNode) -> list[Prune]:
+    if isinstance(node, Prune):
+        return [node]
+    if isinstance(node, Not):
+        return _prune_nodes(node.kid)
+    if isinstance(node, (And, Or)):
+        return [p for kid in node.kids for p in _prune_nodes(kid)]
+    return []
+
+
+def _time_tests_failing(node: PredNode) -> PredNode:
+    """The tree with every time test false, sharing the prune ledgers.
+
+    A directory that reports no mtime passes no time test, the way the
+    flat window admits no such row, so the prunes it reaches are the
+    ones reachable with every test false. The ``Prune`` nodes are the
+    original objects, so what this copy records lands on the tree.
+
+    Args:
+        node (PredNode): the predicate tree.
+    """
+    if isinstance(node, Mtime):
+        return Not(TrueNode())
+    if isinstance(node, Not):
+        return Not(_time_tests_failing(node.kid))
+    if isinstance(node, And):
+        return And([_time_tests_failing(kid) for kid in node.kids])
+    if isinstance(node, Or):
+        return Or([_time_tests_failing(kid) for kid in node.kids])
+    return node
+
+
 def settle_prunes(node: PredNode, mtimes: Mapping[str, float | None]) -> None:
     """Decide the pending prunes whose directory mtime is now known.
 
-    A pending prune stands when every test it waited on holds for the
-    directory's mtime and is dropped otherwise, so ``find d -newermt X
-    -prune`` skips only the contents of directories newer than ``X``. A
-    key ``mtimes`` does not name stays pending.
+    Each decided directory leaves the pending ledgers and is evaluated
+    again with its mtime, so the prunes it reaches are exactly GNU's,
+    whichever arm the tests send it down: ``find d -newermt X -prune``
+    skips only the contents of directories newer than ``X``, and
+    ``( -mtime 1 -o -type d ) -prune`` skips every directory's. A key
+    ``mtimes`` does not name stays pending.
 
     Args:
         node (PredNode): the predicate tree, after evaluation.
         mtimes (Mapping[str, float | None]): epoch-second mtime per
             directory key, None for a directory that reports none.
     """
-    if isinstance(node, Prune):
-        still: list[PendingPrune] = []
-        for pend in node.pending:
-            if pend.key not in mtimes:
-                still.append(pend)
-            elif all(
-                    in_mtime_window(mtimes[pend.key], test.lo, test.hi)
-                    for test in pend.tests):
-                node.pruned.append(pend.key)
-        node.pending[:] = still
-    elif isinstance(node, Not):
-        settle_prunes(node.kid, mtimes)
-    elif isinstance(node, (And, Or)):
-        for kid in node.kids:
-            settle_prunes(kid, mtimes)
+    decided: dict[str, FindEntry] = {}
+    for prune in _prune_nodes(node):
+        still = [p for p in prune.pending if p.entry.key not in mtimes]
+        decided.update((p.entry.key, p.entry) for p in prune.pending
+                       if p.entry.key in mtimes)
+        prune.pending[:] = still
+    for key, entry in decided.items():
+        mtime = mtimes[key]
+        tree = node if mtime is not None else _time_tests_failing(node)
+        evaluate(tree, replace(entry, mtime=mtime), Effects())
 
 
 def drop_pruned(rows: list[str],
@@ -472,7 +523,7 @@ async def settle_pending_prunes(
     """
     mtimes: dict[str, float | None] = {}
     for pend in pending_prunes(node):
-        mtimes[pend.key] = await mtime_of(pend.key)
+        mtimes[pend.entry.key] = await mtime_of(pend.entry.key)
     settle_prunes(node, mtimes)
 
 

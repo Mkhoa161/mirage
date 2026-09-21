@@ -187,10 +187,47 @@ describe('parseFindExpression', () => {
         ['-name', 'a', '-o', '-exec', 'echo', '{}', ';', '-name', 'b'],
         'find: -exec must end its -a chain under -o, ! or parentheses',
       ],
+      [
+        ['-type', 'd', '-exec', 'false', '{}', ';', '-o', '-prune'],
+        'find: -exec must end the expression under -o, ! or parentheses',
+      ],
+      [
+        ['-exec', 'echo', '{}', ';', '-o', '-exec', 'echo', '{}', ';'],
+        'find: -exec must end the expression under -o, ! or parentheses',
+      ],
+      [
+        ['(', '-name', 'a', '-exec', 'echo', '{}', ';', ')', '-o', '-name', 'b'],
+        'find: -exec must end the expression under -o, ! or parentheses',
+      ],
     ]
     for (const [tokens, message] of cases) {
       expect(() => parseFindExpression(tokens)).toThrow(message)
     }
+  })
+
+  it('a batched -exec is true whatever the command exits', () => {
+    // GNU: `-exec ... {} +` always returns true, so the next arm never sees
+    // a row through it and the executor's late status is harmless.
+    expect(parseFindExpression(['-exec', 'echo', '{}', '+']).tree).toEqual({
+      op: 'action',
+      kind: 'exec',
+      batch: true,
+    })
+    expect(
+      parseFindExpression(['-type', 'd', '-exec', 'echo', '{}', '+', '-o', '-prune']).tree,
+    ).toEqual({
+      op: 'or',
+      kids: [
+        {
+          op: 'and',
+          kids: [
+            { op: 'type', kind: 'd' },
+            { op: 'action', kind: 'exec', batch: true },
+          ],
+        },
+        { op: 'prune', pruned: [], pending: [] },
+      ],
+    })
   })
 
   it('throws FindParseError on invalid numeric / size args', () => {

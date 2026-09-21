@@ -50,11 +50,13 @@ export interface MtimeNode {
   hi: number | null
 }
 
-// A `-prune` reached past time tests the walk could not decide: every one
-// of `tests` must hold for the directory's mtime for the prune to stand.
+// A `-prune` reached past time tests the walk could not decide. The entry
+// is kept whole: whether the prune stands is settled by evaluating the
+// expression again with the directory's mtime, since a failing test may
+// send GNU down another arm that prunes anyway (`( -mtime 1 -o -type d )
+// -prune`).
 export interface PendingPrune {
-  key: string
-  tests: MtimeNode[]
+  entry: FindEntry
 }
 
 export type PredNode =
@@ -78,22 +80,27 @@ export type PredNode =
   // short-circuits past a `-print` (`-path ./skip -prune -o -type f
   // -print` never reaches the print for `./skip`). The executor still runs
   // the action itself, once per kept row, so the parser admits one
-  // distinct action to a tree holding any.
-  | { op: 'action'; kind: ActionKind }
+  // distinct action to a tree holding any. GNU's `-exec ... ;` alone is
+  // false when its command fails, which the executor learns only after the
+  // walk, so the parser lets it stand only where nothing follows it;
+  // `batch` marks `-exec ... {} +`, true whatever the command exits.
+  | { op: 'action'; kind: ActionKind; batch?: boolean }
   // `-prune`: true, and a directory it reaches loses its contents. Every
   // backend evaluates the tree entry by entry with no say over its own
   // walk, and a flat listing meets a child before its parent, so the node
   // keeps the ledger of pruned directory keys (mount-relative) and
   // `dropPruned` applies it to what the walk returned; `bindTree` hands
   // every start point a fresh ledger. A prune reached past a time test the
-  // entry could not answer lands in `pending`; until `settlePrunes` decides
-  // it, it counts as pruned, the most a walk without times can say.
+  // entry could not answer lands in `pending`; until `settlePrunes`
+  // evaluates the directory again with its mtime, it counts as pruned, the
+  // most a walk without times can say.
   | { op: 'prune'; pruned: string[]; pending: PendingPrune[] }
   | MtimeNode
 
 // What evaluating an expression on one entry did besides answer: whether an
-// action was reached, and the time tests reached so far that the entry
-// carried no mtime for.
+// action was reached, and the time tests the entry carried no mtime for on
+// the path that decided the answer so far; a branch whose outcome they
+// could not have changed drops them again.
 export interface Effects {
   acted: boolean
   deferred: MtimeNode[]
@@ -119,7 +126,7 @@ export function evaluate(node: PredNode, entry: FindEntry, effects: Effects): bo
       // directory prefix (an object store allows both) must not drop what
       // sits under the directory.
       if (entry.kind === 'd' && effects.deferred.length > 0) {
-        node.pending.push({ key: entry.key, tests: [...effects.deferred] })
+        node.pending.push({ entry })
       } else if (entry.kind === 'd') {
         node.pruned.push(entry.key)
       }
@@ -144,10 +151,32 @@ export function evaluate(node: PredNode, entry: FindEntry, effects: Effects): bo
       return entry.kind === node.kind
     case 'not':
       return !evaluate(node.kid, entry, effects)
-    case 'and':
-      return node.kids.every((kid) => evaluate(kid, entry, effects))
-    case 'or':
-      return node.kids.some((kid) => evaluate(kid, entry, effects))
+    case 'and': {
+      const mark = effects.deferred.length
+      for (const kid of node.kids) {
+        const before = effects.deferred.length
+        if (!evaluate(kid, entry, effects)) {
+          // Had an earlier factor's undecided test failed, the chain would
+          // have ended there with this same answer, so those tests decide
+          // nothing; the failing factor's own may (`! -mtime 1` flips with
+          // its mtime).
+          effects.deferred.splice(mark, before - mark)
+          return false
+        }
+      }
+      return true
+    }
+    case 'or': {
+      const mark = effects.deferred.length
+      for (const kid of node.kids) {
+        const before = effects.deferred.length
+        if (evaluate(kid, entry, effects)) {
+          effects.deferred.splice(mark, before - mark)
+          return true
+        }
+      }
+      return false
+    }
   }
 }
 
@@ -219,7 +248,7 @@ export function withoutPrune(node: PredNode): PredNode {
 // Every directory key the tree's `-prune` nodes reached. A pending prune
 // counts until `settlePrunes` decides it.
 export function prunedKeys(node: PredNode): string[] {
-  if (node.op === 'prune') return [...node.pruned, ...node.pending.map((p) => p.key)]
+  if (node.op === 'prune') return [...node.pruned, ...node.pending.map((p) => p.entry.key)]
   if (node.op === 'not') return prunedKeys(node.kid)
   if (node.op === 'and' || node.op === 'or') return node.kids.flatMap(prunedKeys)
   return []
@@ -233,28 +262,54 @@ export function pendingPrunes(node: PredNode): PendingPrune[] {
   return []
 }
 
-// Decide the pending prunes whose directory mtime is now known. A pending
-// prune stands when every test it waited on holds for the directory's mtime
-// and is dropped otherwise, so `find d -newermt X -prune` skips only the
-// contents of directories newer than X. A key `mtimes` does not name stays
-// pending.
-export function settlePrunes(node: PredNode, mtimes: ReadonlyMap<string, number | null>): void {
-  if (node.op === 'prune') {
-    const still: PendingPrune[] = []
-    for (const pend of node.pending) {
-      if (!mtimes.has(pend.key)) {
-        still.push(pend)
-      } else if (
-        pend.tests.every((test) => inMtimeWindow(mtimes.get(pend.key), test.lo, test.hi))
-      ) {
-        node.pruned.push(pend.key)
-      }
-    }
-    node.pending = still
-    return
+function pruneNodes(node: PredNode): Extract<PredNode, { op: 'prune' }>[] {
+  if (node.op === 'prune') return [node]
+  if (node.op === 'not') return pruneNodes(node.kid)
+  if (node.op === 'and' || node.op === 'or') return node.kids.flatMap(pruneNodes)
+  return []
+}
+
+// The tree with every time test false, sharing the prune ledgers. A
+// directory that reports no mtime passes no time test, the way the flat
+// window admits no such row, so the prunes it reaches are the ones reachable
+// with every test false. The prune nodes are the original objects, so what
+// this copy records lands on the tree.
+function timeTestsFailing(node: PredNode): PredNode {
+  switch (node.op) {
+    case 'mtime':
+      return { op: 'not', kid: { op: 'true' } }
+    case 'not':
+      return { op: 'not', kid: timeTestsFailing(node.kid) }
+    case 'and':
+      return { op: 'and', kids: node.kids.map(timeTestsFailing) }
+    case 'or':
+      return { op: 'or', kids: node.kids.map(timeTestsFailing) }
+    default:
+      return node
   }
-  if (node.op === 'not') settlePrunes(node.kid, mtimes)
-  if (node.op === 'and' || node.op === 'or') for (const kid of node.kids) settlePrunes(kid, mtimes)
+}
+
+// Decide the pending prunes whose directory mtime is now known. Each decided
+// directory leaves the pending ledgers and is evaluated again with its
+// mtime, so the prunes it reaches are exactly GNU's, whichever arm the tests
+// send it down: `find d -newermt X -prune` skips only the contents of
+// directories newer than X, and `( -mtime 1 -o -type d ) -prune` skips every
+// directory's. A key `mtimes` does not name stays pending.
+export function settlePrunes(node: PredNode, mtimes: ReadonlyMap<string, number | null>): void {
+  const decided = new Map<string, FindEntry>()
+  for (const prune of pruneNodes(node)) {
+    const still: PendingPrune[] = []
+    for (const pend of prune.pending) {
+      if (mtimes.has(pend.entry.key)) decided.set(pend.entry.key, pend.entry)
+      else still.push(pend)
+    }
+    prune.pending = still
+  }
+  for (const [key, entry] of decided) {
+    const mtime = mtimes.get(key) ?? null
+    const tree = mtime === null ? timeTestsFailing(node) : node
+    evaluate(tree, { ...entry, mtime }, { acted: false, deferred: [] })
+  }
 }
 
 // The rows minus everything under a directory `-prune` reached. The pruned
@@ -279,7 +334,9 @@ export async function settlePendingPrunes(
   mtimeOf: (key: string) => Promise<number | null>,
 ): Promise<void> {
   const mtimes = new Map<string, number | null>()
-  for (const pend of pendingPrunes(node)) mtimes.set(pend.key, await mtimeOf(pend.key))
+  for (const pend of pendingPrunes(node)) {
+    mtimes.set(pend.entry.key, await mtimeOf(pend.entry.key))
+  }
   settlePrunes(node, mtimes)
 }
 

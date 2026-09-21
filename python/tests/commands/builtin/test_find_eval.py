@@ -274,20 +274,20 @@ def test_prune_past_an_undecided_time_test_is_pending_until_settled():
         assert keep(_entry(key=key, name=key[1:], kind="d"), tree, None)
     # Pending counts as pruned until the caller learns the mtimes.
     assert pruned_keys(tree) == ["/old", "/new"]
-    assert [p.key for p in pending_prunes(tree)] == ["/old", "/new"]
+    assert [p.entry.key for p in pending_prunes(tree)] == ["/old", "/new"]
     rows = ["/old", "/old/f", "/new", "/new/g"]
     assert drop_pruned(rows, tree) == ["/old", "/new"]
     # A key the mapping does not name stays pending.
     settle_prunes(tree, {"/old": 50.0})
     assert pruned_keys(tree) == ["/new"]
-    assert [p.key for p in pending_prunes(tree)] == ["/new"]
+    assert [p.entry.key for p in pending_prunes(tree)] == ["/new"]
     settle_prunes(tree, {"/new": 150.0})
     assert pruned_keys(tree) == ["/new"]
     assert pending_prunes(tree) == []
     assert drop_pruned(rows, tree) == ["/old", "/old/f", "/new"]
     # bind_tree hands out a fresh pending ledger too.
     bound = bind_tree(
-        Prune(pending=[PendingPrune("/y", (Mtime(1.0, None), ))]), "")
+        Prune(pending=[PendingPrune(_entry(key="/y", kind="d"))]), "")
     assert bound == Prune()
 
 
@@ -318,7 +318,7 @@ def test_settling_needs_every_deferred_test_to_hold():
 
     tree = two()
     keep(_entry(key="/d", name="d", kind="d"), tree, None)
-    assert [len(p.tests) for p in pending_prunes(tree)] == [2]
+    assert [p.entry.key for p in pending_prunes(tree)] == ["/d"]
     settle_prunes(tree, {"/d": 250.0})
     assert pruned_keys(tree) == []
     tree = two()
@@ -330,6 +330,58 @@ def test_settling_needs_every_deferred_test_to_hold():
     keep(_entry(key="/d", name="d", kind="d"), tree, None)
     settle_prunes(tree, {"/d": None})
     assert pruned_keys(tree) == []
+
+
+def test_deferred_tests_stay_with_the_branch_that_needs_them():
+    # `( -mtime 1 -type f ) -o ( -type d -prune )`: the first arm fails on
+    # -type f whatever the mtime, so the prune on the second is firm and
+    # no stat is owed (GNU prunes every directory here).
+    tree = bind_tree(
+        Or([
+            And([Mtime(100.0, None), Type("f")]),
+            And([Type("d"), Prune()]),
+        ]), "")
+    assert keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    assert pending_prunes(tree) == []
+    assert pruned_keys(tree) == ["/d"]
+    # `( ! -mtime +N -type d ) -o -prune`: the failing factor's own test
+    # is the one that may flip, so the prune waits on it.
+    tree = bind_tree(Or([And([Not(Mtime(None, 100.0)),
+                              Type("d")]),
+                         Prune()]), "")
+    assert keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    assert [p.entry.key for p in pending_prunes(tree)] == ["/d"]
+    settle_prunes(tree, {"/d": 150.0})
+    assert pruned_keys(tree) == []
+    tree = bind_tree(Or([And([Not(Mtime(None, 100.0)),
+                              Type("d")]),
+                         Prune()]), "")
+    keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    settle_prunes(tree, {"/d": 50.0})
+    assert pruned_keys(tree) == ["/d"]
+
+
+def test_settling_evaluates_the_expression_again():
+    # `( -mtime 1 -o -type d ) -prune`: a directory failing the time test
+    # still reaches the prune through -type d, as GNU's does.
+    tree = bind_tree(And([Or([Mtime(100.0, None), Type("d")]), Prune()]), "")
+    assert keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    assert [p.entry.key for p in pending_prunes(tree)] == ["/d"]
+    settle_prunes(tree, {"/d": 50.0})
+    assert pending_prunes(tree) == []
+    assert pruned_keys(tree) == ["/d"]
+    # Without a reported mtime every time test is false; the prune is
+    # still reached here, and not past a bare test.
+    tree = bind_tree(And([Or([Mtime(100.0, None), Type("d")]), Prune()]), "")
+    keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    settle_prunes(tree, {"/d": None})
+    assert pruned_keys(tree) == ["/d"]
+    # An action reached again while settling changes nothing: the rows
+    # were decided at the walk.
+    tree = bind_tree(And([Mtime(100.0, None), Prune(), Action("print")]), "")
+    assert keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    settle_prunes(tree, {"/d": 150.0})
+    assert pruned_keys(tree) == ["/d"]
 
 
 def test_mindepth_prunes_nothing_above_its_level():

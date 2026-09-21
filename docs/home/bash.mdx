@@ -234,7 +234,11 @@ Under `-o` or parentheses an action ends its `-a` chain and the whole
 expression holds one action, so `find . -path ./skip -prune -o -type f -print`
 and `-name a -print -o -name b -print` run as GNU runs them, while `-print`
 on one arm and `-print0` or a different `-exec` on the other, an action that
-is not last in its chain, or an action under `!` is refused. `-prune` skips a
+is not last in its chain, or an action under `!` is refused. `-exec ... \;`
+is true only when its command exits 0, which is learned after the walk, so
+under `-o` it may stand only where nothing follows it (`-type d -exec false
+\; -o -prune` is refused), while `-exec ... {} +` is true regardless, as in
+GNU, and sits anywhere an action may. `-prune` skips a
 directory's contents, a mount nested under that directory included (and a
 file it reaches skips nothing); it does nothing under `-depth`, and GNU's
 refusal of `-prune` with `-delete` is kept unless `-depth` is spelled out. `-path` matches the row as it prints, under the

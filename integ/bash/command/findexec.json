@@ -2165,6 +2165,40 @@
         "stderr": ""
       },
       "note": "GNU findutils 4.9 on debian:stable-slim: -ls renders the stat find already holds. GNU stats a start point when it opens the walk and any other row only for a test that needs the inode (-size, -mtime, -newer, -empty), so both list the row -delete removed (a start-point directory lists too, in the unit tests; hf keeps no marker for an emptied directory, so that step stays out of the shared battery), while `find d -type f -delete -ls` reports it gone (pinned in the unit tests). rc is sed's, since the pipe hides find's."
+    },
+    {
+      "id": "find_exec_result_before_another_arm_refused",
+      "seq": 981542,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "find /data -type d -exec false {} \\; -o -prune; echo rc=$?; find /data -type d -exec true {} + -o -prune; echo rc=$?",
+      "expect": {
+        "exit": 0,
+        "stdout": "rc=1\nrc=0\n",
+        "stderr": "find: -exec must end the expression under -o, ! or parentheses\n"
+      }
     }
   ]
 }

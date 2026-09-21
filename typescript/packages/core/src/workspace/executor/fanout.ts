@@ -217,11 +217,11 @@ function prunedAway(path: string, tree: PredNode | null): boolean {
 //
 // The start point is evaluated first, for its ledger alone: a `-prune`
 // reaching it or a namespace-only ancestor is recorded on the tree, which
-// drops the candidates beneath and comes back with the entries so the
-// caller can hold the descendant mounts to it, since each of those is
-// walked on its own and never learns what the walk above it skipped
-// (`find /data -type d -prune` is one row). The tree is null when the
-// expression does not parse.
+// skips the candidates beneath before they are statted and comes back with
+// the entries so the caller can hold the descendant mounts to it, since
+// each of those is walked on its own and never learns what the walk above
+// it skipped (`find /data -type d -prune` is one row). The tree is null
+// when the expression does not parse.
 async function synthesizeFindMountEntries(
   targetPath: string,
   descendants: readonly MountEntry[],
@@ -269,6 +269,9 @@ async function synthesizeFindMountEntries(
       seen.add(candidate)
       const depth = pathSegments(candidate).length - parentDepth
       if (maxDepth !== null && depth > maxDepth) continue
+      // GNU never visits it, so it is neither statted nor judged: a backend
+      // that refuses the probe must not fail the line.
+      if (prunedAway(candidate, tree)) continue
       const mtime = await mtimeOf(candidate)
       if (!keep(dirEntry(candidate, depth, mtime), tree, minDepth)) continue
       // The flat window (-newermt, -newer) also holds the candidate the way

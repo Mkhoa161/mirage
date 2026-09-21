@@ -270,16 +270,19 @@ def _check_window_placement(state: _State, token: str) -> None:
             "not under -o, ! or parentheses")
 
 
-def _action_node(state: _State, kind: ActionKind) -> Action:
+def _action_node(state: _State,
+                 kind: ActionKind,
+                 batch: bool = False) -> Action:
     """The tree node for an action just parsed.
 
     Args:
         state (_State): parser state.
         kind (ActionKind): the action's word without the dash.
+        batch (bool): an ``-exec ... {} +``.
     """
     if state.nested > 0:
         state.positional = True
-    return Action(kind)
+    return Action(kind, batch)
 
 
 _POSITIONAL = "under -o, ! or parentheses"
@@ -316,6 +319,43 @@ def _check_positional(node: PredNode) -> None:
     elif isinstance(node, Or):
         for kid in node.kids:
             _check_positional(kid)
+
+
+def _holds_exec_result(node: PredNode) -> bool:
+    if isinstance(node, Action):
+        return node.kind == "exec" and not node.batch
+    if isinstance(node, Not):
+        return _holds_exec_result(node.kid)
+    if isinstance(node, (And, Or)):
+        return any(_holds_exec_result(kid) for kid in node.kids)
+    return False
+
+
+def _check_exec_result(node: PredNode) -> None:
+    """Refuse an ``-exec ... ;`` whose exit status picks the next arm.
+
+    GNU's ``-exec ... ;`` is false when its command fails, so an ``-o``
+    arm ending in one hands the failing rows to the next arm (``-type d
+    -exec false ; -o -prune`` prunes exactly the directories the
+    command rejects). The executor learns the status only after the
+    walk, once the tree has decided every row, so such an -exec may
+    stand only where nothing follows it. ``-exec ... +`` is true
+    whatever the command exits, as GNU's is, and sits anywhere an
+    action may.
+
+    Args:
+        node (PredNode): the predicate tree.
+    """
+    if isinstance(node, Or):
+        for kid in node.kids[:-1]:
+            if _holds_exec_result(kid):
+                raise FindParseError(
+                    f"find: -exec must end the expression {_POSITIONAL}")
+    if isinstance(node, Not):
+        _check_exec_result(node.kid)
+    elif isinstance(node, (And, Or)):
+        for kid in node.kids:
+            _check_exec_result(kid)
 
 
 def _first_action(node: PredNode) -> str:
@@ -357,6 +397,7 @@ def _settle_actions(state: _State) -> None:
         raise FindParseError(f"find: {_action_word(first)} and "
                              f"{_action_word(second)} cannot be combined "
                              f"{_POSITIONAL}")
+    _check_exec_result(state.expr.tree)
     state.expr.actions = distinct
 
 
@@ -488,8 +529,9 @@ def _parse_primary(state: _State) -> PredNode:
         _merge_window(state, mt_lo, mt_hi)
         return Mtime(mt_lo, mt_hi)
     if tok in constants.FIND_EXEC_PREDICATES:
-        state.expr.actions.append(_parse_exec(state))
-        return _action_node(state, "exec")
+        action = _parse_exec(state)
+        state.expr.actions.append(action)
+        return _action_node(state, "exec", action.batch)
     if tok == "-empty":
         state.expr.uses_empty = True
         return Empty()

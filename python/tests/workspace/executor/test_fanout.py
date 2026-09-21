@@ -171,11 +171,31 @@ def test_synthesize_time_test_before_prune_gates_the_mounts():
                                 stat_path) == "/old/deep\n/new"
     _, tree = asyncio.run(
         _synthesize_find_mount_entries("/", desc, gated, "/", stat_path))
-    # `/old` failed the test, so it alone is open; `/new/deep` is judged
-    # too, then dropped as a row under `/new`.
-    assert pruned_keys(tree) == ["/old/deep", "/new", "/new/deep"]
+    # `/old` failed the test, so it alone is open; `/new/deep` sits under
+    # a pruned directory and is never judged.
+    assert pruned_keys(tree) == ["/old/deep", "/new"]
     firm = ["-mindepth", "1", "-prune", "-newermt", "2010-01-01"]
     assert _shown_mount_entries("/", desc, firm, "/", stat_path) == "/new"
+
+
+def test_synthesize_never_stats_a_mount_under_a_pruned_directory():
+    # `find / -path /skip -prune -newermt X`: GNU never visits `/skip/deep`,
+    # so the fan-out asks nothing about it, and a backend refusing the
+    # probe cannot fail the line.
+    statted: list[str] = []
+
+    async def stat_path(path):
+        statted.append(path)
+        if path.startswith("/skip/"):
+            raise PermissionError(path)
+        return FileStat(name=path.rsplit("/", 1)[-1],
+                        type=FileType.DIRECTORY,
+                        modified="2026-01-01T00:00:00Z")
+
+    desc = _mounts("/skip/deep/", "/keep/deep/")
+    texts = ["-path", "/skip", "-prune", "-newermt", "2010-01-01"]
+    assert _shown_mount_entries("/", desc, texts, "/", stat_path) == "/skip"
+    assert statted == ["/", "/skip", "/keep", "/keep/deep"]
 
 
 def test_adjust_depth_texts_reduces_maxdepth_by_delta():

@@ -301,10 +301,11 @@ async def _synthesize_find_mount_entries(
 
     The start point is evaluated first, for its ledger alone: a
     ``-prune`` reaching it or a namespace-only ancestor is recorded on
-    the tree, which drops the candidates beneath and comes back with
-    the entries so the caller can hold the descendant mounts to it,
-    since each of those is walked on its own and never learns what the
-    walk above it skipped (``find /data -type d -prune`` is one row).
+    the tree, which skips the candidates beneath before they are
+    statted and comes back with the entries so the caller can hold the
+    descendant mounts to it, since each of those is walked on its own
+    and never learns what the walk above it skipped (``find /data -type
+    d -prune`` is one row).
 
     Args:
         target_path (str): the find start path the fan-out runs from.
@@ -352,6 +353,11 @@ async def _synthesize_find_mount_entries(
             seen.add(candidate)
             depth = len(_path_segments(candidate)) - parent_depth
             if max_depth is not None and depth > max_depth:
+                continue
+            if _pruned_away(candidate, tree):
+                # GNU never visits it, so it is neither statted nor
+                # judged: a backend that refuses the probe must not fail
+                # the line.
                 continue
             mtime = await mtime_of(candidate)
             if not keep(_dir_entry(candidate, depth, mtime), tree, min_depth):

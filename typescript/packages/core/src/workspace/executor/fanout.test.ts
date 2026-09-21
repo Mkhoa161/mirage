@@ -176,6 +176,38 @@ describe('fanOutTraversal mount-entry synthesis honors the expression tree', () 
     )
   })
 
+  it('a mount under a pruned directory is not statted', async () => {
+    // `find /w -path /w/skip -prune -newermt X`: GNU never visits `/w/skip/deep`,
+    // so the fan-out asks nothing about it, and a backend refusing the probe
+    // cannot fail the line.
+    const dispatch: DispatchFn = ((op: string, path: PathSpec) => {
+      if (op !== 'stat') throw new Error(`dispatch(${op}) should not have been called`)
+      if (path.virtual.startsWith('/w/skip/')) throw new Error(`statted ${path.virtual}`)
+      return Promise.resolve([
+        new FileStat({
+          name: basename(path.virtual),
+          type: FileType.DIRECTORY,
+          modified: '2026-01-01T00:00:00Z',
+        }),
+        new IOResult(),
+      ])
+    }) as unknown as DispatchFn
+    const reg = new MountRegistry(
+      { '/w/': new RAMVFS(), '/w/skip/deep/': new RAMVFS() },
+      MountMode.WRITE,
+    )
+    wireRegistry(reg)
+    const s = new SessionState({ sessionId: 'test', cwd: '/' })
+    const [out] = await handleCommand(
+      NEVER_EXECUTE,
+      dispatch,
+      reg,
+      ['find', '/w', '-path', '/w/skip', '-prune', '-newermt', '2010-01-01'],
+      s,
+    )
+    expect(out === null ? '' : new TextDecoder().decode(await materialize(out))).toBe('/w/skip\n')
+  })
+
   it('-prune at the start point is one row', async () => {
     expect(await runFind(['find', '/data', '-type', 'd', '-prune'])).toBe('/data\n')
   })
