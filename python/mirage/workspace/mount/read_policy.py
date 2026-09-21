@@ -111,6 +111,19 @@ def check_read_capability(prefix: str, vfs: BaseVFS, spec: ReadSpec) -> None:
     Raises:
         ValueError: the backend cannot honour the declared policy.
     """
+    # Before the policy dispatch, because a bound has to be usable
+    # whatever the policy is. `resolve_read_spec` refuses a bad one at
+    # the YAML and snapshot doors, but a `ReadSpec` handed straight to
+    # `Workspace` or `add_mount` never passes through it, and a mount
+    # taking ttl=0 accepts every write and keeps nothing: RAM marks the
+    # entry expired as it is written and redis deletes the key outright,
+    # so the mount silently caches nothing at all.
+    if not isinstance(spec.ttl, int) or isinstance(spec.ttl, bool):
+        raise ValueError(f"mount {prefix!r}: read: ttl must be whole "
+                         f"seconds, got {spec.ttl!r}")
+    if spec.ttl < 1:
+        raise ValueError(f"mount {prefix!r}: read: ttl must be at least "
+                         f"1 second, got {spec.ttl}")
     if spec.policy is ReadPolicy.PINNED:
         raise ValueError(
             f"mount {prefix!r}: read: pinned needs a version layer to pin "

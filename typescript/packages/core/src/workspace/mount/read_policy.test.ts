@@ -83,6 +83,25 @@ describe('DEFAULT_READ_SPEC', () => {
 })
 
 describe('checkReadCapability', () => {
+  // The programmatic door bypasses resolveReadSpec entirely: a ReadSpec
+  // handed straight to `Workspace` or `addMount` never passes through
+  // the coercer, so before this the mount was accepted and then kept
+  // nothing -- RAM marks a ttl=0 entry expired as it is written and
+  // redis deletes the key. Checked ahead of the policy dispatch,
+  // because `bounded` returns from it first.
+  it.each([
+    [0, /at least 1 second/],
+    [-1, /at least 1 second/],
+    [1.5, /whole seconds/],
+  ])('refuses a bound of %s that no mount could use', (bad, message) => {
+    expect(() => {
+      checkReadCapability('/d/', stub('ram', false, false), {
+        policy: ReadPolicy.BOUNDED,
+        ttl: bad,
+      })
+    }).toThrow(message)
+  })
+
   it('refuses pinned, naming the missing layer', () => {
     expect(() => {
       checkReadCapability('/d/', stub('ram', false, false), {

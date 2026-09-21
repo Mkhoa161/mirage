@@ -12,9 +12,6 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-# Kept at this filename although it now demonstrates the per-mount read
-# policy rather than the deleted workspace-wide ConsistencyPolicy.
-
 import asyncio
 import tempfile
 
@@ -75,6 +72,12 @@ async def bounds() -> None:
 
 
 async def main() -> None:
+    """Demonstrate the per-mount read policy.
+
+    Kept at this filename although the workspace-wide
+    ``ConsistencyPolicy`` it was written for is gone; the policy it
+    shows is now declared per mount.
+    """
     refusals()
     await bounds()
 

@@ -18,6 +18,7 @@ import { RAMVFS } from '../../vfs/ram/ram.ts'
 import { type ReadSpec, DEFAULT_READ_TTL, Limit, MountMode, ReadPolicy } from '../../types.ts'
 import { normalizeMounts } from './mounts.ts'
 import { Mount } from '../mount/spec.ts'
+import { MountEntry } from '../mount/mount.ts'
 
 const DEFAULT_READ: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
 
@@ -58,6 +59,20 @@ describe('normalizeMounts', () => {
     )
     expect(normalized.read['/a']).toBeUndefined()
     expect(normalized.read['/b']).toBeUndefined()
+  })
+
+  // Python's ReadSpec is a frozen dataclass, so a spec cannot be edited
+  // after the verdict passed it. A plain JS object can be, which would
+  // let a caller flip a mount to `fresh` behind the verdict's back.
+  it("freezes a copy of the caller's spec rather than storing it", () => {
+    const caller: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: 30 }
+    const entry = new MountEntry({ prefix: '/a/', vfs: new RAMVFS(), read: caller })
+    expect(entry.read).not.toBe(caller)
+    expect(Object.isFrozen(entry.read)).toBe(true)
+    expect(() => {
+      ;(caller as { policy: string }).policy = ReadPolicy.FRESH
+    }).not.toThrow()
+    expect(entry.read.policy).toBe(ReadPolicy.BOUNDED)
   })
 
   it('judges a mount that declared nothing against the default', () => {

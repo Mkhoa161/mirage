@@ -77,6 +77,23 @@ export function resolveReadSpec(policy: unknown, ttl: unknown): ReadSpec {
  * @throws if the backend cannot honour the declared policy.
  */
 export function checkReadCapability(prefix: string, vfs: VFS, spec: ReadSpec): void {
+  // Before the policy dispatch, because a bound has to be usable whatever
+  // the policy is. `resolveReadSpec` refuses a bad one at the YAML and
+  // snapshot doors, but a `ReadSpec` handed straight to `Workspace` or
+  // `addMount` never passes through it, and a mount taking ttl=0 accepts
+  // every write and keeps nothing: RAM marks the entry expired as it is
+  // written and redis deletes the key outright, so the mount silently
+  // caches nothing at all.
+  if (!Number.isInteger(spec.ttl)) {
+    throw new Error(
+      `mount '${prefix}': read: ttl must be whole seconds, got ${JSON.stringify(spec.ttl)}`,
+    )
+  }
+  if (spec.ttl < 1) {
+    throw new Error(
+      `mount '${prefix}': read: ttl must be at least 1 second, got ${String(spec.ttl)}`,
+    )
+  }
   if (spec.policy === ReadPolicy.PINNED) {
     throw new Error(
       `mount '${prefix}': read: pinned needs a version layer to pin to, and ` +

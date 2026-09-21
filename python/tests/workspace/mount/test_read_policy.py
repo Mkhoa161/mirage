@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from mirage.types import DEFAULT_READ_TTL, ReadPolicy, ReadSpec
+from mirage.types import DEFAULT_READ_TTL, MountMode, ReadPolicy, ReadSpec
 from mirage.vfs.aliyun.aliyun import AliyunVFS
 from mirage.vfs.backblaze.backblaze import BackblazeVFS
 from mirage.vfs.ceph.ceph import CephVFS
@@ -43,6 +43,7 @@ from mirage.vfs.ssh.ssh import SSHVFS, SSHConfig
 from mirage.vfs.supabase.supabase import SupabaseVFS
 from mirage.vfs.tencent.tencent import TencentVFS
 from mirage.vfs.wasabi.wasabi import WasabiVFS
+from mirage.workspace import Workspace
 from mirage.workspace.mount.read_policy import (check_read_capability,
                                                 coerce_read_policy,
                                                 resolve_read_spec)
@@ -103,6 +104,34 @@ def test_unknown_policy_names_the_known_ones():
     with pytest.raises(ValueError) as exc:
         resolve_read_spec("banana", None)
     assert "fresh, bounded, pinned" in str(exc.value)
+
+
+@pytest.mark.parametrize(("bad", "message"), [
+    (0, "at least 1 second"),
+    (-1, "at least 1 second"),
+    (1.5, "whole seconds"),
+    (True, "whole seconds"),
+])
+def test_the_verdict_refuses_a_bound_no_mount_could_use(bad, message):
+    """The programmatic door bypasses ``resolve_read_spec`` entirely.
+
+    A `ReadSpec` handed straight to `Workspace` or `add_mount` never
+    passes through the coercer, so before this the mount was accepted
+    and then kept nothing: RAM marks a ttl=0 entry expired as it is
+    written and redis deletes the key, which is caching silently
+    disabled rather than a refusal. Checked ahead of the policy
+    dispatch, because `bounded` returns from it first.
+    """
+    spec = ReadSpec(policy=ReadPolicy.BOUNDED, ttl=bad)
+    with pytest.raises(ValueError, match=message):
+        check_read_capability("/d/", RAMVFS(), spec)
+
+
+def test_a_bad_bound_is_refused_at_the_workspace_door_too():
+    with pytest.raises(ValueError, match="at least 1 second"):
+        Workspace({"/d": RAMVFS()},
+                  mode=MountMode.WRITE,
+                  read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=0))
 
 
 def test_pinned_is_refused_naming_the_missing_layer():

@@ -145,7 +145,13 @@ export class MountEntry {
     this.prefix = prefix
     this.vfs = init.vfs
     this.mode = init.mode ?? MountMode.READ
-    this.read = init.read ?? DEFAULT_READ_SPEC
+    // Frozen copy, not the caller's object. Python's `ReadSpec` is a
+    // frozen dataclass, so the same spec cannot be edited after the
+    // mount-time verdict passed it; a plain JS object can, which would
+    // let a caller flip a RAM mount to `fresh` behind the verdict's
+    // back or slip a ttl the bound check already refused into every
+    // later cache write.
+    this.read = Object.freeze({ ...(init.read ?? DEFAULT_READ_SPEC) })
   }
 
   /** Prepare and retain the VFS while its glob hook reads metadata. */
