@@ -1012,13 +1012,17 @@ async function main(): Promise<void> {
         isDeepStrictEqual(restored.sheets.get(file.id)?.tabs[0]?.cells, tab.cells),
       )
       tab.cells.set('00,0', 'duplicate primary key')
-      let rejected = false
+      let refusal = ''
       try {
         await saveState(db, gwsFake.dmmf, 't1', st)
-      } catch {
-        rejected = true
+      } catch (err) {
+        refusal = err instanceof Error ? err.message : String(err)
       }
-      check('an invalid bulk cell write fails', rejected)
+      check(
+        'an invalid bulk cell write fails on the composite key',
+        refusal.includes('UNIQUE constraint failed'),
+        refusal.replaceAll('\n', ' ').trim().slice(0, 160),
+      )
       const rolledBack = await loadState(db, 't1')
       check(
         'a failed bulk write restores the entire previous workbook',
