@@ -140,17 +140,9 @@ class _State:
     tokens: list[str]
     pos: int = 0
     depth: int = 0
-    # How many parentheses and negations enclose the current token, and
-    # whether a top-level `-o` has been seen: a time window under either
-    # cannot be exact, and the flat action list only runs in order along
-    # a top-level -a chain.
+    # Parentheses and negations enclosing the current token.
     nested: int = 0
     in_or: bool = False
-    # Whether the tree decides per entry which action is reached (an
-    # `-o`, or an action under `!` or inside parentheses): the actions
-    # then have to be one and the same, and nothing may follow one.
-    # `depth_option` is a spelled-out `-depth`, which is what lets -prune
-    # ride beside -delete.
     positional: bool = False
     depth_option: bool = False
     mtime_seen: bool = False
@@ -274,6 +266,10 @@ def _action_node(state: _State,
                  kind: ActionKind,
                  batch: bool = False) -> Action:
     """The tree node for an action just parsed.
+
+    An action inside parentheses or under ``!`` makes the expression
+    positional: the tree decides per entry which action is reached,
+    rather than the chain running them all in order.
 
     Args:
         state (_State): parser state.
@@ -544,6 +540,8 @@ def _parse_primary(state: _State) -> PredNode:
     if tok == "-prune":
         return Prune()
     if tok == "-depth":
+        # Spelled out, unlike the -depth that -delete turns on: only this
+        # one lets a -prune ride beside -delete, as a knowing no-op.
         state.expr.depth_first = True
         state.depth_option = True
         return TrueNode()
@@ -605,6 +603,8 @@ def _parse_or(state: _State) -> PredNode:
             break
         _advance(state)
         _after_operator(state, tok)
+        # Each arm reaches its own actions, and a window under one cannot
+        # be exact.
         state.positional = True
         if state.nested == 0:
             state.in_or = True

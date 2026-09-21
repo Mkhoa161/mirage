@@ -327,16 +327,9 @@ export function parseFindExpression(tokens: string[]): FindExpr {
   }
   let pos = 0
   let depth = 0
-  // How many parentheses and negations enclose the current token, and
-  // whether a top-level `-o` has been seen: a time window under either
-  // cannot be exact, and the flat action list only runs in order along a
-  // top-level -a chain.
+  // Parentheses and negations enclosing the current token.
   let nested = 0
   let inOr = false
-  // Whether the tree decides per entry which action is reached (an `-o`, or
-  // an action under `!` or inside parentheses): the actions then have to be
-  // one and the same, and nothing may follow one. `depthOption` is a
-  // spelled-out `-depth`, which is what lets -prune ride beside -delete.
   const shape = { positional: false, depthOption: false }
   let mtimeSeen = false
   let newerToken: string | null = null
@@ -347,6 +340,9 @@ export function parseFindExpression(tokens: string[]): FindExpr {
       )
     }
   }
+  // An action inside parentheses or under `!` makes the expression
+  // positional: the tree decides per entry which action is reached, rather
+  // than the chain running them all in order.
   const actionNode = (kind: ActionKind, batch = false): PredNode => {
     if (nested > 0) shape.positional = true
     return batch ? { op: 'action', kind, batch } : { op: 'action', kind }
@@ -511,6 +507,8 @@ export function parseFindExpression(tokens: string[]): FindExpr {
     }
     if (tok === '-prune') return { op: 'prune', pruned: [], pending: [] }
     if (tok === '-depth') {
+      // Spelled out, unlike the -depth that -delete turns on: only this one
+      // lets a -prune ride beside -delete, as a knowing no-op.
       g.depthFirst = true
       shape.depthOption = true
       return { op: 'true' }
@@ -578,6 +576,8 @@ export function parseFindExpression(tokens: string[]): FindExpr {
       if (tok !== '-o' && tok !== '-or') break
       advance()
       afterOperator(tok)
+      // Each arm reaches its own actions, and a window under one cannot be
+      // exact.
       shape.positional = true
       if (nested === 0) {
         inOr = true
