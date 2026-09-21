@@ -273,7 +273,7 @@ describe('awkGeneric', () => {
 })
 
 describe('awk runs what the scraper refused', () => {
-  it('builds an indent in a for loop (issue #1149)', async () => {
+  it('builds an indent in a for loop', async () => {
     const program = '{indent="";for(i=1;i<NF;i++)indent=indent"    ";print indent $NF}'
     const stdin = ENC.encode('School/Courses_Materials/notes.md\n')
     const [out] = await run([], [program], opts({ F: '/' }, stdin))
@@ -487,5 +487,63 @@ describe('awk unset values', () => {
   it('prints empty for an out-of-range field', async () => {
     const [out] = await run([], ['{print $5}'], opts({}, ENC.encode('one two\n')))
     expect(out).toBe('\n')
+  })
+})
+
+async function* chunked(parts: readonly (string | Uint8Array)[]): AsyncIterable<Uint8Array> {
+  for (const part of parts) {
+    await Promise.resolve()
+    yield typeof part === 'string' ? ENC.encode(part) : part
+  }
+}
+
+describe('awk RS', () => {
+  it.each<[string, Record<string, string[] | string>, string, string]>([
+    ['BEGIN{RS=":"} {print NR": "$0}', {}, 'a:b', '1: a\n2: b\n'],
+    ['{print NR": "$0}', { v: ['RS=:'] }, 'a:b:\n', '1: a\n2: b\n3: \n\n'],
+    ['{print NR": "$0; RS="2"}', {}, 'a\nb2c2d\n', '1: a\n2: b\n3: c\n4: d\n\n'],
+    ['{print NF": "$0}', { v: ['RS='] }, '\n\na b\nc\n\n\nd\n', '3: a b\nc\n1: d\n'],
+    ['{print NF}', { v: ['RS='], F: ':' }, 'a:b\nc\n\nd', '3\n1\n'],
+    ['{print NR": "$0}', { v: ['RS=[0-9]+'] }, 'a12b345c', '1: a\n2: b\n3: c\n'],
+  ])('separates records for %j with %j', async (program, flags, stdin, expected) => {
+    expect(await runStdin(program, stdin, flags)).toBe(expected)
+  })
+
+  it.each<[string[], string, string]>([
+    [['a\n', '\nb\n'], '', 'a|b|'],
+    [['a1', '2b'], '[0-9]+', 'a|b|'],
+    [['a:', 'b'], ':', 'a|b|'],
+  ])('holds a record across the chunks %j', async (parts, rs, expected) => {
+    const o = { ...opts({ v: [`RS=${rs}`] }), stdin: chunked(parts) }
+    const [out] = await run([], ['{printf "%s|", $0}'], o)
+    expect(out).toBe(expected)
+  })
+
+  it('decodes a character split across chunks', async () => {
+    const parts = [Uint8Array.of(0x68, 0xc3), Uint8Array.of(0xa9, 0x3a, 0x78)]
+    const o = { ...opts({ v: ['RS=:'] }), stdin: chunked(parts) }
+    const [out] = await run([], ['{printf "%s|", $0}'], o)
+    expect(out).toBe('h\u00e9|x|')
+  })
+
+  it('never lets a record span two files', async () => {
+    const files = { '/a.txt': 'a:b', '/b.txt': 'c:d:' }
+    const paths = [spec('/a.txt'), spec('/b.txt')]
+    const [out] = await run(paths, ['{print FNR, NR, $0}'], opts({ v: ['RS=:'] }), files)
+    expect(out).toBe('1 1 a\n2 2 b\n1 3 c\n2 4 d\n')
+  })
+
+  it('takes the whole newline run as the paragraph separator', async () => {
+    const o = { ...opts({ v: ['RS='] }), stdin: chunked(['a\n\n', '\nb\n']) }
+    const [out] = await run([], ['{printf "%s|", $0; RS="\\n"}'], o)
+    expect(out).toBe('a|b|')
+  })
+
+  it('is fatal on a bad regex', async () => {
+    expect(await runIo('BEGIN{RS="[a"} {print}', 'ab')).toEqual([
+      '',
+      2,
+      'awk: syntax error in regular expression [a at source line 1\n',
+    ])
   })
 })

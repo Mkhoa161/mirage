@@ -494,19 +494,113 @@ def split_fields(record: str, pattern: re.Pattern[str] | None) -> list[str]:
     return fields
 
 
-def split_record(record: str, separator: str) -> list[str]:
+def split_record(record: str,
+                 separator: str,
+                 paragraph: bool = False) -> list[str]:
     """Split a record using an FS value.
 
     An empty FS makes every character its own field; gawk, mawk and
     onetrueawk all agree on that even though POSIX leaves it undefined.
+    A record read in paragraph mode also splits at each newline when FS
+    is a single character, as in gawk and onetrueawk; a regex FS and
+    split() do not.
 
     Args:
         record (str): the record text.
         separator (str): the FS value.
+        paragraph (bool): whether the record was read with an empty RS.
     """
     if separator == "":
         return list(record)
+    if paragraph and len(separator) == 1:
+        return split_fields(record.replace("\n", separator),
+                            split_pattern(separator))
     return split_fields(record, split_pattern(separator))
+
+
+def take_tail(buffer: str, start: int, final: bool) -> tuple[str | None, int]:
+    """Hand out what is left of the input as its last record.
+
+    Args:
+        buffer (str): the decoded input.
+        start (int): where the record starts in ``buffer``.
+        final (bool): whether the input is exhausted.
+    """
+    if final and start < len(buffer):
+        return buffer[start:], len(buffer)
+    return None, start
+
+
+def take_paragraph(buffer: str, start: int,
+                   final: bool) -> tuple[str | None, int]:
+    """Cut the next record in paragraph mode, where RS is empty.
+
+    Records are separated by blank lines, and leading or trailing
+    newlines never make an empty record. The whole run of newlines is
+    the separator, so a run that reaches the end of the buffer waits for
+    more input before the record is handed out.
+
+    Args:
+        buffer (str): the decoded input.
+        start (int): where the record starts in ``buffer``.
+        final (bool): whether the input is exhausted.
+    """
+    while start < len(buffer) and buffer[start] == "\n":
+        start += 1
+    end = buffer.find("\n\n", start)
+    if end >= 0:
+        stop = end + 2
+        while stop < len(buffer) and buffer[stop] == "\n":
+            stop += 1
+        if stop < len(buffer) or final:
+            return buffer[start:end], stop
+        return None, start
+    if not final or start == len(buffer):
+        return None, start
+    end = len(buffer) - 1 if buffer.endswith("\n") else len(buffer)
+    return buffer[start:end], len(buffer)
+
+
+def take_record(buffer: str, start: int, separator: str,
+                final: bool) -> tuple[str | None, int]:
+    """Cut the next record out of ``buffer`` with an RS value.
+
+    A single character RS separates records literally and an empty RS
+    is paragraph mode. A longer RS is an ERE, as in gawk, mawk and
+    onetrueawk, where a match of nothing separates nothing. Until the
+    input is exhausted a separator that reaches the end of the buffer
+    could still grow, so that record waits for more input.
+
+    Args:
+        buffer (str): the decoded input.
+        start (int): where the record starts in ``buffer``.
+        separator (str): the RS value.
+        final (bool): whether the input is exhausted.
+
+    Returns:
+        tuple[str | None, int]: the record, or None when ``buffer`` holds
+        no complete one, and where the next record starts.
+    """
+    if separator == "":
+        return take_paragraph(buffer, start, final)
+    if len(separator) == 1:
+        end = buffer.find(separator, start)
+        if end >= 0:
+            return buffer[start:end], end + len(separator)
+        return take_tail(buffer, start, final)
+    pattern = compile_ere(separator)
+    pos = start
+    while pos <= len(buffer):
+        found = pattern.search(buffer, pos)
+        if found is None:
+            break
+        if found.end() == found.start():
+            pos = found.start() + 1
+            continue
+        if found.end() == len(buffer) and not final:
+            return None, start
+        return buffer[start:found.start()], found.end()
+    return take_tail(buffer, start, final)
 
 
 __all__ = [
@@ -530,4 +624,7 @@ __all__ = [
     "substitute",
     "substr",
     "take_arg",
+    "take_paragraph",
+    "take_record",
+    "take_tail",
 ]

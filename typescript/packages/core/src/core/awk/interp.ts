@@ -150,6 +150,7 @@ export class Interpreter {
   private err: string[] = []
   private record = ''
   private recordFs = ' '
+  private recordParagraph = false
   private fields: string[] | null = []
   private recordStale = false
   private nr = 0
@@ -166,7 +167,7 @@ export class Interpreter {
     for (const [name, raw] of Object.entries(assignments)) this.globals.set(name, strnum(raw))
   }
 
-  private special(name: string): string {
+  special(name: string): string {
     return toStr(this.globals.get(name) ?? UNINIT, '%.6g')
   }
 
@@ -181,7 +182,7 @@ export class Interpreter {
   }
 
   private ensureFields(): string[] {
-    this.fields ??= splitRecord(this.record, this.recordFs)
+    this.fields ??= splitRecord(this.record, this.recordFs, this.recordParagraph)
     return this.fields
   }
 
@@ -193,11 +194,12 @@ export class Interpreter {
     return this.record
   }
 
-  // The record splits with the FS in force when it arrived, so an action
-  // that assigns FS changes the next record, not this one.
+  // The record splits with the FS and RS in force when it arrived, so an
+  // action that assigns either changes the next record, not this one.
   private setRecord(value: string): void {
     this.record = value
     this.recordFs = this.special('FS')
+    this.recordParagraph = this.special('RS') === ''
     this.fields = null
     this.recordStale = false
   }

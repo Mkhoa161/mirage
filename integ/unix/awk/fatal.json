@@ -203,6 +203,40 @@
         "stdout": "",
         "stderr": "awk: trying to access field -1\n"
       }
+    },
+    {
+      "id": "awk_fatal_bad_rs_regex",
+      "seq": 991306,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'ab' | awk 'BEGIN{RS=\"[a\"} {print}'",
+      "expect": {
+        "exit": 2,
+        "stdout": "",
+        "stderr": "awk: syntax error in regular expression [a at source line 1\n"
+      }
     }
   ]
 }

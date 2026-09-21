@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "id": "awk_1149_concat_assignment",
+      "id": "awk_tree_concat_assignment",
       "seq": 991400,
       "targets": [
         "ram",
@@ -35,7 +35,7 @@
       }
     },
     {
-      "id": "awk_1149_variable_persists_across_records",
+      "id": "awk_tree_variable_persists_across_records",
       "seq": 991401,
       "targets": [
         "ram",
@@ -69,7 +69,7 @@
       }
     },
     {
-      "id": "awk_1149_juxtaposed_print_operands",
+      "id": "awk_tree_juxtaposed_print_operands",
       "seq": 991402,
       "targets": [
         "ram",
@@ -103,7 +103,7 @@
       }
     },
     {
-      "id": "awk_1149_last_field",
+      "id": "awk_tree_last_field",
       "seq": 991403,
       "targets": [
         "ram",
@@ -137,7 +137,7 @@
       }
     },
     {
-      "id": "awk_1149_depth_as_nf",
+      "id": "awk_tree_depth_as_nf",
       "seq": 991404,
       "targets": [
         "ram",

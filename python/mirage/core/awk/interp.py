@@ -126,6 +126,7 @@ class Interpreter:
         self.err: list[str] = []
         self.record = ""
         self.record_fs = " "
+        self.record_paragraph = False
         self.fields: list[str] | None = []
         self.record_stale = False
         self.nr = 0
@@ -158,7 +159,8 @@ class Interpreter:
 
     def ensure_fields(self) -> list[str]:
         if self.fields is None:
-            self.fields = split_record(self.record, self.record_fs)
+            self.fields = split_record(self.record, self.record_fs,
+                                       self.record_paragraph)
         return self.fields
 
     def ensure_record(self) -> str:
@@ -170,14 +172,16 @@ class Interpreter:
     def set_record(self, value: str) -> None:
         """Install a new $0, invalidating the split fields.
 
-        The record splits with the FS in force when it arrived, so an
-        action that assigns FS changes the next record, not this one.
+        The record splits with the FS and RS in force when it arrived, so
+        an action that assigns either changes the next record, not this
+        one.
 
         Args:
             value (str): the new record text.
         """
         self.record = value
         self.record_fs = self.special("FS")
+        self.record_paragraph = self.special("RS") == ""
         self.fields = None
         self.record_stale = False
 

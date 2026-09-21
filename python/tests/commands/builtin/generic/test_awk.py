@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+
 import pytest
 
 from mirage.commands.builtin.generic.awk import awk
@@ -673,7 +675,7 @@ async def _run_io(program: str, stdin: bytes) -> tuple[str, int, bytes]:
 
 
 @pytest.mark.asyncio
-async def test_awk_for_loop_builds_an_indent_issue_1149():
+async def test_awk_for_loop_builds_an_indent():
     program = ('{indent="";for(i=1;i<NF;i++)indent=indent"    ";'
                'print indent $NF}')
     out = await _run_stdin(program, b"School/Courses_Materials/notes.md\n",
@@ -741,3 +743,92 @@ async def test_awk_dev_stderr_is_the_error_stream():
 async def test_awk_syntax_error_is_a_usage_error():
     with pytest.raises(UsageError, match="syntax error"):
         await _run_stdin("{print $(}", b"a\n")
+
+
+@pytest.mark.parametrize(
+    "program,flags,stdin,expected",
+    [
+        ('BEGIN{RS=":"} {print NR": "$0}', None, b"a:b", "1: a\n2: b\n"),
+        ('{print NR": "$0}', {
+            "v": ["RS=:"]
+        }, b"a:b:\n", "1: a\n2: b\n3: \n\n"),
+        ('{print NR": "$0; RS="2"}', None, b"a\nb2c2d\n",
+         "1: a\n2: b\n3: c\n4: d\n\n"),
+        ('{print NF": "$0}', {
+            "v": ["RS="]
+        }, b"\n\na b\nc\n\n\nd\n", "3: a b\nc\n1: d\n"),
+        ("{print NF}", {
+            "v": ["RS="],
+            "F": ":"
+        }, b"a:b\nc\n\nd", "3\n1\n"),
+        ('{print NR": "$0}', {
+            "v": ["RS=[0-9]+"]
+        }, b"a12b345c", "1: a\n2: b\n3: c\n"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_awk_rs_separates_records(program, flags, stdin, expected):
+    assert await _run_stdin(program, stdin, flags) == expected
+
+
+async def _chunked(parts: tuple[bytes, ...]) -> AsyncIterator[bytes]:
+    for part in parts:
+        yield part
+
+
+@pytest.mark.parametrize(
+    "parts,rs,expected",
+    [
+        ((b"a\n", b"\nb\n"), "", "a|b|"),
+        ((b"a1", b"2b"), "[0-9]+", "a|b|"),
+        ((b"a:", b"b"), ":", "a|b|"),
+        ((b"h\xc3", b"\xa9:x"), ":", "h\u00e9|x|"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_awk_rs_holds_a_record_across_chunks(parts, rs, expected):
+    rb, read_stream = _make_backend({})
+    output, _ = await awk(
+        [],
+        ('{printf "%s|", $0}', ),
+        {"v": [f"RS={rs}"]},
+        read_bytes=rb,
+        read_stream=read_stream,
+        stdin=_chunked(parts),
+    )
+    assert (await _drain(output)).decode() == expected
+
+
+@pytest.mark.asyncio
+async def test_awk_rs_record_never_spans_two_files():
+    rb, rs = _make_backend({"/a.txt": b"a:b", "/b.txt": b"c:d:"})
+    output, _ = await awk(
+        [_spec("/a.txt"), _spec("/b.txt")],
+        ("{print FNR, NR, $0}", ),
+        {"v": ["RS=:"]},
+        read_bytes=rb,
+        read_stream=rs,
+    )
+    assert (await _drain(output)).decode() == "1 1 a\n2 2 b\n1 3 c\n2 4 d\n"
+
+
+@pytest.mark.asyncio
+async def test_awk_rs_paragraph_separator_is_the_whole_newline_run():
+    rb, read_stream = _make_backend({})
+    output, _ = await awk(
+        [],
+        ('{printf "%s|", $0; RS="\\n"}', ),
+        {"v": ["RS="]},
+        read_bytes=rb,
+        read_stream=read_stream,
+        stdin=_chunked((b"a\n\n", b"\nb\n")),
+    )
+    assert (await _drain(output)).decode() == "a|b|"
+
+
+@pytest.mark.asyncio
+async def test_awk_rs_bad_regex_is_fatal():
+    out, code, err = await _run_io('BEGIN{RS="[a"} {print}', b"ab")
+    assert (out, code) == ("", 2)
+    assert err == (b"awk: syntax error in regular expression [a "
+                   b"at source line 1\n")

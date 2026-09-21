@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+export { takeRecord } from './builtins.ts'
 export { AwkRuntimeError, AwkSyntaxError } from './errors.ts'
 export { ExitProgram, Interpreter } from './interp.ts'
 export { parse } from './parser.ts'

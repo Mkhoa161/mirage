@@ -5,8 +5,8 @@ import pytest
 from mirage.core.awk.builtins import (match_position, next_random, safe_fmod,
                                       safe_log, safe_pow, safe_sqrt,
                                       split_record, sprintf, substitute,
-                                      substr)
-from mirage.core.awk.errors import AwkRuntimeError
+                                      substr, take_record)
+from mirage.core.awk.errors import AwkRuntimeError, AwkSyntaxError
 from mirage.core.awk.value import num, strnum, text
 
 
@@ -66,6 +66,71 @@ def test_match_position():
 ])
 def test_split_record(record, separator, expected):
     assert split_record(record, separator) == expected
+
+
+@pytest.mark.parametrize("record,separator,expected", [
+    ("a:b\nc", ":", ["a", "b", "c"]),
+    ("a b\nc", " ", ["a", "b", "c"]),
+    ("a\tb\nc", "\t", ["a", "b", "c"]),
+    ("a:b\nc", "[:]", ["a", "b\nc"]),
+])
+def test_split_record_in_paragraph_mode(record, separator, expected):
+    assert split_record(record, separator, True) == expected
+
+
+def drain(buffer: str, separator: str, final: bool) -> tuple[list[str], int]:
+    records: list[str] = []
+    start = 0
+    while True:
+        record, start = take_record(buffer, start, separator, final)
+        if record is None:
+            return records, start
+        records.append(record)
+
+
+@pytest.mark.parametrize("buffer,separator,expected", [
+    ("a\nb\n", "\n", ["a", "b"]),
+    ("a\n\nb", "\n", ["a", "", "b"]),
+    ("a:b", ":", ["a", "b"]),
+    ("a:b:\n", ":", ["a", "b", "\n"]),
+    ("a:b:", ":", ["a", "b"]),
+    ("a.b|c", ".", ["a", "b|c"]),
+    ("a😀b", "😀", ["a", "b"]),
+    ("\n\na b\nc\n\n\n\nd e\n\n", "", ["a b\nc", "d e"]),
+    ("a\n \nb\n", "", ["a\n \nb"]),
+    ("a\n \n", "", ["a\n "]),
+    ("\n\n\n", "", []),
+    ("", "", []),
+    ("a12b345c", "[0-9]+", ["a", "b", "c"]),
+    ("a12b34", "[0-9]+", ["a", "b"]),
+    ("axxbyc", "x*", ["a", "byc"]),
+    ("a;b,c", ";|,", ["a", "b", "c"]),
+])
+def test_take_record_at_the_end_of_input(buffer, separator, expected):
+    records, start = drain(buffer, separator, True)
+    assert records == expected
+    assert start == len(buffer)
+
+
+@pytest.mark.parametrize("buffer,separator,expected,rest", [
+    ("a\nb", "\n", ["a"], "b"),
+    ("a\n\nb\n", "", ["a"], "b\n"),
+    ("a\n\n", "", [], "a\n\n"),
+    ("a\n", "", [], "a\n"),
+    ("a12", "[0-9]+", [], "a12"),
+    ("a12b", "[0-9]+", ["a"], "b"),
+    ("ab", "x*", [], "ab"),
+])
+def test_take_record_waits_for_a_separator_that_could_grow(
+        buffer, separator, expected, rest):
+    records, start = drain(buffer, separator, False)
+    assert records == expected
+    assert buffer[start:] == rest
+
+
+def test_take_record_with_a_bad_regex_is_a_syntax_error():
+    with pytest.raises(AwkSyntaxError):
+        take_record("ab", 0, "[a", True)
 
 
 @pytest.mark.parametrize("fmt,args,expected", [

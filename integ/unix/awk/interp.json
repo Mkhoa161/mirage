@@ -1,7 +1,7 @@
 {
   "cases": [
     {
-      "id": "awk_interp_issue1149",
+      "id": "awk_interp_for_loop_indent",
       "seq": 991200,
       "targets": [
         "ram",
@@ -1357,6 +1357,210 @@
       "expect": {
         "exit": 0,
         "stdout": "12\n0.5\n1000\n0\n-7\n3\n42\n1\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_interp_rs_begin",
+      "seq": 991240,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a:b' | awk 'BEGIN{RS=\":\"} {print NR\": \"$0}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1: a\n2: b\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_interp_rs_v_keeps_newline",
+      "seq": 991241,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a:b:\\n' | awk -v RS=: '{print NR\": [\"$0\"]\"}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1: [a]\n2: [b]\n3: [\n]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_interp_rs_paragraph",
+      "seq": 991242,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf '\\n\\na b\\nc\\n\\n\\nd e\\n' | awk -v RS= '{print NR\": \"NF\" \"$1\"-\"$NF}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1: 3 a-c\n2: 2 d-e\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_interp_rs_paragraph_fs",
+      "seq": 991243,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a:b\\nc:d\\n\\ne:f\\n' | awk -v RS= -F: '{print NR\": \"NF}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1: 4\n2: 2\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_interp_rs_regex",
+      "seq": 991244,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a12b345c' | awk -v RS='[0-9]+' '{print NR\": \"$0}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1: a\n2: b\n3: c\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "awk_interp_rs_mid_stream",
+      "seq": 991245,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'a\\nb2c2d\\n' | awk '{print NR\": [\"$0\"]\"; RS=\"2\"}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "1: [a]\n2: [b]\n3: [c]\n4: [d\n]\n",
         "stderr": ""
       }
     }

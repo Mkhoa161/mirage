@@ -24,8 +24,9 @@ import {
   sprintf,
   substitute,
   substr,
+  takeRecord,
 } from './builtins.ts'
-import { AwkRuntimeError } from './errors.ts'
+import { AwkRuntimeError, AwkSyntaxError } from './errors.ts'
 import { num, strnum, text, type Value } from './value.ts'
 
 describe('awk substr', () => {
@@ -86,6 +87,70 @@ describe('awk field splitting', () => {
     ['abc', 'x*', ['abc']],
   ])('splitRecord(%j, %j)', (record, separator, expected) => {
     expect(splitRecord(record, separator)).toEqual(expected)
+  })
+
+  it.each<[string, string, string[]]>([
+    ['a:b\nc', ':', ['a', 'b', 'c']],
+    ['a b\nc', ' ', ['a', 'b', 'c']],
+    ['a\tb\nc', '\t', ['a', 'b', 'c']],
+    ['a:b\nc', '[:]', ['a', 'b\nc']],
+  ])('splitRecord(%j, %j) in paragraph mode', (record, separator, expected) => {
+    expect(splitRecord(record, separator, true)).toEqual(expected)
+  })
+})
+
+function drain(buffer: string, separator: string, final: boolean): [string[], number] {
+  const records: string[] = []
+  let start = 0
+  for (;;) {
+    const [record, next] = takeRecord(buffer, start, separator, final)
+    start = next
+    if (record === null) return [records, start]
+    records.push(record)
+  }
+}
+
+describe('awk record splitting', () => {
+  it.each<[string, string, string[]]>([
+    ['a\nb\n', '\n', ['a', 'b']],
+    ['a\n\nb', '\n', ['a', '', 'b']],
+    ['a:b', ':', ['a', 'b']],
+    ['a:b:\n', ':', ['a', 'b', '\n']],
+    ['a:b:', ':', ['a', 'b']],
+    ['a.b|c', '.', ['a', 'b|c']],
+    ['a😀b', '😀', ['a', 'b']],
+    ['\n\na b\nc\n\n\n\nd e\n\n', '', ['a b\nc', 'd e']],
+    ['a\n \nb\n', '', ['a\n \nb']],
+    ['a\n \n', '', ['a\n ']],
+    ['\n\n\n', '', []],
+    ['', '', []],
+    ['a12b345c', '[0-9]+', ['a', 'b', 'c']],
+    ['a12b34', '[0-9]+', ['a', 'b']],
+    ['axxbyc', 'x*', ['a', 'byc']],
+    ['a;b,c', ';|,', ['a', 'b', 'c']],
+  ])('takeRecord(%j, %j) at the end of input', (buffer, separator, expected) => {
+    expect(drain(buffer, separator, true)).toEqual([expected, buffer.length])
+  })
+
+  it.each<[string, string, string[], string]>([
+    ['a\nb', '\n', ['a'], 'b'],
+    ['a\n\nb\n', '', ['a'], 'b\n'],
+    ['a\n\n', '', [], 'a\n\n'],
+    ['a\n', '', [], 'a\n'],
+    ['a12', '[0-9]+', [], 'a12'],
+    ['a12b', '[0-9]+', ['a'], 'b'],
+    ['ab', 'x*', [], 'ab'],
+  ])(
+    'takeRecord(%j, %j) waits for a separator that could grow',
+    (buffer, separator, expected, rest) => {
+      const [records, start] = drain(buffer, separator, false)
+      expect(records).toEqual(expected)
+      expect(buffer.slice(start)).toBe(rest)
+    },
+  )
+
+  it('is a syntax error on a bad regex', () => {
+    expect(() => takeRecord('ab', 0, '[a', true)).toThrow(AwkSyntaxError)
   })
 })
 

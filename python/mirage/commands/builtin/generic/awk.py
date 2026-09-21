@@ -1,5 +1,7 @@
-from collections.abc import (AsyncIterator, Awaitable, Callable, Mapping,
-                             Sequence)
+import codecs
+from collections.abc import (AsyncGenerator, AsyncIterator, Awaitable,
+                             Callable, Mapping, Sequence)
+from contextlib import aclosing
 
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.commands.builtin.generic.awk_types import (FS_ESCAPES, USAGE,
@@ -11,9 +13,11 @@ from mirage.commands.spec.flag_view import FlagView
 from mirage.commands.spec.types import FlagValue
 from mirage.core.awk import (AwkRuntimeError, AwkSyntaxError, ExitProgram,
                              Interpreter, parse)
+from mirage.core.awk.builtins import take_record
 from mirage.core.awk.value import text as text_value
-from mirage.io.async_line_iterator import AsyncLineIterator
+from mirage.io.cooperative import chunks
 from mirage.io.types import ByteSource, IOResult
+from mirage.io.yield_budget import YieldBudget
 from mirage.types import PathSpec
 
 
@@ -93,6 +97,37 @@ def _settle(io: IOResult, interp: Interpreter,
     return interp.drain().encode()
 
 
+async def _records(source: AsyncIterator[bytes],
+                   interp: Interpreter) -> AsyncGenerator[str, None]:
+    """Cut one input into records with the RS in force at each read.
+
+    RS is read again before every record, so an action that assigns it
+    changes how the next record is cut, as in every awk.
+
+    Args:
+        source (AsyncIterator[bytes]): the input bytes.
+        interp (Interpreter): the interpreter whose RS applies.
+    """
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    budget = YieldBudget()
+    buffer = ""
+    start = 0
+    final = False
+    async with aclosing(chunks(source)) as pulled:
+        while not final:
+            data = await anext(pulled, None)
+            final = data is None
+            buffer = buffer[start:] + decoder.decode(data or b"", final)
+            start = 0
+            while True:
+                await budget.run()
+                record, start = take_record(buffer, start,
+                                            interp.special("RS"), final)
+                if record is None:
+                    break
+                yield record
+
+
 async def _awk_stream(
     sources: Sequence[tuple[str, AsyncIterator[bytes]]],
     interp: Interpreter,
@@ -113,20 +148,21 @@ async def _awk_stream(
             if exited:
                 break
             interp.start_file(name)
-            async for line_bytes in AsyncLineIterator(source):
-                try:
-                    interp.run_record(line_bytes.decode(errors="replace"))
-                except ExitProgram as stop:
-                    io.exit_code = stop.code & 0xFF
-                    exited = True
-                except (AwkRuntimeError, AwkSyntaxError) as exc:
-                    yield _settle(io, interp, exc)
-                    return
-                chunk = _settle(io, interp, None)
-                if chunk:
-                    yield chunk
-                if exited or interp.skip_file:
-                    break
+            try:
+                async with aclosing(_records(source, interp)) as records:
+                    async for record in records:
+                        interp.run_record(record)
+                        chunk = _settle(io, interp, None)
+                        if chunk:
+                            yield chunk
+                        if interp.skip_file:
+                            break
+            except ExitProgram as stop:
+                io.exit_code = stop.code & 0xFF
+                exited = True
+            except (AwkRuntimeError, AwkSyntaxError) as exc:
+                yield _settle(io, interp, exc)
+                return
     try:
         interp.run_end()
     except ExitProgram as stop:

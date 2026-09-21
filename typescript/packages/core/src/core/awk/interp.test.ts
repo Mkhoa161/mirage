@@ -36,10 +36,17 @@ function run(program: string, o: RunOpts = {}): string {
 }
 
 describe('awk interpreter', () => {
-  it('builds an indent in a for loop (issue #1149)', () => {
+  it('builds an indent in a for loop', () => {
     const program = '{indent="";for(i=1;i<NF;i++)indent=indent"    ";print indent $NF}'
     const lines = ['School/Courses_Materials/notes.md', 'top.txt']
     expect(run(program, { lines, fs: '/' })).toBe('        notes.md\ntop.txt\n')
+  })
+
+  it('splits fields at newlines too in paragraph mode', () => {
+    const lines = ['a:b\nc']
+    expect(run('{print NF}', { lines, fs: ':', assignments: { RS: '' } })).toBe('3\n')
+    expect(run('{print NF}', { lines, fs: ':' })).toBe('2\n')
+    expect(run('{RS=""; print NF}', { lines: ['a:b\nc', 'd:e\nf'], fs: ':' })).toBe('2\n3\n')
   })
 
   it.each([

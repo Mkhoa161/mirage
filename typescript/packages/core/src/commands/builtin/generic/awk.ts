@@ -18,13 +18,15 @@ import { mountKey, mountPrefixOf } from '../../../utils/key_prefix.ts'
 import { IOResult, materialize } from '../../../io/types.ts'
 import { PathSpec } from '../../../types.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
-import { AsyncLineIterator } from '../../../io/async_line_iterator.ts'
+import { chunks } from '../../../io/cooperative.ts'
+import { YieldBudget } from '../../../io/yield_budget.ts'
 import {
   AwkRuntimeError,
   AwkSyntaxError,
   ExitProgram,
   Interpreter,
   parse,
+  takeRecord,
   text,
 } from '../../../core/awk/index.ts'
 import { UsageError } from '../../errors.ts'
@@ -103,6 +105,43 @@ function isFatal(err: unknown): err is AwkRuntimeError | AwkSyntaxError {
   return err instanceof AwkRuntimeError || err instanceof AwkSyntaxError
 }
 
+/**
+ * Cut one input into records with the RS in force at each read. RS is
+ * read again before every record, so an action that assigns it changes
+ * how the next record is cut, as in every awk.
+ */
+async function* records(
+  source: AsyncIterable<Uint8Array>,
+  interp: Interpreter,
+): AsyncIterable<string> {
+  const decoder = new TextDecoder('utf-8', { fatal: false })
+  const budget = new YieldBudget()
+  const pulled = chunks(source)
+  let buffer = ''
+  let start = 0
+  let final = false
+  try {
+    while (!final) {
+      const next = await pulled.next()
+      final = next.done === true
+      const decoded =
+        next.done === true ? decoder.decode() : decoder.decode(next.value, { stream: true })
+      buffer = buffer.slice(start) + decoded
+      start = 0
+      for (;;) {
+        const pending = budget.run()
+        if (pending !== undefined) await pending
+        const [record, after] = takeRecord(buffer, start, interp.special('RS'), final)
+        start = after
+        if (record === null) break
+        yield record
+      }
+    }
+  } finally {
+    await pulled.return?.()
+  }
+}
+
 async function* awkStream(
   sources: readonly Source[],
   interp: Interpreter,
@@ -125,21 +164,21 @@ async function* awkStream(
     for (const [name, source] of sources) {
       if (exited) break
       interp.startFile(name)
-      for await (const lineBytes of new AsyncLineIterator(source)) {
-        try {
-          interp.runRecord(DEC.decode(lineBytes))
-        } catch (err) {
-          if (err instanceof ExitProgram) {
-            io.exitCode = exitStatus(err.code)
-            exited = true
-          } else if (isFatal(err)) {
-            yield settle(io, interp, err)
-            return
-          } else throw err
+      try {
+        for await (const record of records(source, interp)) {
+          interp.runRecord(record)
+          const chunk = settle(io, interp, null)
+          if (chunk.length > 0) yield chunk
+          if (interp.skipFile) break
         }
-        const chunk = settle(io, interp, null)
-        if (chunk.length > 0) yield chunk
-        if (exited || interp.skipFile) break
+      } catch (err) {
+        if (err instanceof ExitProgram) {
+          io.exitCode = exitStatus(err.code)
+          exited = true
+        } else if (isFatal(err)) {
+          yield settle(io, interp, err)
+          return
+        } else throw err
       }
     }
   }

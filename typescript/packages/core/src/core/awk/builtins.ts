@@ -400,9 +400,78 @@ function splitFields(record: string, pattern: RegExp | null): string[] {
 /**
  * Split a record using an FS value. An empty FS makes every character
  * its own field; gawk, mawk and onetrueawk all agree on that even though
- * POSIX leaves it undefined.
+ * POSIX leaves it undefined. A record read in paragraph mode also splits
+ * at each newline when FS is a single character, as in gawk and
+ * onetrueawk; a regex FS and split() do not.
  */
-export function splitRecord(record: string, separator: string): string[] {
+export function splitRecord(record: string, separator: string, paragraph = false): string[] {
   if (separator === '') return chars(record)
+  if (paragraph && charLength(separator) === 1) {
+    return splitFields(record.replaceAll('\n', separator), splitPattern(separator))
+  }
   return splitFields(record, splitPattern(separator))
+}
+
+/** Hand out what is left of the input as its last record. */
+function takeTail(buffer: string, start: number, final: boolean): [string | null, number] {
+  if (final && start < buffer.length) return [buffer.slice(start), buffer.length]
+  return [null, start]
+}
+
+/**
+ * Cut the next record in paragraph mode, where RS is empty. Records are
+ * separated by blank lines, and leading or trailing newlines never make
+ * an empty record. The whole run of newlines is the separator, so a run
+ * that reaches the end of the buffer waits for more input before the
+ * record is handed out.
+ */
+function takeParagraph(buffer: string, from: number, final: boolean): [string | null, number] {
+  let start = from
+  while (start < buffer.length && buffer.charAt(start) === '\n') start += 1
+  const end = buffer.indexOf('\n\n', start)
+  if (end >= 0) {
+    let stop = end + 2
+    while (stop < buffer.length && buffer.charAt(stop) === '\n') stop += 1
+    if (stop < buffer.length || final) return [buffer.slice(start, end), stop]
+    return [null, start]
+  }
+  if (!final || start === buffer.length) return [null, start]
+  const last = buffer.endsWith('\n') ? buffer.length - 1 : buffer.length
+  return [buffer.slice(start, last), buffer.length]
+}
+
+/**
+ * Cut the next record out of `buffer` with an RS value. A single
+ * character RS separates records literally and an empty RS is paragraph
+ * mode. A longer RS is an ERE, as in gawk, mawk and onetrueawk, where a
+ * match of nothing separates nothing. Until the input is exhausted a
+ * separator that reaches the end of the buffer could still grow, so that
+ * record waits for more input. Returns the record, or null when `buffer`
+ * holds no complete one, and where the next record starts.
+ */
+export function takeRecord(
+  buffer: string,
+  start: number,
+  separator: string,
+  final: boolean,
+): [string | null, number] {
+  if (separator === '') return takeParagraph(buffer, start, final)
+  if (charLength(separator) === 1) {
+    const end = buffer.indexOf(separator, start)
+    if (end >= 0) return [buffer.slice(start, end), end + separator.length]
+    return takeTail(buffer, start, final)
+  }
+  const pattern = compileEre(separator)
+  let pos = start
+  while (pos <= buffer.length) {
+    const found = searchFrom(pattern, buffer, pos)
+    if (found === null) break
+    if (found.end === found.start) {
+      pos = found.start + 1
+      continue
+    }
+    if (found.end === buffer.length && !final) return [null, start]
+    return [buffer.slice(start, found.start), found.end]
+  }
+  return takeTail(buffer, start, final)
 }

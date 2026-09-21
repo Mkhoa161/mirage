@@ -22,11 +22,18 @@ def run(program: str,
     return interp.drain()
 
 
-def test_issue_1149_indent_loop():
+def test_for_loop_builds_an_indent():
     program = ('{indent="";for(i=1;i<NF;i++)indent=indent"    ";'
                'print indent $NF}')
     assert run(program, ["School/Courses_Materials/notes.md", "top.txt"],
                fs="/") == "        notes.md\ntop.txt\n"
+
+
+def test_paragraph_mode_splits_fields_at_newlines_too():
+    record = ["a:b\nc"]
+    assert run("{print NF}", record, ":", {"RS": ""}) == "3\n"
+    assert run("{print NF}", record, ":") == "2\n"
+    assert run('{RS=""; print NF}', ["a:b\nc", "d:e\nf"], ":") == "2\n3\n"
 
 
 @pytest.mark.parametrize("program,expected", [
