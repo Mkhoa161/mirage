@@ -81,7 +81,7 @@ def test_disk_under_bounded_reads_current_bytes(tmp_path):
 def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
     """Multipart-style ETags are not the MD5 of the content. The cold
     read must stamp the cache entry with the backend ETag so a warm read
-    under ALWAYS passes the freshness check and serves from cache
+    under `fresh` passes the freshness check and serves from cache
     instead of evicting and refetching on every read."""
     store = {"data.txt": b"name,age\nalice,30\n"}
     session = MultiBucketSession({"test-bucket": store}, etag_suffix="-2")
@@ -325,7 +325,7 @@ def test_a_flaky_probe_costs_a_refetch_not_the_walk():
 def test_ram_cannot_declare_fresh():
     """The silent downgrade is refused, not accepted.
 
-    This test used to assert the opposite: that a RAM mount under ALWAYS
+    This test used to assert the opposite: that a RAM mount under `fresh`
     "must succeed (no fingerprint -> LAZY fallback)". That fallback is
     the bug the read policy exists to remove -- a mount that asked to
     revalidate and quietly did not. RAM does not cache reads, so the

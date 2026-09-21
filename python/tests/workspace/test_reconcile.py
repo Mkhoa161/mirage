@@ -91,7 +91,7 @@ async def test_on_op_missing_gcs_on_a_fresh_mounts_stat():
 
 
 @pytest.mark.asyncio
-async def test_may_serve_cached_trusts_cache_under_lazy():
+async def test_may_serve_cached_trusts_cache_under_bounded():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     mount = ws.namespace.mount_for("/data/f.txt")
@@ -181,7 +181,7 @@ async def test_reconcile_read_noop_without_overlay_or_cache():
 
 
 @pytest.mark.asyncio
-async def test_reconcile_read_skips_under_lazy():
+async def test_reconcile_read_skips_under_bounded():
     ws = Workspace({"/data/": RAMVFS()}, mode=MountMode.WRITE)
     await ws.namespace.ensure_loaded()
     await ws.namespace.set_attrs("/data/gone.txt", mode=0o600)

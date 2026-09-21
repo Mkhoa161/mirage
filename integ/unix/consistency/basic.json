@@ -73,7 +73,8 @@
         "exit": 0,
         "stdout": "v1\nv2\n",
         "stderr": ""
-      }
+      },
+      "note": "Narrowed to the backends that may declare `read: fresh`: the other five cache reads but stamp no comparable content token, so the mount-time verdict refuses the policy and the workspace never constructs. The bounded control keeps the full list."
     }
   ]
 }

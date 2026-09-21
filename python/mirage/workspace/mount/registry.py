@@ -463,7 +463,7 @@ class MountRegistry:
         Resolution order:
         1. First PathSpec path (or cwd) → mount_for(path)
         2. If mount lacks the command → mount_for_command(cmd_name)
-        3. For a read-only command on a caching backend under ALWAYS
+        3. For a read-only command on a caching backend under `fresh`
            consistency, evict stale entries from the hidden file cache so
            the in-place read-through serves fresh bytes. The command always
            stays on its real mount; the cache is never a mount.

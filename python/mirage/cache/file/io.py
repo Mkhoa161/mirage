@@ -45,7 +45,7 @@ def latest_fingerprint(records: list[OpRecord] | None, path: str,
     Backends stamp a read record with the content identifier they
     returned (S3 ETag, OneDrive cTag, Postgres sha256), and an
     object-store write record with the token its PUT answered.
-    Threading it into the cache entry lets ALWAYS-mode ``is_fresh``
+    Threading it into the cache entry lets a ``fresh`` mount's ``is_fresh``
     compare like with like; the MD5-of-content default only matches
     simple-PUT S3 objects.
 
@@ -119,7 +119,7 @@ async def _set_cached_locked(
         # Warm read: the bytes were served from this cache, so there is
         # no backend read record. Re-setting would replace the backend
         # fingerprint stamped on the cold read with the MD5 default and
-        # force ALWAYS mode to evict and refetch on every read.
+        # force a ``fresh`` mount to evict and refetch on every read.
         return
     await cache.set(path, data, fingerprint=fingerprint, ttl=ttl)
 

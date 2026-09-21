@@ -37,8 +37,9 @@ enum Verdict {
 /**
  * Keep the local view honest against backend truth.
  *
- * The single reconcile point every read path shares. Under ALWAYS a backend
- * re-stat classifies a path as fresh, stale (fingerprint mismatch), gone
+ * The single reconcile point every read path shares. Under a mount's
+ * `read: fresh` a backend re-stat classifies a path as fresh, stale
+ * (fingerprint mismatch), gone
  * (deletion), or unknown (no fingerprint to compare). One deletion signal
  * feeds both consumers with separate reactions: the file cache evicts and the
  * namespace GCs any orphaned attribute overlay.
@@ -147,8 +148,9 @@ export class Reconciler {
     }
   }
 
-  // Gate a cached read: is the cached copy still valid to serve? Under LAZY
-  // the cache is trusted. Under ALWAYS the backend is re-stated: a matching
+  // Gate a cached read: is the cached copy still valid to serve? Under
+  // `bounded` the cache is trusted within its bound. Under `fresh` the
+  // backend is re-stated: a matching
   // fingerprint serves the cached copy, a mismatch evicts it, a path the
   // backend no longer has GCs and throws, and a backend that answers no
   // fingerprint at all -- or no stat at all -- cannot be verified, so the

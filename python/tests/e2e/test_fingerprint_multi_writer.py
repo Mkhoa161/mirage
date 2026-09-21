@@ -57,7 +57,7 @@ def test_two_workspaces_always_sees_other_writers_update():
         b_first, b_second = asyncio.run(run())
         assert b_first == b"v1"
         assert b_second == b"v2", (
-            "Workspace B under ALWAYS must see Workspace A's write "
+            "Workspace B under `fresh` must see Workspace A's write "
             "via fingerprint mismatch; got stale cached bytes")
     finally:
         stack.close()

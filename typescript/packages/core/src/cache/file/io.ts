@@ -37,7 +37,7 @@ export function withCacheMutation<T>(cache: FileCache, fn: () => Promise<T>): Pr
  * Backends stamp a read record with the content identifier they returned
  * (S3 ETag, OneDrive cTag, Postgres sha256), and an object-store write
  * record with the token its PUT answered. Threading it into the cache
- * entry lets ALWAYS-mode `isFresh` compare like with like; the
+ * entry lets a `fresh` mount's `isFresh` compare like with like; the
  * MD5-of-content default only matches simple-PUT S3 objects.
  *
  * `ops` is the direction the caller took, never both. One line's records
@@ -115,7 +115,7 @@ async function setCachedLocked(
     // Warm read: the bytes were served from this cache, so there is no
     // backend read record. Re-setting would replace the backend
     // fingerprint stamped on the cold read with the MD5 default and
-    // force ALWAYS mode to evict and refetch on every read.
+    // force a `fresh` mount to evict and refetch on every read.
     return
   }
   await cache.set(path, data, { fingerprint, ttl })

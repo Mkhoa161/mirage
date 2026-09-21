@@ -109,7 +109,7 @@ describe('Reconciler', () => {
     await ws.close()
   })
 
-  it('mayServeCached trusts the cache under LAZY', async () => {
+  it('mayServeCached trusts the cache under bounded', async () => {
     const ws = new Workspace({ '/data': new RAMVFS() })
     const mount = mountOf(ws, '/data/f.txt')
     const rec = new Reconciler(ws.cache, ws.namespace, ws.opsRegistry)

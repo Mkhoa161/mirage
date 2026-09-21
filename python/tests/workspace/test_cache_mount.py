@@ -81,7 +81,8 @@ async def test_warm_read_stays_on_real_mount(tmp_path):
 @pytest.mark.asyncio
 async def test_cross_mount_read_serves_cache(tmp_path):
     """A cross-mount read relays each operand through ``execute_op``, and the
-    op-layer read-through serves a warm operand from cache. Proven under LAZY
+    op-layer read-through serves a warm operand from cache. Proven under
+    `bounded`
     by mutating the file out-of-band: the cross-mount read still returns the
     cached v1."""
     (tmp_path / "a.txt").write_bytes(b"v1\n")

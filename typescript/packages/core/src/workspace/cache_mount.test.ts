@@ -69,9 +69,9 @@ describe('cache is a hidden store, not a mount', () => {
 })
 
 describe('warm read serves from the hidden store, command stays on its mount', () => {
-  it('serves a cached operand under LAZY after out-of-band mutation', async () => {
+  it('serves a cached operand under bounded after out-of-band mutation', async () => {
     const ram = new RAMVFS()
-    // Force the cache on a local backend so the read is cached and, under LAZY,
+    // Force the cache on a local backend so the read is cached and, under `bounded`,
     // never revalidated. A subsequent out-of-band mutation must NOT be seen:
     // the warm read serves the cached bytes from the hidden store while the
     // command stays on its real mount.
@@ -268,7 +268,7 @@ describe('namespace orphan GC on remote delete', () => {
     }
   })
 
-  it('leaves the overlay in place under LAZY', async () => {
+  it('leaves the overlay in place under bounded', async () => {
     const ws = new Workspace(
       { '/data': new RAMVFS() },
       { mode: MountMode.WRITE, read: { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL } },

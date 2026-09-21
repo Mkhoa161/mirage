@@ -73,7 +73,7 @@ describe('fingerprint spike (port of test_fingerprint_spike.py)', () => {
     await ws.close()
   })
 
-  // This used to assert the opposite: that a RAM mount under ALWAYS "falls
+  // This used to assert the opposite: that a RAM mount under `fresh` "falls
   // back gracefully" when no fingerprint is present. That fallback is the
   // bug the read policy exists to remove -- a mount that asked to
   // revalidate and quietly did not.

@@ -120,8 +120,11 @@ def test_always_reads_a_written_path_from_cache():
         served = asyncio.run(run())
 
     assert served == b"hello\n"
-    assert client.calls["head_object"] >= 1, (
-        "ALWAYS must consult the remote fingerprint on the read")
+    # Three, not ">= 1": the routing reconcile, cat's own operand stat and
+    # the gate's probe. The loose bound was satisfied with the gate fully
+    # off, and its TypeScript twin already asserts the exact number.
+    assert client.calls["head_object"] == 3, (
+        "a `fresh` mount must consult the remote fingerprint on the read")
     assert client.calls["get_object"] == 0, (
         "the written bytes are already cached under the backend's own "
         "token, so the read must not refetch them")

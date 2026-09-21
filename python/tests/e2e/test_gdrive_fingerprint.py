@@ -23,7 +23,7 @@ from tests.e2e.gdrive_mock import FakeGDrive, patch_gdrive
 def test_gdrive_cannot_declare_fresh():
     """gdrive stamps two different kinds of token, so it is refused.
 
-    This test used to assert that gdrive under ALWAYS refetched after a
+    This test used to assert that gdrive under `fresh` refetched after a
     modifiedTime change. It passed because the fake made the two tokens
     agree; the real backend stamps a timestamp on stat
     (core/gdrive/stat.py) and an md5 on read (core/gdrive/versions.py),
