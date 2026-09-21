@@ -13,8 +13,11 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { fnmatch } from '../../utils/fnmatch.ts'
+import { inMtimeWindow } from '../../utils/dates.ts'
 import type { LinkView } from '../../ops/types.ts'
+import { respellOne } from '../../utils/path.ts'
 import { rstripSlash, stripSlash } from '../../utils/slash.ts'
+import type { RowActionKind } from './types.ts'
 
 export interface FindEntry {
   key: string
@@ -24,41 +27,127 @@ export interface FindEntry {
   kind: 'f' | 'd' | 'l' | 'c'
   depth: number
   isEmpty?: boolean | null
+  // Modification time in epoch seconds; null or absent when the walk did
+  // not fetch it, and a time test then defers to the expression's flat
+  // window.
+  mtime?: number | null
+}
+
+export type ActionKind = RowActionKind | 'exec' | 'printf'
+
+// `-mtime`, `-newermt` and a resolved `-newer`: an inclusive epoch-second
+// window over the entry's modification time. The same bounds fold into the
+// expression's flat window (`FindExpr.mtimeMin`/`mtimeMax`), which is what a
+// backend pushes down and the generic post-filters with, so an entry whose
+// mtime the walk did not fetch passes here and meets the window afterwards.
+// The node's own job is its position: a `-prune` after it fires only for a
+// directory the test holds for, and one before it fires regardless, as GNU
+// orders them. A prune reached past an undecided test is recorded as
+// pending for the caller to settle once it has statted the directory.
+export interface MtimeNode {
+  op: 'mtime'
+  lo: number | null
+  hi: number | null
+}
+
+// A `-prune` reached past time tests the walk could not decide: every one
+// of `tests` must hold for the directory's mtime for the prune to stand.
+export interface PendingPrune {
+  key: string
+  tests: MtimeNode[]
 }
 
 export type PredNode =
   | { op: 'name'; pattern: string; icase: boolean }
-  // `-path` matches the display path as printed (mount prefix + key), so
-  // the tree is stamped with the mount prefix before evaluation
-  // (`prefixPathNodes`); entry keys stay mount-relative (#396).
-  | { op: 'path'; pattern: string; prefix?: string }
+  // `-path` matches the row as `find` prints it: the mount prefix plus the
+  // entry's key, respelled under the operand as typed (`find . -path
+  // ./skip` prints and matches `./skip`), so `bindTree` stamps all three
+  // onto the node before evaluation and entry keys stay mount-relative
+  // (#396). An empty `root` leaves the row as the display path.
+  | { op: 'path'; pattern: string; prefix?: string; root?: string; raw?: string }
   | { op: 'type'; kind: string }
   | { op: 'empty' }
   | { op: 'not'; kid: PredNode }
   | { op: 'and'; kids: PredNode[] }
   | { op: 'or'; kids: PredNode[] }
   | { op: 'true' }
+  // An action the expression reached (-print, -print0, -ls, -delete,
+  // -exec, -printf): true, like GNU's, and it marks the entry as acted on.
+  // A tree that holds one keeps the entries an action reached rather than
+  // the ones the whole expression held for, which is how `-o`
+  // short-circuits past a `-print` (`-path ./skip -prune -o -type f
+  // -print` never reaches the print for `./skip`). The executor still runs
+  // the action itself, once per kept row, so the parser admits one
+  // distinct action to a tree holding any.
+  | { op: 'action'; kind: ActionKind }
+  // `-prune`: true, and a directory it reaches loses its contents. Every
+  // backend evaluates the tree entry by entry with no say over its own
+  // walk, and a flat listing meets a child before its parent, so the node
+  // keeps the ledger of pruned directory keys (mount-relative) and
+  // `dropPruned` applies it to what the walk returned; `bindTree` hands
+  // every start point a fresh ledger. A prune reached past a time test the
+  // entry could not answer lands in `pending`; until `settlePrunes` decides
+  // it, it counts as pruned, the most a walk without times can say.
+  | { op: 'prune'; pruned: string[]; pending: PendingPrune[] }
+  | MtimeNode
+
+// What evaluating an expression on one entry did besides answer: whether an
+// action was reached, and the time tests reached so far that the entry
+// carried no mtime for.
+export interface Effects {
+  acted: boolean
+  deferred: MtimeNode[]
+}
 
 export function evalPredicate(node: PredNode, entry: FindEntry): boolean {
+  return evaluate(node, entry, { acted: false, deferred: [] })
+}
+
+// Whether the expression holds for one entry, recording what it did.
+// Evaluation short-circuits the way GNU's does (`-a` stops at the first
+// false, `-o` at the first true), so an action or a prune is reached
+// exactly when GNU would reach it.
+export function evaluate(node: PredNode, entry: FindEntry, effects: Effects): boolean {
   switch (node.op) {
     case 'true':
       return true
+    case 'action':
+      effects.acted = true
+      return true
+    case 'prune':
+      // Only a directory has contents to skip; a file key that is also a
+      // directory prefix (an object store allows both) must not drop what
+      // sits under the directory.
+      if (entry.kind === 'd' && effects.deferred.length > 0) {
+        node.pending.push({ key: entry.key, tests: [...effects.deferred] })
+      } else if (entry.kind === 'd') {
+        node.pruned.push(entry.key)
+      }
+      return true
+    case 'mtime':
+      if (entry.mtime === null || entry.mtime === undefined) {
+        effects.deferred.push(node)
+        return true
+      }
+      return inMtimeWindow(entry.mtime, node.lo, node.hi)
     case 'empty':
       return entry.isEmpty === true
     case 'name':
       return node.icase
         ? fnmatch(entry.name.toLowerCase(), node.pattern.toLowerCase())
         : fnmatch(entry.name, node.pattern)
-    case 'path':
-      return fnmatch(displayPath(node.prefix ?? '', entry.key), node.pattern)
+    case 'path': {
+      const shown = displayPath(node.prefix ?? '', entry.key)
+      return fnmatch(node.root ? respellOne(shown, node.root, node.raw ?? '') : shown, node.pattern)
+    }
     case 'type':
       return entry.kind === node.kind
     case 'not':
-      return !evalPredicate(node.kid, entry)
+      return !evaluate(node.kid, entry, effects)
     case 'and':
-      return node.kids.every((kid) => evalPredicate(kid, entry))
+      return node.kids.every((kid) => evaluate(kid, entry, effects))
     case 'or':
-      return node.kids.some((kid) => evalPredicate(kid, entry))
+      return node.kids.some((kid) => evaluate(kid, entry, effects))
   }
 }
 
@@ -71,24 +160,127 @@ export function displayPath(prefix: string, key: string): string {
   return rel === '' ? prefix : `${prefix}/${rel}`
 }
 
-// Copy of a predicate tree with `path` nodes bound to a prefix. `-path`
-// matches the display path, but backend find ops evaluate entries by
-// mount-relative key; stamping the prefix onto the tree keeps the
-// evaluation site prefix-free (#396).
-export function prefixPathNodes(node: PredNode, prefix: string): PredNode {
-  if (!prefix) return node
+// Copy of a predicate tree bound to one start point. `-path` matches the
+// row as printed, but backend find ops evaluate entries by mount-relative
+// key; stamping the prefix and the operand's spelling onto the tree keeps
+// the evaluation site prefix-free (#396). Every prune node comes back with
+// an empty ledger, so what one start point pruned never drops rows from the
+// next (`find a/skip/inner a -path a/skip -prune -o -print` lists the first
+// operand in full, as GNU does).
+export function bindTree(node: PredNode, prefix: string, root = '', raw = ''): PredNode {
   switch (node.op) {
     case 'path':
-      return { op: 'path', pattern: node.pattern, prefix }
+      return { op: 'path', pattern: node.pattern, prefix, root, raw }
+    case 'prune':
+      return { op: 'prune', pruned: [], pending: [] }
     case 'not':
-      return { op: 'not', kid: prefixPathNodes(node.kid, prefix) }
+      return { op: 'not', kid: bindTree(node.kid, prefix, root, raw) }
     case 'and':
-      return { op: 'and', kids: node.kids.map((kid) => prefixPathNodes(kid, prefix)) }
+      return { op: 'and', kids: node.kids.map((kid) => bindTree(kid, prefix, root, raw)) }
     case 'or':
-      return { op: 'or', kids: node.kids.map((kid) => prefixPathNodes(kid, prefix)) }
+      return { op: 'or', kids: node.kids.map((kid) => bindTree(kid, prefix, root, raw)) }
     default:
       return node
   }
+}
+
+export function treeHasAction(node: PredNode): boolean {
+  if (node.op === 'action') return true
+  if (node.op === 'not') return treeHasAction(node.kid)
+  if (node.op === 'and' || node.op === 'or') return node.kids.some(treeHasAction)
+  return false
+}
+
+export function treeHasPrune(node: PredNode): boolean {
+  if (node.op === 'prune') return true
+  if (node.op === 'not') return treeHasPrune(node.kid)
+  if (node.op === 'and' || node.op === 'or') return node.kids.some(treeHasPrune)
+  return false
+}
+
+// The tree with every `-prune` made inert. GNU: `-prune` does nothing when
+// `-depth` is in effect, since a directory's contents are visited before
+// the directory itself.
+export function withoutPrune(node: PredNode): PredNode {
+  switch (node.op) {
+    case 'prune':
+      return { op: 'true' }
+    case 'not':
+      return { op: 'not', kid: withoutPrune(node.kid) }
+    case 'and':
+      return { op: 'and', kids: node.kids.map(withoutPrune) }
+    case 'or':
+      return { op: 'or', kids: node.kids.map(withoutPrune) }
+    default:
+      return node
+  }
+}
+
+// Every directory key the tree's `-prune` nodes reached. A pending prune
+// counts until `settlePrunes` decides it.
+export function prunedKeys(node: PredNode): string[] {
+  if (node.op === 'prune') return [...node.pruned, ...node.pending.map((p) => p.key)]
+  if (node.op === 'not') return prunedKeys(node.kid)
+  if (node.op === 'and' || node.op === 'or') return node.kids.flatMap(prunedKeys)
+  return []
+}
+
+/** Every `-prune` still waiting on a time test. */
+export function pendingPrunes(node: PredNode): PendingPrune[] {
+  if (node.op === 'prune') return [...node.pending]
+  if (node.op === 'not') return pendingPrunes(node.kid)
+  if (node.op === 'and' || node.op === 'or') return node.kids.flatMap(pendingPrunes)
+  return []
+}
+
+// Decide the pending prunes whose directory mtime is now known. A pending
+// prune stands when every test it waited on holds for the directory's mtime
+// and is dropped otherwise, so `find d -newermt X -prune` skips only the
+// contents of directories newer than X. A key `mtimes` does not name stays
+// pending.
+export function settlePrunes(node: PredNode, mtimes: ReadonlyMap<string, number | null>): void {
+  if (node.op === 'prune') {
+    const still: PendingPrune[] = []
+    for (const pend of node.pending) {
+      if (!mtimes.has(pend.key)) {
+        still.push(pend)
+      } else if (
+        pend.tests.every((test) => inMtimeWindow(mtimes.get(pend.key), test.lo, test.hi))
+      ) {
+        node.pruned.push(pend.key)
+      }
+    }
+    node.pending = still
+    return
+  }
+  if (node.op === 'not') settlePrunes(node.kid, mtimes)
+  if (node.op === 'and' || node.op === 'or') for (const kid of node.kids) settlePrunes(kid, mtimes)
+}
+
+// The rows minus everything under a directory `-prune` reached. The pruned
+// directory itself stays, the root spelled `/` included: GNU reports it when
+// the rest of the expression does, and only its contents go unvisited. Rows are spelled as the
+// ledger's keys are, or as display paths when `prefix` is given.
+export function dropPruned(rows: string[], tree: PredNode, prefix = ''): string[] {
+  const stems = prunedKeys(tree).map((key) => rstripSlash(displayPath(prefix, key)) + '/')
+  if (stems.length === 0) return rows
+  return rows.filter((row) => !stems.some((stem) => row.startsWith(stem) && row !== stem))
+}
+
+// Decide every pending prune by asking for its directory's mtime. The
+// backend judged its entries without their mtimes, so a prune reached past
+// `-newermt` or `-mtime` is only pending; the caller's overlay-aware stat
+// answers for the directory here, and a directory the test rejects keeps
+// its contents (`find d -newermt X -prune` skips only the directories newer
+// than X, as GNU does). `mtimeOf` takes a mount-relative key and answers
+// null when the directory reports no mtime or is gone.
+export async function settlePendingPrunes(
+  node: PredNode,
+  mtimeOf: (key: string) => Promise<number | null>,
+): Promise<void> {
+  const mtimes = new Map<string, number | null>()
+  for (const pend of pendingPrunes(node)) mtimes.set(pend.key, await mtimeOf(pend.key))
+  settlePrunes(node, mtimes)
 }
 
 export function treeHasType(node: PredNode): boolean {
@@ -105,13 +297,21 @@ export function treeHasEmpty(node: PredNode): boolean {
   return false
 }
 
+// Whether `find` reports the entry. With no action in the tree the rows are
+// the entries the whole expression holds for, GNU's implicit `-print`. With
+// one, they are the entries an action reached: `-path ./skip -prune -o -type
+// f -print` holds for `./skip` but never prints it. `-mindepth` applies
+// neither tests nor actions above its level, so a shallow directory is not
+// pruned either.
 export function keep(
   entry: FindEntry,
   tree: PredNode,
   minDepth: number | null | undefined,
 ): boolean {
   if (minDepth !== null && minDepth !== undefined && entry.depth < minDepth) return false
-  return evalPredicate(tree, entry)
+  const effects: Effects = { acted: false, deferred: [] }
+  const matched = evaluate(tree, entry, effects)
+  return treeHasAction(tree) ? effects.acted : matched
 }
 
 // Basename of a find start path, as GNU prints and matches it. Single source

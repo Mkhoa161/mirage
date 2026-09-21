@@ -26,11 +26,14 @@ import { rstripSlash, stripSlash } from '../../../utils/slash.ts'
 import { respellRaw } from '../../../utils/path.ts'
 import { mountKey, mountPrefixOf } from '../../../utils/key_prefix.ts'
 import {
+  bindTree,
+  displayPath,
+  dropPruned,
   emitStartPath,
   hasLinkChildren,
   keep,
   optionsTree,
-  prefixPathNodes,
+  settlePendingPrunes,
   startBasename,
   unrespellRaw,
   type FindEntry,
@@ -54,6 +57,16 @@ function invalidFindArg(message: string): CommandFnResult {
   ]
 }
 
+// The stat probe's path for one display row of a mount.
+function rowSpec(row: string, mountPrefix: string): PathSpec {
+  return new PathSpec({
+    virtual: row,
+    directory: row,
+    resolved: false,
+    vfsPath: mountKey(row, mountPrefix),
+  })
+}
+
 async function applyMtimeFilter(
   results: string[],
   mtimeMin: number | null,
@@ -64,15 +77,9 @@ async function applyMtimeFilter(
   if (mtimeMin === null && mtimeMax === null) return results
   const filtered: string[] = []
   for (const r of results) {
-    const spec = new PathSpec({
-      virtual: r,
-      directory: r,
-      resolved: false,
-      vfsPath: mountKey(r, mountPrefix),
-    })
     let st: FileStat
     try {
-      st = await stat(spec)
+      st = await stat(rowSpec(r, mountPrefix))
     } catch (err) {
       if (isEnoent(err)) continue
       throw err
@@ -84,6 +91,21 @@ async function applyMtimeFilter(
     filtered.push(r)
   }
   return filtered
+}
+
+// Epoch-second mtime of one mount-relative row through the overlay-aware
+// stat, null when it has none or is gone.
+async function rowMtime(
+  stat: (spec: PathSpec) => Promise<FileStat>,
+  mountPrefix: string,
+  row: string,
+): Promise<number | null> {
+  try {
+    return modifiedTs((await stat(rowSpec(displayPath(mountPrefix, row), mountPrefix))).modified)
+  } catch (err) {
+    if (!isEnoent(err)) throw err
+    return null
+  }
 }
 
 function extractNotName(texts: readonly string[]): string | null {
@@ -172,7 +194,13 @@ export async function linkResults(
           ? 0
           : rel.split('/').length
     if (maxDepth !== null && depth > maxDepth) continue
-    const entry: FindEntry = { key, name: path.split('/').pop() ?? path, kind, depth }
+    const entry: FindEntry = {
+      key,
+      name: path.split('/').pop() ?? path,
+      kind,
+      depth,
+      mtime: modifiedTs(st.modified),
+    }
     if (!keep(entry, tree, minDepth)) continue
     const size = st.size ?? 0
     if (minSize !== null && size < minSize) continue
@@ -375,14 +403,13 @@ export async function findGeneric(
   const printfFmt = expr !== null ? expr.printf : null
   const printfPairs: [string, PathSpec][] = []
   for (const root of targets) {
-    // `-path` matches the display path as printed; stamp the mount
-    // prefix onto path nodes before the backend walks mount-relative
-    // keys (#396).
+    // `-path` matches the row as printed; stamp the mount prefix and the
+    // operand's spelling onto path nodes before the backend walks
+    // mount-relative keys (#396). Bound per start point: options is
+    // shared by every one of them and must stay unbound.
     const prefix = mountPrefixOf(root.virtual, root.vfsPath)
-    const rootOptions: FindOptions = {
-      ...options,
-      tree: prefixPathNodes(optionsTree(options), prefix),
-    }
+    const tree = bindTree(optionsTree(options), prefix, root.virtual, root.rawPath)
+    const rootOptions: FindOptions = { ...options, tree }
     const rootIsLink = (opts.ns?.links ?? null)?.statAt(root.virtual) != null
     // What the start point is decides which walk is even possible, so it
     // is resolved once, ahead of all of them: a symlink has no backend
@@ -510,10 +537,17 @@ export async function findGeneric(
       ),
     )
     withLinks.sort(compareCodePoints)
+    // What -prune reached is known only once every row has been judged: a
+    // flat listing meets a child before its parent, so the ledger the tree
+    // kept is applied here, after the backend and the link merge.
+    if (stat !== undefined) {
+      await settlePendingPrunes(tree, (key) => rowMtime(stat, prefix, key))
+    }
+    const unpruned = dropPruned(withLinks, tree, prefix)
     // Hidden rows drop here, above the native-op/walk fork and after
     // the link merge, so a mount's visibility behavior cannot depend
     // on whether its backend ships a native find op.
-    const visibleRows = withLinks.filter((row) => pathAllowed(row))
+    const visibleRows = unpruned.filter((row) => pathAllowed(row))
     const added = respellRaw(visibleRows, root.virtual, root.rawPath)
     matches.push(...added)
     for (const r of added) printfPairs.push([r, root])
