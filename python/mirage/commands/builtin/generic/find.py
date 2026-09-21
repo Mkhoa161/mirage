@@ -3,12 +3,7 @@ from dataclasses import dataclass
 from functools import partial
 
 from mirage.cache.index import IndexCacheStore
-from mirage.commands.builtin.find_eval import (FindArgs, FindEntry, PredNode,
-                                               args_to_tree, emit_start_path,
-                                               has_link_children, keep,
-                                               prefix_path_nodes,
-                                               start_basename, tree_has_empty,
-                                               unrespell_raw)
+from mirage.commands.builtin import find_eval
 from mirage.commands.builtin.find_parse import (parse_depth,
                                                 parse_find_expression,
                                                 parse_mtime, parse_size)
@@ -41,10 +36,10 @@ def parse_find_args(
     path: str | None = None,
     mindepth: str | None = None,
     empty: bool = False,
-) -> FindArgs:
+) -> find_eval.FindArgs:
     if texts:
         expr = parse_find_expression(list(texts))
-        return FindArgs(
+        return find_eval.FindArgs(
             min_size=expr.min_size,
             max_size=expr.max_size,
             mtime_min=expr.mtime_min,
@@ -67,7 +62,7 @@ def parse_find_args(
     mtime_min, mtime_max = (None, None)
     if mtime is not None:
         mtime_min, mtime_max = parse_mtime(mtime)
-    return FindArgs(
+    return find_eval.FindArgs(
         name=name,
         iname=iname,
         path_pattern=path,
@@ -80,6 +75,20 @@ def parse_find_args(
         mindepth=md_min,
         empty=empty,
     )
+
+
+def _row_spec(row: str, mount_prefix: str) -> PathSpec:
+    """The stat probe's path for one mount-relative row.
+
+    Args:
+        row (str): the row, as the backend keyed it.
+        mount_prefix (str): the mount prefix the row sits under.
+    """
+    virtual = apply_mount_prefix([row], mount_prefix)[0]
+    return PathSpec(virtual=virtual,
+                    directory=virtual,
+                    resolved=False,
+                    vfs_path=mount_key(virtual, mount_prefix))
 
 
 async def apply_mtime_filter(
@@ -95,12 +104,7 @@ async def apply_mtime_filter(
     filtered: list[str] = []
     for r in results:
         try:
-            virtual = apply_mount_prefix([r], mount_prefix)[0]
-            spec = PathSpec(virtual=virtual,
-                            directory=virtual,
-                            resolved=False,
-                            vfs_path=mount_key(virtual, mount_prefix))
-            s = await stat(spec)
+            s = await stat(_row_spec(r, mount_prefix))
         except (FileNotFoundError, ValueError):
             continue
         # `matches_mtime` is the same helper the rest of this file already
@@ -112,9 +116,29 @@ async def apply_mtime_filter(
     return filtered
 
 
+async def _row_mtime(
+    stat: Callable[[PathSpec], Awaitable[FileStat]],
+    mount_prefix: str,
+    row: str,
+) -> float | None:
+    """Epoch-second mtime of one mount-relative row, None when it has
+    none or is gone.
+
+    Args:
+        stat (Callable): overlay-aware stat.
+        mount_prefix (str): the mount prefix the row sits under.
+        row (str): the row, as the backend keyed it.
+    """
+    try:
+        return _modified_ts((await stat(_row_spec(row,
+                                                  mount_prefix))).modified)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
 def _matched_path(row: str, search: PathSpec) -> PathSpec:
-    virtual = unrespell_raw(row, search.virtual, search.raw_path
-                            or search.virtual)
+    virtual = find_eval.unrespell_raw(row, search.virtual, search.raw_path
+                                      or search.virtual)
     prefix = mount_prefix_of(search.virtual, search.vfs_path)
     return PathSpec(virtual=virtual,
                     directory=virtual.rsplit("/", 1)[0] or "/",
@@ -144,8 +168,8 @@ async def _printf_stat(
         stat_path (StatPath | None): the dispatcher's stat probe.
         links (LinkView | None): the namespace's symlink facts.
     """
-    virtual = unrespell_raw(row, search.virtual, search.raw_path
-                            or search.virtual)
+    virtual = find_eval.unrespell_raw(row, search.virtual, search.raw_path
+                                      or search.virtual)
     if links is not None:
         link_row = links.stat_at(virtual)
         if link_row is not None:
@@ -295,7 +319,7 @@ NOT_DIR_START = StartPoint(walk=False,
 
 async def resolve_start(
     search: PathSpec,
-    args: FindArgs,
+    args: find_eval.FindArgs,
     stat_path: StatPath | None,
     *,
     is_link: bool = False,
@@ -337,10 +361,12 @@ async def resolve_start(
     if search.raw_path.endswith("/"):
         return NOT_DIR_START
     prefix = mount_prefix_of(search.virtual, search.vfs_path)
-    # `-path` matches the display path, so Path nodes carry the mount
-    # prefix. Built here rather than read off args.tree: only the
-    # native-op path stamps that, the walk stamps inside walk_find.
-    tree = prefix_path_nodes(args_to_tree(args), prefix)
+    # `-path` matches the row as printed, so Path nodes carry the mount
+    # prefix and the operand's spelling. Built here rather than read off
+    # args.tree: only the native-op path stamps that, the walk stamps
+    # inside walk_find.
+    tree = find_eval.bind_tree(find_eval.args_to_tree(args), prefix,
+                               search.virtual, search.raw_path)
     rows = apply_mount_prefix(start_point_results(search, start, args, tree),
                               prefix)
     return StartPoint(walk=False,
@@ -351,8 +377,8 @@ async def resolve_start(
 def start_point_results(
     search_path: PathSpec,
     start: FileStat,
-    args: FindArgs,
-    tree: PredNode,
+    args: find_eval.FindArgs,
+    tree: find_eval.PredNode,
 ) -> list[str]:
     """Results for a start point that is not a directory.
 
@@ -387,25 +413,25 @@ def start_point_results(
         # start point is never empty-eligible.
         empty = (start.size
                  or 0) == 0 if start.type is FileType.FILE else False
-    emit_start_path(results,
-                    search_path.mount_path,
-                    start_basename(search_path),
-                    kind=printf_kind(start),
-                    is_empty=empty,
-                    exists=True,
-                    tree=tree,
-                    maxdepth=args.maxdepth,
-                    mindepth=args.mindepth,
-                    size=start.size,
-                    min_size=args.min_size,
-                    max_size=args.max_size)
+    find_eval.emit_start_path(results,
+                              search_path.mount_path,
+                              find_eval.start_basename(search_path),
+                              kind=printf_kind(start),
+                              is_empty=empty,
+                              exists=True,
+                              tree=tree,
+                              maxdepth=args.maxdepth,
+                              mindepth=args.mindepth,
+                              size=start.size,
+                              min_size=args.min_size,
+                              max_size=args.max_size)
     return results
 
 
 def root_dir_results(
     search_path: PathSpec,
-    args: FindArgs,
-    tree: PredNode,
+    args: find_eval.FindArgs,
+    tree: find_eval.PredNode,
     *,
     is_empty: bool | None,
 ) -> list[str]:
@@ -430,17 +456,17 @@ def root_dir_results(
             when no listing was taken (``-empty`` then cannot match it).
     """
     results: list[str] = []
-    emit_start_path(results,
-                    search_path.mount_path,
-                    start_basename(search_path),
-                    kind="d",
-                    is_empty=is_empty,
-                    exists=True,
-                    tree=tree,
-                    maxdepth=args.maxdepth,
-                    mindepth=args.mindepth,
-                    min_size=args.min_size,
-                    max_size=args.max_size)
+    find_eval.emit_start_path(results,
+                              search_path.mount_path,
+                              find_eval.start_basename(search_path),
+                              kind="d",
+                              is_empty=is_empty,
+                              exists=True,
+                              tree=tree,
+                              maxdepth=args.maxdepth,
+                              mindepth=args.mindepth,
+                              min_size=args.min_size,
+                              max_size=args.max_size)
     return results
 
 
@@ -540,7 +566,7 @@ async def find(
 
 async def _find_root(
     search_path: PathSpec,
-    args: FindArgs,
+    args: find_eval.FindArgs,
     *,
     find_core: Callable[..., Awaitable[list[str]]],
     stat_path: StatPath | None,
@@ -585,11 +611,12 @@ async def _find_root(
         except (FileNotFoundError, ValueError):
             return None, "No such file or directory"
     root_prefix = mount_prefix_of(search_path.virtual, search_path.vfs_path)
-    # `-path` matches the display path as printed; stamp the mount
-    # prefix onto Path nodes before the backend walks mount-relative
-    # keys (#396). Stamped into a per-operand tree — args is shared by
-    # every start point and must stay unprefixed.
-    tree = prefix_path_nodes(args_to_tree(args), root_prefix)
+    # `-path` matches the row as printed; stamp the mount prefix and the
+    # operand's spelling onto Path nodes before the backend walks
+    # mount-relative keys (#396). Stamped into a per-operand tree: args
+    # is shared by every start point and must stay unbound.
+    tree = find_eval.bind_tree(find_eval.args_to_tree(args), root_prefix,
+                               search_path.virtual, search_path.raw_path)
     # With a stat wired, the mtime window is applied by the overlay-
     # aware post-filter below, not pushed into the core: backend cores
     # only see native times and would drop files whose mtime lives in
@@ -646,7 +673,8 @@ async def _find_root(
             # A symlink is namespace state no backend readdir can see, so a
             # directory holding only one would read as empty. GNU counts the
             # link as an entry.
-            root_empty = not has_link_children(links, search_path.virtual)
+            root_empty = not find_eval.has_link_children(
+                links, search_path.virtual)
         results = with_root_row(
             results, search_path,
             root_dir_results(search_path, args, tree, is_empty=root_empty))
@@ -667,6 +695,13 @@ async def _find_root(
                                         args,
                                         tree,
                                         follow=follow))
+    # What -prune reached is known only once every row has been judged:
+    # a flat listing meets a child before its parent, so the ledger the
+    # tree kept is applied here, after the backend and the link merge.
+    if stat is not None:
+        await find_eval.settle_pending_prunes(
+            tree, partial(_row_mtime, stat, root_prefix))
+    results = find_eval.drop_pruned(results, tree, root_prefix)
     # Hidden rows drop here, above the native-op/walk fork and after the
     # link merge, so a mount's visibility behavior cannot depend on
     # whether its backend ships a native find op.
@@ -710,7 +745,7 @@ async def _is_empty_entry(
     links: LinkView | None = None,
 ) -> bool:
     if is_dir:
-        if has_link_children(links, path):
+        if find_eval.has_link_children(links, path):
             return False
         spec = PathSpec(virtual=path,
                         directory=path,
@@ -783,8 +818,8 @@ async def link_results(
     search_root: str,
     prefix: str,
     search_key: str,
-    args: FindArgs,
-    tree: PredNode,
+    args: find_eval.FindArgs,
+    tree: find_eval.PredNode,
     follow: bool = False,
 ) -> list[str]:
     """Namespace symlinks under the search root that match the expression.
@@ -842,12 +877,13 @@ async def link_results(
             depth = 0 if rel == "" else rel.count("/") + 1
         if args.maxdepth is not None and depth > args.maxdepth:
             continue
-        entry = FindEntry(key=key,
-                          name=path.rsplit("/", 1)[-1],
-                          kind=kind,
-                          depth=depth,
-                          is_empty=None)
-        if not keep(entry, tree, args.mindepth):
+        entry = find_eval.FindEntry(key=key,
+                                    name=path.rsplit("/", 1)[-1],
+                                    kind=kind,
+                                    depth=depth,
+                                    is_empty=None,
+                                    mtime=_modified_ts(st.modified))
+        if not find_eval.keep(entry, tree, args.mindepth):
             continue
         size = st.size or 0
         if args.min_size is not None and size < args.min_size:
@@ -873,7 +909,7 @@ async def walk_find(
                       Awaitable[list[str]]],
     stat: Callable[[PathSpec, IndexCacheStore | None], Awaitable[FileStat]],
     index: IndexCacheStore,
-    args: FindArgs,
+    args: find_eval.FindArgs,
     links: LinkView | None = None,
     follow: bool = False,
     unreadable: list[str] | None = None,
@@ -893,8 +929,12 @@ async def walk_find(
     if root_stat is None or root_stat.type == FileType.DIRECTORY:
         await _walk_collect(readdir, stat, search_path, index, args.maxdepth,
                             1, collected, unreadable)
-    tree = prefix_path_nodes(args_to_tree(args), prefix)
-    need_empty = tree_has_empty(tree)
+    tree = find_eval.bind_tree(find_eval.args_to_tree(args), prefix,
+                               search_path.virtual, search_path.raw_path)
+    need_empty = find_eval.tree_has_empty(tree)
+    need_size = args.min_size is not None or args.max_size is not None
+    need_mtime = args.mtime_min is not None or args.mtime_max is not None
+    learned: dict[str, float | None] = {}
     results: list[str] = []
     for p, kind in sorted(collected):
         if not path_allowed(p):
@@ -912,17 +952,25 @@ async def walk_find(
         if need_empty:
             is_empty = await _is_empty_entry(readdir, stat, p, is_dir, prefix,
                                              index, links)
-        entry = FindEntry(key=key,
-                          name=entry_name,
-                          kind=kind,
-                          depth=depth,
-                          is_empty=is_empty)
-        if not keep(entry, tree, args.mindepth):
-            continue
-        need_size = (args.min_size is not None or args.max_size is not None)
-        need_mtime = args.mtime_min is not None or args.mtime_max is not None
+        # With a time test in the tree the stat comes first, so the entry
+        # answers the test itself and a -prune after it fires only where
+        # GNU's would; the stat that -size alone needs waits for the rows
+        # the tree kept.
         st = None
-        if (need_size and not is_dir) or need_mtime:
+        if need_mtime:
+            st = await _stat_entry(stat, p, prefix, index)
+            if st is None:
+                continue
+            learned[key] = _modified_ts(st.modified)
+        entry = find_eval.FindEntry(key=key,
+                                    name=entry_name,
+                                    kind=kind,
+                                    depth=depth,
+                                    is_empty=is_empty,
+                                    mtime=learned.get(key))
+        if not find_eval.keep(entry, tree, args.mindepth):
+            continue
+        if need_size and not is_dir and st is None:
             st = await _stat_entry(stat, p, prefix, index)
             if st is None:
                 continue
@@ -950,7 +998,8 @@ async def walk_find(
                                       args,
                                       tree,
                                       follow=follow))
-    return sorted(results)
+    find_eval.settle_prunes(tree, learned)
+    return sorted(find_eval.drop_pruned(results, tree, prefix))
 
 
 @dataclass(frozen=True, slots=True)

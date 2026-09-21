@@ -307,7 +307,7 @@
       }
     },
     {
-      "id": "find_exec_under_or_refused",
+      "id": "find_exec_under_or_runs_on_the_other_arm",
       "seq": 980079,
       "targets": [
         "ram",
@@ -333,11 +333,11 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "find /data -name a -o -exec echo {} \\; ; echo rc=$?",
+      "command": "mkdir -p /data/fe/d/sub && printf 'a\\n' > /data/fe/d/a.txt && printf 'bb\\n' > /data/fe/d/b.txt && printf x > /data/fe/d/sub/c.txt && cd /data/fe && find d -name a.txt -o -exec echo {} \\; ; echo rc=$? ; cd / && rm -r /data/fe",
       "expect": {
         "exit": 0,
-        "stdout": "rc=1\n",
-        "stderr": "find: -exec is supported only in a top-level -a chain, not under -o, ! or parentheses\n"
+        "stdout": "d\nd/b.txt\nd/sub\nd/sub/c.txt\nrc=0\n",
+        "stderr": ""
       }
     },
     {
@@ -511,7 +511,7 @@
       "expect": {
         "exit": 0,
         "stdout": "rc=1\n",
-        "stderr": "find: -exec is supported only in a top-level -a chain, not under -o, ! or parentheses\n"
+        "stderr": "find: -exec and -print cannot be combined under -o, ! or parentheses\n"
       }
     },
     {
@@ -842,13 +842,13 @@
       "note": "box, hf, hf-prefix, s3, s3-prefix and nextcloud are excused in integ/target_exceptions.json: python cannot create the newline-bearing name on the first five, and Nextcloud's WebDAV refuses it for both hosts."
     },
     {
-      "id": "find_delete_or_refused_before_mutation",
+      "id": "find_delete_under_or_removes_the_other_arm",
       "seq": 981503,
       "command": "mkdir -p /data/reviewor; touch /data/reviewor/keep /data/reviewor/remove; find /data/reviewor -name keep -o -delete; echo find:$?; test -f /data/reviewor/keep && test -f /data/reviewor/remove; echo kept:$?; rm -r /data/reviewor",
       "expect": {
         "exit": 0,
-        "stdout": "find:1\nkept:0\n",
-        "stderr": "find: -delete is supported only in a top-level -a chain, not under -o, ! or parentheses\n"
+        "stdout": "find:1\nkept:1\n",
+        "stderr": "find: cannot delete '/data/reviewor': Directory not empty\n"
       },
       "targets": [
         "ram",
@@ -861,8 +861,6 @@
         "s3-prefix",
         "databricks-prefix",
         "gridfs-prefix",
-        "hf",
-        "hf-prefix",
         "dropbox",
         "dropbox-root",
         "onedrive",
@@ -2165,6 +2163,40 @@
         "stderr": ""
       },
       "note": "GNU findutils 4.9 on debian:stable-slim: -ls renders the stat find already holds. GNU stats a start point when it opens the walk and any other row only for a test that needs the inode (-size, -mtime, -newer, -empty), so both list the row -delete removed (a start-point directory lists too, in the unit tests; hf keeps no marker for an emptied directory, so that step stays out of the shared battery), while `find d -type f -delete -ls` reports it gone (pinned in the unit tests). rc is sed's, since the pipe hides find's."
+    },
+    {
+      "id": "find_exec_result_before_another_arm_refused",
+      "seq": 981542,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "find /data -type d -exec false {} \\; -o -prune; echo rc=$?; find /data -type d -exec true {} + -o -prune; echo rc=$?",
+      "expect": {
+        "exit": 0,
+        "stdout": "rc=1\nrc=0\n",
+        "stderr": "find: -exec must end the expression under -o, ! or parentheses\n"
+      }
     }
   ]
 }

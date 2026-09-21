@@ -542,13 +542,16 @@ async def test_print0_preserves_newlines_through_mount_fanout():
 
 
 @pytest.mark.asyncio
-async def test_delete_under_or_is_refused_before_any_file_is_removed():
+async def test_delete_under_or_removes_only_the_other_arm():
+    # GNU findutils 4.10.0: `keep` short-circuits the -o, everything else
+    # reaches -delete, and the directory holding `keep` cannot go.
     ws = _ws()
     await ws.shell('mkdir d; touch d/keep d/remove')
     io = await ws.shell('find d -name keep -o -delete')
     assert io.exit_code == 1
-    assert "supported only in a top-level" in await io.stderr_str()
-    io = await ws.shell('test -f d/keep && test -f d/remove')
+    assert await io.stderr_str(
+    ) == "find: cannot delete 'd': Directory not empty\n"
+    io = await ws.shell('test -f d/keep && test ! -e d/remove')
     assert io.exit_code == 0
 
 
