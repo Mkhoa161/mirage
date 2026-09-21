@@ -75,14 +75,6 @@ function latestFingerprint(
   return null
 }
 
-function bytesEqual(a: Uint8Array | null, b: Uint8Array): boolean {
-  if (a?.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
-
 async function setCached(
   cache: FileCache,
   path: string,
@@ -111,11 +103,31 @@ async function setCachedLocked(
   ttl: number | null,
 ): Promise<void> {
   const fingerprint = latestFingerprint(records, path, ops, data.byteLength)
-  if (fingerprint === null && bytesEqual(await cache.get(path), data)) {
-    // Warm read: the bytes were served from this cache, so there is no
-    // backend read record. Re-setting would replace the backend
-    // fingerprint stamped on the cold read with the MD5 default and
-    // force a `fresh` mount to evict and refetch on every read.
+  if (ops.has('read') && fingerprint === null && (await cache.exists(path))) {
+    // A read carrying no backend token, over an entry that is already
+    // there. Almost always that is a warm read: the bytes were served
+    // from this cache, so no backend read record exists, and re-setting
+    // would replace the backend fingerprint stamped on the cold read
+    // with the MD5 default and force a `fresh` mount to evict and
+    // refetch on every read.
+    //
+    // Existence is the whole question, because these bytes came out of
+    // this entry one call ago (`cache/read_through.ts` serves the read
+    // before the command sees it); fetching the blob back to compare it
+    // with itself is the file over the wire twice on a Redis cache.
+    //
+    // A read that reached the backend with an entry still standing is
+    // only possible under `bounded`, where that entry is what served
+    // it: `fresh` evicts on every non-FRESH verdict before the read
+    // (`workspace/reconcile.ts`). `cp`'s guarded primitive walk is the
+    // exception, since it reads the backend raw, and there this keeps
+    // an entry `bounded` already calls trusted rather than healing it
+    // by accident.
+    //
+    // The direction is load-bearing: a write must always write. A
+    // backend that stamps no write token would otherwise skip the set
+    // and leave the pre-write bytes standing wherever its own
+    // invalidation had not already dropped the entry.
     return
   }
   await cache.set(path, data, { fingerprint, ttl })
