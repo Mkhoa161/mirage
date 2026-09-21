@@ -404,18 +404,26 @@ export class Workspace {
         mount.registerGeneral(cmd)
       }
     }
-    // A Mount's own limits win, which is the order node's unwrap produced
+    // A mount's own limits win, which is the order node's unwrap produced
     // before it handed them to core: it spread options first and then
-    // overwrote per prefix from the Mount.
-    for (const [prefix, commandLimits] of Object.entries({
-      ...(options.commandLimits ?? {}),
-      ...normalized.commandLimits,
-    })) {
+    // overwrote per prefix from the Mount. Merged per command, not per
+    // prefix: spreading one whole record over the other dropped every
+    // command the losing side named, so a workspace-level `cat` limit
+    // disappeared the moment the mount itself named an `ls` one. Python
+    // reaches the same shape through `entry.command_limits.update()`.
+    const limitPrefixes = new Set([
+      ...Object.keys(options.commandLimits ?? {}),
+      ...Object.keys(normalized.commandLimits),
+    ])
+    for (const prefix of limitPrefixes) {
       const mount = this.registry.tryMountForPrefix(prefix)
       if (mount === null) {
         throw new Error(`commandLimits references unknown mount prefix: ${prefix}`)
       }
-      for (const [cmd, sg] of Object.entries(commandLimits)) {
+      for (const [cmd, sg] of Object.entries({
+        ...(options.commandLimits?.[prefix] ?? {}),
+        ...(normalized.commandLimits[prefix] ?? {}),
+      })) {
         mount.commandLimits.set(cmd, sg)
       }
     }
