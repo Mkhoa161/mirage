@@ -119,8 +119,9 @@ def test_the_verdict_refuses_a_bound_no_mount_could_use(bad, message):
     passes through the coercer, so before this the mount was accepted
     and then kept nothing: RAM marks a ttl=0 entry expired as it is
     written and redis deletes the key, which is caching silently
-    disabled rather than a refusal. Checked ahead of the policy
-    dispatch, because `bounded` returns from it first.
+    disabled rather than a refusal. Checked after the policy name and
+    ahead of the policy dispatch, because `bounded` returns from that
+    dispatch first.
     """
     spec = ReadSpec(policy=ReadPolicy.BOUNDED, ttl=bad)
     with pytest.raises(ValueError, match=message):
@@ -167,6 +168,20 @@ def test_the_two_doors_refuse_a_doubly_bad_config_the_same_way():
     # shared config fixtures.
     with pytest.raises(ValueError, match="unknown read policy"):
         resolve_read_spec("banana", 0)
+
+
+def test_the_verdict_names_the_policy_before_the_bound():
+    """The coercer's order, applied at the mount door too.
+
+    `check_read_capability` judged the bound first while
+    `checkReadCapability` judged the policy first, so one
+    `ReadSpec(policy="banana", ttl=0)` came back naming the bound on
+    python and the policy on TypeScript -- and an embedder fixing what
+    it was told was wrong hit the other refusal next.
+    """
+    spec = ReadSpec(policy="banana", ttl=0)
+    with pytest.raises(ValueError, match="unknown read policy"):
+        check_read_capability("/d/", RAMVFS(), spec)
 
 
 def test_pinned_is_refused_naming_the_missing_layer():

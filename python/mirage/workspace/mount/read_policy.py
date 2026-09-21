@@ -121,6 +121,19 @@ def check_read_capability(prefix: str, vfs: BaseVFS, spec: ReadSpec) -> None:
     Raises:
         ValueError: the backend cannot honour the declared policy.
     """
+    # Coerced, not compared raw. `ReadPolicy` is a (str, Enum) and
+    # `ReadSpec` coerces nothing, so an embedder's
+    # `ReadSpec(policy="fresh")` would match neither `is` below and the
+    # whole verdict would silently no-op on the one door -- the
+    # programmatic one -- that does not pass through `resolve_read_spec`.
+    # Idempotent on a member, and it refuses a name that is not a policy
+    # at all. `MountEntry` stores the coerced spec for the same reason.
+    #
+    # Policy first, bound second, the order `resolve_read_spec` and
+    # `resolveReadSpec` both take. Judging the bound first here meant
+    # one `ReadSpec(policy="banana", ttl=0)` came back naming the bound
+    # on this host and the policy on the other.
+    policy = coerce_read_policy(spec.policy)
     # Before the policy dispatch, because a bound has to be usable
     # whatever the policy is. `resolve_read_spec` refuses a bad one at
     # the YAML and snapshot doors, but a `ReadSpec` handed straight to
@@ -134,14 +147,6 @@ def check_read_capability(prefix: str, vfs: BaseVFS, spec: ReadSpec) -> None:
     if spec.ttl < 1:
         raise ValueError(f"mount {prefix!r}: read: ttl must be at least "
                          f"1 second, got {spec.ttl}")
-    # Coerced, not compared raw. `ReadPolicy` is a (str, Enum) and
-    # `ReadSpec` coerces nothing, so an embedder's
-    # `ReadSpec(policy="fresh")` would match neither `is` below and the
-    # whole verdict would silently no-op on the one door -- the
-    # programmatic one -- that does not pass through `resolve_read_spec`.
-    # Idempotent on a member, and it refuses a name that is not a policy
-    # at all. `MountEntry` stores the coerced spec for the same reason.
-    policy = coerce_read_policy(spec.policy)
     if policy is ReadPolicy.PINNED:
         raise ValueError(
             f"mount {prefix!r}: read: pinned needs a version layer to pin "

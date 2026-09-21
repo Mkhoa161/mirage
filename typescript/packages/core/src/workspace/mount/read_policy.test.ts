@@ -115,6 +115,19 @@ describe('checkReadCapability', () => {
     }).toThrow()
   })
 
+  it('names the policy before the bound', () => {
+    // The coercer's order, applied at the mount door too. Python judged
+    // the bound first here, so one `ReadSpec(policy='banana', ttl=0)`
+    // came back naming the bound there and the policy here, and an
+    // embedder fixing what it was told was wrong hit the other next.
+    expect(() => {
+      checkReadCapability('/d/', stub('ram', false, false), {
+        policy: 'banana' as never,
+        ttl: 0,
+      })
+    }).toThrow(/unknown read policy/)
+  })
+
   it('refuses pinned, naming the missing layer', () => {
     expect(() => {
       checkReadCapability('/d/', stub('ram', false, false), {
