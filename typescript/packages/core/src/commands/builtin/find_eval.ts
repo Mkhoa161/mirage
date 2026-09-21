@@ -27,9 +27,6 @@ export interface FindEntry {
   kind: 'f' | 'd' | 'l' | 'c'
   depth: number
   isEmpty?: boolean | null
-  // Modification time in epoch seconds; null or absent when the walk did
-  // not fetch it, and a time test then defers to the expression's flat
-  // window.
   mtime?: number | null
 }
 
@@ -140,6 +137,9 @@ export function evaluate(node: PredNode, entry: FindEntry, effects: Effects): bo
       effects.pruned = effects.pruned || entry.kind === 'd'
       return true
     case 'mtime':
+      // An entry the walk fetched no time for passes here and meets the
+      // expression's flat window afterwards; the test is recorded so a
+      // `-prune` reached past it is only pending.
       if (entry.mtime === null || entry.mtime === undefined) {
         effects.deferred.push(node)
         return true

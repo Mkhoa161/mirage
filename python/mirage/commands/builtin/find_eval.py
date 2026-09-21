@@ -45,9 +45,7 @@ def start_basename(path: PathSpec) -> str:
 class FindEntry:
     """One walked entry, as the predicate tree sees it: a mount-relative
     key, the basename (the start point's own name at depth 0) and the
-    kind ``f``, ``d``, ``l`` or ``c``. ``mtime`` is None when the walk did
-    not fetch it, and a time test then defers to the expression's flat
-    window.
+    kind ``f``, ``d``, ``l`` or ``c``.
     """
     key: str
     name: str
@@ -188,15 +186,11 @@ PredNode = (Name | Path | Type | Empty | Not | And | Or | TrueNode | Action
 
 @dataclass(slots=True)
 class Effects:
-    """What evaluating an expression on one entry did besides answer.
-
-    Args:
-        acted (bool): whether an ``Action`` node was reached.
-        pruned (bool): whether a ``Prune`` node recorded the entry, firm
-            or pending.
-        deferred (list[Mtime]): the time tests the entry carried no mtime
-            for on the path that decided the answer so far; a branch
-            whose outcome they could not have changed drops them again.
+    """What evaluating an expression on one entry did besides answer:
+    whether an action was reached, whether a prune node recorded the
+    entry (firm or pending), and the time tests the entry carried no
+    mtime for on the path that decided the answer so far; a branch whose
+    outcome they could not have changed drops them again.
     """
     acted: bool = False
     pruned: bool = False
@@ -284,6 +278,9 @@ def evaluate(node: PredNode, entry: FindEntry, effects: Effects) -> bool:
         effects.pruned = effects.pruned or entry.kind == "d"
         return True
     if isinstance(node, Mtime):
+        # An entry the walk fetched no time for passes here and meets
+        # the expression's flat window afterwards; the test is recorded
+        # so a -prune reached past it is only pending.
         if entry.mtime is None:
             effects.deferred.append(node)
             return True
