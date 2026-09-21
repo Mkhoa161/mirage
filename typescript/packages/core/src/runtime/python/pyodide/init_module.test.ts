@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PyodideRuntime } from './runtime.ts'
 import * as interrupt from './interrupt.ts'
+import type * as PendingCleanup from './fixtures/pending_cleanup.ts'
+import type * as FailingCleanup from './fixtures/failing_cleanup.ts'
+import type * as Capability from './fixtures/capability.ts'
 
 describe('PyodideRuntime host initializer', () => {
   it('declares process reach only when a host initializer is configured', () => {
@@ -13,40 +16,13 @@ describe('PyodideRuntime host initializer', () => {
   it.each([false, true])(
     'queues execution and another close behind pending cleanup (rejects: %s)',
     async (rejects) => {
-      const ref =
-        'data:text/javascript,' +
-        encodeURIComponent(`
-export const events = []
-export const failure = new Error('pending cleanup failed')
-export let release
-const gate = new Promise(resolve => { release = resolve })
-let enter
-let installs = 0
-export const entered = new Promise(resolve => { enter = resolve })
-export default function(py) {
-  const id = ++installs
-  events.push('install ' + id)
-  py.registerJsModule('_test_lifecycle', {
-    use: () => { events.push('use ' + id); return id }
-  })
-  return async () => {
-    events.push('closing ' + id)
-    if (id === 1) {
-      enter()
-      await gate
-    }
-    py.unregisterJsModule('_test_lifecycle')
-    events.push('closed ' + id)
-    if (${String(rejects)} && id === 1) throw failure
-  }
-}`)
-      const module = (await import(ref)) as {
-        events: string[]
-        failure: Error
-        entered: Promise<void>
-        release: () => void
-      }
-      const rt = new PyodideRuntime({ config: { initModule: ref, autoLoadFromImports: false } })
+      const ref = new URL('./fixtures/pending_cleanup.ts', import.meta.url)
+      ref.searchParams.set('case', String(rejects))
+      const module = (await import(ref.href)) as typeof PendingCleanup
+      module.configure(rejects)
+      const rt = new PyodideRuntime({
+        config: { initModule: ref.href, autoLoadFromImports: false },
+      })
       const pending: Promise<unknown>[] = []
       try {
         expect((await rt.eval('from _test_lifecycle import use; use()')).value).toBe(1)
@@ -94,20 +70,13 @@ export default function(py) {
     60_000,
   )
 
-  it.each(['sync', 'async'])(
+  it.each(['sync', 'async'] as const)(
     'finishes teardown after %s cleanup fails',
     async (kind) => {
-      const ref =
-        'data:text/javascript,' +
-        encodeURIComponent(`
-export let installs = 0
-export let disposals = 0
-export const failure = new Error('cleanup failed')
-export default function(py) {
-  installs++
-  return ${kind === 'async' ? 'async' : ''} () => { disposals++; throw failure }
-}`)
-      const module = (await import(ref)) as { installs: number; disposals: number; failure: Error }
+      const ref = new URL('./fixtures/failing_cleanup.ts', import.meta.url)
+      ref.searchParams.set('case', kind)
+      const module = (await import(ref.href)) as typeof FailingCleanup
+      module.configure(kind)
       const closeInterrupt = vi.fn()
       const factory = vi.spyOn(interrupt, 'createPyodideInterrupter').mockResolvedValue({
         view: new Int32Array(new SharedArrayBuffer(16)),
@@ -115,7 +84,7 @@ export default function(py) {
         close: closeInterrupt,
       })
       const rt = new PyodideRuntime({
-        config: { initModule: ref, bootstrapCode: 'import builtins; builtins.ready = 42' },
+        config: { initModule: ref.href, bootstrapCode: 'import builtins; builtins.ready = 42' },
       })
       try {
         expect((await rt.eval('ready')).value).toBe(42)
@@ -142,20 +111,11 @@ export default function(py) {
   )
 
   it('initializes once before bootstrap and disposes with the runtime', async () => {
-    const ref =
-      'data:text/javascript,' +
-      encodeURIComponent(`
-export let installs = 0
-export let disposals = 0
-export default function(py) {
-  installs++
-  py.registerJsModule('_test_capability', { add: (a, b) => a + b })
-  return () => { disposals++; py.unregisterJsModule('_test_capability') }
-}`)
-    const module = (await import(ref)) as { installs: number; disposals: number }
+    const ref = new URL('./fixtures/capability.ts', import.meta.url)
+    const module = (await import(ref.href)) as typeof Capability
     const rt = new PyodideRuntime({
       config: {
-        initModule: ref,
+        initModule: ref.href,
         bootstrapCode: 'from _test_capability import add; assert add(2, 3) == 5',
       },
     })
