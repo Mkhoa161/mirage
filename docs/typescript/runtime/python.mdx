@@ -36,6 +36,12 @@ that use file operations, such as PIL and NumPy. These operations reach
 the same workspace mounts used by shell commands. Symlinks and metadata
 overlays come from the workspace namespace.
 
+`os.getxattr`, `os.listxattr`, `os.setxattr` and `os.removexattr` reach
+the attributes the shell's `getfattr` and `setfattr` see, including a
+backend's read-only facts under `user.mirage.` (a Google Drive file's id
+is `user.mirage.file_id`). They need the worker; the fallback below
+answers them with `OSError` (`ENOTSUP`).
+
 With a worker, files are fetched on first access and cached for that run.
 The cache is discarded before the next execution; it does not track
 external edits to already fetched files during a run. Writes flush through
@@ -120,6 +126,8 @@ so a dependency update can revisit them.
 - Command-line arguments are the `argv` global; `sys.argv` does not exist.
 - No `sys.stdin` and no third-party imports.
 - `os.environ` reflects the session env only.
+- `os` has no extended-attribute calls (`os.getxattr` and its siblings);
+  run `getfattr` or `setfattr` in the shell instead.
 - `os.stat()` and `Path.stat()` answer with every attribute CPython's
   `stat_result` carries, but not its sequence half: `st[6]`, `len(st)`
   and iterating it raise `TypeError` here and work on the Python host,

@@ -15,6 +15,7 @@
 import source from '../../../generated/pyodide.ts'
 import type { EvalStatus, EvalValue, RunArgs } from '../../types.ts'
 import type { PyodideInterface } from './loader.ts'
+import type { XattrOp } from './vfs/types.ts'
 
 interface PyProxy {
   destroy(): void
@@ -26,6 +27,24 @@ interface PyNamespace extends PyProxy {
   get(name: string): PyFunction
 }
 
+/**
+ * The guest's extended-attribute door, registered as `_mirage_xattr`:
+ * the op, the absolute path, the name and base64 value where the op has
+ * them, the create/replace flags and nofollow, answered as JSON (`{value}`,
+ * or `{code}` naming the condition).
+ */
+export type XattrCall = (
+  op: XattrOp,
+  path: string,
+  name: string | null | undefined,
+  value: string | null | undefined,
+  create: boolean,
+  replace: boolean,
+  nofollow: boolean,
+) => string
+
+const NO_XATTRS: XattrCall = () => JSON.stringify({ code: 'ENOTSUP' })
+
 type ExecutionRequest = Pick<RunArgs, 'code' | 'env' | 'stdin'> & {
   argv: string[]
   cwd: string
@@ -36,7 +55,11 @@ type ExecutionRequest = Pick<RunArgs, 'code' | 'env' | 'stdin'> & {
 export class PyodideExecution {
   private readonly namespace: PyNamespace
 
-  constructor(private readonly pyodide: PyodideInterface) {
+  constructor(
+    private readonly pyodide: PyodideInterface,
+    xattr: XattrCall = NO_XATTRS,
+  ) {
+    pyodide.registerJsModule('_mirage_xattr', { call: xattr })
     this.namespace = pyodide.toPy({ __name__: '_mirage_pyodide' }) as PyNamespace
     try {
       pyodide.runPython(source, { globals: this.namespace, filename: 'mirage/execution.py' })

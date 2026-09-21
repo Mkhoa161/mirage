@@ -27,5 +27,6 @@ describe('GDRIVE_PROMPT', () => {
     expect(rendered).toContain('remote mount')
     expect(rendered).toContain('modifiedTime range')
     expect(rendered).toContain('No owned/ vs shared/')
+    expect(rendered).toContain('getfattr -n user.mirage.file_id --only-values /gdrive/<path>')
   })
 })

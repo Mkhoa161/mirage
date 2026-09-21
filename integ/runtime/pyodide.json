@@ -1207,6 +1207,62 @@
           }
         }
       ]
+    },
+    {
+      "id": "extended_attributes_round_trip_with_the_shell",
+      "hosts": [
+        "typescript"
+      ],
+      "world": {
+        "runtimes": [
+          "pyodide",
+          "workspace"
+        ],
+        "mounts": {
+          "/data": {
+            "vfs": "ram",
+            "files": {
+              "t.txt": "hello\n"
+            }
+          }
+        }
+      },
+      "steps": [
+        {
+          "command": "setfattr -n user.tag -v shell /data/t.txt",
+          "expect": {
+            "exit": 0
+          }
+        },
+        {
+          "command": "python3 -c \"import os; print(os.getxattr('/data/t.txt', 'user.tag')); os.setxattr('/data/t.txt', 'user.guest', b'g'); print(os.listxattr('/data/t.txt'))\"",
+          "expect": {
+            "exit": 0,
+            "stdout": "b'shell'\n['user.guest', 'user.tag']\n"
+          }
+        },
+        {
+          "command": "getfattr -n user.guest --only-values /data/t.txt",
+          "expect": {
+            "exit": 0,
+            "stdout": "g"
+          }
+        },
+        {
+          "command": "python3 -c \"import errno, os\nfor call in (lambda: os.getxattr('/data/t.txt', 'user.none'),\n             lambda: os.setxattr('/data/t.txt', 'user.guest', b'x', os.XATTR_CREATE),\n             lambda: os.listxattr('/data/none.txt')):\n    try:\n        call()\n    except OSError as exc:\n        print(errno.errorcode[exc.errno])\"",
+          "expect": {
+            "exit": 0,
+            "stdout": "ENODATA\nEEXIST\nENOENT\n"
+          }
+        },
+        {
+          "command": "python3 -c \"import os; os.removexattr('/data/t.txt', 'user.tag'); print(os.listxattr('/data/t.txt'))\"",
+          "expect": {
+            "exit": 0,
+            "stdout": "['user.guest']\n"
+          }
+        }
+      ]
     }
   ]
 }

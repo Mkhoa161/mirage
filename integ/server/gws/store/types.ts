@@ -52,14 +52,25 @@ export interface SheetTab {
   sheetId: number
   title: string
   cells: Map<string, string>
+  // Everything else a caller wrote to a cell, keyed like `cells`: the
+  // CellData fields other than the value (userEnteredFormat, note,
+  // dataValidation, ...), in the wire shape the live API reports them.
+  props: Map<string, JsonObj>
   // The declared grid, which insertDimension and appendDimension grow and
   // deleteDimension shrinks. Kept beside the sparse cell map because the
   // grid is independent of what has been written: a new tab reports 1000
   // rows with nothing in it.
   rows: number
   cols: number
-  rowPixels?: Record<string, number>
-  columnPixels?: Record<string, number>
+  // The DimensionProperties a caller set on a row or column, by index. What
+  // the API derives (the default pixel size, hiddenByFilter) is not stored.
+  rowMeta: Record<string, JsonObj>
+  columnMeta: Record<string, JsonObj>
+  // Every GridRange below is stored without its sheetId: the tab it sits on
+  // is its sheet, so a duplicated tab's ranges name the copy without edits.
+  bandedRanges: JsonObj[]
+  basicFilter: JsonObj | null
+  conditionalFormats: JsonObj[]
 }
 
 export interface Spreadsheet {

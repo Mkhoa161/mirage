@@ -30,8 +30,12 @@ import { saveState } from './store/save.ts'
 import { parseDriveQuery, matchQuery } from './drive/query.ts'
 import { createDriveItem } from './drive/item.ts'
 import { GwsState } from './store/state.ts'
-import { newTab, gridData } from './sheets/grid.ts'
+import { newTab } from './sheets/grid.ts'
+import { gridData } from './sheets/spreadsheet.ts'
 import { sheetsBatchUpdate } from './sheets/batch.ts'
+import { CELL_DATA, CELL_FORMAT, canonical } from './sheets/fields.ts'
+import { badField, parseMask } from './sheets/mask.ts'
+import { formatNumber } from './sheets/number.ts'
 import { formatEventTime, slotMs } from './calendar/zone.ts'
 
 // The corpus exercises the SURFACES of this fake heavily -- seven vendor APIs
@@ -214,7 +218,7 @@ function compatibilityDirect(): void {
     200,
   )
   tab = st.sheets.get(file.id)!.tabs[0]!
-  check('direct Sheets sizes content', Number(tab.columnPixels?.[0]) > 100)
+  check('direct Sheets sizes content', Number(tab.columnMeta['0']?.pixelSize) > 100)
   eq(
     'direct Sheets leaves cells unchanged',
     tab.cells.get('0,0') ?? '',
@@ -265,6 +269,7 @@ function compatibilityDirect(): void {
       updateCells: {
         start: { sheetId: 1 },
         rows: [{ values: [{ userEnteredValue: { stringValue: 'new value' } }] }],
+        fields: 'userEnteredValue',
       },
     },
     { autoResizeDimensions: { dimensions: { sheetId: 1, dimension: 'COLUMNS', endIndex: 1 } } },
@@ -344,6 +349,52 @@ function compatibilityDirect(): void {
   )
 }
 
+// The Sheets pieces every format request leans on, each pinned to what the
+// live API answered on 2026-09-21.
+function sheetsFormatsDirect(): void {
+  eq(
+    'direct Sheets mask distributes a parenthesized list',
+    parseMask('userEnteredFormat(backgroundColor,textFormat.italic),note').map((p) => [...p]),
+    [
+      ['userEnteredFormat', 'backgroundColor'],
+      ['userEnteredFormat', 'textFormat', 'italic'],
+      ['note'],
+    ],
+  )
+  eq(
+    'direct Sheets mask names the first bad segment in snake_case',
+    badField(parseMask('userEnteredFormat.textFormatX.bold'), CELL_DATA),
+    'userEnteredFormat.text_format_x',
+  )
+  eq('direct Sheets mask accepts a whole message', badField(parseMask('*'), CELL_DATA), null)
+  for (const [value, format, want] of [
+    [0.685, { type: 'PERCENT', pattern: '0.0%' }, '68.5%'],
+    [0.62, { type: 'PERCENT', pattern: '0.0%' }, '62.0%'],
+    [0.62, { type: 'PERCENT' }, '62%'],
+    [1234.5, { type: 'NUMBER', pattern: '#,##0.00' }, '1,234.50'],
+    [-5, { type: 'CURRENCY' }, '-$5.00'],
+    [12345, { type: 'SCIENTIFIC', pattern: '0.00E+00' }, '1.23E+04'],
+    [1.005, { type: 'NUMBER', pattern: '0.00' }, '1.01'],
+    [-3, { type: 'NUMBER', pattern: '0;(0)' }, '(3)'],
+  ] as const) {
+    eq(`direct Sheets formats ${String(value)} as ${want}`, formatNumber(value, format), want)
+  }
+  eq(
+    'direct Sheets shows a NUMBER with no pattern plain',
+    formatNumber(1234.5, { type: 'NUMBER' }),
+    null,
+  )
+  eq('direct Sheets leaves dates unmodeled', formatNumber(1, { type: 'DATE' }), null)
+  eq(
+    'direct Sheets quantizes a color and mirrors its style',
+    canonical({ backgroundColor: { red: 1, green: 0.9, blue: 0 } }, CELL_FORMAT),
+    {
+      backgroundColor: { red: 1, green: 0.8980392 },
+      backgroundColorStyle: { rgbColor: { red: 1, green: 0.8980392 } },
+    },
+  )
+}
+
 async function compatibilityHttp(at: string): Promise<void> {
   const base = `${at}/_run/compat1077`
   check('compatibility world seeds', (await reset(base, { tenants: ['t1'], epoch: EPOCH })) === 200)
@@ -404,6 +455,7 @@ async function compatibilityHttp(at: string): Promise<void> {
         updateCells: {
           start: { sheetId: 0 },
           rows: [{ values: [{ userEnteredValue: { stringValue: 'short' } }] }],
+          fields: 'userEnteredValue',
         },
       },
       { autoResizeDimensions: { dimensions: { sheetId: 0, dimension: 'COLUMNS', endIndex: 1 } } },
@@ -647,7 +699,10 @@ async function gridRangesHttp(at: string): Promise<void> {
     'ranges: a zero start is omitted',
     !('startRow' in headGrid) && !('startColumn' in headGrid),
   )
-  check('ranges: the reply stays small', JSON.stringify(head.body).length < 10_000)
+  check(
+    'ranges: the reply stays small',
+    JSON.stringify(head.body).length * 100 < JSON.stringify(all.body).length,
+  )
 
   const offset = await get(`includeGridData=true&ranges=${encodeURIComponent('Sheet1!C5:D6')}`)
   const offsetGrid = obj(arr(sheetsOf(offset.body)[0]?.data)[0])
@@ -699,6 +754,7 @@ async function gridRangesHttp(at: string): Promise<void> {
 
 async function main(): Promise<void> {
   compatibilityDirect()
+  sheetsFormatsDirect()
   const fake = await launch()
   const at = fake.endpoint
   const seed = { tenants: ['t1'], epoch: EPOCH, extras: { forms: FORMS } }
@@ -1105,12 +1161,19 @@ async function main(): Promise<void> {
       const samples = ['', 'quote" and apostrophe\'', 'line\nfeed', '音楽', '\\', '\u0000']
       for (let row = 0; row < 20_001; row += 1)
         tab.cells.set(`${String(row)},0`, samples[row % samples.length] ?? '')
+      tab.props.set('10000,0', { userEnteredFormat: { textFormat: { bold: true } } })
+      tab.cells.delete('10001,0')
+      tab.props.set('10001,0', { note: 'formatted, no value' })
       st.sheets.set(file.id, { title: file.name, tabs: [tab], nextSheetId: 1 })
       await saveState(db, gwsFake.dmmf, 't1', st)
       const restored = await loadState(db, 't1')
       check(
         'bulk cell persistence preserves text across chunk boundaries',
         isDeepStrictEqual(restored.sheets.get(file.id)?.tabs[0]?.cells, tab.cells),
+      )
+      check(
+        'bulk cell persistence preserves formats, a formatted blank cell included',
+        isDeepStrictEqual(restored.sheets.get(file.id)?.tabs[0]?.props, tab.props),
       )
       tab.cells.set('00,0', 'duplicate primary key')
       let refusal = ''

@@ -41,7 +41,9 @@ import { MirageFs } from './vfs/vfs.ts'
 import { MirageFsSeed } from './vfs/seed.ts'
 import { PyodideExecution } from './execution.ts'
 import { unhonoredNotice, type InitFlags } from '../flags.ts'
-import type { SyncVFS } from './vfs/types.ts'
+import type { SyncVFS, XattrOp } from './vfs/types.ts'
+import { classify } from '../../../errors/index.ts'
+import { decodeBase64, encodeBase64 } from '../../../utils/base64.ts'
 import { PyodideWorkerClient } from './worker/client.ts'
 
 function bridgeBytes(value: Uint8Array | ArrayLike<number>): Uint8Array {
@@ -585,8 +587,41 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   }
 
   private guestModule(pyodide: PyodideInterface): PyodideExecution {
-    this.guest ??= new PyodideExecution(pyodide)
+    this.guest ??= new PyodideExecution(pyodide, this.guestXattr.bind(this))
     return this.guest
+  }
+
+  /**
+   * The guest's extended-attribute calls (its os.getxattr family, which
+   * the harness installs over this module), answered by the workspace
+   * door and handed back as JSON: `{value}`, or `{code}` naming the
+   * condition the door reported. Only the worker can wait on the door
+   * from inside a WASM frame, so without one, and for a path no mount
+   * serves, the answer is ENOTSUP: what a filesystem without extended
+   * attributes says.
+   */
+  private guestXattr(
+    op: XattrOp,
+    path: string,
+    name: string | null | undefined,
+    value: string | null | undefined,
+    create: boolean,
+    replace: boolean,
+    nofollow: boolean,
+  ): string {
+    const sync = this.sync
+    if (sync === undefined || this.vfs?.mountOf(path) == null) {
+      return JSON.stringify({ code: 'ENOTSUP' })
+    }
+    try {
+      const bytes = value == null ? undefined : decodeBase64(value)
+      const out = sync.xattr(op, path, name ?? undefined, bytes, { create, replace, nofollow })
+      return JSON.stringify({
+        value: out instanceof Uint8Array ? encodeBase64(out) : (out ?? null),
+      })
+    } catch (err) {
+      return JSON.stringify({ code: (err as { code?: unknown }).code ?? classify(err) ?? 'EIO' })
+    }
   }
 
   private takeSeedNotices(): string[] {

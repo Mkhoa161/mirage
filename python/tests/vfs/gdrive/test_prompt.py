@@ -26,3 +26,5 @@ def test_prompt_cross_references_per_service_shapes():
     assert "remote mount" in rendered
     assert "modifiedTime range" in rendered
     assert "No owned/ vs shared/" in rendered
+    assert ("getfattr -n user.mirage.file_id --only-values /gdrive/<path>"
+            in rendered)

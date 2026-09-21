@@ -71,15 +71,17 @@ export async function saveState(db: C, dmmf: Dmmf, tenant: string, st: GwsState)
               cell.row,
               cell.col,
               cell.text,
+              cell.props,
             ]),
         )
         // One bound JSON value avoids constructing a Prisma query node for
         // each field of every cell. SQLite still enforces the composite key.
         await tx.$executeRaw`
-        INSERT INTO "SheetCell" ("tenant", "spreadsheetId", "sheetId", "row", "col", "text")
+        INSERT INTO "SheetCell" ("tenant", "spreadsheetId", "sheetId", "row", "col", "text", "props")
         SELECT json_extract(value, '$[0]'), json_extract(value, '$[1]'),
                json_extract(value, '$[2]'), json_extract(value, '$[3]'),
-               json_extract(value, '$[4]'), json_extract(value, '$[5]')
+               json_extract(value, '$[4]'), json_extract(value, '$[5]'),
+               json_extract(value, '$[6]')
         FROM json_each(${cells})`
       }
       if (rows.presentations.length > 0) {
@@ -159,8 +161,11 @@ interface Rows {
     title: string
     rows: number
     cols: number
-    rowPixels: string
-    columnPixels: string
+    rowMeta: string
+    columnMeta: string
+    bandedRanges: string
+    basicFilter: string | null
+    conditionalFormats: string
     seq: number
   }[]
   cells: {
@@ -169,7 +174,8 @@ interface Rows {
     sheetId: number
     row: number
     col: number
-    text: string
+    text: string | null
+    props: string
   }[]
   presentations: { tenant: string; id: string; title: string }[]
   slides: { tenant: string; presentationId: string; objectId: string; seq: number }[]
@@ -376,11 +382,14 @@ function buildRows(tenant: string, st: GwsState): Rows {
         title: tab.title,
         rows: tab.rows,
         cols: tab.cols,
-        rowPixels: JSON.stringify(tab.rowPixels ?? {}),
-        columnPixels: JSON.stringify(tab.columnPixels ?? {}),
+        rowMeta: JSON.stringify(tab.rowMeta),
+        columnMeta: JSON.stringify(tab.columnMeta),
+        bandedRanges: JSON.stringify(tab.bandedRanges),
+        basicFilter: tab.basicFilter === null ? null : JSON.stringify(tab.basicFilter),
+        conditionalFormats: JSON.stringify(tab.conditionalFormats),
         seq: (tabSeq += 1),
       })
-      for (const [key, text] of tab.cells) {
+      for (const key of new Set([...tab.cells.keys(), ...tab.props.keys()])) {
         const [row, col] = key.split(',')
         rows.cells.push({
           tenant,
@@ -388,7 +397,8 @@ function buildRows(tenant: string, st: GwsState): Rows {
           sheetId: tab.sheetId,
           row: Number(row),
           col: Number(col),
-          text,
+          text: tab.cells.get(key) ?? null,
+          props: JSON.stringify(tab.props.get(key) ?? {}),
         })
       }
     }
