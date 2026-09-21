@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { RAMFileCacheStore } from './ram.ts'
 
@@ -137,19 +138,17 @@ describe('RAMFileCacheStore', () => {
 })
 
 describe('RAMFileCacheStore: a writer waiting on the lock', () => {
-  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+  // Staged by call order, not by a sleep: `invalidation.enter` runs
+  // synchronously when the store method is called and `KeyLock.withLock`
+  // awaits an already-resolved promise, so every writer below takes its
+  // stamp before the invalidation lands and is still parked when it does.
 
   it.each(['set', 'add'] as const)(
     '%s sees an invalidation that landed while it waited',
     async (operation) => {
-      // Both writers hold bytes read before the clear; the second only gets
-      // the lock after the clear, so a version read under the lock would
-      // look current and let it install stale content.
       const cache = new RAMFileCacheStore()
-      const first = cache[operation]('/large', new Uint8Array(4_000_000).fill(0x78))
-      await sleep(2)
-      const second = cache[operation]('/large', new Uint8Array(4_000_000).fill(0x79))
-      await sleep(2)
+      const first = cache[operation]('/large', new Uint8Array([0x78]))
+      const second = cache[operation]('/large', new Uint8Array([0x79]))
       await cache.clear()
       await Promise.all([first, second])
       expect(await cache.get('/large')).toBeNull()
@@ -157,36 +156,76 @@ describe('RAMFileCacheStore: a writer waiting on the lock', () => {
   )
 
   it.each(['set', 'add'] as const)(
+    '%s parked when the cache is cleared is discarded',
+    async (operation) => {
+      // One writer, parked on the lock rather than behind another writer.
+      // Lived in io/cooperative.test.ts while the cooperative md5 was what
+      // parked it; that is no longer this file's subject.
+      const cache = new RAMFileCacheStore()
+      const pending = cache[operation]('/large', new Uint8Array([0x78]))
+      await cache.clear()
+      await pending
+      expect(await cache.get('/large')).toBeNull()
+      expect(cache.cacheSize).toBe(0)
+    },
+  )
+
+  it.each(['set', 'add'] as const)(
+    '%s parked when a covering prefix is evicted is discarded',
+    async (operation) => {
+      // evictPrefix bumps the same store-wide epoch clear does, but through
+      // its own path; the redis suite used to be the only place this was
+      // exercised in TypeScript.
+      const cache = new RAMFileCacheStore()
+      const pending = cache[operation]('/large', new Uint8Array([0x78]))
+      await cache.evictPrefix('/lar')
+      await pending
+      expect(await cache.get('/large')).toBeNull()
+    },
+  )
+
+  it.each(['set', 'add'] as const)(
     '%s queued behind a removal of its key is discarded',
     async (operation) => {
-      // The removal runs between the first writer's fingerprint and the
-      // second writer's turn. The second holds bytes read before the
-      // removal, so it must not repopulate the key that was just dropped.
+      // The second writer holds bytes read before the removal, so it must
+      // not repopulate the key that was just dropped.
       const cache = new RAMFileCacheStore()
-      const first = cache[operation]('/large', new Uint8Array(4_000_000).fill(0x78))
-      await sleep(2)
+      const first = cache[operation]('/large', new Uint8Array([0x78]))
       const removal = cache.remove('/large')
-      await sleep(2)
-      const second = cache[operation]('/large', new Uint8Array(4_000_000).fill(0x79))
+      const second = cache[operation]('/large', new Uint8Array([0x79]))
       await Promise.all([first, removal, second])
       expect(await cache.get('/large')).toBeNull()
     },
   )
 
   it.each(['set', 'add'] as const)(
-    '%s of one key survives the removal of another key while it hashes',
+    '%s of one key survives the removal of another key',
     async (operation) => {
       const cache = new RAMFileCacheStore()
-      const data = new Uint8Array(4_000_000).fill(0x78)
+      const data = new Uint8Array([0x78, 0x78])
       const fill = cache[operation]('/large', data)
-      await sleep(2)
       await cache.remove('/other')
       await fill
-      // Compared by length and a byte, not deep equality: a 4 MB deep
-      // compare alone outlives the test budget.
-      const kept = await cache.get('/large')
-      expect(kept?.byteLength).toBe(data.byteLength)
-      expect(kept?.[0]).toBe(0x78)
+      expect(await cache.get('/large')).toEqual(data)
+    },
+  )
+})
+
+describe('a fill that carries no token', () => {
+  it.each(['set', 'add'] as const)('%s stores null, not a hash of the bytes', async (operation) => {
+    const cache = new RAMFileCacheStore()
+    await cache[operation]('/a', encode('data'))
+    expect(await cache.isFresh('/a', 'etag-1')).toBe(false)
+    expect(await cache.isFresh('/a', createHash('md5').update('data').digest('hex'))).toBe(false)
+  })
+
+  it.each(['set', 'add'] as const)(
+    '%s treats an empty token as absent, matching the redis wire convention',
+    async (operation) => {
+      // `add` is the door where '' crosses into add.lua as ARGV[2].
+      const cache = new RAMFileCacheStore()
+      await cache[operation]('/a', encode('data'), { fingerprint: '' })
+      expect(await cache.isFresh('/a', '')).toBe(false)
     },
   )
 })

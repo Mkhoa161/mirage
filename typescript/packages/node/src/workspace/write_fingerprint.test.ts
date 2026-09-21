@@ -34,7 +34,7 @@ const DEC = new TextDecoder()
 
 // Non-empty suffix: the mock's ETag is then NOT md5(content), the way a
 // multipart or SSE-KMS upload's is not, so a cache entry carrying the
-// backend's token is distinguishable from one carrying the md5 default.
+// backend's token is distinguishable from a fabricated md5.
 const SUFFIX = '-2'
 
 function etagOf(data: string): string {
@@ -86,7 +86,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
   })
 
   it('a written path caches the backend token, not md5', async () => {
-    // Holding md5(content) is only right by accident on a simple-PUT
+    // Holding a fabricated md5(content) is only right by accident on a simple-PUT
     // object, and never right on a multipart one.
     const ws = makeWorkspace(BOUNDED)
     try {
@@ -103,7 +103,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
   it('ALWAYS reads a written path from cache', async () => {
     // The cost assertion. With the backend's token on the entry the
     // freshness probe matches and the read is served from cache; with the
-    // md5 default it never matches a suffixed ETag, so every read evicts
+    // no token it never matches a suffixed ETag, so every read evicts
     // and refetches.
     const ws = makeWorkspace(FRESH)
     try {

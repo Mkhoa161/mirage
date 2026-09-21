@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 
 import { CachableAsyncIterator } from '../../io/cachable_iterator.ts'
@@ -123,6 +124,25 @@ describe('backend fingerprint threading', () => {
     const io = new IOResult({ reads: { '/s3/f.txt': stream }, cache: ['/s3/f.txt'] })
     await applyIo(cache, io, undefined, [readRecord('/s3/f.txt', 'etag-multipart-2')])
     expect(await cache.isFresh('/s3/f.txt', 'etag-multipart-2')).toBe(true)
+  })
+
+  it('leaves the entry tokenless when a write token describes other bytes', async () => {
+    // The byte-length guard refuses a token whose length disagrees with the
+    // bytes stored. The entry then carries no token at all, so it matches
+    // neither the refused token nor a hash of its own content -- the
+    // fabricated md5 that used to stand in here was a valid validator only
+    // on a simple-PUT S3 object, by coincidence of ETag format.
+    const cache = new RAMFileCacheStore()
+    const io = new IOResult({
+      writes: { '/s3/f.txt': ENC.encode('new') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, io, undefined, [opRecord('write', '/s3/f.txt', 'etag-put-2', 99)])
+    expect(DEC.decode((await cache.get('/s3/f.txt')) ?? undefined)).toBe('new')
+    expect(await cache.isFresh('/s3/f.txt', 'etag-put-2')).toBe(false)
+    expect(await cache.isFresh('/s3/f.txt', createHash('md5').update('new').digest('hex'))).toBe(
+      false,
+    )
   })
 
   it('preserves the entry fingerprint on a warm re-apply', async () => {

@@ -27,7 +27,10 @@ import {
 const FRESH: ReadSpec = { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL }
 const BOUNDED: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
+import { applyIo } from '@struktoai/mirage-core/cache/file/io'
+import { IOResult } from '@struktoai/mirage-core/io/types'
 import { Workspace } from '../../workspace.ts'
 import type { S3Config } from './config.ts'
 import { installS3Mock, type S3Mock } from './mock.ts'
@@ -210,6 +213,42 @@ describe('S3 cache consistency (mocked)', () => {
       mock.resetCalls()
       expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
       expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+    } finally {
+      await ws.close()
+    }
+  })
+
+  it('a tokenless entry costs one extra GET, then carries the ETag', async () => {
+    // The measured price of storing no token instead of a fabricated md5.
+    // On s3 the ETag of a simple unencrypted PUT *is* md5(content), so the
+    // old fallback was a valid validator there -- the one backend where it
+    // was. An entry that reaches the cache with no token can no longer
+    // claim freshness, so the next read under `fresh` refetches once; after
+    // that it carries the backend's own ETag and the read after it is
+    // served from cache. The python twin is in test_fingerprint_spike.py,
+    // where `Workspace.applyIo` is public; here the seed goes through
+    // core's applyIo on the same cache.
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, read: FRESH },
+    )
+    try {
+      await applyIo(
+        ws.cache,
+        new IOResult({ reads: { '/s3/c.txt': ENC.encode('v1') }, cache: ['/s3/c.txt'] }),
+      )
+      expect(await ws.cache.isFresh('/s3/c.txt', 'anything')).toBe(false)
+      mock.resetCalls()
+      expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
+      expect(mock.commandCalls(GetObjectCommand)).toBe(1)
+      mock.resetCalls()
+      expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+      // Names the mechanism, not just its consequence: a zero-GET second
+      // read only implies *some* match, this says which token it was.
+      expect(
+        await ws.cache.isFresh('/s3/c.txt', createHash('md5').update('v1').digest('hex')),
+      ).toBe(true)
     } finally {
       await ws.close()
     }

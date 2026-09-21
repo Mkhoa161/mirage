@@ -18,7 +18,7 @@ import { Invalidation } from '../invalidation.ts'
 import { KeyLock } from '../lock.ts'
 import { CacheEntry } from './entry.ts'
 import { type FileCache, validateMaxDrainBytes } from './mixin.ts'
-import { defaultFingerprintAsync, parseLimit } from './utils.ts'
+import { parseLimit, tokenOrNull } from './utils.ts'
 
 export class RAMFileCacheStore extends RAMVFS implements FileCache {
   private readonly entries = new Map<string, CacheEntry>()
@@ -94,7 +94,6 @@ export class RAMFileCacheStore extends RAMVFS implements FileCache {
     const stamp = this.invalidation.enter(key)
     try {
       await this.lock.withLock(key, async () => {
-        const fp = options.fingerprint ?? (await defaultFingerprintAsync(data))
         if (this.invalidation.stale(key, stamp)) return
         const existing = this.entries.get(key)
         if (existing !== undefined) {
@@ -104,7 +103,7 @@ export class RAMFileCacheStore extends RAMVFS implements FileCache {
         const entry = new CacheEntry({
           size: data.byteLength,
           cachedAt: Math.floor(Date.now() / 1000),
-          fingerprint: fp,
+          fingerprint: tokenOrNull(options.fingerprint),
           ttl: options.ttl ?? null,
         })
         this.entries.set(key, entry)
@@ -129,7 +128,6 @@ export class RAMFileCacheStore extends RAMVFS implements FileCache {
       placed = await this.lock.withLock(key, async () => {
         const existing = this.entries.get(key)
         if (existing !== undefined && !existing.expired) return Promise.resolve(false)
-        const fp = options.fingerprint ?? (await defaultFingerprintAsync(data))
         if (this.invalidation.stale(key, stamp)) return false
         if (existing !== undefined) {
           this.size -= existing.size
@@ -138,7 +136,7 @@ export class RAMFileCacheStore extends RAMVFS implements FileCache {
         const entry = new CacheEntry({
           size: data.byteLength,
           cachedAt: Math.floor(Date.now() / 1000),
-          fingerprint: fp,
+          fingerprint: tokenOrNull(options.fingerprint),
           ttl: options.ttl ?? null,
         })
         this.entries.set(key, entry)
