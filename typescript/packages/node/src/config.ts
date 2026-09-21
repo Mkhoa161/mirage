@@ -40,7 +40,10 @@ import {
   parseMountMode,
 } from '@struktoai/mirage-core/types'
 import { Mount } from '@struktoai/mirage-core/workspace/mount/spec'
-import { resolveReadSpec } from '@struktoai/mirage-core/workspace/mount/read_policy'
+import {
+  coerceReadPolicy,
+  resolveReadSpec,
+} from '@struktoai/mirage-core/workspace/mount/read_policy'
 import { snakeToCamel } from '@struktoai/mirage-core/utils/normalize'
 import { parseSessionProfile, type SessionProfile } from '@struktoai/mirage-core/policy/profile'
 import type { ResolvedSource } from '@struktoai/mirage-core/secrets/types'
@@ -388,13 +391,25 @@ function validateReadBlock(prefix: string, block: Record<string, unknown>): void
   // value. Comparing the raw one let `read: BOUNDED` -- a spelling both
   // languages accept -- skip the bound rule that Python enforces.
   const declared = block.read ?? undefined
-  const policy = declared === undefined ? undefined : resolveReadSpec(declared, block.ttl).policy
+  const policy = declared === undefined ? undefined : coerceReadPolicy(declared)
   const ttl = block.ttl ?? undefined
+  // The bound's type is judged whatever `read:` says, and before the
+  // dependent-key rules, because that is where Python judges it: a
+  // field validator, which runs ahead of the model validator carrying
+  // those rules. Left until after them, `ttl: "30"` with no `read:`
+  // came back naming the missing policy on one host and the unusable
+  // bound on the other.
+  if (ttl !== undefined && (typeof ttl !== 'number' || !Number.isInteger(ttl))) {
+    throw new Error(`mount \`${prefix}\`: ttl must be whole seconds, got ${JSON.stringify(ttl)}`)
+  }
   if (ttl !== undefined && policy === undefined) {
     throw new Error(`mount \`${prefix}\`: ttl pins the read bound; it takes read: bounded`)
   }
   if (policy === ReadPolicy.BOUNDED && ttl === undefined) {
     throw new Error(`mount \`${prefix}\`: read: bounded needs a bound; set ttl:`)
+  }
+  if (ttl !== undefined && ttl < 1) {
+    throw new Error(`mount \`${prefix}\`: ttl must be at least 1 second, got ${String(ttl)}`)
   }
 }
 

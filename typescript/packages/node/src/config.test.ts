@@ -610,6 +610,35 @@ describe('configToWorkspaceArgs', () => {
     )
   })
 
+  it.each([['30'], [true], [1.5]])('refuses a bound of %o as not whole seconds', (junk) => {
+    // pydantic coerces where this key cannot afford it: `ttl: "30"`
+    // arrived as 30 there and `ttl: true` as 1 -- a mount silently
+    // bounded at one second -- while this loader refused both. Same
+    // bytes, two answers, which `integ/fixtures/config/rejected.json`
+    // now pins.
+    expect(() =>
+      loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'bounded', ttl: junk } } }),
+    ).toThrow(/whole seconds/)
+  })
+
+  it.each([[0], [-1]])('refuses a bound of %s that can never expire', (bad) => {
+    expect(() =>
+      loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', read: 'bounded', ttl: bad } } }),
+    ).toThrow(/at least 1 second/)
+  })
+
+  it('judges the bound whatever `read:` says, and names the missing policy first', () => {
+    // The type is wrong on its own terms, so it is judged before the
+    // dependent-key rules -- where Python's field validator judges it,
+    // ahead of the model validator carrying those rules.
+    expect(() => loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', ttl: '30' } } })).toThrow(
+      /whole seconds/,
+    )
+    expect(() => loadWorkspaceConfig({ mounts: { '/': { vfs: 'ram', ttl: 0 } } })).toThrow(
+      /ttl pins the read bound/,
+    )
+  })
+
   it('threads per-mount backend into top-level kernelMounts and yields {} otherwise', async () => {
     const withFuse = await configToWorkspaceArgs(
       loadWorkspaceConfig({

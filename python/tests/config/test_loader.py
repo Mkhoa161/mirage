@@ -1266,6 +1266,56 @@ def test_the_two_dependent_read_keys_are_refused_at_the_door():
         load_config({"mounts": {"/a": {"vfs": "ram", "read": "bounded"}}})
 
 
+def test_a_bound_that_is_not_whole_seconds_is_refused_at_the_door():
+    """pydantic coerces where this key cannot afford it.
+
+    `ttl: "30"` arrived as 30 and `ttl: true` as 1 -- a mount silently
+    bounded at one second -- while the TypeScript loader refused both
+    documents outright. Same bytes, two answers, which is exactly what
+    `integ/fixtures/config/rejected.json` exists to catch.
+    """
+    for junk in ("30", True, 1.5):
+        with pytest.raises(ValueError, match="whole seconds"):
+            load_config({
+                "mounts": {
+                    "/a": {
+                        "vfs": "ram",
+                        "read": "bounded",
+                        "ttl": junk
+                    }
+                }
+            })
+
+
+def test_an_unusable_bound_is_refused_at_the_config_door_not_later():
+    """The same door TypeScript refuses it at.
+
+    `resolve_read_spec` catches this too, but only once
+    `to_workspace_kwargs` runs; the shared fixture loads the config and
+    nothing more, so a bound that can never expire has to be refused
+    here.
+    """
+    for bad in (0, -1):
+        with pytest.raises(ValueError, match="at least 1 second"):
+            load_config({
+                "mounts": {
+                    "/a": {
+                        "vfs": "ram",
+                        "read": "bounded",
+                        "ttl": bad
+                    }
+                }
+            })
+
+
+def test_a_missing_policy_is_named_before_an_unusable_bound():
+    # TypeScript's `validateReadBlock` names the dependent key first and
+    # the bound second; one document wrong in both ways has to come back
+    # the same way on both hosts.
+    with pytest.raises(ValueError, match="ttl pins the read bound"):
+        load_config({"mounts": {"/a": {"vfs": "ram", "ttl": 0}}})
+
+
 def test_a_junk_read_policy_is_refused_at_the_door():
     with pytest.raises(ValueError, match="fresh, bounded, pinned"):
         load_config({"mounts": {"/a": {"vfs": "ram", "read": "banana"}}})

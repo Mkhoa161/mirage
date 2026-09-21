@@ -353,6 +353,22 @@ class MountBlock(BaseModel):
             return v
         return coerce_read_policy(v)
 
+    @field_validator("ttl", mode="before")
+    @classmethod
+    def _v_ttl(cls, v):
+        # Ahead of pydantic's own coercion, which is lax where this key
+        # cannot afford to be: `ttl: "30"` arrives as 30 and `ttl: true`
+        # as 1, so a document TypeScript refuses outright would load
+        # here and the two hosts would disagree about the same bytes --
+        # `ttl: true` silently bounding the mount at one second. A bound
+        # is a whole number of seconds off a YAML scalar; anything else
+        # is a typo, not a bound.
+        if v is None:
+            return v
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise ValueError(f"ttl must be whole seconds, got {v!r}")
+        return v
+
     @model_validator(mode="after")
     def _v_bound(self) -> "MountBlock":
         # Two dependent-key rules, refused here rather than in the mount
@@ -364,6 +380,15 @@ class MountBlock(BaseModel):
                              "read: bounded")
         if self.read is ReadPolicy.BOUNDED and self.ttl is None:
             raise ValueError("read: bounded needs a bound; set ttl:")
+        # Last, so the dependent-key rules name the missing key first,
+        # as TypeScript's `validateReadBlock` does. `resolve_read_spec`
+        # refuses this too, but only at `to_workspace_kwargs`, which is
+        # a door later than the one TypeScript refuses it at: the shared
+        # `integ/fixtures/config/rejected.json` loads the config and
+        # nothing more.
+        if self.ttl is not None and self.ttl < 1:
+            raise ValueError(f"ttl must be at least 1 second, got "
+                             f"{self.ttl}")
         return self
 
 

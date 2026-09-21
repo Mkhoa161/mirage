@@ -56,6 +56,66 @@
       }
     },
     {
+      "name": "mount block: a quoted bound",
+      "config": {
+        "mounts": {
+          "/d": {
+            "vfs": "ram",
+            "read": "bounded",
+            "ttl": "30"
+          }
+        }
+      }
+    },
+    {
+      "name": "mount block: a boolean bound",
+      "config": {
+        "mounts": {
+          "/d": {
+            "vfs": "ram",
+            "read": "bounded",
+            "ttl": true
+          }
+        }
+      }
+    },
+    {
+      "name": "mount block: a fractional bound",
+      "config": {
+        "mounts": {
+          "/d": {
+            "vfs": "ram",
+            "read": "bounded",
+            "ttl": 1.5
+          }
+        }
+      }
+    },
+    {
+      "name": "mount block: a zero bound",
+      "config": {
+        "mounts": {
+          "/d": {
+            "vfs": "ram",
+            "read": "bounded",
+            "ttl": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "mount block: a negative bound",
+      "config": {
+        "mounts": {
+          "/d": {
+            "vfs": "ram",
+            "read": "bounded",
+            "ttl": -1
+          }
+        }
+      }
+    },
+    {
       "name": "cache block: limitt for limit",
       "config": {
         "mounts": {
