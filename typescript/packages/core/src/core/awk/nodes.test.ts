@@ -12,12 +12,20 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-export const USAGE = "awk: usage: awk [-F fs] [-v var=val] 'program' [file ...]"
+import { describe, expect, it } from 'vitest'
+import { RedirKind, RuleKind, isLvalue } from './nodes.ts'
 
-export const FS_ESCAPES: Readonly<Record<string, string>> = { t: '\t', n: '\n', '\\': '\\' }
+describe('awk nodes', () => {
+  it('names the three assignable shapes as lvalues', () => {
+    const one = { type: 'Num', value: 1 } as const
+    expect(isLvalue({ type: 'Var', name: 'x' })).toBe(true)
+    expect(isLvalue({ type: 'Field', index: one })).toBe(true)
+    expect(isLvalue({ type: 'ArrayRef', name: 'a', subscripts: [one] })).toBe(true)
+    expect(isLvalue(one)).toBe(false)
+  })
 
-export interface AwkFlags {
-  readonly fieldSeparator: string | null
-  readonly assignments: readonly string[]
-  readonly programFiles: readonly string[]
-}
+  it('spells kinds as their source tokens', () => {
+    expect(Object.values(RedirKind)).toEqual(['>', '>>', '|'])
+    expect(RuleKind.BEGIN).toBe('BEGIN')
+  })
+})

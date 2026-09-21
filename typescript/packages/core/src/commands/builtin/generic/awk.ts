@@ -18,8 +18,17 @@ import { mountKey, mountPrefixOf } from '../../../utils/key_prefix.ts'
 import { IOResult, materialize } from '../../../io/types.ts'
 import { PathSpec } from '../../../types.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
-import { awkStream, validateAwkProgram } from '../awk_program.ts'
-import { USAGE, type AwkFlags } from './awk_types.ts'
+import { AsyncLineIterator } from '../../../io/async_line_iterator.ts'
+import {
+  AwkRuntimeError,
+  AwkSyntaxError,
+  ExitProgram,
+  Interpreter,
+  parse,
+  text,
+} from '../../../core/awk/index.ts'
+import { UsageError } from '../../errors.ts'
+import { FS_ESCAPES, USAGE, type AwkFlags } from './awk_types.ts'
 import { isMissingPath } from '../../../utils/errors.ts'
 import { resolvePath } from '../../../utils/path.ts'
 import { resolveSource } from '../utils/stream.ts'
@@ -28,6 +37,8 @@ const ENC = new TextEncoder()
 const DEC = new TextDecoder('utf-8', { fatal: false })
 
 type Stream = (p: PathSpec) => AsyncIterable<Uint8Array>
+
+type Source = readonly [name: string, bytes: AsyncIterable<Uint8Array>]
 
 function parseFlags(opts: CommandOpts): AwkFlags {
   const fl = new FlagView(opts.flags, specOf('awk'))
@@ -38,6 +49,110 @@ function parseFlags(opts: CommandOpts): AwkFlags {
     assignments,
     programFiles,
   }
+}
+
+/** Expand the backslash escapes awk reads in a -F or -v argument. */
+function unescape(raw: string): string {
+  let out = ''
+  let idx = 0
+  while (idx < raw.length) {
+    if (raw.charAt(idx) === '\\' && idx + 1 < raw.length) {
+      const nxt = raw.charAt(idx + 1)
+      out += FS_ESCAPES[nxt] ?? '\\' + nxt
+      idx += 2
+      continue
+    }
+    out += raw.charAt(idx)
+    idx += 1
+  }
+  return out
+}
+
+function splitAssignments(raw: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const item of raw) {
+    const eq = item.indexOf('=')
+    if (eq >= 0) out[item.slice(0, eq)] = unescape(item.slice(eq + 1))
+  }
+  return out
+}
+
+function exitStatus(code: number): number {
+  return Number(BigInt.asUintN(8, BigInt(code)))
+}
+
+/**
+ * Close a phase: move /dev/stderr text and a fatal error onto `io`.
+ * Every awk treats a runtime error as fatal at exit 2 and keeps what it
+ * had already written, so the pending stdout is handed back either way.
+ */
+function settle(io: IOResult, interp: Interpreter, failure: Error | null): Uint8Array {
+  let err = interp.drainErr()
+  if (failure !== null) {
+    io.exitCode = 2
+    err += `${failure.message}\n`
+  }
+  if (err !== '') {
+    const held = io.stderr instanceof Uint8Array ? DEC.decode(io.stderr) : ''
+    io.stderr = ENC.encode(held + err)
+  }
+  return ENC.encode(interp.drain())
+}
+
+function isFatal(err: unknown): err is AwkRuntimeError | AwkSyntaxError {
+  return err instanceof AwkRuntimeError || err instanceof AwkSyntaxError
+}
+
+async function* awkStream(
+  sources: readonly Source[],
+  interp: Interpreter,
+  io: IOResult,
+): AsyncIterable<Uint8Array> {
+  let exited = false
+  try {
+    interp.runBegin()
+  } catch (err) {
+    if (err instanceof ExitProgram) {
+      io.exitCode = exitStatus(err.code)
+      exited = true
+    } else if (isFatal(err)) {
+      yield settle(io, interp, err)
+      return
+    } else throw err
+  }
+  yield settle(io, interp, null)
+  if (!exited && interp.hasMainRules()) {
+    for (const [name, source] of sources) {
+      if (exited) break
+      interp.startFile(name)
+      for await (const lineBytes of new AsyncLineIterator(source)) {
+        try {
+          interp.runRecord(DEC.decode(lineBytes))
+        } catch (err) {
+          if (err instanceof ExitProgram) {
+            io.exitCode = exitStatus(err.code)
+            exited = true
+          } else if (isFatal(err)) {
+            yield settle(io, interp, err)
+            return
+          } else throw err
+        }
+        const chunk = settle(io, interp, null)
+        if (chunk.length > 0) yield chunk
+        if (exited || interp.skipFile) break
+      }
+    }
+  }
+  try {
+    interp.runEnd()
+  } catch (err) {
+    if (err instanceof ExitProgram) io.exitCode = exitStatus(err.code)
+    else if (isFatal(err)) {
+      yield settle(io, interp, err)
+      return
+    } else throw err
+  }
+  yield settle(io, interp, null)
 }
 
 export async function awkGeneric(
@@ -60,7 +175,7 @@ export async function awkGeneric(
       const virtual = resolvePath(programFile, opts.cwd)
       const programSpec = PathSpec.fromStrPath(virtual, mountKey(virtual, mountPrefix))
       try {
-        pieces.push(DEC.decode(await materialize(stream(programSpec))).trim())
+        pieces.push(DEC.decode(await materialize(stream(programSpec))))
       } catch (err) {
         // GNU awk exits 2 when a -f program file cannot be opened;
         // anything that is not absence keeps propagating.
@@ -76,22 +191,25 @@ export async function awkGeneric(
     return [null, new IOResult({ exitCode: 2, stderr: ENC.encode(`${USAGE}\n`) })]
   }
 
-  validateAwkProgram(program)
-
-  const variables: Record<string, string> = {}
-  for (const assignment of f.assignments) {
-    const eq = assignment.indexOf('=')
-    if (eq > 0) variables[assignment.slice(0, eq)] = assignment.slice(eq + 1)
+  let interp: Interpreter
+  try {
+    interp = new Interpreter(parse(program), splitAssignments(f.assignments))
+  } catch (err) {
+    if (err instanceof AwkSyntaxError) throw new UsageError(err.message)
+    throw err
   }
+  if (f.fieldSeparator !== null) interp.setVar('FS', text(unescape(f.fieldSeparator)))
 
-  let sources: AsyncIterable<Uint8Array>[]
+  let sources: Source[]
   let cache: string[]
   if (paths.length > 0) {
-    sources = paths.map((p) => stream(p))
+    // FILENAME reports the operand as typed, matching every awk.
+    sources = paths.map((p) => [p.rawPath, stream(p)] as const)
     cache = paths.map((p) => p.mountPath)
   } else {
-    sources = [resolveSource(opts.stdin)]
+    sources = [['', resolveSource(opts.stdin)]]
     cache = []
   }
-  return [awkStream(sources, program, f.fieldSeparator, variables), new IOResult({ cache })]
+  const io = new IOResult({ cache })
+  return [awkStream(sources, interp, io), io]
 }

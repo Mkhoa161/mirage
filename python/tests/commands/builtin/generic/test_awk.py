@@ -502,62 +502,6 @@ async def test_awk_semicolon_inside_string_is_not_a_separator():
     assert (await _drain(output)).decode() == "a;b x\n"
 
 
-@pytest.mark.asyncio
-async def test_awk_rejects_arithmetic_assignment():
-    rb, rs = _make_backend({})
-    with pytest.raises(UsageError, match="unsupported construct"):
-        await awk(
-            [],
-            ("{x = y + 1; print x}", ),
-            None,
-            read_bytes=rb,
-            read_stream=rs,
-            stdin=b"line\n",
-        )
-
-
-@pytest.mark.asyncio
-async def test_awk_rejects_function_call_in_print():
-    rb, rs = _make_backend({})
-    with pytest.raises(UsageError, match=r"unsupported construct.*toupper"):
-        await awk(
-            [],
-            ("{print toupper($1)}", ),
-            None,
-            read_bytes=rb,
-            read_stream=rs,
-            stdin=b"line\n",
-        )
-
-
-@pytest.mark.asyncio
-async def test_awk_rejects_printf():
-    rb, rs = _make_backend({})
-    with pytest.raises(UsageError, match="unsupported construct"):
-        await awk(
-            [],
-            ('{printf "%s\\n", $1}', ),
-            None,
-            read_bytes=rb,
-            read_stream=rs,
-            stdin=b"line\n",
-        )
-
-
-@pytest.mark.asyncio
-async def test_awk_rejects_if_statement():
-    rb, rs = _make_backend({})
-    with pytest.raises(UsageError, match="unsupported construct"):
-        await awk(
-            [],
-            ("{if ($1) print $1}", ),
-            None,
-            read_bytes=rb,
-            read_stream=rs,
-            stdin=b"line\n",
-        )
-
-
 async def _run_stdin(program: str, stdin: bytes, flags=None) -> str:
     rb, rs = _make_backend({})
     output, _ = await awk(
@@ -686,40 +630,6 @@ async def test_awk_bare_invalid_regex_is_usage_error():
 
 
 @pytest.mark.asyncio
-async def test_awk_tilde_rejects_an_unsupported_lhs():
-    with pytest.raises(UsageError, match="unsupported construct"):
-        await _run_stdin("length($1) ~ /1/", b"a\n")
-
-
-@pytest.mark.asyncio
-async def test_awk_rejects_arithmetic_in_condition():
-    rb, rs = _make_backend({})
-    with pytest.raises(UsageError, match="unsupported construct"):
-        await awk(
-            [],
-            ("NR % 2 == 0 {print}", ),
-            None,
-            read_bytes=rb,
-            read_stream=rs,
-            stdin=b"a\nb\n",
-        )
-
-
-@pytest.mark.asyncio
-async def test_awk_rejects_program_file_with_unsupported_statement():
-    rb, rs = _make_backend({"/p.awk": b'{gsub(/a/, "b"); print}\n'})
-    with pytest.raises(UsageError, match="unsupported construct"):
-        await awk(
-            [],
-            (),
-            {"f": [_spec("/p.awk")]},
-            read_bytes=rb,
-            read_stream=rs,
-            stdin=b"line\n",
-        )
-
-
-@pytest.mark.asyncio
 async def test_awk_unset_variable_prints_empty():
     rb, rs = _make_backend({})
     output, _ = await awk(
@@ -745,3 +655,89 @@ async def test_awk_out_of_range_field_prints_empty():
         stdin=b"one two\n",
     )
     assert (await _drain(output)).decode() == "\n"
+
+
+async def _run_io(program: str, stdin: bytes) -> tuple[str, int, bytes]:
+    rb, rs = _make_backend({})
+    output, io = await awk(
+        [],
+        (program, ),
+        None,
+        read_bytes=rb,
+        read_stream=rs,
+        stdin=stdin,
+    )
+    out = (await _drain(output)).decode()
+    err = io.stderr if isinstance(io.stderr, bytes) else b""
+    return out, io.exit_code, err
+
+
+@pytest.mark.asyncio
+async def test_awk_for_loop_builds_an_indent_issue_1149():
+    program = ('{indent="";for(i=1;i<NF;i++)indent=indent"    ";'
+               'print indent $NF}')
+    out = await _run_stdin(program, b"School/Courses_Materials/notes.md\n",
+                           {"F": "/"})
+    assert out == "        notes.md\n"
+
+
+@pytest.mark.parametrize(
+    "program,stdin,expected",
+    [
+        ("{x = y + 1; print x}", b"line\n", "1\n"),
+        ("{print toupper($1)}", b"line\n", "LINE\n"),
+        ('{printf "%s\\n", $1}', b"line\n", "line\n"),
+        ("{if ($1) print $1}", b"line\n", "line\n"),
+        ("length($1) ~ /1/", b"a\n", "a\n"),
+        ("NR % 2 == 0 {print}", b"a\nb\n", "b\n"),
+        ('{gsub(/a/, "b"); print}', b"banana\n", "bbnbnb\n"),
+        ("{while (i++ < 2) print i, $1}", b"x\n", "1 x\n2 x\n"),
+        ("{c[$1]++} END{print c[\"a\"], length(c)}", b"a\nb\na\n", "2 2\n"),
+        ("function twice(n){return n*2} {print twice($1)}", b"21\n", "42\n"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_awk_runs_what_the_scraper_refused(program, stdin, expected):
+    assert await _run_stdin(program, stdin) == expected
+
+
+@pytest.mark.parametrize(
+    "program,message",
+    [
+        ("{getline line; print line}",
+         "awk: getline is not supported in mirage\n"),
+        ('{print > "out.txt"}', "awk: output redirection to 'out.txt' "
+         "is not supported in mirage\n"),
+        ('{system("ls")}', "awk: system() is not supported in mirage\n"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_awk_refuses_what_it_cannot_reach(program, message):
+    out, code, err = await _run_io(program, b"a\n")
+    assert (out, code, err) == ("", 2, message.encode())
+
+
+@pytest.mark.asyncio
+async def test_awk_runtime_error_keeps_earlier_output():
+    out, code, err = await _run_io("{print $1; print 1/0; print 9}", b"a\n")
+    assert (out, code, err) == ("a\n", 2, b"awk: division by zero\n")
+
+
+@pytest.mark.asyncio
+async def test_awk_exit_code_and_end_still_runs():
+    out, code, err = await _run_io('NR==2{exit 3} {print} END{print "end"}',
+                                   b"a\nb\nc\n")
+    assert (out, code, err) == ("a\nend\n", 3, b"")
+
+
+@pytest.mark.asyncio
+async def test_awk_dev_stderr_is_the_error_stream():
+    out, code, err = await _run_io('{print "warn" > "/dev/stderr"; print}',
+                                   b"a\n")
+    assert (out, code, err) == ("a\n", 0, b"warn\n")
+
+
+@pytest.mark.asyncio
+async def test_awk_syntax_error_is_a_usage_error():
+    with pytest.raises(UsageError, match="syntax error"):
+        await _run_stdin("{print $(}", b"a\n")

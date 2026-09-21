@@ -12,12 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-export const USAGE = "awk: usage: awk [-F fs] [-v var=val] 'program' [file ...]"
-
-export const FS_ESCAPES: Readonly<Record<string, string>> = { t: '\t', n: '\n', '\\': '\\' }
-
-export interface AwkFlags {
-  readonly fieldSeparator: string | null
-  readonly assignments: readonly string[]
-  readonly programFiles: readonly string[]
-}
+export { AwkRuntimeError, AwkSyntaxError } from './errors.ts'
+export { ExitProgram, Interpreter } from './interp.ts'
+export { parse } from './parser.ts'
+export { text } from './value.ts'

@@ -12,24 +12,13 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from dataclasses import dataclass
 
-from mirage.types import PathSpec
-
-USAGE = "awk: usage: awk [-F fs] [-v var=val] 'program' [file ...]"
-
-FS_ESCAPES = {"t": "\t", "n": "\n", "\\": "\\"}
+class AwkSyntaxError(Exception):
+    pass
 
 
-@dataclass(frozen=True, slots=True)
-class AwkFlags:
-    field_separator: str | None
-    assignments: tuple[str, ...]
-    program_files: tuple[PathSpec, ...]
+class AwkRuntimeError(Exception):
+    pass
 
 
-__all__ = [
-    "AwkFlags",
-    "FS_ESCAPES",
-    "USAGE",
-]
+__all__ = ["AwkRuntimeError", "AwkSyntaxError"]
