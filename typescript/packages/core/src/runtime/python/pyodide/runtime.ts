@@ -166,6 +166,8 @@ export function stripDeniedImports(code: string, denyPackages: ReadonlySet<strin
 export interface PyodideConfig {
   autoLoadFromImports?: boolean
   bootstrapCode?: string
+  /** Trusted host module URL. Its default initializer receives Pyodide and may return cleanup. */
+  initModule?: string
   denyPackages?: readonly string[]
   /**
    * Virtual paths prepended to sys.path once the mounts are in place, so
@@ -206,6 +208,7 @@ export interface PyodideConfig {
 const PYODIDE_CONFIG_KEYS: readonly string[] = [
   'autoLoadFromImports',
   'bootstrapCode',
+  'initModule',
   'denyPackages',
   'home',
   'sysPath',
@@ -234,6 +237,7 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   private guest: PyodideExecution | null = null
   private initPromise: Promise<PyodideInterface> | null = null
   private bootstrapPromise: Promise<void> | null = null
+  private disposeModule: (() => void | Promise<void>) | null = null
   private queue: Promise<unknown> = Promise.resolve()
   private readonly autoLoadFromImports: boolean
   private readonly bootstrapCode: string | null
@@ -392,6 +396,8 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
     }
     this.guest?.close()
     this.guest = null
+    await this.disposeModule?.()
+    this.disposeModule = null
     this.bootstrapPromise = null
     this.pyodide = null
     ;(await this.worker)?.close()
@@ -423,6 +429,22 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
       ...(this.packageBaseUrl !== null ? { packageBaseUrl: this.packageBaseUrl } : {}),
       ...(this.lockFileURL !== null ? { lockFileURL: this.lockFileURL } : {}),
       ...(this.packages.length > 0 ? { packages: this.packages } : {}),
+    }).then(async (py) => {
+      const ref = (this.config as PyodideConfig).initModule
+      if (ref !== undefined) {
+        const module = (await import(ref)) as {
+          default: (runtime: PyodideInterface) => unknown
+        }
+        if (typeof module.default !== 'function') {
+          throw new TypeError('pyodide initModule must export a default initializer')
+        }
+        const dispose = await module.default(py)
+        if (dispose !== undefined && typeof dispose !== 'function') {
+          throw new TypeError('pyodide initModule must return a cleanup function or undefined')
+        }
+        this.disposeModule = (dispose as (() => void | Promise<void>) | undefined) ?? null
+      }
+      return py
     })
     this.pyodide = await this.initPromise
     if (this.bootstrapCode !== null) {

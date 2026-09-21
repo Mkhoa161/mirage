@@ -168,6 +168,16 @@ const ws = new Workspace(mounts, {
 })
 ```
 
+`pyodide.config.initModule` accepts a trusted host module URL or absolute
+Node path. Its default export receives the loaded Pyodide instance before
+`bootstrapCode` runs, and may return a cleanup function. This supports
+registering narrow JavaScript capabilities with `registerJsModule` without
+exposing host globals through `import js`. The initializer also runs inside
+the execution worker; it must not depend on caller-thread state. It has host
+privileges and belongs in deployment configuration, never agent input.
+Worker termination destroys its isolate; only in-process shutdown invokes
+the returned cleanup function, so extensions must tolerate abrupt shutdown.
+
 ## Resource limits
 
 `python3` is a command like any other: the same `command_limits`
