@@ -10,6 +10,90 @@ describe('PyodideRuntime host initializer', () => {
     expect(rt.capabilities.reach).toBe('process')
   })
 
+  it.each([false, true])(
+    'queues execution and another close behind pending cleanup (rejects: %s)',
+    async (rejects) => {
+      const ref =
+        'data:text/javascript,' +
+        encodeURIComponent(`
+export const events = []
+export const failure = new Error('pending cleanup failed')
+export let release
+const gate = new Promise(resolve => { release = resolve })
+let enter
+let installs = 0
+export const entered = new Promise(resolve => { enter = resolve })
+export default function(py) {
+  const id = ++installs
+  events.push('install ' + id)
+  py.registerJsModule('_test_lifecycle', {
+    use: () => { events.push('use ' + id); return id }
+  })
+  return async () => {
+    events.push('closing ' + id)
+    if (id === 1) {
+      enter()
+      await gate
+    }
+    py.unregisterJsModule('_test_lifecycle')
+    events.push('closed ' + id)
+    if (${String(rejects)} && id === 1) throw failure
+  }
+}`)
+      const module = (await import(ref)) as {
+        events: string[]
+        failure: Error
+        entered: Promise<void>
+        release: () => void
+      }
+      const rt = new PyodideRuntime({ config: { initModule: ref, autoLoadFromImports: false } })
+      const pending: Promise<unknown>[] = []
+      try {
+        expect((await rt.eval('from _test_lifecycle import use; use()')).value).toBe(1)
+        const closing = rt.close()
+        const closed = rejects
+          ? expect(closing).rejects.toBe(module.failure)
+          : expect(closing).resolves.toBeUndefined()
+        pending.push(closed)
+        await module.entered
+        const run = rt.run({
+          code: 'from _test_lifecycle import use; print(use())',
+          args: [],
+          env: {},
+          stdin: null,
+        })
+        const evaluation = rt.eval('from _test_lifecycle import use; use()')
+        const closeAgain = rt.close()
+        pending.push(run, evaluation, closeAgain)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(module.events).toEqual(['install 1', 'use 1', 'closing 1'])
+        module.release()
+        await closed
+        const result = await run
+        expect(result.exitCode).toBe(0)
+        expect(new TextDecoder().decode(result.stdout)).toBe('2\n')
+        expect((await evaluation).value).toBe(2)
+        await closeAgain
+        expect(module.events).toEqual([
+          'install 1',
+          'use 1',
+          'closing 1',
+          'closed 1',
+          'install 2',
+          'use 2',
+          'use 2',
+          'closing 2',
+          'closed 2',
+        ])
+      } finally {
+        module.release()
+        await Promise.allSettled(pending)
+        await rt.close()
+      }
+    },
+    60_000,
+  )
+
   it.each(['sync', 'async'])(
     'finishes teardown after %s cleanup fails',
     async (kind) => {

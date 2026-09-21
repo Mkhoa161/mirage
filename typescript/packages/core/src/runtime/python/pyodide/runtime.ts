@@ -390,12 +390,14 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
     }
   }
 
-  override async close(): Promise<void> {
-    try {
-      await this.queue
-    } catch {
-      // queue failures already surfaced to individual callers; safe to swallow here
-    }
+  override close(): Promise<void> {
+    const task = (): Promise<void> => this.closeOne()
+    const next = this.queue.then(task, task)
+    this.queue = next.catch(() => undefined)
+    return next
+  }
+
+  private async closeOne(): Promise<void> {
     this.guest?.close()
     this.guest = null
     const dispose = this.disposeModule
