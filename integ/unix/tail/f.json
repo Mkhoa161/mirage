@@ -212,7 +212,7 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "mkdir -p /data/tfd3; printf 'a\\n' > /data/tfd3/f; (sleep 1.5; rm /data/tfd3/f; mkdir /data/tfd3/f) & tail --follow=name -s 5 /data/tfd3/f; echo code=$?",
+      "command": "mkdir -p /data/tfd3; printf 'a\\n' > /data/tfd3/f; (sleep 3; rm /data/tfd3/f; mkdir /data/tfd3/f) & tail --follow=name -s 8 /data/tfd3/f; echo code=$?",
       "expect": {
         "exit": 0,
         "stdout": "a\ncode=1\n",
@@ -222,7 +222,7 @@
         "follow",
         "s"
       ],
-      "note": "Two margins, and only one of them was ever tight. The 1.5s sleep gives tail time to open and read before the file goes; the poll interval gives `rm` plus `mkdir` time to BOTH land before tail looks again. A poll that falls between them stats ENOENT and reports `has become inaccessible` instead of the EISDIR answer this case is about, which is how it flaked on the remote-backed targets where each of those two ops is a round trip. -s 5 widens the second margin to 3.5s and leaves the first alone; lowering the sleep instead would have traded one race for the other."
+      "note": "The only racing case in this file, and both of its margins have now failed once on dropbox-root. The sleep gives tail time to stat AND download before the file goes; the poll interval gives `rm` plus `mkdir` time to both land before tail looks again. Miss the first and tail's download 409s on a path the stat had just found, so the initial line never prints; miss the second and a poll lands between the two writes, stats ENOENT and reports `has become inaccessible` instead of the EISDIR answer this case is about. Each margin is two round trips against a fake shared with every other target, so the budget is contention, not backend latency: sleep 3 with -s 8 leaves 3s for the first and 5s for the second, against the 1.5s and 1.5s that have each broken."
     },
     {
       "id": "tail_follow_quotes_a_multibyte_word",
