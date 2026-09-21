@@ -825,14 +825,6 @@ function outputLineSize(env: Record<string, string> | undefined): number {
   return size
 }
 
-// GNU's `out_col`: how full the current output line is. One counter for
-// the whole run rather than one per value. It used to amount to the same
-// thing, because every statement that printed ended in a newline; `print`
-// does not, so a string it wrote moves the column a later value folds at,
-// and the counter has to outlive the statement. A folded line carries
-// `line_size - 2` bytes and then a backslash, so the default 70 puts 68
-// of them on a line and makes it 69 bytes wide. Only written output
-// folds: GNU's diagnostics do not, however long they are.
 // Where the UTF-8 encoding of a code point changes width. GNU counts the
 // bytes it writes, not the characters, so a two-byte `é` moves the fold
 // twice as far as an `x`; derived from the code point rather than by
@@ -851,6 +843,11 @@ function columnWidth(char: string): number {
   return 4
 }
 
+// GNU's `out_col`: how full the current output line is. One counter for
+// the whole run, not one per value: `print` ends in no newline, so a
+// string it wrote moves the column a later value folds at. Only written
+// output folds; a diagnostic never does. A `lineSize` of 0 folds
+// nothing, however long the output is.
 class OutputColumn {
   col = 0
   constructor(private readonly lineSize: number) {}
@@ -868,12 +865,14 @@ class OutputColumn {
         continue
       }
       const width = columnWidth(char)
-      // A character that would cross the boundary moves whole to the next
-      // line. GNU, writing one byte at a time, splits it there instead
-      // and emits bytes that are no longer UTF-8; the fold lands in the
-      // same place whenever a character does not straddle it, which is
-      // every ASCII one. The `col !== 0` guard is what keeps a character
-      // wider than the whole line from folding forever.
+      // A folded line carries `lineSize - 2` bytes and then a backslash,
+      // so the default 70 puts 68 of them on a line and makes it 69
+      // wide. A character that would cross that boundary moves whole to
+      // the next line; GNU, writing one byte at a time, splits it there
+      // instead and emits bytes that are no longer UTF-8. The fold lands
+      // in the same place whenever a character does not straddle it,
+      // which is every ASCII one. The `col !== 0` guard keeps a
+      // character wider than the whole line from folding forever.
       if (this.lineSize !== 0 && this.col !== 0 && this.col + width > this.lineSize - 2) {
         out.push('\\\n')
         this.col = 0
