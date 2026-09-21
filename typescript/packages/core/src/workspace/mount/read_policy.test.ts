@@ -102,6 +102,19 @@ describe('checkReadCapability', () => {
     }).toThrow(message)
   })
 
+  // `ReadPolicy` is a string-const object, so a runtime spec carrying
+  // 'FRESH' or 'banana' matched no `===` and the verdict silently
+  // no-opped on the one door that skips resolveReadSpec. Worse on a
+  // capable backend: it mounted and then read as `bounded` everywhere.
+  it.each(['FRESH', 'banana', 'PINNED'])('judges the wire string %s like a member', (policy) => {
+    expect(() => {
+      checkReadCapability('/d/', stub('ram', false, false), {
+        policy: policy as never,
+        ttl: 30,
+      })
+    }).toThrow()
+  })
+
   it('refuses pinned, naming the missing layer', () => {
     expect(() => {
       checkReadCapability('/d/', stub('ram', false, false), {

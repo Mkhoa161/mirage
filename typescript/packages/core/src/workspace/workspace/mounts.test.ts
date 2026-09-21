@@ -75,6 +75,18 @@ describe('normalizeMounts', () => {
     expect(entry.read.policy).toBe(ReadPolicy.BOUNDED)
   })
 
+  // Downstream -- the gate, the routing reconcile -- all compare with
+  // `===`, so the spec has to be normalized where it becomes live mount
+  // state or a capable backend mounts `fresh` and behaves as bounded.
+  it('stores the coerced policy, not the wire string it was given', () => {
+    const entry = new MountEntry({
+      prefix: '/a/',
+      vfs: new RAMVFS(),
+      read: { policy: 'BOUNDED' as never, ttl: 30 },
+    })
+    expect(entry.read.policy).toBe(ReadPolicy.BOUNDED)
+  })
+
   it('judges a mount that declared nothing against the default', () => {
     const fresh: ReadSpec = { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL }
     expect(() => normalizeMounts({ '/a': new RAMVFS() }, fresh)).toThrow(

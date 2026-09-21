@@ -31,22 +31,36 @@ import { cachesReads, readRevalidatable, type VFS } from '../../vfs/base.ts'
  * @throws if the policy name is not a known one, or the bound is not a
  *   positive whole number of seconds.
  */
-export function resolveReadSpec(policy: unknown, ttl: unknown): ReadSpec {
-  let resolved: ReadPolicy = ReadPolicy.BOUNDED
-  // null and undefined both mean absent: YAML's bare `read:` parses as
-  // null, and reading it as a string would die on .toLowerCase() rather
-  // than answering with this door's own refusal.
-  if (policy !== undefined && policy !== null && policy !== '') {
-    if (typeof policy !== 'string') {
-      throw new Error(`unknown read policy ${JSON.stringify(policy)}; expected a policy name`)
-    }
-    const lowered = policy.toLowerCase()
-    const known = Object.values(ReadPolicy) as string[]
-    if (!known.includes(lowered)) {
-      throw new Error(`unknown read policy '${policy}'; expected one of: ${known.join(', ')}`)
-    }
-    resolved = lowered as ReadPolicy
+/**
+ * Coerce one declared policy name to its `ReadPolicy`, or refuse it.
+ *
+ * Split out so the mount door can run it on a spec that never passed
+ * through `resolveReadSpec`: `ReadPolicy` is a plain string-const object, so
+ * a runtime `ReadSpec` carrying `'FRESH'` or `'banana'` matches no `===` in
+ * the verdict and would mount and then read as `bounded` everywhere. Absent
+ * (`undefined`, `null`, `''`) means bounded, which is what YAML's bare
+ * `read:` parses as. Idempotent on a member. Mirrors Python's
+ * `coerce_read_policy`.
+ *
+ * @throws if the value is not a known policy name.
+ */
+export function coerceReadPolicy(value: unknown): ReadPolicy {
+  if (value === undefined || value === null || value === '') return ReadPolicy.BOUNDED
+  if (typeof value !== 'string') {
+    throw new Error(`unknown read policy ${JSON.stringify(value)}; expected a policy name`)
   }
+  const lowered = value.toLowerCase()
+  const known = Object.values(ReadPolicy) as string[]
+  if (!known.includes(lowered)) {
+    throw new Error(`unknown read policy '${value}'; expected one of: ${known.join(', ')}`)
+  }
+  return lowered as ReadPolicy
+}
+
+export function resolveReadSpec(policy: unknown, ttl: unknown): ReadSpec {
+  // Policy first, bound second; the Python twin matches, or one document
+  // wrong in both ways yields two different refusals across the hosts.
+  const resolved = coerceReadPolicy(policy)
   const bound = ttl ?? DEFAULT_READ_TTL
   // A non-positive bound is not a very short one: the store marks such an
   // entry expired the moment it is written (redis EXPIRE <= 0 deletes the
@@ -77,6 +91,12 @@ export function resolveReadSpec(policy: unknown, ttl: unknown): ReadSpec {
  * @throws if the backend cannot honour the declared policy.
  */
 export function checkReadCapability(prefix: string, vfs: VFS, spec: ReadSpec): void {
+  // Coerced, not compared raw. `ReadPolicy` is a string-const object, so a
+  // runtime `ReadSpec` carrying `'FRESH'` or `'banana'` -- what an untyped
+  // caller reaches the programmatic door with -- matches neither `===`
+  // below and the whole verdict silently no-ops. `MountEntry` stores the
+  // coerced spec for the same reason. Python coerces at both points too.
+  const policy = coerceReadPolicy(spec.policy)
   // Before the policy dispatch, because a bound has to be usable whatever
   // the policy is. `resolveReadSpec` refuses a bad one at the YAML and
   // snapshot doors, but a `ReadSpec` handed straight to `Workspace` or
@@ -94,13 +114,13 @@ export function checkReadCapability(prefix: string, vfs: VFS, spec: ReadSpec): v
       `mount '${prefix}': read: ttl must be at least 1 second, got ${String(spec.ttl)}`,
     )
   }
-  if (spec.policy === ReadPolicy.PINNED) {
+  if (policy === ReadPolicy.PINNED) {
     throw new Error(
       `mount '${prefix}': read: pinned needs a version layer to pin to, and ` +
         'mirage has none; use fresh or bounded',
     )
   }
-  if (spec.policy !== ReadPolicy.FRESH) return
+  if (policy !== ReadPolicy.FRESH) return
   if (!cachesReads(vfs)) {
     throw new Error(
       `mount '${prefix}': read: fresh needs a resource that caches reads; ` +

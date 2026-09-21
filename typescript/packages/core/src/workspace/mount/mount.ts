@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { mountKey } from '../../utils/key_prefix.ts'
+import { coerceReadPolicy } from './read_policy.ts'
 import { KeyLock } from '../../cache/lock.ts'
 import type { IndexCacheStore } from '../../cache/index/store.ts'
 import { type Accessor, NOOPAccessor } from '../../accessor/base.ts'
@@ -145,13 +146,21 @@ export class MountEntry {
     this.prefix = prefix
     this.vfs = init.vfs
     this.mode = init.mode ?? MountMode.READ
-    // Frozen copy, not the caller's object. Python's `ReadSpec` is a
-    // frozen dataclass, so the same spec cannot be edited after the
-    // mount-time verdict passed it; a plain JS object can, which would
-    // let a caller flip a RAM mount to `fresh` behind the verdict's
-    // back or slip a ttl the bound check already refused into every
-    // later cache write.
-    this.read = Object.freeze({ ...(init.read ?? DEFAULT_READ_SPEC) })
+    // A frozen copy carrying the coerced policy, not the caller's object.
+    //
+    // Frozen because Python's `ReadSpec` is a frozen dataclass, so the
+    // same spec cannot be edited after the mount-time verdict passed it;
+    // a plain JS object can, which would let a caller flip a RAM mount to
+    // `fresh` behind the verdict's back.
+    //
+    // Coerced because `ReadPolicy` is a string-const object: a runtime
+    // spec carrying `'FRESH'` matches no `===` downstream -- the gate, the
+    // routing reconcile -- so the mount would pass its capability check
+    // and then read as `bounded` everywhere, which is the silent
+    // downgrade the policy exists to remove. The Python twin normalizes
+    // at this same point.
+    const spec = init.read ?? DEFAULT_READ_SPEC
+    this.read = Object.freeze({ ...spec, policy: coerceReadPolicy(spec.policy) })
   }
 
   /** Prepare and retain the VFS while its glob hook reads metadata. */
