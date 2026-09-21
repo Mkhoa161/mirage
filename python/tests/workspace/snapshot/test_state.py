@@ -649,21 +649,30 @@ async def test_an_unversioned_state_dict_is_refused_not_keyerrored():
 
 
 @pytest.mark.asyncio
-async def test_a_v4_entry_missing_the_read_key_raises_rather_than_defaulting():
-    """Required, never `.get(default)`.
+@pytest.mark.parametrize("key", [MountKey.READ, MountKey.TTL])
+async def test_a_v4_entry_missing_the_read_key_raises_rather_than_defaulting(
+        key):
+    """Required, never `.get(default)`, and named rather than subscripted.
 
     A dict labelled v4 with the key missing would otherwise install a
     default on a mount that was saved carrying something else -- the
-    silent-downgrade failure the whole policy exists to remove.
+    silent-downgrade failure the whole policy exists to remove. The bare
+    subscript said so as `KeyError: 'read'`, which names neither the
+    mount nor the fix, where TypeScript's loader named both; a snapshot
+    written by a foreign writer is the one that arrives without the key,
+    so the two hosts have to refuse it the same way.
     """
     ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
     try:
         state = await to_state_dict(ws)
     finally:
         await ws.close()
-    del state[StateKey.MOUNTS][0][MountKey.READ]
-    with pytest.raises(KeyError, match="read"):
+    del state[StateKey.MOUNTS][0][key]
+    with pytest.raises(ValueError) as exc:
         build_mount_args(state)
+    assert "/d/" in str(exc.value)
+    assert "missing its read policy" in str(exc.value)
+    assert "regenerate the snapshot" in str(exc.value)
 
 
 @pytest.mark.asyncio
@@ -722,19 +731,6 @@ async def test_an_overridden_mount_takes_the_default_read_spec():
         assert mount.read == ReadSpec()
     finally:
         await restored.close()
-
-
-@pytest.mark.asyncio
-async def test_a_v4_entry_missing_only_the_ttl_raises_too():
-    """A separate subscript from ``read``, so a separate case."""
-    ws = Workspace({"/d/": RAMVFS()}, mode=MountMode.WRITE)
-    try:
-        state = await to_state_dict(ws)
-    finally:
-        await ws.close()
-    del state[StateKey.MOUNTS][0][MountKey.TTL]
-    with pytest.raises(KeyError, match="ttl"):
-        build_mount_args(state)
 
 
 @pytest.mark.asyncio

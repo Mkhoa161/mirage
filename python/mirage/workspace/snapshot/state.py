@@ -310,12 +310,20 @@ def build_mount_args(state: dict[str, Any],
         prefix = norm_mount_prefix(m[MountKey.PREFIX])
         prov = (overrides[prefix]
                 if prefix in overrides else _construct_vfs(m))
-        # Subscripted, never `.get(default)`: a dict labelled v4 with the
-        # key missing would silently install a default on a mount that
-        # was saved otherwise, which is the whole failure this version
-        # bump exists to prevent. Through the coercer, so a junk policy
-        # or a null/non-positive bound is refused here rather than
-        # restoring a mount whose bound can never expire.
+        # Named, never `.get(default)` and never a bare subscript: a
+        # dict labelled v4 with the key missing would silently install a
+        # default on a mount that was saved otherwise, which is the
+        # whole failure this version bump exists to prevent -- and the
+        # subscript said so as `KeyError: 'read'`, which names neither
+        # the mount nor the fix. `mode`, subscripted below, is the same
+        # shape of required key. TypeScript refuses it here too.
+        if MountKey.READ not in m or MountKey.TTL not in m:
+            raise ValueError(
+                f"Workspace.load: mount {m[MountKey.PREFIX]!r} is missing "
+                "its read policy; regenerate the snapshot")
+        # Through the coercer, so a junk policy or a null/non-positive
+        # bound is refused here rather than restoring a mount whose
+        # bound can never expire.
         read = resolve_read_spec(m[MountKey.READ], m[MountKey.TTL])
         # The saved policy belongs to the backend that was saved. A mount
         # handed back through `mounts=` -- which a redacted-credential
