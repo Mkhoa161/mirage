@@ -65,6 +65,9 @@ describe('awk interpreter', () => {
   it.each([
     ['BEGIN{print 7/2, 7%3, 2^10, -2^2, 0.1+0.2, 1/3}', '3.5 1 1024 -4 0.3 0.333333\n'],
     ['BEGIN{i=5; print i++, i, ++i, i--, --i}', '5 6 7 7 5\n'],
+    // A float assignment in BEGIN, which the scraper this replaced
+    // refused as an unsupported construct.
+    ['BEGIN {a=7*7.172100067138672; print a}', '50.2047\n'],
     ['BEGIN{x=1; y=2; print x y, x+y, x" "y}', '12 3 1 2\n'],
     ['BEGIN{print x+0, "[" x "]", (x==0), (x=="")}', '0 [] 1 1\n'],
     ['BEGIN{print ("10"<"9"), (10<9), ("abc"<1)}', '1 0 0\n'],

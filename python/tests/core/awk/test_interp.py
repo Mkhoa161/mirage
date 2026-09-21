@@ -83,6 +83,12 @@ def test_begin_programs(program, expected):
     assert run(program) == expected
 
 
+def test_begin_float_assignment():
+    # Issue #1156: the scraper this interpreter replaced refused an
+    # assignment in BEGIN as an unsupported construct.
+    assert run("BEGIN {a=7*7.172100067138672; print a}") == "50.2047\n"
+
+
 def test_field_assignment_rebuilds_the_record():
     assert run("{$2=\"X\"; print; print NF}", ["a b c"]) == "a X c\n3\n"
     assert run("{NF=2; print}", ["a b c"]) == "a b\n"
