@@ -50,11 +50,12 @@ export interface MtimeNode {
   hi: number | null
 }
 
-// A `-prune` reached past time tests the walk could not decide. The entry
-// is kept whole: whether the prune stands is settled by evaluating the
-// expression again with the directory's mtime, since a failing test may
-// send GNU down another arm that prunes anyway (`( -mtime 1 -o -type d )
-// -prune`).
+// A directory whose `-prune` decision waited on time tests the walk could
+// not decide: a prune reached past one, or every prune skipped on the
+// strength of one (`-mtime 1 -o -prune`). The entry is kept whole: whether
+// the prune stands is settled by evaluating the expression again with the
+// directory's mtime, since a failing test may send GNU down another arm
+// that prunes anyway (`( -mtime 1 -o -type d ) -prune`).
 export interface PendingPrune {
   entry: FindEntry
 }
@@ -98,16 +99,22 @@ export type PredNode =
   | MtimeNode
 
 // What evaluating an expression on one entry did besides answer: whether an
-// action was reached, and the time tests the entry carried no mtime for on
-// the path that decided the answer so far; a branch whose outcome they
-// could not have changed drops them again.
+// action was reached, whether a prune node recorded the entry (firm or
+// pending), and the time tests the entry carried no mtime for on the path
+// that decided the answer so far; a branch whose outcome they could not
+// have changed drops them again.
 export interface Effects {
   acted: boolean
+  pruned: boolean
   deferred: MtimeNode[]
 }
 
+function freshEffects(): Effects {
+  return { acted: false, pruned: false, deferred: [] }
+}
+
 export function evalPredicate(node: PredNode, entry: FindEntry): boolean {
-  return evaluate(node, entry, { acted: false, deferred: [] })
+  return evaluate(node, entry, freshEffects())
 }
 
 // Whether the expression holds for one entry, recording what it did.
@@ -130,6 +137,7 @@ export function evaluate(node: PredNode, entry: FindEntry, effects: Effects): bo
       } else if (entry.kind === 'd') {
         node.pruned.push(entry.key)
       }
+      effects.pruned = effects.pruned || entry.kind === 'd'
       return true
     case 'mtime':
       if (entry.mtime === null || entry.mtime === undefined) {
@@ -308,7 +316,7 @@ export function settlePrunes(node: PredNode, mtimes: ReadonlyMap<string, number 
   for (const [key, entry] of decided) {
     const mtime = mtimes.get(key) ?? null
     const tree = mtime === null ? timeTestsFailing(node) : node
-    evaluate(tree, { ...entry, mtime }, { acted: false, deferred: [] })
+    evaluate(tree, { ...entry, mtime }, freshEffects())
   }
 }
 
@@ -366,8 +374,16 @@ export function keep(
   minDepth: number | null | undefined,
 ): boolean {
   if (minDepth !== null && minDepth !== undefined && entry.depth < minDepth) return false
-  const effects: Effects = { acted: false, deferred: [] }
+  const effects = freshEffects()
   const matched = evaluate(tree, entry, effects)
+  if (entry.kind === 'd' && effects.deferred.length > 0 && !effects.pruned) {
+    // The answer passed every -prune on the strength of an undecided test,
+    // and the directory's mtime may send it into one (`-mtime 1 -o
+    // -prune`), so it waits with the prunes it might reach, on the first
+    // of them.
+    const [first] = pruneNodes(tree)
+    if (first !== undefined) first.pending.push({ entry })
+  }
   return treeHasAction(tree) ? effects.acted : matched
 }
 

@@ -384,6 +384,33 @@ def test_settling_evaluates_the_expression_again():
     assert pruned_keys(tree) == ["/d"]
 
 
+def test_a_time_test_steering_past_every_prune_leaves_the_directory_pending():
+    # `-mtime 1 -o -prune`: without its mtime the directory takes the
+    # first arm, but GNU prunes it when the test fails, so it waits.
+    def either() -> Or:
+        return bind_tree(Or([Mtime(100.0, None), Prune()]), "")
+
+    tree = either()
+    assert keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    assert [p.entry.key for p in pending_prunes(tree)] == ["/d"]
+    assert pruned_keys(tree) == ["/d"]
+    settle_prunes(tree, {"/d": 150.0})
+    assert pruned_keys(tree) == []
+    tree = either()
+    keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    settle_prunes(tree, {"/d": 50.0})
+    assert pruned_keys(tree) == ["/d"]
+    # A file has nothing to prune, a known mtime decides at once, and a
+    # tree without -prune has nothing to wait for.
+    tree = either()
+    assert keep(_entry(key="/f", name="f", kind="f"), tree, None)
+    assert keep(_entry(key="/d", name="d", kind="d", mtime=150.0), tree, None)
+    assert pending_prunes(tree) == []
+    tree = bind_tree(Or([Mtime(100.0, None), Type("d")]), "")
+    assert keep(_entry(key="/d", name="d", kind="d"), tree, None)
+    assert pending_prunes(tree) == []
+
+
 def test_mindepth_prunes_nothing_above_its_level():
     tree = bind_tree(Or([And([Name("skip"), Prune()]), Action("print")]), "")
     assert keep(_entry(key="/skip", name="skip", kind="d", depth=1), tree,

@@ -883,6 +883,26 @@
         "newermt",
         "prune"
       ]
+    },
+    {
+      "id": "find_prune_on_the_arm_a_time_test_fails_into",
+      "seq": 790,
+      "targets": [
+        "ram",
+        "disk"
+      ],
+      "command": "find /data/aging -mindepth 1 \\( -mtime -3650 -print \\) -o -prune",
+      "expect": {
+        "exit": 0,
+        "stdout": "/data/aging/new\n/data/aging/new/y\n/data/aging/new/y/g\n",
+        "stderr": ""
+      },
+      "flags": [
+        "mindepth",
+        "mtime",
+        "print",
+        "prune"
+      ]
     }
   ]
 }

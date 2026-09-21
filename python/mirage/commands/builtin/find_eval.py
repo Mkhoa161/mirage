@@ -173,7 +173,9 @@ class Mtime:
 
 @dataclass(frozen=True, slots=True)
 class PendingPrune:
-    """A ``-prune`` reached past time tests the walk could not decide.
+    """A directory whose ``-prune`` decision waited on time tests the
+    walk could not decide: a prune reached past one, or every prune
+    skipped on the strength of one (``-mtime 1 -o -prune``).
 
     The entry is kept whole: whether the prune stands is settled by
     evaluating the expression again with the directory's mtime, since a
@@ -218,11 +220,14 @@ class Effects:
 
     Args:
         acted (bool): whether an ``Action`` node was reached.
+        pruned (bool): whether a ``Prune`` node recorded the entry, firm
+            or pending.
         deferred (list[Mtime]): the time tests the entry carried no mtime
             for on the path that decided the answer so far; a branch
             whose outcome they could not have changed drops them again.
     """
     acted: bool = False
+    pruned: bool = False
     deferred: list[Mtime] = field(default_factory=list)
 
 
@@ -304,6 +309,7 @@ def evaluate(node: PredNode, entry: FindEntry, effects: Effects) -> bool:
             node.pending.append(PendingPrune(entry))
         elif entry.kind == "d":
             node.pruned.append(entry.key)
+        effects.pruned = effects.pruned or entry.kind == "d"
         return True
     if isinstance(node, Mtime):
         if entry.mtime is None:
@@ -584,6 +590,13 @@ def keep(entry: FindEntry, tree: PredNode, min_depth: int | None) -> bool:
         return False
     effects = Effects()
     matched = evaluate(tree, entry, effects)
+    if entry.kind == "d" and effects.deferred and not effects.pruned:
+        # The answer passed every -prune on the strength of an undecided
+        # test, and the directory's mtime may send it into one
+        # (`-mtime 1 -o -prune`), so it waits with the prunes it might
+        # reach, on the first of them.
+        for prune in _prune_nodes(tree)[:1]:
+            prune.pending.append(PendingPrune(entry))
     return effects.acted if tree_has_action(tree) else matched
 
 

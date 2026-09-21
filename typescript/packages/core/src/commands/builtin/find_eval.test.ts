@@ -546,6 +546,50 @@ describe('time tests and -prune', () => {
     expect(prunedKeys(tree)).toEqual(['/d'])
   })
 
+  it('a time test steering past every prune leaves the directory pending', () => {
+    // `-mtime 1 -o -prune`: without its mtime the directory takes the first
+    // arm, but GNU prunes it when the test fails, so it waits.
+    const either = (): PredNode =>
+      bindTree(
+        {
+          op: 'or',
+          kids: [
+            { op: 'mtime', lo: 100, hi: null },
+            { op: 'prune', pruned: [], pending: [] },
+          ],
+        },
+        '',
+      )
+    let tree = either()
+    expect(keep(entry({ key: '/d', name: 'd', kind: 'd' }), tree, null)).toBe(true)
+    expect(pendingPrunes(tree).map((p) => p.entry.key)).toEqual(['/d'])
+    expect(prunedKeys(tree)).toEqual(['/d'])
+    settlePrunes(tree, new Map([['/d', 150]]))
+    expect(prunedKeys(tree)).toEqual([])
+    tree = either()
+    keep(entry({ key: '/d', name: 'd', kind: 'd' }), tree, null)
+    settlePrunes(tree, new Map([['/d', 50]]))
+    expect(prunedKeys(tree)).toEqual(['/d'])
+    // A file has nothing to prune, a known mtime decides at once, and a
+    // tree without -prune has nothing to wait for.
+    tree = either()
+    expect(keep(entry({ key: '/f', name: 'f', kind: 'f' }), tree, null)).toBe(true)
+    expect(keep(entry({ key: '/d', name: 'd', kind: 'd', mtime: 150 }), tree, null)).toBe(true)
+    expect(pendingPrunes(tree)).toEqual([])
+    tree = bindTree(
+      {
+        op: 'or',
+        kids: [
+          { op: 'mtime', lo: 100, hi: null },
+          { op: 'type', kind: 'd' },
+        ],
+      },
+      '',
+    )
+    expect(keep(entry({ key: '/d', name: 'd', kind: 'd' }), tree, null)).toBe(true)
+    expect(pendingPrunes(tree)).toEqual([])
+  })
+
   it('settling evaluates the expression again', () => {
     // `( -mtime 1 -o -type d ) -prune`: a directory failing the time test
     // still reaches the prune through -type d, as GNU's does.

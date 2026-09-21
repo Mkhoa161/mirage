@@ -255,7 +255,8 @@ dates are refused. `-newer` and `-newermt` must be in a top-level AND chain;
 placing them under OR, negation, or parentheses is refused. Repeated time
 tests in that chain intersect, so `-newer old -newer new` keeps only what is
 newer than both; `-mtime` tests under `-o` widen to the union of their
-windows, which can match more than GNU. A time test keeps its place before
+windows, which can match more than GNU, while a `-prune` on the other arm
+still fires exactly where GNU's does. A time test keeps its place before
 or after `-prune`: `find d -newermt X -prune` skips the contents of the
 directories newer than X alone, and `-prune -newermt X` skips every
 directory's contents and prints the newer ones, as GNU orders them. A
