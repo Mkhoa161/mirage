@@ -2,6 +2,7 @@ name: Integ
 
 permissions:
   contents: read
+  actions: read
 
 "on":
   push:
@@ -284,6 +285,7 @@ jobs:
       - name: Download TypeScript build outputs
         uses: actions/download-artifact@v8
         with:
+          github-token: ${{ github.token }}
           name: integ-typescript-dist
           path: typescript/packages
 
@@ -699,6 +701,7 @@ jobs:
       - name: Download TypeScript build outputs
         uses: actions/download-artifact@v8
         with:
+          github-token: ${{ github.token }}
           name: integ-typescript-dist
           path: typescript/packages
 
@@ -1038,6 +1041,7 @@ jobs:
       - name: Download TypeScript build outputs
         uses: actions/download-artifact@v8
         with:
+          github-token: ${{ github.token }}
           name: integ-typescript-dist
           path: typescript/packages
 
@@ -1366,6 +1370,7 @@ jobs:
       - name: Download TypeScript build outputs
         uses: actions/download-artifact@v8
         with:
+          github-token: ${{ github.token }}
           name: integ-typescript-dist
           path: typescript/packages
 
@@ -1497,6 +1502,7 @@ jobs:
       - name: Download TypeScript build outputs
         uses: actions/download-artifact@v8
         with:
+          github-token: ${{ github.token }}
           name: integ-typescript-dist
           path: typescript/packages
 
@@ -1591,6 +1597,7 @@ jobs:
       - name: Download TypeScript build outputs
         uses: actions/download-artifact@v8
         with:
+          github-token: ${{ github.token }}
           name: integ-typescript-dist
           path: typescript/packages
 

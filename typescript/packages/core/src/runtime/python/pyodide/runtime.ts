@@ -26,6 +26,7 @@ import type {
   RuntimeContext,
   RunResult,
   RuntimeOptions,
+  RuntimeReach,
 } from '../../types.ts'
 import {
   createPyodideInterrupter,
@@ -166,6 +167,8 @@ export function stripDeniedImports(code: string, denyPackages: ReadonlySet<strin
 export interface PyodideConfig {
   autoLoadFromImports?: boolean
   bootstrapCode?: string
+  /** Trusted host module URL. Its default initializer receives Pyodide and may return cleanup. */
+  initModule?: string
   denyPackages?: readonly string[]
   /**
    * Virtual paths prepended to sys.path once the mounts are in place, so
@@ -206,6 +209,7 @@ export interface PyodideConfig {
 const PYODIDE_CONFIG_KEYS: readonly string[] = [
   'autoLoadFromImports',
   'bootstrapCode',
+  'initModule',
   'denyPackages',
   'home',
   'sysPath',
@@ -226,14 +230,15 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   // so file effects pass the workspace gate, and loader.ts seals the
   // `js` module (null-prototype jsglobals) so guest code cannot reach
   // js.process or js.fetch either. Both doors closed is what makes this
-  // 'workspace'; jsglobals.test.ts pins the seal.
-  override readonly reach = 'workspace'
+  // 'workspace' unless a trusted initializer installs host capabilities.
+  override readonly reach: RuntimeReach
   override readonly filesystem = ['read', 'write', 'list', 'stat', 'glob'] as const
   readonly [EVALUATOR] = true as const
   private pyodide: PyodideInterface | null = null
   private guest: PyodideExecution | null = null
   private initPromise: Promise<PyodideInterface> | null = null
   private bootstrapPromise: Promise<void> | null = null
+  private disposeModule: (() => void | Promise<void>) | null = null
   private queue: Promise<unknown> = Promise.resolve()
   private readonly autoLoadFromImports: boolean
   private readonly bootstrapCode: string | null
@@ -272,6 +277,7 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
   ) {
     super(options, PYODIDE_CONFIG_KEYS)
     const config = this.config as PyodideConfig
+    this.reach = config.initModule === undefined ? 'workspace' : 'process'
     this.autoLoadFromImports = config.autoLoadFromImports ?? true
     this.bootstrapCode = config.bootstrapCode ?? null
     this.denyPackages = new Set(config.denyPackages ?? [])
@@ -384,24 +390,36 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
     }
   }
 
-  override async close(): Promise<void> {
-    try {
-      await this.queue
-    } catch {
-      // queue failures already surfaced to individual callers; safe to swallow here
-    }
+  override close(): Promise<void> {
+    const task = (): Promise<void> => this.closeOne()
+    const next = this.queue.then(task, task)
+    this.queue = next.catch(() => undefined)
+    return next
+  }
+
+  private async closeOne(): Promise<void> {
     this.guest?.close()
     this.guest = null
-    this.bootstrapPromise = null
-    this.pyodide = null
-    ;(await this.worker)?.close()
-    this.worker = null
-    this.initPromise = null
-    this.vfs = null
-    this.mounted.clear()
-    this.interrupter?.close()
-    this.interrupter = null
-    this.interrupterTried = false
+    const dispose = this.disposeModule
+    this.disposeModule = null
+    try {
+      await dispose?.()
+    } finally {
+      this.bootstrapPromise = null
+      this.pyodide = null
+      const worker = this.worker
+      this.worker = null
+      this.initPromise = null
+      this.vfs = null
+      this.mounted.clear()
+      try {
+        ;(await worker)?.close()
+      } finally {
+        this.interrupter?.close()
+        this.interrupter = null
+        this.interrupterTried = false
+      }
+    }
   }
 
   private async wireInterruptIfNeeded(pyodide: PyodideInterface): Promise<void> {
@@ -423,6 +441,22 @@ export class PyodideRuntime extends PythonRuntime implements Evaluator {
       ...(this.packageBaseUrl !== null ? { packageBaseUrl: this.packageBaseUrl } : {}),
       ...(this.lockFileURL !== null ? { lockFileURL: this.lockFileURL } : {}),
       ...(this.packages.length > 0 ? { packages: this.packages } : {}),
+    }).then(async (py) => {
+      const ref = (this.config as PyodideConfig).initModule
+      if (ref !== undefined) {
+        const module = (await import(ref)) as {
+          default: (runtime: PyodideInterface) => unknown
+        }
+        if (typeof module.default !== 'function') {
+          throw new TypeError('pyodide initModule must export a default initializer')
+        }
+        const dispose = await module.default(py)
+        if (dispose !== undefined && typeof dispose !== 'function') {
+          throw new TypeError('pyodide initModule must return a cleanup function or undefined')
+        }
+        this.disposeModule = (dispose as (() => void | Promise<void>) | undefined) ?? null
+      }
+      return py
     })
     this.pyodide = await this.initPromise
     if (this.bootstrapCode !== null) {
