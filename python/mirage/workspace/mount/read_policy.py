@@ -12,7 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-from mirage.types import DEFAULT_READ_TTL, ReadPolicy, ReadSpec
+from mirage.types import DEFAULT_READ_TTL, JsonValue, ReadPolicy, ReadSpec
 from mirage.vfs.base import BaseVFS
 
 
@@ -54,8 +54,43 @@ def coerce_read_policy(value: "str | ReadPolicy | None") -> ReadPolicy:
                          f"{known}") from None
 
 
+def coerce_read_ttl(value: JsonValue) -> int:
+    """Coerce a declared bound to a whole number of seconds.
+
+    Every door that reads a bound off a document runs this, so one
+    scalar is judged the same whether it came from YAML or from a
+    snapshot's JSON.
+
+    An integral float is a bound, not a typo: JavaScript has one number
+    type, so `ttl: 60.0` reaches ``coerceReadPolicy``'s twin as plain
+    `60` and there is no predicate TypeScript could write that tells the
+    two spellings apart. Refusing it here would load a document on one
+    host and fail it on the other. A fractional float, a quoted number
+    and a bool are refused on both.
+
+    Args:
+        value (JsonValue): the declared bound, as the document spelled
+            it.
+
+    Returns:
+        int: the bound in whole seconds.
+
+    Raises:
+        ValueError: the value is not a whole number of seconds.
+    """
+    # Bools first: `bool` is a subclass of `int`, so `ttl: true` would
+    # otherwise pass as a one-second bound.
+    if isinstance(value, bool):
+        raise ValueError(f"ttl must be whole seconds, got {value!r}")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    raise ValueError(f"ttl must be whole seconds, got {value!r}")
+
+
 def resolve_read_spec(policy: "str | ReadPolicy | None",
-                      ttl: int | None) -> ReadSpec:
+                      ttl: JsonValue) -> ReadSpec:
     """Coerce a declared read policy and bound into a ReadSpec.
 
     Coercion only: an unknown name is refused here, but whether the
@@ -72,8 +107,8 @@ def resolve_read_spec(policy: "str | ReadPolicy | None",
     Args:
         policy (str | ReadPolicy | None): the requested policy; None
             and the empty string mean bounded.
-        ttl (int | None): the requested bound in seconds; None means
-            the default.
+        ttl (JsonValue): the requested bound in seconds, as the
+            document spelled it; None means the default.
 
     Returns:
         ReadSpec: the resolved policy and bound.
@@ -87,13 +122,11 @@ def resolve_read_spec(policy: "str | ReadPolicy | None",
     # or `integ/fixtures/config/rejected.json` compares two different
     # messages for one document.
     resolved_policy = coerce_read_policy(policy)
-    resolved = DEFAULT_READ_TTL if ttl is None else ttl
+    resolved = DEFAULT_READ_TTL if ttl is None else coerce_read_ttl(ttl)
     # A non-positive bound is not a very short one: the store marks such
     # an entry expired the moment it is written (redis EXPIRE <= 0 deletes
     # the key outright), so the mount silently caches nothing. Refusing it
     # is the other half of the rule that refuses `bounded` with no bound.
-    if not isinstance(resolved, int) or isinstance(resolved, bool):
-        raise ValueError(f"ttl must be whole seconds, got {ttl!r}")
     if resolved < 1:
         raise ValueError(f"ttl must be at least 1 second, got {resolved}")
     return ReadSpec(policy=resolved_policy, ttl=resolved)

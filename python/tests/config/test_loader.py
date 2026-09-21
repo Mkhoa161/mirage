@@ -1274,7 +1274,7 @@ def test_a_bound_that_is_not_whole_seconds_is_refused_at_the_door():
     documents outright. Same bytes, two answers, which is exactly what
     `integ/fixtures/config/rejected.json` exists to catch.
     """
-    for junk in ("30", True, 1.5):
+    for junk in ("30", True, 1.5, 60.5):
         with pytest.raises(ValueError, match="whole seconds"):
             load_config({
                 "mounts": {
@@ -1285,6 +1285,26 @@ def test_a_bound_that_is_not_whole_seconds_is_refused_at_the_door():
                     }
                 }
             })
+
+
+def test_an_integral_float_bound_is_a_bound():
+    """JavaScript has one number type.
+
+    `ttl: 60.0` reaches the TypeScript loader as plain `60`, and no
+    predicate there can tell the two spellings apart, so refusing the
+    float here would load a document on one host and fail it on the
+    other. A fractional one is still a typo on both.
+    """
+    cfg = load_config(
+        {"mounts": {
+            "/a": {
+                "vfs": "ram",
+                "read": "bounded",
+                "ttl": 60.0
+            }
+        }})
+    assert cfg.mounts["/a"].ttl == 60
+    assert isinstance(cfg.mounts["/a"].ttl, int)
 
 
 def test_an_unusable_bound_is_refused_at_the_config_door_not_later():

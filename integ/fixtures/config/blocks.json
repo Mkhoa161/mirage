@@ -155,6 +155,18 @@
       }
     },
     {
+      "name": "mount block: an integral float bound",
+      "config": {
+        "mounts": {
+          "/d": {
+            "vfs": "ram",
+            "read": "bounded",
+            "ttl": 60.0
+          }
+        }
+      }
+    },
+    {
       "name": "cache and index: every ram key",
       "config": {
         "mounts": {

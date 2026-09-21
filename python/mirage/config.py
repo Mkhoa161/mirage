@@ -42,6 +42,7 @@ from mirage.types import (KERNEL_BACKENDS, Limit, MountBackend, MountMode,
 from mirage.vfs.loader import load_attr
 from mirage.vfs.registry import build_vfs
 from mirage.workspace.mount.read_policy import (coerce_read_policy,
+                                                coerce_read_ttl,
                                                 resolve_read_spec)
 from mirage.workspace.mount.spec import Mount
 from mirage.workspace.store import (DEFAULT_STATE_ROOT,
@@ -360,14 +361,11 @@ class MountBlock(BaseModel):
         # cannot afford to be: `ttl: "30"` arrives as 30 and `ttl: true`
         # as 1, so a document TypeScript refuses outright would load
         # here and the two hosts would disagree about the same bytes --
-        # `ttl: true` silently bounding the mount at one second. A bound
-        # is a whole number of seconds off a YAML scalar; anything else
-        # is a typo, not a bound.
+        # `ttl: true` silently bounding the mount at one second. The
+        # snapshot door reads its bound through the same coercer.
         if v is None:
             return v
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise ValueError(f"ttl must be whole seconds, got {v!r}")
-        return v
+        return coerce_read_ttl(v)
 
     @model_validator(mode="after")
     def _v_bound(self) -> "MountBlock":

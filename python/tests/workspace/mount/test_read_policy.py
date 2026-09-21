@@ -100,6 +100,16 @@ def test_a_bound_must_be_whole_positive_seconds():
             resolve_read_spec("bounded", junk)
 
 
+def test_an_integral_float_bound_resolves_to_the_int():
+    # JavaScript has one number type, so `ttl: 60.0` reaches
+    # `resolveReadSpec` as plain `60`; refusing it here would refuse a
+    # snapshot TypeScript restores. The fractional case above still
+    # refuses on both.
+    spec = resolve_read_spec("bounded", 60.0)
+    assert spec.ttl == 60
+    assert isinstance(spec.ttl, int)
+
+
 def test_unknown_policy_names_the_known_ones():
     with pytest.raises(ValueError) as exc:
         resolve_read_spec("banana", None)
