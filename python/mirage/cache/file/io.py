@@ -112,7 +112,11 @@ async def _set_cached_locked(
     data: bytes,
     records: list[OpRecord] | None,
     ops: frozenset[str],
-    ttl: int | None = None,
+    # No default: the one caller always has a bound to pass, and
+    # omitting it would write an entry no `bounded` mount can ever
+    # expire -- the population the gate's self-heal exists to clean up.
+    # Required in the TypeScript twin for the same reason.
+    ttl: int | None,
 ) -> None:
     fingerprint = latest_fingerprint(records, path, ops, len(data))
     if fingerprint is None and await cache.get(path) == data:

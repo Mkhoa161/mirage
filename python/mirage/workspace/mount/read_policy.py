@@ -45,8 +45,13 @@ def coerce_read_policy(value: "str | ReadPolicy | None") -> ReadPolicy:
         return ReadPolicy(str(value).lower())
     except ValueError:
         known = ", ".join(p.value for p in ReadPolicy)
-        raise ValueError(
-            f"unknown read policy {value!r}; expected one of: {known}")
+        # `from None`: the inner error is `Enum.__call__`'s own "'x' is
+        # not a valid ReadPolicy", which carries nothing this message
+        # does not and would otherwise be the first thing a user with a
+        # YAML typo reads, under a "During handling of the above
+        # exception" banner.
+        raise ValueError(f"unknown read policy {value!r}; expected one of: "
+                         f"{known}") from None
 
 
 def resolve_read_spec(policy: "str | ReadPolicy | None",
@@ -77,6 +82,11 @@ def resolve_read_spec(policy: "str | ReadPolicy | None",
         ValueError: the policy name is not a known one, or the bound is
             not a positive whole number of seconds.
     """
+    # Policy first, bound second, matching `resolveReadSpec`. A config
+    # wrong in both ways has to be refused the same way on both hosts,
+    # or `integ/fixtures/config/rejected.json` compares two different
+    # messages for one document.
+    resolved_policy = coerce_read_policy(policy)
     resolved = DEFAULT_READ_TTL if ttl is None else ttl
     # A non-positive bound is not a very short one: the store marks such
     # an entry expired the moment it is written (redis EXPIRE <= 0 deletes
@@ -86,7 +96,7 @@ def resolve_read_spec(policy: "str | ReadPolicy | None",
         raise ValueError(f"ttl must be whole seconds, got {ttl!r}")
     if resolved < 1:
         raise ValueError(f"ttl must be at least 1 second, got {resolved}")
-    return ReadSpec(policy=coerce_read_policy(policy), ttl=resolved)
+    return ReadSpec(policy=resolved_policy, ttl=resolved)
 
 
 def check_read_capability(prefix: str, vfs: BaseVFS, spec: ReadSpec) -> None:
@@ -124,11 +134,19 @@ def check_read_capability(prefix: str, vfs: BaseVFS, spec: ReadSpec) -> None:
     if spec.ttl < 1:
         raise ValueError(f"mount {prefix!r}: read: ttl must be at least "
                          f"1 second, got {spec.ttl}")
-    if spec.policy is ReadPolicy.PINNED:
+    # Coerced, not compared raw. `ReadPolicy` is a (str, Enum) and
+    # `ReadSpec` coerces nothing, so an embedder's
+    # `ReadSpec(policy="fresh")` would match neither `is` below and the
+    # whole verdict would silently no-op on the one door -- the
+    # programmatic one -- that does not pass through `resolve_read_spec`.
+    # Idempotent on a member, and it refuses a name that is not a policy
+    # at all. `MountEntry` stores the coerced spec for the same reason.
+    policy = coerce_read_policy(spec.policy)
+    if policy is ReadPolicy.PINNED:
         raise ValueError(
             f"mount {prefix!r}: read: pinned needs a version layer to pin "
             "to, and mirage has none; use fresh or bounded")
-    if spec.policy is not ReadPolicy.FRESH:
+    if policy is not ReadPolicy.FRESH:
         return
     # VFSName is a (str, Enum), whose str() is "VFSName.RAM"; a VFS
     # registered from a script carries a plain string. Both read as the

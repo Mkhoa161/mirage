@@ -239,15 +239,6 @@ export interface ReadSpec {
 }
 
 /**
- * What the cache write path needs to know about a path's mount.
- *
- * Answered per path against the mount table pinned at command start, so a
- * fill that lands after the command is stamped with the bound of the mount
- * that produced the bytes rather than whatever holds the prefix by then.
- * `cacheable` is read first and short-circuits, so `ttl` is never consulted
- * for a path that is not being cached.
- */
-/**
  * The policy a mount takes when it declares none, and the one pinned onto the
  * three synthetic anchors (`/dev`, the history view, the implicit `/` root).
  *
@@ -260,6 +251,15 @@ export const DEFAULT_READ_SPEC: ReadSpec = Object.freeze({
   ttl: DEFAULT_READ_TTL,
 })
 
+/**
+ * What the cache write path needs to know about a path's mount.
+ *
+ * Answered per path against the mount table pinned at command start, so a
+ * fill that lands after the command is stamped with the bound of the mount
+ * that produced the bytes rather than whatever holds the prefix by then.
+ * `cacheable` is read first and short-circuits, so `ttl` is never consulted
+ * for a path that is not being cached.
+ */
 export interface CacheFacts {
   readonly cacheable: boolean
   readonly ttl: number

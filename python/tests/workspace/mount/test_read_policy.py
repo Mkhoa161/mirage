@@ -134,6 +134,41 @@ def test_a_bad_bound_is_refused_at_the_workspace_door_too():
                   read=ReadSpec(policy=ReadPolicy.BOUNDED, ttl=0))
 
 
+@pytest.mark.parametrize("policy", ["fresh", "pinned"])
+def test_a_wire_string_policy_is_judged_like_the_enum(policy):
+    """`ReadPolicy` is a (str, Enum) and `ReadSpec` coerces nothing.
+
+    An embedder writing ``ReadSpec(policy="fresh")`` against the public
+    API matched neither `is` in the verdict, so the whole check silently
+    no-opped on the one door that skips ``resolve_read_spec``. On a
+    backend that *can* revalidate it was worse: the mount passed and
+    then read as `bounded` everywhere downstream, which is the silent
+    downgrade this policy exists to remove.
+    """
+    with pytest.raises(ValueError):
+        check_read_capability("/d/", RAMVFS(), ReadSpec(policy=policy, ttl=30))
+
+
+def test_a_mount_stores_the_coerced_policy_not_the_wire_string():
+    # Downstream -- the gate, the routing reconcile -- all compare with
+    # `is`, so the spec has to be normalized where it becomes live mount
+    # state or a capable backend mounts `fresh` and behaves as bounded.
+    vfs = S3VFS(S3Config(bucket="b"))
+    ws = Workspace({"/s3": vfs},
+                   mode=MountMode.WRITE,
+                   read=ReadSpec(policy="fresh", ttl=30))
+    mount = ws._registry.mount_for_prefix("/s3/")
+    assert mount.read.policy is ReadPolicy.FRESH
+
+
+def test_the_two_doors_refuse_a_doubly_bad_config_the_same_way():
+    # TypeScript's `resolveReadSpec` names the policy first; python has
+    # to agree, or one document yields two different refusals across the
+    # shared config fixtures.
+    with pytest.raises(ValueError, match="unknown read policy"):
+        resolve_read_spec("banana", 0)
+
+
 def test_pinned_is_refused_naming_the_missing_layer():
     with pytest.raises(ValueError) as exc:
         check_read_capability("/d/", RAMVFS(),
