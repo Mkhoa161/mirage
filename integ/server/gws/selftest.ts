@@ -25,6 +25,7 @@ import type { JsonValue } from '../kit/typescript/types.ts'
 import { gwsFake } from './fake.ts'
 import { cachedState, dropState, withState } from './store/cache.ts'
 import { loadState } from './store/load.ts'
+import { saveState } from './store/save.ts'
 
 import { parseDriveQuery, matchQuery } from './drive/query.ts'
 import { createDriveItem } from './drive/item.ts'
@@ -986,6 +987,45 @@ async function main(): Promise<void> {
       )
     } finally {
       await home.close()
+    }
+
+    const bulk = await start(gwsFake, 0)
+    try {
+      await reset(bulk.endpoint, seed)
+      const db = bulk.runtime.pool.client(DEFAULT_RUN)
+      const st = await loadState(db, 't1')
+      const file = createDriveItem(
+        st,
+        'large workbook',
+        'application/vnd.google-apps.spreadsheet',
+        [],
+      )
+      const tab = newTab(0, 'Data', 20_001, 1)
+      const samples = ['', 'quote" and apostrophe\'', 'line\nfeed', '音楽', '\\', '\u0000']
+      for (let row = 0; row < 20_001; row += 1)
+        tab.cells.set(`${String(row)},0`, samples[row % samples.length] ?? '')
+      st.sheets.set(file.id, { title: file.name, tabs: [tab], nextSheetId: 1 })
+      await saveState(db, gwsFake.dmmf, 't1', st)
+      const restored = await loadState(db, 't1')
+      check(
+        'bulk cell persistence preserves text across chunk boundaries',
+        isDeepStrictEqual(restored.sheets.get(file.id)?.tabs[0]?.cells, tab.cells),
+      )
+      tab.cells.set('00,0', 'duplicate primary key')
+      let rejected = false
+      try {
+        await saveState(db, gwsFake.dmmf, 't1', st)
+      } catch {
+        rejected = true
+      }
+      check('an invalid bulk cell write fails', rejected)
+      const rolledBack = await loadState(db, 't1')
+      check(
+        'a failed bulk write restores the entire previous workbook',
+        isDeepStrictEqual(rolledBack.sheets, restored.sheets),
+      )
+    } finally {
+      await bulk.close()
     }
 
     // Door four: keyed by the run's CLIENT, not its name, so two servers in
