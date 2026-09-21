@@ -2793,6 +2793,40 @@
         "stdout": "2\n",
         "stderr": "(standard_in) 1: illegal character: \"\n"
       }
+    },
+    {
+      "id": "bc_print_element_order",
+      "seq": 601481,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "printf 'print 255, obase=16, 255, \"\\\\n\"\\n' | bc",
+      "expect": {
+        "exit": 0,
+        "stdout": "25510FF\n",
+        "stderr": ""
+      }
     }
   ]
 }

@@ -41,6 +41,9 @@ const DEC = new TextDecoder()
 //   builtin   := sqrt | length | scale
 //   func      := s | c | a | l | e   (all need -l)
 //   string    := '"' [^"]* '"'
+// A statement's output is rendered as it is reached rather than at the
+// end, because `obase`, `scale` and `last` can all change partway down a
+// `print` list: `print 255, obase=16` writes `255` and then `10`.
 // A string is a statement and never an expression, so `1+"a"` is a syntax
 // error, and its token runs to the next `"` anywhere in the input --
 // across newlines, and past a `;`, a `#` or a `/*` -- because a backslash
@@ -222,12 +225,6 @@ interface BcNumber {
 }
 
 const ZERO: BcNumber = { value: 0, scale: 0 }
-
-// One piece of a statement's output. A string is written as it stands: a
-// bare string statement's raw body, an expression statement's trailing
-// newline, or the characters `print` unescaped. A BcNumber is rendered by
-// the caller in the output base, which is also where it reaches `last`.
-type BcWrite = string | BcNumber
 
 // What survives between statements on one bc run: the registers, the
 // symbol table and whether `-l` loaded the math library. The whole
@@ -1020,13 +1017,14 @@ function callBuiltin(name: string, arg: BcNumber, scale: number): BcNumber {
 // lines.
 class Parser {
   private pos = 0
-  // `writes` is owned by the caller, so the pieces a statement produced
-  // before a runtime error survive it: `print "x", 1/0` writes the `x`
-  // GNU had already written when the division refused.
+  // `writes` holds already-rendered text and is owned by the caller, so
+  // what a statement produced before a runtime error survives it:
+  // `print "x", 1/0` writes the `x` GNU had already written when the
+  // division refused.
   constructor(
     private readonly src: string,
     private readonly state: BcState,
-    private readonly writes: BcWrite[],
+    private readonly writes: string[],
   ) {}
 
   private skipBlanks(): void {
@@ -1089,6 +1087,17 @@ class Parser {
     return this.src.slice(start, this.pos)
   }
 
+  // Render one value the moment the statement reaches it. GNU writes a
+  // value where its own instruction runs, not at the end of the
+  // statement, so everything an element changes before it is already in
+  // force and everything a later element changes is not:
+  // `print 255, obase=16` writes `255` and then `10`, and
+  // `print 5, last` writes the 5 twice.
+  private emit(num: BcNumber): string {
+    this.state.last = reduceNumber(num)
+    return renderNumber(num, this.state.obase)
+  }
+
   private readString(): string {
     this.skipBlanks()
     const start = this.pos
@@ -1132,7 +1141,7 @@ class Parser {
     }
     const probe = this.tryAssignment()
     if (probe === null) {
-      this.writes.push(this.parseExpr())
+      this.writes.push(this.emit(this.parseExpr()))
       this.writes.push('\n')
       return
     }
@@ -1159,7 +1168,7 @@ class Parser {
   private parsePrint(): void {
     for (;;) {
       if (this.peek() === STRING_QUOTE) this.writes.push(unescape(this.readString()))
-      else this.writes.push(this.parseExpr())
+      else this.writes.push(this.emit(this.parseExpr()))
       if (!this.match(',')) return
     }
   }
@@ -1391,7 +1400,7 @@ class Parser {
 // an assignment.
 // Evaluate one statement, appending its output to `writes`. A refusal
 // leaves behind whatever was written before it.
-function evalStatement(text: string, state: BcState, writes: BcWrite[]): void {
+function evalStatement(text: string, state: BcState, writes: string[]): void {
   const parser = new Parser(text, state, writes)
   parser.parseStatement()
   if (!parser.done()) throw parser.unexpected()
@@ -1666,9 +1675,9 @@ async function bcCommand(
       // leave `y` unset while leaving `x` at 5.
       const target = runs ? state : snapshotState(state)
       // Owned here rather than inside the parser, so that a runtime error
-      // partway down a `print` list keeps the pieces already written:
+      // partway down a `print` list keeps the text already written:
       // `print "x", 1/0` writes the `x`.
-      const writes: BcWrite[] = []
+      const writes: string[] = []
       try {
         evalStatement(statement.text, target, writes)
       } catch (err) {
@@ -1698,17 +1707,10 @@ async function bcCommand(
       if (runs) lineErrors.push(...state.warnings)
       state.warnings.length = 0
       if (!runs) continue
-      for (const piece of writes) {
-        // The one place output is written, so the one place it is folded,
-        // and the one place a value reaches `last`: a string never does,
-        // which is why `1+1; "x"; last` answers 2 rather than the string.
-        if (typeof piece === 'string') {
-          lineResults.push(folder.write(piece))
-          continue
-        }
-        state.last = reduceNumber(piece)
-        lineResults.push(folder.write(renderNumber(piece, state.obase)))
-      }
+      // The one place output is folded. Rendering happened as each element
+      // was reached, in `Parser.emit`, because GNU's `obase` and `last`
+      // can both change partway down a `print` list.
+      for (const piece of writes) lineResults.push(folder.write(piece))
     }
     if (parseErrors.length > 0) {
       // None of the line ran, so a `halt` on it did not run either, and

@@ -43,6 +43,9 @@ from mirage.types import PathSpec
 #   builtin   := sqrt | length | scale
 #   func      := s | c | a | l | e   (all need -l)
 #   string    := '"' [^"]* '"'
+# A statement's output is rendered as it is reached rather than at the
+# end, because `obase`, `scale` and `last` can all change partway down a
+# `print` list: `print 255, obase=16` writes `255` and then `10`.
 # A string is a statement and never an expression, so `1+"a"` is a syntax
 # error, and its token runs to the next `"` anywhere in the input --
 # across newlines, and past a `;`, a `#` or a `/*` -- because a backslash
@@ -246,12 +249,6 @@ class BcNumber:
 
 
 ZERO = BcNumber(0.0, 0)
-
-# One piece of a statement's output. A `str` is written as it stands: a
-# bare string statement's raw body, an expression statement's trailing
-# newline, or the characters `print` unescaped. A BcNumber is rendered by
-# the caller in the output base, which is also where it reaches `last`.
-BcWrite = str | BcNumber
 
 
 @dataclass(slots=True)
@@ -1477,16 +1474,16 @@ class Parser:
         src (str): the statement text.
         state (BcState): the run's registers, symbol table and
             math-library flag.
-        writes (list[BcWrite]): where the statement's output is appended,
-            owned by the caller so that the pieces a statement produced
-            before a runtime error survive it -- `print "x", 1/0` writes
-            the `x` GNU had already written when the division refused.
+        writes (list[str]): where the statement's output is appended,
+            already rendered. Owned by the caller so that the text a
+            statement produced before a runtime error survives it:
+            `print "x", 1/0` writes the `x` GNU had already written when
+            the division refused.
     """
 
     __slots__ = ("_src", "_pos", "_state", "_writes")
 
-    def __init__(self, src: str, state: BcState,
-                 writes: list[BcWrite]) -> None:
+    def __init__(self, src: str, state: BcState, writes: list[str]) -> None:
         self._src = src
         self._pos = 0
         self._state = state
@@ -1555,6 +1552,24 @@ class Parser:
             self._pos += 1
         return self._src[start:self._pos]
 
+    def _emit(self, num: BcNumber) -> str:
+        """Render one value the moment the statement reaches it.
+
+        GNU writes a value where its own instruction runs, not at the end
+        of the statement, so everything an element changes before it is
+        already in force and everything a later element changes is not:
+        `print 255, obase=16` writes `255` and then `10`, and
+        `print 5, last` writes the 5 twice.
+
+        Args:
+            num (BcNumber): the value the element evaluated to.
+
+        Returns:
+            str: the value in the output base as it stands now.
+        """
+        self._state.last = reduce_number(num)
+        return render_number(num, self._state.obase)
+
     def _read_string(self) -> str:
         self._skip_blanks()
         start = self._pos
@@ -1596,7 +1611,7 @@ class Parser:
             return
         probe = self._try_assignment()
         if probe is None:
-            self._writes.append(self.parse_expr())
+            self._writes.append(self._emit(self.parse_expr()))
             self._writes.append("\n")
             return
         name, op = probe
@@ -1623,7 +1638,7 @@ class Parser:
             if self._peek() == STRING_QUOTE:
                 self._writes.append(unescape(self._read_string()))
             else:
-                self._writes.append(self.parse_expr())
+                self._writes.append(self._emit(self.parse_expr()))
             if not self._match(","):
                 return
 
@@ -1853,14 +1868,15 @@ class Parser:
         return self._pos >= len(self._src)
 
 
-def eval_statement(text: str, state: BcState, writes: list[BcWrite]) -> None:
+def eval_statement(text: str, state: BcState, writes: list[str]) -> None:
     """Evaluate one bc statement against the run's state.
 
     Args:
         text (str): the statement, already split off and stripped.
         state (BcState): the run's registers and symbol table.
-        writes (list[BcWrite]): where the statement's output is appended.
-            A refusal leaves behind whatever was written before it.
+        writes (list[str]): where the statement's output is appended,
+            already rendered. A refusal leaves behind whatever was
+            written before it.
 
     Raises:
         BcParseError: the statement cannot be parsed.
@@ -2199,9 +2215,9 @@ async def bc(
             # `x=5;1/0;y=7` has to leave `y` unset while leaving `x` at 5.
             target = state if runs else snapshot_state(state)
             # Owned here rather than inside the parser, so that a runtime
-            # error partway down a `print` list keeps the pieces already
+            # error partway down a `print` list keeps the text already
             # written: `print "x", 1/0` writes the `x`.
-            writes: list[BcWrite] = []
+            writes: list[str] = []
             try:
                 eval_statement(statement.text, target, writes)
             except BcParseError as exc:
@@ -2228,14 +2244,10 @@ async def bc(
             state.warnings.clear()
             if not runs:
                 continue
+            # The one place output is folded. Rendering happened as each
+            # element was reached, in `Parser._emit`, because GNU's `obase`
+            # and `last` can both change partway down a `print` list.
             for piece in writes:
-                # The one place output is written, so the one place it is
-                # folded, and the one place a value reaches `last`: a
-                # string never does, which is why `1+1; "x"; last` answers
-                # 2 rather than the string.
-                if isinstance(piece, BcNumber):
-                    state.last = reduce_number(piece)
-                    piece = render_number(piece, state.obase)
                 line_results.append(folder.write(piece))
         if parse_errors:
             # None of the line ran, so a `halt` on it did not run either,

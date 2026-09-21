@@ -1265,6 +1265,41 @@ def test_bc_print_takes_a_comma_separated_list():
     assert _out("bc", b'print (1+2)*3, "\\n"\n')[0] == b"9\n"
 
 
+def test_bc_each_element_is_written_where_it_is_reached():
+    # GNU writes a value where its own instruction runs, not at the end
+    # of the statement, so an element sees everything the elements before
+    # it changed and nothing a later one will: `print 5, last` writes the
+    # 5 twice, and `print 255, obase=16` writes the 255 in base ten and
+    # then the 16 in the base it just set.
+    assert _out("bc", b"print 5, last\n")[0] == b"55"
+    assert _out("bc", b"print last, 5\n")[0] == b"05"
+    assert _out("bc", b"print 1, last, last\n")[0] == b"111"
+    assert _out("bc", b"print 255, obase=16\n")[0] == b"25510"
+    assert _out("bc", b"print obase=16, 255\n")[0] == b"10FF"
+    assert _out("bc", b"print 255, obase=16, 255\n")[0] == b"25510FF"
+    assert _out("bc", b"x=1\nprint x, x=9, x\n")[0] == b"199"
+    assert _out("bc", b"scale=3\nprint 1/3, scale=1, 1/3\n")[0] == b".3331.3"
+
+
+def test_bc_an_expression_statement_renders_where_it_is_reached_too():
+    # The same rule outside `print`: the 255 is written before the `;`
+    # changes the base, so only the second one comes out hexadecimal.
+    assert _out("bc", b"255; obase=16\n")[0] == b"255\n"
+    assert _out("bc", b"obase=16; 255\n")[0] == b"FF\n"
+    assert _out("bc", b"255; obase=16; 255\n")[0] == b"255\nFF\n"
+
+
+def test_bc_last_follows_its_line_being_discarded():
+    # `last` is state, so a syntax error later on the line rolls it back
+    # with everything else the line wrote.
+    assert _out("bc", b"print 5\nlast\n")[0] == b"55\n"
+    stdout, io = _out("bc", b"print 5; 1 2\nlast\n")
+    assert stdout == b"0\n"
+    assert _stderr_text(io) == "(standard_in) 1: syntax error\n"
+    # A runtime error does not roll it back: the element before it stands.
+    assert _out("bc", b"print 5, 1/0\nlast\n")[0] == b"55\n"
+
+
 def test_bc_print_sets_last_where_a_string_does_not():
     # A printed value reaches `last`, so `print 5; .` answers 5 twice;
     # a string never does, so `last` still holds the 2.

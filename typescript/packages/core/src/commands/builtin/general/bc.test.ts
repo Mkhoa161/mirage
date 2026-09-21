@@ -1509,6 +1509,44 @@ describe('bc', () => {
     expect((await runBc('print (1+2)*3, "\\n"\n')).out).toBe('9\n')
   })
 
+  it('each element is written where it is reached', async () => {
+    // GNU writes a value where its own instruction runs, not at the end
+    // of the statement, so an element sees everything the elements
+    // before it changed and nothing a later one will: `print 5, last`
+    // writes the 5 twice, and `print 255, obase=16` writes the 255 in
+    // base ten and then the 16 in the base it just set.
+    expect((await runBc('print 5, last\n')).out).toBe('55')
+    expect((await runBc('print last, 5\n')).out).toBe('05')
+    expect((await runBc('print 1, last, last\n')).out).toBe('111')
+    expect((await runBc('print 255, obase=16\n')).out).toBe('25510')
+    expect((await runBc('print obase=16, 255\n')).out).toBe('10FF')
+    expect((await runBc('print 255, obase=16, 255\n')).out).toBe('25510FF')
+    expect((await runBc('x=1\nprint x, x=9, x\n')).out).toBe('199')
+    expect((await runBc('scale=3\nprint 1/3, scale=1, 1/3\n')).out).toBe('.3331.3')
+  })
+
+  it('an expression statement renders where it is reached too', async () => {
+    // The same rule outside `print`: the 255 is written before the `;`
+    // changes the base, so only the second one comes out hexadecimal.
+    expect((await runBc('255; obase=16\n')).out).toBe('255\n')
+    expect((await runBc('obase=16; 255\n')).out).toBe('FF\n')
+    expect((await runBc('255; obase=16; 255\n')).out).toBe('255\nFF\n')
+  })
+
+  it('last follows its line being discarded', async () => {
+    // `last` is state, so a syntax error later on the line rolls it back
+    // with everything else the line wrote.
+    expect((await runBc('print 5\nlast\n')).out).toBe('55\n')
+    expect(await runBc('print 5; 1 2\nlast\n')).toEqual({
+      out: '0\n',
+      err: '(standard_in) 1: syntax error\n',
+      exitCode: 0,
+    })
+    // A runtime error does not roll it back: the element before it
+    // stands.
+    expect((await runBc('print 5, 1/0\nlast\n')).out).toBe('55\n')
+  })
+
   it('print sets last where a string does not', async () => {
     // A printed value reaches `last`, so `print 5; .` answers 5 twice; a
     // string never does, so `last` still holds the 2.
@@ -1697,7 +1735,7 @@ describe('bc', () => {
     // The column is one counter for the whole run, so a `print` that
     // left the line two characters in folds the value that follows two
     // characters early: 66 digits here rather than 68.
-    const digits = UNFOLDED_300.replace('\n', '')
+    const digits = UNFOLDED_300.replaceAll('\n', '')
     expect((await runBc('print "ab"; 2^300\n')).out).toBe(
       `ab${digits.slice(0, 66)}\\\n${digits.slice(66)}\n`,
     )
