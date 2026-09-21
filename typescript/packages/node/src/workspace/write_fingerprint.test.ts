@@ -13,7 +13,15 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { createHash } from 'node:crypto'
-import { ConsistencyPolicy, MountMode } from '@struktoai/mirage-core/types'
+import {
+  type ReadSpec,
+  DEFAULT_READ_TTL,
+  MountMode,
+  ReadPolicy,
+} from '@struktoai/mirage-core/types'
+
+const FRESH: ReadSpec = { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL }
+const BOUNDED: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { S3Config } from '../vfs/s3/config.ts'
 import { installS3Mock, type S3Mock } from '../vfs/s3/mock.ts'
@@ -43,8 +51,8 @@ function makeConfig(): S3Config {
   }
 }
 
-function makeWorkspace(consistency: ConsistencyPolicy): Workspace {
-  return new Workspace({ '/s3': new S3VFS(makeConfig()) }, { mode: MountMode.WRITE, consistency })
+function makeWorkspace(read: ReadSpec): Workspace {
+  return new Workspace({ '/s3': new S3VFS(makeConfig()) }, { mode: MountMode.WRITE, read })
 }
 
 describe('object-store write fingerprint (mocked S3)', () => {
@@ -66,7 +74,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
   })
 
   it('the write record carries the backend token', async () => {
-    const ws = makeWorkspace(ConsistencyPolicy.LAZY)
+    const ws = makeWorkspace(BOUNDED)
     try {
       await ws.shell('tee /s3/x.txt <<< hello')
       expect(ws.records.map((r) => [r.op, r.path, r.fingerprint])).toEqual([
@@ -80,7 +88,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
   it('a written path caches the backend token, not md5', async () => {
     // Holding md5(content) is only right by accident on a simple-PUT
     // object, and never right on a multipart one.
-    const ws = makeWorkspace(ConsistencyPolicy.LAZY)
+    const ws = makeWorkspace(BOUNDED)
     try {
       await ws.shell('tee /s3/x.txt <<< hello')
       expect(await ws.cache.isFresh('/s3/x.txt', etagOf('hello\n'))).toBe(true)
@@ -97,7 +105,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
     // freshness probe matches and the read is served from cache; with the
     // md5 default it never matches a suffixed ETag, so every read evicts
     // and refetches.
-    const ws = makeWorkspace(ConsistencyPolicy.ALWAYS)
+    const ws = makeWorkspace(FRESH)
     try {
       await ws.shell('tee /s3/x.txt <<< hello')
       const read = await ws.shell('cat /s3/x.txt')
@@ -115,7 +123,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
     // write's token the entry would read as fresh forever and the stale
     // bytes would serve; the next read must see the written content.
     mock.store.set(BUCKET, 'f.txt', ENC.encode('old\n'))
-    const ws = makeWorkspace(ConsistencyPolicy.ALWAYS)
+    const ws = makeWorkspace(FRESH)
     try {
       await ws.shell('cat /s3/f.txt && echo new | tee /s3/f.txt')
       const read = await ws.shell('cat /s3/f.txt')
@@ -130,7 +138,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
     // `truncate` records its own token but hands the cache no bytes, so
     // the entry would otherwise hold tee's content under truncate's
     // token and serve it for the life of the entry.
-    const ws = makeWorkspace(ConsistencyPolicy.ALWAYS)
+    const ws = makeWorkspace(FRESH)
     try {
       await ws.shell('echo hello | tee /s3/f.txt && truncate -s 2 /s3/f.txt')
       const read = await ws.shell('cat /s3/f.txt')
@@ -146,7 +154,7 @@ describe('object-store write fingerprint (mocked S3)', () => {
     // eviction marker while tee's write record stays the last one, so
     // the token would land on bytes it does not describe.
     mock.store.set(BUCKET, 'a.txt', ENC.encode('x\n'))
-    const ws = makeWorkspace(ConsistencyPolicy.ALWAYS)
+    const ws = makeWorkspace(FRESH)
     try {
       await ws.shell('echo x | tee /s3/f.txt && cp /s3/a.txt /s3/f.txt')
       const read = await ws.shell('cat /s3/f.txt')

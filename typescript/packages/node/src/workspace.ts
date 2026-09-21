@@ -18,7 +18,6 @@ import type { ProvisionResult } from '@struktoai/mirage-core/provision/types'
 import { createShellParser } from '@struktoai/mirage-core/shell/parse'
 import type { ShellParser } from '@struktoai/mirage-core/shell/parse'
 import { KERNEL_BACKENDS, MountBackend } from '@struktoai/mirage-core/types'
-import type { Limit } from '@struktoai/mirage-core/types'
 import { Workspace as CoreWorkspace } from '@struktoai/mirage-core/workspace/workspace/workspace'
 import type {
   ExecuteOptions,
@@ -64,28 +63,22 @@ export class Workspace extends CoreWorkspace {
   private fuseSetupPromise: Promise<void> | null = null
   private readonly kernelMounts = new KernelMounts(this)
 
-  constructor(mounts: Record<string, MountSpec | Mount>, options: NodeWorkspaceOptions = {}) {
-    const specs: Record<string, MountSpec> = {}
-    const commandLimits: Record<string, Record<string, Limit>> = {
-      ...(options.commandLimits ?? {}),
-    }
+  constructor(mounts: Record<string, MountSpec>, options: NodeWorkspaceOptions = {}) {
+    // Core takes a `Mount` directly now, so this unwrap is down to the one
+    // fact core has no use for: which mounts also want a real mountpoint.
+    // It used to re-spell the mount as [vfs, mode] and lift commandLimits
+    // by hand, which is how a `Mount`'s read policy would have been lost
+    // before reaching the workspace.
     const mountTargets: [string, MountBackend, string | undefined][] = []
     for (const [prefix, value] of Object.entries(mounts)) {
-      if (value instanceof Mount) {
-        specs[prefix] =
-          value.options.mode !== undefined ? [value.vfs, value.options.mode] : value.vfs
-        if (value.options.commandLimits !== undefined)
-          commandLimits[prefix] = value.options.commandLimits
-        const backend = value.options.backend ?? MountBackend.WORKSPACE
-        if (KERNEL_BACKENDS.includes(backend))
-          mountTargets.push([prefix, backend, value.options.mountpoint])
-      } else {
-        specs[prefix] = value
+      if (!(value instanceof Mount)) continue
+      const backend = value.options.backend ?? MountBackend.WORKSPACE
+      if (KERNEL_BACKENDS.includes(backend)) {
+        mountTargets.push([prefix, backend, value.options.mountpoint])
       }
     }
-    super(specs, {
+    super(mounts, {
       ...options,
-      ...(Object.keys(commandLimits).length > 0 ? { commandLimits } : {}),
       shellParserFactory: options.shellParserFactory ?? loadShellParser,
     })
     if (mountTargets.length > 0) {

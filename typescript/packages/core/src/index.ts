@@ -88,8 +88,8 @@ export type {
 export { JobConsole } from './shell/console/index.ts'
 export type { ConsoleFactory } from './shell/job_table/index.ts'
 export {
-  ConsistencyPolicy,
   ContentType,
+  DEFAULT_READ_TTL,
   DriftPolicy,
   FileChangeKind,
   FileEvent,
@@ -100,9 +100,10 @@ export {
   MountMode,
   OnExceed,
   PathSpec,
+  ReadPolicy,
   VFSName,
 } from './types.ts'
-export type { WalkEntry } from './types.ts'
+export type { ReadSpec, WalkEntry } from './types.ts'
 export { eisdir, enoent, enotdir } from './utils/errors.ts'
 export { snakeToCamel } from './utils/normalize.ts'
 export { ListingDeltaHook, RAMWatchQueue, Watcher } from './watch/index.ts'

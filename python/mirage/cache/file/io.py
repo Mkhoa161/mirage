@@ -22,6 +22,7 @@ from mirage.cache.file.mixin import FileCacheMixin
 from mirage.io import CachableAsyncIterator, IOResult
 from mirage.observe.record import (READ_FINGERPRINT_OPS, WRITE_FINGERPRINT_OPS,
                                    OpRecord)
+from mirage.types import CacheFacts
 
 logger = logging.getLogger(__name__)
 _mutation_locks: WeakKeyDictionary[FileCacheMixin,
@@ -44,7 +45,7 @@ def latest_fingerprint(records: list[OpRecord] | None, path: str,
     Backends stamp a read record with the content identifier they
     returned (S3 ETag, OneDrive cTag, Postgres sha256), and an
     object-store write record with the token its PUT answered.
-    Threading it into the cache entry lets ALWAYS-mode ``is_fresh``
+    Threading it into the cache entry lets a ``fresh`` mount's ``is_fresh``
     compare like with like; the MD5-of-content default only matches
     simple-PUT S3 objects.
 
@@ -92,12 +93,17 @@ async def _set_cached(
     path: str,
     data: bytes,
     records: list[OpRecord] | None,
-    is_cacheable: Callable[[str], bool] | None,
+    cache_facts: Callable[[str], CacheFacts] | None,
     ops: frozenset[str],
 ) -> None:
     async with mutation_lock(cache):
-        if is_cacheable is None or is_cacheable(path):
-            await _set_cached_locked(cache, path, data, records, ops)
+        facts = cache_facts(path) if cache_facts is not None else None
+        # `cacheable` is read first and short-circuits, so `ttl` is never
+        # consulted for a path that is not being cached. That ordering is
+        # what keeps an unresolvable mount from being read as "no bound".
+        if facts is None or facts.cacheable:
+            await _set_cached_locked(cache, path, data, records, ops,
+                                     facts.ttl if facts else None)
 
 
 async def _set_cached_locked(
@@ -106,15 +112,20 @@ async def _set_cached_locked(
     data: bytes,
     records: list[OpRecord] | None,
     ops: frozenset[str],
+    # No default: the one caller always has a bound to pass, and
+    # omitting it would write an entry no `bounded` mount can ever
+    # expire -- the population the gate's self-heal exists to clean up.
+    # Required in the TypeScript twin for the same reason.
+    ttl: int | None,
 ) -> None:
     fingerprint = latest_fingerprint(records, path, ops, len(data))
     if fingerprint is None and await cache.get(path) == data:
         # Warm read: the bytes were served from this cache, so there is
         # no backend read record. Re-setting would replace the backend
         # fingerprint stamped on the cold read with the MD5 default and
-        # force ALWAYS mode to evict and refetch on every read.
+        # force a ``fresh`` mount to evict and refetch on every read.
         return
-    await cache.set(path, data, fingerprint=fingerprint)
+    await cache.set(path, data, fingerprint=fingerprint, ttl=ttl)
 
 
 def _drop_drain_task(cache: FileCacheMixin, path: str,
@@ -126,12 +137,12 @@ def _drop_drain_task(cache: FileCacheMixin, path: str,
 async def apply_io(
     cache: FileCacheMixin,
     io: IOResult,
-    is_cacheable: Callable[[str], bool] | None = None,
+    cache_facts: Callable[[str], CacheFacts] | None = None,
     records: list[OpRecord] | None = None,
 ) -> None:
     cache_set = set(io.cache)
     for path in io.cache:
-        if is_cacheable is not None and not is_cacheable(path):
+        if cache_facts is not None and not cache_facts(path).cacheable:
             continue
         data = io.reads.get(path)
         # The token has to describe the bytes actually stored, so the
@@ -143,13 +154,13 @@ async def apply_io(
         if data is None:
             continue
         if isinstance(data, bytes):
-            await _set_cached(cache, path, data, records, is_cacheable, ops)
+            await _set_cached(cache, path, data, records, cache_facts, ops)
         elif isinstance(data, CachableAsyncIterator):
             if data.discarded:
                 continue
             if data.exhausted:
                 await _set_cached(cache, path, b"".join(data.buffered_chunks),
-                                  records, is_cacheable, ops)
+                                  records, cache_facts, ops)
             else:
                 if (hasattr(cache, "_drain_tasks")
                         and path not in cache._drain_tasks
@@ -157,14 +168,14 @@ async def apply_io(
                     task = asyncio.create_task(
                         _background_drain(cache, path, data,
                                           cache.drain_budget, ops, records,
-                                          is_cacheable))
+                                          cache_facts))
                     cache._drain_tasks[path] = task
                     task.add_done_callback(
                         partial(_drop_drain_task, cache, path))
     for path in io.writes:
         if path in cache_set:
             continue
-        if is_cacheable is not None and not is_cacheable(path):
+        if cache_facts is not None and not cache_facts(path).cacheable:
             continue
         await cache.remove(path)
 
@@ -176,7 +187,7 @@ async def _background_drain(
     max_bytes: int,
     ops: frozenset[str],
     records: list[OpRecord] | None = None,
-    is_cacheable: Callable[[str], bool] | None = None,
+    cache_facts: Callable[[str], CacheFacts] | None = None,
 ) -> None:
     """Drain an unconsumed stream and write to cache.
 
@@ -192,12 +203,18 @@ async def _background_drain(
         materialized = await it.drain_bounded(max_bytes)
         if materialized is not None:
             async with mutation_lock(cache):
+                facts = (cache_facts(path)
+                         if cache_facts is not None else None)
+                # The large-object path stamps the bound too, or a
+                # streamed read would be the one thing `bounded` never
+                # expires.
                 if (cache._drain_tasks.get(path) is asyncio.current_task()
-                        and (is_cacheable is None or is_cacheable(path))):
+                        and (facts is None or facts.cacheable)):
                     await cache.add(path,
                                     materialized,
                                     fingerprint=latest_fingerprint(
-                                        records, path, ops, len(materialized)))
+                                        records, path, ops, len(materialized)),
+                                    ttl=facts.ttl if facts else None)
         else:
             logger.info(
                 "cache drain budget exceeded for %s "

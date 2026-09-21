@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass, field
 
-from mirage.types import Limit, MountBackend, MountMode
+from mirage.types import Limit, MountBackend, MountMode, ReadSpec
 from mirage.vfs.base import BaseVFS
 
 
@@ -29,3 +29,6 @@ class Mount:
     # directory appropriate for the backend. Ignored when backend is VFS.
     mountpoint: str | None = None
     command_limits: dict[str, Limit] = field(default_factory=dict)
+    # How cached bytes for this mount are revalidated. None takes the
+    # workspace default, as ``mode`` does.
+    read: ReadSpec | None = None

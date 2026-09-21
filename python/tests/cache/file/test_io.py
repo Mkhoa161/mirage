@@ -22,6 +22,7 @@ from mirage.io import CachableAsyncIterator, IOResult
 from mirage.io.stream import close_quietly
 from mirage.observe.record import (READ_FINGERPRINT_OPS, WRITE_FINGERPRINT_OPS,
                                    OpRecord)
+from mirage.types import CacheFacts
 
 
 def _record(op: str,
@@ -514,3 +515,53 @@ def test_latest_fingerprint_does_not_size_check_a_read():
     records = [_record("read", "/s3/f.txt", "etag-2", 1)]
     assert cache_io.latest_fingerprint(records, "/s3/f.txt",
                                        READ_FINGERPRINT_OPS, 9) == "etag-2"
+
+
+# ── the mount's staleness bound reaches the entry ───────────────────────
+
+
+def _facts(ttl: int, cacheable: bool = True):
+    return lambda _path: CacheFacts(cacheable=cacheable, ttl=ttl)
+
+
+@pytest.mark.asyncio
+async def test_apply_io_stamps_the_bound_on_a_plain_read():
+    cache = RAMFileCacheStore()
+    io = IOResult(reads={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache, io, _facts(45))
+    assert cache._entries["/s3/f.txt"].ttl == 45
+
+
+@pytest.mark.asyncio
+async def test_apply_io_stamps_the_bound_on_a_background_drain():
+    """The large-object path stamps too.
+
+    A stream the command never exhausted is filled by the background
+    drain, which writes through ``add`` rather than ``set``. Missing it
+    would leave streamed reads -- the ones a staleness bound matters most
+    for -- as the only entries `bounded` never expires.
+    """
+    cache = RAMFileCacheStore()
+
+    async def _gen():
+        yield b"hello"
+
+    stream = CachableAsyncIterator(_gen())
+    io = IOResult(reads={"/s3/big.txt": stream}, cache=["/s3/big.txt"])
+    await cache_io.apply_io(cache, io, _facts(30))
+    await asyncio.sleep(0.05)
+    assert await cache.get("/s3/big.txt") == b"hello"
+    assert cache._entries["/s3/big.txt"].ttl == 30
+
+
+@pytest.mark.asyncio
+async def test_apply_io_skips_a_path_its_mount_does_not_cache():
+    """`cacheable` is read first and short-circuits.
+
+    The bound is never consulted for a path that is not being cached,
+    which is what keeps an unresolvable mount from reading as "no bound".
+    """
+    cache = RAMFileCacheStore()
+    io = IOResult(reads={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache, io, _facts(30, cacheable=False))
+    assert not await cache.exists("/s3/f.txt")

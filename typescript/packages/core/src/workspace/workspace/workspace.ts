@@ -49,9 +49,17 @@ import {
   withRebuiltMounts,
 } from '../snapshot/state.ts'
 import { readSnapshotTar } from '../snapshot/tar_io.ts'
+import { normMountPrefix } from '../snapshot/utils.ts'
 import type { WorkspaceStateDict, MountSnapshot } from '../snapshot/types.ts'
 import type { FileEvent } from '../../types.ts'
-import { ConsistencyPolicy, DriftPolicy, MountMode, PathSpec, parseMountMode } from '../../types.ts'
+import {
+  type ReadSpec,
+  DEFAULT_READ_SPEC,
+  DriftPolicy,
+  MountMode,
+  PathSpec,
+  parseMountMode,
+} from '../../types.ts'
 import type { Explanation, Policies } from '../../policy/index.ts'
 import type { RoutePolicy } from '../../runtime/routing/index.ts'
 import type { TSNodeLike } from '../../shell/types.ts'
@@ -59,6 +67,7 @@ import type { ExecuteFn } from '../expand/node.ts'
 import type { ProvisionResult } from '../../provision/types.ts'
 import { Ops } from '../../ops/ops.ts'
 import type { MountEntry } from '../mount/mount.ts'
+import { checkReadCapability } from '../mount/read_policy.ts'
 import { MountRegistry } from '../mount/registry.ts'
 import { PrefixResolver } from '../../runtime/resolver.ts'
 import { WorkspaceBinding, captureBinding } from '../../runtime/binding.ts'
@@ -136,6 +145,7 @@ export class Workspace {
    */
   readonly opsRegistry: OpsRegistry
   private readonly indexConfig: IndexConfig | undefined
+  private readonly readDefault: ReadSpec
   private shellParser: ShellParser | null
   private readonly shellParserFactory: (() => Promise<ShellParser>) | null
   private shellParserPromise: Promise<ShellParser> | null = null
@@ -189,15 +199,17 @@ export class Workspace {
   // can't mount), so the core Workspace carries no FUSE state.
 
   constructor(mounts: Record<string, MountSpec>, options: WorkspaceOptions = {}) {
-    const normalized = normalizeMounts(mounts)
+    // The workspace-level default a mount overrides, as `mode` is.
+    this.readDefault = options.read ?? DEFAULT_READ_SPEC
+    const normalized = normalizeMounts(mounts, this.readDefault)
     this.indexConfig = options.index
     this.registry = new MountRegistry(
       normalized.bare,
       options.mode ?? MountMode.READ,
       normalized.modes,
+      this.readDefault,
+      normalized.read,
     )
-    const consistency = options.consistency ?? ConsistencyPolicy.LAZY
-    this.registry.setConsistency(consistency)
     if (options.index !== undefined) {
       for (const vfs of Object.values(normalized.bare)) {
         vfs.setIndex?.(options.index)
@@ -329,7 +341,14 @@ export class Workspace {
       this.registry.clis.install(cliName, cliSpec, cliConfig)
     }
     this.observer = new Observer(stores.observe)
-    this.registry.mount(HISTORY_PREFIX, new HistoryViewVFS(this.observer), MountMode.READ)
+    // Explicit at the construction site: the history view does not cache
+    // reads, so its policy can only ever be bounded.
+    this.registry.mount(
+      HISTORY_PREFIX,
+      new HistoryViewVFS(this.observer),
+      MountMode.READ,
+      DEFAULT_READ_SPEC,
+    )
     this.cache = buildFileCache(options.cache, options.cacheLimit)
     this.registry.attachFileCache(this.cache)
     // Only an explicit agentId claims the workspace user; a bare launch
@@ -344,7 +363,6 @@ export class Workspace {
       this.namespace,
       this.cache,
       this.opsRegistry,
-      consistency,
       this.registry.policies,
       this.drift,
     )
@@ -355,7 +373,13 @@ export class Workspace {
     // A synthetic anchor is internal to Mirage and must NOT be forwarded to Pyodide,
     // whose own `/` filesystem (holding the Python stdlib) would be hijacked.
     if (this.registry.rootMount === null) {
-      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ)
+      // Pinned bounded, not inherited. This anchor is synthesized after
+      // normalizeMounts has run, so it never meets the capability verdict
+      // -- and RAM does not cache reads, so a workspace-level `fresh`
+      // would stamp on it exactly the combination the verdict refuses. It
+      // is snapshotted like any other mount, so that stray policy came
+      // back as a refusal on restore.
+      this.registry.mount('/', new RAMVFS(), options.mode ?? MountMode.READ, DEFAULT_READ_SPEC)
       this.syntheticRootAnchor = true
     }
     // The workspace's own session is a session created without a name,
@@ -380,15 +404,26 @@ export class Workspace {
         mount.registerGeneral(cmd)
       }
     }
-    for (const [prefix, commandLimits] of Object.entries({
-      ...normalized.commandLimits,
-      ...(options.commandLimits ?? {}),
-    })) {
+    // A mount's own limits win, which is the order node's unwrap produced
+    // before it handed them to core: it spread options first and then
+    // overwrote per prefix from the Mount. Merged per command, not per
+    // prefix: spreading one whole record over the other dropped every
+    // command the losing side named, so a workspace-level `cat` limit
+    // disappeared the moment the mount itself named an `ls` one. Python
+    // reaches the same shape through `entry.command_limits.update()`.
+    const limitPrefixes = new Set([
+      ...Object.keys(options.commandLimits ?? {}),
+      ...Object.keys(normalized.commandLimits),
+    ])
+    for (const prefix of limitPrefixes) {
       const mount = this.registry.tryMountForPrefix(prefix)
       if (mount === null) {
         throw new Error(`commandLimits references unknown mount prefix: ${prefix}`)
       }
-      for (const [cmd, sg] of Object.entries(commandLimits)) {
+      for (const [cmd, sg] of Object.entries({
+        ...(options.commandLimits?.[prefix] ?? {}),
+        ...(normalized.commandLimits[prefix] ?? {}),
+      })) {
         mount.commandLimits.set(cmd, sg)
       }
     }
@@ -914,10 +949,21 @@ export class Workspace {
   /**
    * Add a mount to a running workspace. Registers the VFS's ops globally
    * on this workspace's OpsRegistry so dispatch can find them.
+   *
+   * The runtime door runs the same read-policy verdict the constructor
+   * does: a mount added here is no more able to declare a policy its
+   * backend cannot honour than one declared in config.
    */
-  addMount(prefix: string, vfs: VFS, mode: MountMode = MountMode.READ): MountEntry {
+  addMount(
+    prefix: string,
+    vfs: VFS,
+    mode: MountMode = MountMode.READ,
+    read?: ReadSpec,
+  ): MountEntry {
     if (this.isShuttingDown()) throw new Error('Workspace is closed')
     this.registry.checkVfsAvailable(vfs)
+    const resolvedRead = read ?? this.readDefault
+    checkReadCapability(prefix, vfs, resolvedRead)
     const previous = this.registry.allMounts()
     // Configure before mount() captures the index in its CacheManager.
     // An alias must retain the index used by the VFS's other mounts.
@@ -928,7 +974,7 @@ export class Workspace {
     ) {
       vfs.setIndex?.(this.indexConfig)
     }
-    const m = this.registry.mount(prefix, vfs, mode)
+    const m = this.registry.mount(prefix, vfs, mode, resolvedRead)
     prepareAddedMount(this.registry, m, previous)
     this.opsRegistry.registerVfs(vfs)
     return m
@@ -1468,11 +1514,18 @@ export class Workspace {
     cliOverrides: CLIOverrides = {},
   ): Promise<InstanceType<T>> {
     const rebuilt = await withRebuiltMounts(state, overrides, (m) => this.buildSavedVfs(m))
-    const args = buildMountArgs(state, rebuilt, cliOverrides)
-    const mounts: Record<string, MountSpec> = {}
-    for (const [prefix, [vfs, mode]] of Object.entries(args.mountArgs)) {
-      mounts[prefix] = [vfs, mode]
-    }
+    // The caller's own overrides, named before the rebuilds are merged
+    // in: past this point the two are one map, and only these are a
+    // backend other than the one the snapshot saved.
+    const args = buildMountArgs(
+      state,
+      rebuilt,
+      cliOverrides,
+      new Set(Object.keys(overrides).map(normMountPrefix)),
+    )
+    // The Mounts ride through whole; flattening them to [vfs, mode]
+    // here is what would drop the restored read policy.
+    const mounts: Record<string, MountSpec> = { ...args.mountArgs }
     const mergedOptions: WorkspaceOptions = {
       ...(args.defaultSessionId !== undefined ? { sessionId: args.defaultSessionId } : {}),
       ...(args.defaultAgentId !== null ? { agentId: args.defaultAgentId } : {}),

@@ -125,6 +125,33 @@ export interface VFS {
    * `BaseVFS.SIZES_ALWAYS_KNOWN`.
    */
   readonly sizesAlwaysKnown?: boolean
+  /**
+   * Whether a `read: fresh` mount can actually be revalidated against this
+   * backend: {@link VFS.stat} and the read record must stamp the *same kind*
+   * of content token, so the gate can compare them with `===`. False (the
+   * default) is refused at mount time rather than degraded, because a mount
+   * that declares fresh and silently serves bounded is the bug the policy
+   * exists to prevent.
+   *
+   * Distinct from {@link VFS.supportsSnapshot}, which asks whether a token
+   * exists at all: gdrive stamps one on both sides and still cannot honour
+   * fresh, because stat returns a timestamp where read returns an md5.
+   * Distinct from {@link VFS.cachesReads}, which asks whether the gate can
+   * fire.
+   *
+   * onedrive and sharepoint look like they qualify and do not: both stamp
+   * a cTag on stat and on read, so on token kind alone the refusal reads
+   * as unnecessary. It is correct for a second reason this flag does not
+   * name -- both label the read record with the slashless `vfsPath`, so
+   * the record key comes out malformed (`/oda/b.txt` rather than
+   * `/od/a/b.txt`) and the cTag can never be matched against the cache
+   * entry. The backends that do qualify pass the mount path instead.
+   * gdrive carries the same slashless label on top of its token-kind
+   * mismatch. Fix the label before reconsidering the flag.
+   *
+   * Mirrors Python's `BaseVFS.READ_REVALIDATABLE`.
+   */
+  readonly readRevalidatable?: boolean
   readonly index?: IndexCacheStore
   readonly accessor?: Accessor
   readonly opsMap?: Record<string, unknown>
@@ -175,6 +202,10 @@ export function cachesReads(vfs: VFS): boolean {
 
 export function sizesAlwaysKnown(vfs: VFS): boolean {
   return vfs.sizesAlwaysKnown === true
+}
+
+export function readRevalidatable(vfs: VFS): boolean {
+  return vfs.readRevalidatable === true
 }
 
 export abstract class BaseVFS {

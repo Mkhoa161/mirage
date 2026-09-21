@@ -24,7 +24,8 @@ export interface MountSnapshot {
   index: number
   prefix: string
   mode: string
-  consistency: string
+  read: string
+  ttl: number
   vfs_class: string
   // The `vfs:` value the registry built the VFS from, or null
   // for one constructed in code. See `vfsRefOf`.

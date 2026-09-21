@@ -44,7 +44,15 @@ import { NO_FOLLOW_OPS, STAMP_WRITE_OPS } from '../../ops/config.ts'
 import { mergeReaddir, namespaceListing, namespaceStat } from '../../ops/namespace_view.ts'
 import { ebusy, isMissingPath } from '../../utils/errors.ts'
 import { cachesReads, type VFS } from '../../vfs/base.ts'
-import { ConsistencyPolicy, FileStat, FileType, MountMode, PathSpec, VFSName } from '../../types.ts'
+import {
+  type CacheFacts,
+  DEFAULT_READ_TTL,
+  FileStat,
+  FileType,
+  MountMode,
+  PathSpec,
+  VFSName,
+} from '../../types.ts'
 import type { DispatchFn } from '../../runtime/types.ts'
 import type { DriftQueue } from '../snapshot/drift.ts'
 import type { Namespace } from '../mount/namespace/namespace.ts'
@@ -155,7 +163,6 @@ export class Dispatcher {
     namespace: Namespace,
     cache: FileCache & VFS,
     opsRegistry: OpsRegistry,
-    consistency: ConsistencyPolicy = ConsistencyPolicy.LAZY,
     policies?: Policies,
     drift?: DriftQueue,
   ) {
@@ -164,7 +171,7 @@ export class Dispatcher {
     this.opsRegistry = opsRegistry
     this.policies = policies ?? new Policies()
     this.drift = drift ?? null
-    this.reconciler = new Reconciler(cache, namespace, opsRegistry, consistency)
+    this.reconciler = new Reconciler(cache, namespace, opsRegistry)
   }
 
   /**
@@ -451,7 +458,7 @@ export class Dispatcher {
       } else {
         const fallback = isMissingPath(err) ? this.namespaceResult(opName, p.virtual) : null
         if (fallback === null) {
-          await this.reconciler.onOpMissing(opName, p.virtual, err)
+          await this.reconciler.onOpMissing(mount, opName, p.virtual, err)
           throw err
         }
         result = fallback
@@ -1063,16 +1070,24 @@ export class Dispatcher {
   }
 
   // The file cache only holds paths for read-caching mounts, mirroring
-  // Python's is_cacheable_path gate; without it every backend's reads
+  // Python's cache_facts_for gate; without it every backend's reads
   // land in the cache and provision reports phantom cache hits.
-  isCacheablePath = (path: string): boolean => {
+  cacheFactsFor = (path: string): CacheFacts => {
     const mount = this.namespace.tryMountFor(path)
-    if (mount === null) return false
-    return !mount.retiring && cachesReads(mount.vfs)
+    if (mount === null || mount.retiring || !cachesReads(mount.vfs)) {
+      return { cacheable: false, ttl: DEFAULT_READ_TTL }
+    }
+    return { cacheable: true, ttl: mount.read.ttl }
   }
 
-  /** Bind deferred command results to the mounts that produced them. */
-  captureCacheablePaths(): (path: string) => boolean {
+  /**
+   * Bind deferred command results to the mounts that produced them.
+   *
+   * The mount table is pinned at command start, so a fill that lands after
+   * the command is stamped with the bound of the mount that produced the
+   * bytes rather than whatever holds the prefix by then.
+   */
+  captureCacheFacts(): (path: string) => CacheFacts {
     const mounts = new Map(
       this.namespace.mountPrefixes().map((p) => [p, this.namespace.mountFor(p)]),
     )
@@ -1080,15 +1095,18 @@ export class Dispatcher {
       const prefix = ownerPrefix(mounts.keys(), path)
       const original = prefix === null ? null : mounts.get(prefix)
       const mount = this.namespace.tryMountFor(path)
-      return mount !== null && original === mount && !mount.retiring && cachesReads(mount.vfs)
+      if (mount === null || original !== mount || mount.retiring || !cachesReads(mount.vfs)) {
+        return { cacheable: false, ttl: DEFAULT_READ_TTL }
+      }
+      return { cacheable: true, ttl: mount.read.ttl }
     }
   }
 
   async applyIo(
     io: IOResult,
     records?: readonly OpRecord[],
-    isCacheable: (path: string) => boolean = this.isCacheablePath,
+    cacheFacts: (path: string) => CacheFacts = this.cacheFactsFor,
   ): Promise<void> {
-    await applyIo(this.cache, io, isCacheable, records)
+    await applyIo(this.cache, io, cacheFacts, records)
   }
 }

@@ -199,3 +199,19 @@ async def test_a_fill_survives_the_removal_of_another_key(operation):
     await cache.remove("/other")
     await fill
     assert await cache.get("/large") == data
+
+
+@pytest.mark.asyncio
+async def test_is_unbounded_distinguishes_absent_from_boundless():
+    """One question, not `exists` plus a ttl lookup.
+
+    A warm bounded read asks this on every serve, so it costs one store
+    round trip; and a missing entry must answer False rather than reading
+    as unbounded, or the gate would evict nothing and refuse everything.
+    """
+    cache = RAMFileCacheStore()
+    assert await cache.is_unbounded("/absent") is False
+    await cache.set("/no-bound", b"x")
+    assert await cache.is_unbounded("/no-bound") is True
+    await cache.set("/bounded", b"x", ttl=30)
+    assert await cache.is_unbounded("/bounded") is False

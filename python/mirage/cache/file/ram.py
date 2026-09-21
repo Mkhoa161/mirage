@@ -152,6 +152,10 @@ class RAMFileCacheStore(RAMVFS, FileCacheMixin, KeyLockMixin):
             return False
         return entry.fingerprint == remote_fingerprint
 
+    async def is_unbounded(self, key: str) -> bool:
+        entry = self._entries.get(key)
+        return entry is not None and entry.ttl is None
+
     async def clear(self) -> None:
         self._invalidation.invalidate_all()
         async with self._clear_lock:

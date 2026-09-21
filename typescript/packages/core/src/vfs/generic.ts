@@ -83,6 +83,14 @@ export interface GenericVFSOptions<A extends Accessor = Accessor> {
    * detection, it is a snapshot that claims to have one.
    */
   supportsSnapshot?: boolean
+  /**
+   * Whether `io.stat` and the read record stamp the *same kind* of content
+   * token, so a `read: fresh` mount can compare them. Setting it without
+   * that makes every read verdict stale and refetch forever; a mount
+   * declaring `fresh` on a backend that leaves it false is refused at mount
+   * time instead.
+   */
+  readRevalidatable?: boolean
   /** Cache-index configuration. Omitted leaves the lazy RAM default. */
   index?: IndexConfig
 }
@@ -119,6 +127,7 @@ export class GenericVFS<A extends Accessor = Accessor> extends BaseVFS implement
   readonly cachesReads: boolean
   readonly sizesAlwaysKnown: boolean
   readonly supportsSnapshot: boolean
+  readonly readRevalidatable: boolean
   readonly #commands: readonly RegisteredCommand[]
   readonly #ops: readonly RegisteredOp[]
   readonly #glob: ResolveGlobOp<A>
@@ -152,6 +161,7 @@ export class GenericVFS<A extends Accessor = Accessor> extends BaseVFS implement
     this.cachesReads = options.cachesReads ?? false
     this.sizesAlwaysKnown = options.sizesAlwaysKnown ?? false
     this.supportsSnapshot = options.supportsSnapshot ?? false
+    this.readRevalidatable = options.readRevalidatable ?? false
     if (options.index !== undefined) this.setIndex(options.index)
     this.#glob = resolveGlobOf(options.io)
     this.#commands = [

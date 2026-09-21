@@ -27,7 +27,7 @@ from mirage.shell.console import (KILLED_OUTCOME, Channel, ConsoleChunk,
                                   JobConsole, RAMConsoleStore, exit_outcome)
 from mirage.shell.job_table import Job, JobStatus
 from mirage.shell.variable import ShellVar
-from mirage.types import ConsistencyPolicy, JsonValue, MountMode, VFSName
+from mirage.types import JsonValue, MountMode, ReadSpec, VFSName
 from mirage.version import __version__
 from mirage.vfs.history import HISTORY_PREFIX
 from mirage.vfs.loader import SCRIPT_MODULE_NAME
@@ -35,6 +35,8 @@ from mirage.vfs.registry import VFSEntry, resolve_class, resolve_entry
 from mirage.vfs.secrets import (has_redacted_secret, redacted_config_dump,
                                 revealed_config_dump)
 from mirage.workspace.mount.namespace import NodeMeta
+from mirage.workspace.mount.read_policy import resolve_read_spec
+from mirage.workspace.mount.spec import Mount
 from mirage.workspace.session.resolve import narrow
 from mirage.workspace.session.session import (SessionState, vars_from_fields,
                                               vars_to_fields)
@@ -162,7 +164,8 @@ async def to_state_dict(ws) -> dict[str, Any]:
             MountKey.INDEX: idx,
             MountKey.PREFIX: m.prefix,
             MountKey.MODE: m.mode.value,
-            MountKey.CONSISTENCY: m.consistency.value,
+            MountKey.READ: m.read.policy.value,
+            MountKey.TTL: m.read.ttl,
             MountKey.VFS_CLASS:
             f"{type(m.vfs).__module__}.{type(m.vfs).__name__}",
             MountKey.VFS_REF: m.vfs.vfs_ref,
@@ -229,6 +232,35 @@ async def to_state_dict(ws) -> dict[str, Any]:
     }
 
 
+def check_format_version(state: dict[str, Any]) -> None:
+    """Refuse a snapshot this loader cannot read.
+
+    An absent version is v3 or older, not "current". It used to be
+    harmless because every key the loader read had a default; v4 makes
+    the read policy required, so an unversioned dict would land on a
+    bare KeyError instead of this message.
+
+    Both doors run it. ``build_mount_args`` builds a workspace from the
+    state; ``apply_state_dict`` restores into one that already exists,
+    and is what ``version checkout``, ``version restore`` and the agent
+    sandbox's hydrate call. Checking in one door only meant the same
+    bytes were refused through ``Workspace.load`` and half-restored
+    through a checkout.
+
+    Args:
+        state (dict[str, Any]): the snapshot state.
+
+    Raises:
+        ValueError: the snapshot predates this loader's format.
+    """
+    saved_version = state.get(StateKey.VERSION)
+    if saved_version is None or saved_version < FORMAT_VERSION:
+        shown = "unversioned" if saved_version is None else f"v{saved_version}"
+        raise ValueError(f"snapshot format {shown} not supported "
+                         f"(loader expects v{FORMAT_VERSION}); "
+                         "regenerate via `mirage workspace snapshot`")
+
+
 def build_mount_args(state: dict[str, Any],
                      mounts: dict[str, Any] | None = None,
                      clis: CLIOverrides | None = None) -> MountArgs:
@@ -243,11 +275,7 @@ def build_mount_args(state: dict[str, Any],
         ValueError: if any redacted mount or CLI lacks an override, or
             if the snapshot is from an unsupported format version.
     """
-    saved_version = state.get(StateKey.VERSION)
-    if saved_version is not None and saved_version < FORMAT_VERSION:
-        raise ValueError(f"snapshot format v{saved_version} not supported "
-                         f"(loader expects v{FORMAT_VERSION}); "
-                         "regenerate via `mirage workspace snapshot`")
+    check_format_version(state)
 
     overrides = {norm_mount_prefix(k): v for k, v in (mounts or {}).items()}
 
@@ -277,12 +305,43 @@ def build_mount_args(state: dict[str, Any],
             f"{missing_clis}. These CLIs were saved with redacted "
             "config secrets.")
 
-    mount_args: dict[str, tuple[Any, ...]] = {}
+    mount_args: dict[str, Mount] = {}
     for m in state[StateKey.MOUNTS]:
         prefix = norm_mount_prefix(m[MountKey.PREFIX])
         prov = (overrides[prefix]
                 if prefix in overrides else _construct_vfs(m))
-        mount_args[m[MountKey.PREFIX]] = (prov, MountMode(m[MountKey.MODE]))
+        # Named, never `.get(default)` and never a bare subscript: a
+        # dict labelled v4 with the key missing would silently install a
+        # default on a mount that was saved otherwise, which is the
+        # whole failure this version bump exists to prevent -- and the
+        # subscript said so as `KeyError: 'read'`, which names neither
+        # the mount nor the fix. `mode`, subscripted below, is the same
+        # shape of required key. TypeScript refuses it here too.
+        if MountKey.READ not in m or MountKey.TTL not in m:
+            raise ValueError(
+                f"Workspace.load: mount {m[MountKey.PREFIX]!r} is missing "
+                "its read policy; regenerate the snapshot")
+        # Through the coercer, so a junk policy or a null/non-positive
+        # bound is refused here rather than restoring a mount whose
+        # bound can never expire.
+        read = resolve_read_spec(m[MountKey.READ], m[MountKey.TTL])
+        # The saved policy belongs to the backend that was saved. A mount
+        # handed back through `mounts=` -- which a redacted-credential
+        # mount *must* be -- may be a different backend entirely, and
+        # carrying `fresh` onto one that cannot revalidate would refuse a
+        # restore that used to succeed. The override keeps the default;
+        # TypeScript applies the same rule to its stand-in.
+        if prefix in overrides:
+            read = ReadSpec()
+        # command_limits is deliberately absent: a mount entry has never
+        # carried one, so there is nothing to restore. Emitting Mount
+        # objects makes the slot exist, but filling it needs a new
+        # snapshot key, which is not this change.
+        mount_args[m[MountKey.PREFIX]] = Mount(
+            vfs=prov,
+            mode=MountMode(m[MountKey.MODE]),
+            read=read,
+        )
 
     cli_args: dict[str, tuple[str | CLISpec, dict[str, Any] | None]] = {}
     for e in cli_entries:
@@ -300,7 +359,6 @@ def build_mount_args(state: dict[str, Any],
 
     return MountArgs(
         mount_args=mount_args,
-        consistency=ConsistencyPolicy.LAZY,
         default_session_id=state[StateKey.DEFAULT_SESSION_ID],
         default_agent_id=state.get(StateKey.DEFAULT_AGENT_ID),
         clis=cli_args or None,
@@ -338,6 +396,7 @@ async def apply_state_dict(ws,
             checkout then still sent every cached read back to an
             origin that may have moved.
     """
+    check_format_version(state)
     sessions, seed_vars = await _gate_restored_state(ws, state)
     if replace_cache:
         await ws._cache.clear()

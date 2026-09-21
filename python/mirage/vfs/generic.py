@@ -175,6 +175,12 @@ class GenericVFS(BaseVFS):
             ``FileStat.fingerprint`` with a stable per-path version
             marker. Setting it without that is not drift detection, it is
             a snapshot that claims to have one.
+        read_revalidatable (bool): whether ``io.stat`` and the read
+            record stamp the *same kind* of content token, so a
+            ``read: fresh`` mount can compare them. Setting it without
+            that makes every read verdict stale and refetch forever; a
+            mount declaring ``fresh`` on a backend that leaves it False
+            is refused at mount time instead.
         index (IndexConfig | None): cache-index configuration.
     """
 
@@ -194,6 +200,7 @@ class GenericVFS(BaseVFS):
         caches_reads: bool = False,
         sizes_always_known: bool = False,
         supports_snapshot: bool = False,
+        read_revalidatable: bool = False,
         index: IndexConfig | None = None,
     ) -> None:
         super().__init__(index=index)
@@ -207,6 +214,7 @@ class GenericVFS(BaseVFS):
         self.caches_reads = caches_reads
         self.SIZES_ALWAYS_KNOWN = sizes_always_known
         self.SUPPORTS_SNAPSHOT = supports_snapshot
+        self.READ_REVALIDATABLE = read_revalidatable
         self._resolve = io.resolve_glob
         self._ops = direct_ops(io, lambda: self.index)
         for fn in make_generic_commands(

@@ -15,6 +15,7 @@
 import { CachableAsyncIterator, concat } from '../../io/cachable_iterator.ts'
 import { materialize, type ByteSource, type IOResult } from '../../io/types.ts'
 import { READ_FINGERPRINT_OPS, WRITE_FINGERPRINT_OPS, type OpRecord } from '../../observe/record.ts'
+import type { CacheFacts } from '../../types.ts'
 import { drainBudget, type FileCache } from './mixin.ts'
 import { KeyLock } from '../lock.ts'
 
@@ -36,7 +37,7 @@ export function withCacheMutation<T>(cache: FileCache, fn: () => Promise<T>): Pr
  * Backends stamp a read record with the content identifier they returned
  * (S3 ETag, OneDrive cTag, Postgres sha256), and an object-store write
  * record with the token its PUT answered. Threading it into the cache
- * entry lets ALWAYS-mode `isFresh` compare like with like; the
+ * entry lets a `fresh` mount's `isFresh` compare like with like; the
  * MD5-of-content default only matches simple-PUT S3 objects.
  *
  * `ops` is the direction the caller took, never both. One line's records
@@ -87,12 +88,16 @@ async function setCached(
   path: string,
   data: Uint8Array,
   records: readonly OpRecord[] | undefined,
-  isCacheable: ((path: string) => boolean) | undefined,
+  cacheFacts: ((path: string) => CacheFacts) | undefined,
   ops: ReadonlySet<string>,
 ): Promise<void> {
   await withCacheMutation(cache, async () => {
-    if (isCacheable === undefined || isCacheable(path)) {
-      await setCachedLocked(cache, path, data, records, ops)
+    const facts = cacheFacts?.(path)
+    // `cacheable` is read first and short-circuits, so `ttl` is never
+    // consulted for a path that is not being cached. That ordering is
+    // what keeps an unresolvable mount from being read as "no bound".
+    if (facts === undefined || facts.cacheable) {
+      await setCachedLocked(cache, path, data, records, ops, facts?.ttl ?? null)
     }
   })
 }
@@ -103,27 +108,28 @@ async function setCachedLocked(
   data: Uint8Array,
   records: readonly OpRecord[] | undefined,
   ops: ReadonlySet<string>,
+  ttl: number | null,
 ): Promise<void> {
   const fingerprint = latestFingerprint(records, path, ops, data.byteLength)
   if (fingerprint === null && bytesEqual(await cache.get(path), data)) {
     // Warm read: the bytes were served from this cache, so there is no
     // backend read record. Re-setting would replace the backend
     // fingerprint stamped on the cold read with the MD5 default and
-    // force ALWAYS mode to evict and refetch on every read.
+    // force a `fresh` mount to evict and refetch on every read.
     return
   }
-  await cache.set(path, data, { fingerprint })
+  await cache.set(path, data, { fingerprint, ttl })
 }
 
 export async function applyIo(
   cache: FileCache,
   io: IOResult,
-  isCacheable?: (path: string) => boolean,
+  cacheFacts?: (path: string) => CacheFacts,
   records?: readonly OpRecord[],
 ): Promise<void> {
   const cacheSet = new Set(io.cache)
   for (const path of io.cache) {
-    if (isCacheable !== undefined && !isCacheable(path)) continue
+    if (cacheFacts !== undefined && !cacheFacts(path).cacheable) continue
     // The token has to describe the bytes actually stored, so the lookup
     // asks about the side this branch took. Set in the branch rather
     // than recovered from the result, so the two cannot disagree.
@@ -135,11 +141,11 @@ export async function applyIo(
     }
     if (source === undefined) continue
     if (source instanceof Uint8Array) {
-      await setCached(cache, path, source, records, isCacheable, ops)
+      await setCached(cache, path, source, records, cacheFacts, ops)
     } else if (source instanceof CachableAsyncIterator) {
       if (source.discarded) continue
       if (source.exhausted) {
-        await setCached(cache, path, concat(source.bufferedChunks), records, isCacheable, ops)
+        await setCached(cache, path, concat(source.bufferedChunks), records, cacheFacts, ops)
       } else {
         const tasks = cache.drainTasks
         if (tasks !== undefined && !tasks.has(path) && !(await cache.exists(path))) {
@@ -148,8 +154,9 @@ export async function applyIo(
             path,
             source,
             drainBudget(cache),
-            () => tasks.get(path) === task && (isCacheable === undefined || isCacheable(path)),
+            () => tasks.get(path) === task,
             ops,
+            cacheFacts,
             records,
           )
           tasks.set(path, task)
@@ -160,12 +167,12 @@ export async function applyIo(
       }
     } else {
       const data = await materialize(source)
-      await setCached(cache, path, data, records, isCacheable, ops)
+      await setCached(cache, path, data, records, cacheFacts, ops)
     }
   }
   for (const path of Object.keys(io.writes)) {
     if (cacheSet.has(path)) continue
-    if (isCacheable !== undefined && !isCacheable(path)) continue
+    if (cacheFacts !== undefined && !cacheFacts(path).cacheable) continue
     await cache.remove(path)
   }
 }
@@ -182,15 +189,22 @@ async function backgroundDrain(
   maxBytes: number,
   isCurrent: () => boolean,
   ops: ReadonlySet<string>,
+  cacheFacts?: (path: string) => CacheFacts,
   records?: readonly OpRecord[],
 ): Promise<void> {
   try {
     const materialized = await it.drainBounded(maxBytes)
     if (materialized === null) return
     await withCacheMutation(cache, async () => {
-      if (isCurrent()) {
+      const facts = cacheFacts?.(path)
+      // The large-object path stamps the bound too, or a streamed read
+      // would be the one thing `bounded` never expires. Task identity
+      // and cacheability are asked separately so this stays one
+      // callback rather than two.
+      if (isCurrent() && (facts === undefined || facts.cacheable)) {
         await cache.add(path, materialized, {
           fingerprint: latestFingerprint(records, path, ops, materialized.byteLength),
+          ttl: facts?.ttl ?? null,
         })
       }
     })

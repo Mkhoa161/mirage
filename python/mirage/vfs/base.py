@@ -77,6 +77,30 @@ class BaseVFS:
     # docs/python/setup/fuse.mdx.
     SIZES_ALWAYS_KNOWN: bool = False
 
+    # Whether a `read: fresh` mount can actually be revalidated against
+    # this backend: stat() and read must stamp FileStat.fingerprint /
+    # the read record with the *same kind* of content token, so the gate
+    # can compare them with ==. False (the default) is refused at mount
+    # time rather than degraded, because a mount that declares fresh and
+    # silently serves bounded is the bug the policy exists to prevent.
+    #
+    # Distinct from SUPPORTS_SNAPSHOT, which asks whether a token exists
+    # at all: gdrive stamps one on both sides and still cannot honour
+    # fresh, because stat returns a timestamp where read returns an md5.
+    # Distinct from caches_reads, which asks whether the gate can fire.
+    #
+    # onedrive and sharepoint look like they qualify and do not: both
+    # stamp a cTag on stat and on read, so on token kind alone the
+    # refusal reads as unnecessary. It is correct for a second reason
+    # the flag does not name -- both label the read record with
+    # `path.vfs_path`, which carries no leading slash, so `record()`
+    # builds a malformed key ("/oda/b.txt" rather than "/od/a/b.txt")
+    # and the cTag can never be matched against the cache entry. The
+    # backends that do qualify pass `path_spec.mount_path` instead.
+    # gdrive carries the same slashless label on top of its token-kind
+    # mismatch. Fix the label before reconsidering the flag.
+    READ_REVALIDATABLE: bool = False
+
     def __init__(
         self,
         index: IndexConfig | None = None,

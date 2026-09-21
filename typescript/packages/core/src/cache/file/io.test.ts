@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { CachableAsyncIterator } from '../../io/cachable_iterator.ts'
 import { IOResult } from '../../io/types.ts'
 import { OpRecord } from '../../observe/record.ts'
+import type { CacheFacts } from '../../types.ts'
 import { applyIo } from './io.ts'
 import { RAMFileCacheStore } from './ram.ts'
 
@@ -424,5 +425,56 @@ describe('the token describes the bytes stored', () => {
     const io = new IOResult({ reads: { '/s3/f.txt': ENC.encode('abcdef') }, cache: ['/s3/f.txt'] })
     await applyIo(cache, io, undefined, [opRecord('read', '/s3/f.txt', 'etag-2', 1)])
     expect(await cache.isFresh('/s3/f.txt', 'etag-2')).toBe(true)
+  })
+})
+
+// ── the mount's staleness bound reaches the entry ───────────────────────
+
+function facts(ttl: number, cacheable = true): (path: string) => CacheFacts {
+  return () => ({ cacheable, ttl })
+}
+
+// The value, not just its presence. `isUnbounded` alone would stay green
+// if every stamp wrote the same hardcoded bound, which is exactly the
+// regression that makes a per-mount `ttl:` cosmetic.
+function boundOf(cache: RAMFileCacheStore, key: string): number | null | undefined {
+  return cache.snapshotEntries().find((e) => e.key === key)?.entry.ttl
+}
+
+describe('applyIo bound stamping', () => {
+  it('stamps the bound on a plain read', async () => {
+    const cache = new RAMFileCacheStore()
+    const io = new IOResult({ reads: { '/s3/f.txt': ENC.encode('hello') }, cache: ['/s3/f.txt'] })
+    await applyIo(cache, io, facts(45))
+    expect(boundOf(cache, '/s3/f.txt')).toBe(45)
+    expect(await cache.isUnbounded('/s3/f.txt')).toBe(false)
+  })
+
+  // The large-object path stamps too. A stream the command never
+  // exhausted is filled by the background drain, which writes through
+  // `add` rather than `set`; missing it would leave streamed reads -- the
+  // ones a staleness bound matters most for -- as the only entries
+  // `bounded` never expires.
+  it('stamps the bound on a background drain', async () => {
+    const cache = new RAMFileCacheStore()
+    const io = new IOResult({
+      reads: { '/s3/big.txt': makeStream('hello') },
+      cache: ['/s3/big.txt'],
+    })
+    await applyIo(cache, io, facts(30))
+    await sleep(50)
+    expect(DEC.decode((await cache.get('/s3/big.txt')) ?? undefined)).toBe('hello')
+    expect(boundOf(cache, '/s3/big.txt')).toBe(30)
+    expect(await cache.isUnbounded('/s3/big.txt')).toBe(false)
+  })
+
+  // `cacheable` is read first and short-circuits, so the bound is never
+  // consulted for a path that is not being cached -- which is what keeps
+  // an unresolvable mount from reading as "no bound".
+  it('skips a path its mount does not cache', async () => {
+    const cache = new RAMFileCacheStore()
+    const io = new IOResult({ reads: { '/s3/f.txt': ENC.encode('hello') }, cache: ['/s3/f.txt'] })
+    await applyIo(cache, io, facts(30, false))
+    expect(await cache.exists('/s3/f.txt')).toBe(false)
   })
 })

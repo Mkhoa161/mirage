@@ -78,6 +78,9 @@ class S3VFS(BaseVFS):
     _ops: dict[str, Any] = _S3_OPS
     PROMPT: str = PROMPT
     SUPPORTS_SNAPSHOT: bool = True
+    # stat and read both stamp the ETag, so the gate compares like with
+    # like. Inherited by every S3AliasVFS provider.
+    READ_REVALIDATABLE: bool = True
 
     def __init__(self, config: S3Config) -> None:
         super().__init__()

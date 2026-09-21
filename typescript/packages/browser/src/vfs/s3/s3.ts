@@ -72,6 +72,9 @@ export class S3VFS extends BaseVFS implements VFS {
   // fetching. Every sibling browser VFS says so; s3 was the one that
   // did not, and its node twin has always declared it.
   readonly sizesAlwaysKnown: boolean = true
+  // stat and read both stamp the ETag, so the gate compares like with
+  // like. Inherited by every S3AliasVFS provider.
+  readonly readRevalidatable: boolean = true
   override readonly indexTtl: number = 600
   readonly prompt: string = S3_BROWSER_PROMPT
   readonly config: S3Config

@@ -188,6 +188,13 @@ export class RedisFileCacheStore extends RedisVFS implements FileCache {
     return fp === remoteFingerprint
   }
 
+  async isUnbounded(key: string): Promise<boolean> {
+    // Redis answers this natively and distinguishes the two cases that
+    // matter: -1 is present with no expiry, -2 is absent.
+    const c = await this.cacheClient()
+    return (await c.ttl(this.dataKey(key))) === -1
+  }
+
   async evictPrefix(prefix: string): Promise<void> {
     this.invalidation.invalidateAll()
     for (const key of [...this.drainTasks.keys()]) {

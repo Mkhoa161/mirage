@@ -17,7 +17,7 @@ import { NOOPAccessor } from '../accessor/base.ts'
 import type { FileCache } from '../cache/file/mixin.ts'
 import type { OpsRegistry } from '../ops/registry.ts'
 import type { VFS } from '../vfs/base.ts'
-import { ConsistencyPolicy, FileStat, PathSpec } from '../types.ts'
+import { FileStat, PathSpec, ReadPolicy } from '../types.ts'
 import { enoent, isEnoent, isMissingOp } from '../utils/errors.ts'
 import { mountKey } from '../utils/key_prefix.ts'
 import { rstripSlash } from '../utils/slash.ts'
@@ -37,8 +37,9 @@ enum Verdict {
 /**
  * Keep the local view honest against backend truth.
  *
- * The single reconcile point every read path shares. Under ALWAYS a backend
- * re-stat classifies a path as fresh, stale (fingerprint mismatch), gone
+ * The single reconcile point every read path shares. Under a mount's
+ * `read: fresh` a backend re-stat classifies a path as fresh, stale
+ * (fingerprint mismatch), gone
  * (deletion), or unknown (no fingerprint to compare). One deletion signal
  * feeds both consumers with separate reactions: the file cache evicts and the
  * namespace GCs any orphaned attribute overlay.
@@ -63,18 +64,11 @@ export class Reconciler {
   private readonly cache: FileCache & VFS
   private readonly namespace: Namespace
   private readonly opsRegistry: OpsRegistry
-  private readonly consistency: ConsistencyPolicy
 
-  constructor(
-    cache: FileCache & VFS,
-    namespace: Namespace,
-    opsRegistry: OpsRegistry,
-    consistency: ConsistencyPolicy,
-  ) {
+  constructor(cache: FileCache & VFS, namespace: Namespace, opsRegistry: OpsRegistry) {
     this.cache = cache
     this.namespace = namespace
     this.opsRegistry = opsRegistry
-    this.consistency = consistency
   }
 
   // Re-stat the backend and apply the matching cache/overlay reaction. A
@@ -154,8 +148,9 @@ export class Reconciler {
     }
   }
 
-  // Gate a cached read: is the cached copy still valid to serve? Under LAZY
-  // the cache is trusted. Under ALWAYS the backend is re-stated: a matching
+  // Gate a cached read: is the cached copy still valid to serve? Under
+  // `bounded` the cache is trusted within its bound. Under `fresh` the
+  // backend is re-stated: a matching
   // fingerprint serves the cached copy, a mismatch evicts it, a path the
   // backend no longer has GCs and throws, and a backend that answers no
   // fingerprint at all -- or no stat at all -- cannot be verified, so the
@@ -170,7 +165,21 @@ export class Reconciler {
   // verify. The backends that really cannot be checked are answered by
   // probe's own UNKNOWN arm, one stat later.
   async mayServeCached(mount: MountEntry, path: string): Promise<boolean> {
-    if (this.consistency !== ConsistencyPolicy.ALWAYS) return true
+    if (mount.read.policy !== ReadPolicy.FRESH) {
+      // Bounded: the store expires the entry on its own, except for one
+      // population it cannot. Nothing stamped a ttl before this policy
+      // existed, and setCachedLocked short-circuits a warm read rather
+      // than re-setting it, so a bound-less entry would never acquire one
+      // and never expire. Removing it -- not merely declining to serve it
+      // -- is what makes the cold read that follows stamp the bound;
+      // refusing alone would leave the entry in place and refetch on
+      // every read forever.
+      if (await this.cache.isUnbounded(path)) {
+        await this.cache.remove(path)
+        return false
+      }
+      return true
+    }
     const verdict = await this.probeOrUnknown(mount, path)
     if (verdict === Verdict.GONE) throw enoent(path)
     return verdict === Verdict.FRESH
@@ -190,7 +199,7 @@ export class Reconciler {
   // the gate's benefit, which is correct there because the gate runs inside a
   // handler; here that same throw is only a way to lose output.
   async reconcileRead(mount: MountEntry, path: string): Promise<void> {
-    if (this.consistency !== ConsistencyPolicy.ALWAYS) return
+    if (mount.read.policy !== ReadPolicy.FRESH) return
     if (this.namespace.metaFor(path) === null && !(await this.cache.exists(path))) return
     try {
       await this.probeOrUnknown(mount, path)
@@ -202,12 +211,19 @@ export class Reconciler {
   }
 
   // React to a read/stat op that the backend reported gone (ENOENT).
-  async onOpMissing(opName: string, path: string, err: unknown): Promise<void> {
-    if (
-      this.consistency === ConsistencyPolicy.ALWAYS &&
-      REVALIDATE_OPS.has(opName) &&
-      isEnoent(err)
-    ) {
+  //
+  // Keyed on the mount's policy rather than fired unconditionally, and
+  // that is deliberate. An ENOENT here is not proof the backend said so:
+  // object-store `stat` answers a miss straight out of a live index
+  // listing, and so do the box, gdrive, dropbox, hierarchy and hf_hub
+  // reads. Reacting to one of those would drop an attribute overlay --
+  // which no backend stores, so nothing can put it back -- on the
+  // strength of cached negative knowledge.
+  //
+  // `isEnoent` is load-bearing and stays: the call site is a generic
+  // catch, so without it a 500, a timeout or an auth failure would GC.
+  async onOpMissing(mount: MountEntry, opName: string, path: string, err: unknown): Promise<void> {
+    if (mount.read.policy === ReadPolicy.FRESH && REVALIDATE_OPS.has(opName) && isEnoent(err)) {
       await this.onMissing(path)
     }
   }

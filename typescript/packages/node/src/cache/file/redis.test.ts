@@ -132,6 +132,34 @@ describe.skipIf(skip)('RedisFileCacheStore', () => {
     expect(await cache.get('nope')).toBeNull()
   })
 
+  // Redis answers isUnbounded as a ttl probe, so the two sentinels are
+  // the whole behaviour: -1 is present with no expiry, -2 is absent.
+  // Reading one as the other makes every warm bounded read either drop
+  // and refetch its entry forever, or never self-heal a bound-less one.
+  // The RAM store's twin cannot catch it -- only redis encodes it this way.
+  it('isUnbounded distinguishes absent from boundless', async () => {
+    const data = new Uint8Array([1])
+    expect(await cache.isUnbounded('absent')).toBe(false)
+    await cache.set('no-bound', data)
+    expect(await cache.isUnbounded('no-bound')).toBe(true)
+    await cache.set('bounded', data, { ttl: 30 })
+    expect(await cache.isUnbounded('bounded')).toBe(false)
+  })
+
+  it('a bound set on redis actually expires the key', async () => {
+    // The stamp has to reach redis itself, not just the client's view: a
+    // `set` that dropped the ttl would leave isUnbounded answering off a
+    // key redis never expires.
+    await cache.set('bounded2', new Uint8Array([1]), { ttl: 30 })
+    const c = await (
+      cache as unknown as { cacheClient(): Promise<{ ttl(k: string): Promise<number> }> }
+    ).cacheClient()
+    const key = (cache as unknown as { dataKey(k: string): string }).dataKey('bounded2')
+    const remaining = await c.ttl(key)
+    expect(remaining).toBeGreaterThan(0)
+    expect(remaining).toBeLessThanOrEqual(30)
+  })
+
   it('add returns false if key exists, true otherwise', async () => {
     const data = new Uint8Array([1, 2, 3])
     expect(await cache.add('k', data)).toBe(true)

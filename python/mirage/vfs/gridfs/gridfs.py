@@ -78,6 +78,9 @@ class GridFSVFS(BaseVFS):
     _ops: dict[str, Any] = _GRIDFS_OPS
     PROMPT: str = PROMPT
     SUPPORTS_SNAPSHOT: bool = True
+    # stat and read both stamp str(file_id), so the gate compares like
+    # with like.
+    READ_REVALIDATABLE: bool = True
 
     def __init__(self, config: GridFSConfig) -> None:
         super().__init__()

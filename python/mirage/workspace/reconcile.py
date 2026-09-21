@@ -17,7 +17,7 @@ from enum import Enum
 
 from mirage.cache.file.mixin import FileCacheMixin
 from mirage.cache.index.ram import RAMIndexCacheStore
-from mirage.types import ConsistencyPolicy
+from mirage.types import ReadPolicy
 from mirage.utils.errors import OperationNotSupportedError
 from mirage.workspace.mount.mount import MountEntry
 from mirage.workspace.mount.namespace import Namespace
@@ -37,9 +37,10 @@ class Verdict(Enum):
 class Reconciler:
     """Keep the local view honest against backend truth.
 
-    The single reconcile point every read path shares. Under ALWAYS a
-    backend re-stat classifies a path as fresh, stale (fingerprint
-    mismatch), gone (deletion), or unknown (no fingerprint to compare).
+    The single reconcile point every read path shares. Under a mount's
+    ``read: fresh`` a backend re-stat classifies a path as fresh, stale
+    (fingerprint mismatch), gone (deletion), or unknown (no fingerprint
+    to compare).
     One deletion signal feeds both consumers with separate reactions: the
     file cache evicts and the namespace GCs any orphaned attribute overlay.
 
@@ -59,11 +60,9 @@ class Reconciler:
     the second probe is the honest price until the two tiers share a scope.
     """
 
-    def __init__(self, cache: FileCacheMixin, namespace: Namespace,
-                 consistency: ConsistencyPolicy) -> None:
+    def __init__(self, cache: FileCacheMixin, namespace: Namespace) -> None:
         self._cache = cache
         self._namespace = namespace
-        self._consistency = consistency
 
     async def _probe(self, mount: MountEntry, path: str) -> Verdict:
         """Re-stat the backend and apply the matching cache/overlay reaction.
@@ -144,7 +143,8 @@ class Reconciler:
     async def may_serve_cached(self, mount: MountEntry, path: str) -> bool:
         """Gate a cached read: is the cached copy still valid to serve?
 
-        Under LAZY the cache is trusted. Under ALWAYS the backend is
+        Under ``bounded`` the cache is trusted within its bound. Under
+        ``fresh`` the backend is
         re-stated: a matching fingerprint serves the cached copy, a
         mismatch evicts it, a path the backend no longer has GCs and
         raises, and a backend that answers no fingerprint at all -- or no
@@ -167,7 +167,18 @@ class Reconciler:
         Returns:
             bool: True when the cached bytes may be served.
         """
-        if self._consistency != ConsistencyPolicy.ALWAYS:
+        if mount.read.policy is not ReadPolicy.FRESH:
+            # Bounded: the store expires the entry on its own, except for
+            # one population it cannot. Nothing stamped a ttl before this
+            # policy existed, and `_set_cached_locked` short-circuits a
+            # warm read rather than re-setting it, so a bound-less entry
+            # would never acquire one and never expire. Removing it --
+            # not merely declining to serve it -- is what makes the cold
+            # read that follows stamp the bound; refusing alone would
+            # leave the entry in place and refetch on every read forever.
+            if await self._cache.is_unbounded(path):
+                await self._cache.remove(path)
+                return False
             return True
         verdict = await self._probe_or_unknown(mount, path)
         if verdict is Verdict.GONE:
@@ -197,7 +208,7 @@ class Reconciler:
             mount (MountEntry): the resolved mount for ``path``.
             path (str): absolute virtual path the command will read.
         """
-        if self._consistency != ConsistencyPolicy.ALWAYS:
+        if mount.read.policy is not ReadPolicy.FRESH:
             return
         if (self._namespace.meta_for(path) is None
                 and not await self._cache.exists(path)):
@@ -209,15 +220,28 @@ class Reconciler:
             await mount.index.clear()
             logger.debug("reconcile probe failed for %s: %s", path, exc)
 
-    async def on_op_missing(self, op: str, path: str) -> None:
+    async def on_op_missing(self, mount: MountEntry, op: str,
+                            path: str) -> None:
         """React to a read/stat op that the backend reported gone.
 
+        Keyed on the mount's policy rather than fired unconditionally,
+        and that is deliberate. An ENOENT here is not proof the backend
+        said so: object-store ``stat`` answers a miss straight out of a
+        live index listing, and so do the box, gdrive, dropbox,
+        hierarchy and hf_hub reads. Reacting to one of those would drop
+        an attribute overlay -- which no backend stores, so nothing can
+        put it back -- on the strength of cached negative knowledge.
+
+        Widening this safely needs an index-sourced ENOENT that says so;
+        until then a mount that declined to revalidate also declines to
+        GC on a miss.
+
         Args:
+            mount (MountEntry): the resolved mount for ``path``.
             op (str): the op that raised.
             path (str): absolute virtual path the backend reports gone.
         """
-        if (self._consistency == ConsistencyPolicy.ALWAYS
-                and op in _REVALIDATE_OPS):
+        if (mount.read.policy is ReadPolicy.FRESH and op in _REVALIDATE_OPS):
             await self.on_missing(path)
 
     async def on_missing(self, path: str) -> None:

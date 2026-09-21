@@ -15,7 +15,7 @@
 import { HISTORY_PREFIX } from '../../vfs/history/history.ts'
 import type { OpsRegistry } from '../../ops/registry.ts'
 import type { VFS } from '../../vfs/base.ts'
-import type { Limit, MountMode } from '../../types.ts'
+import type { Limit, MountMode, ReadSpec } from '../../types.ts'
 import { stripSlash } from '../../utils/slash.ts'
 import type { MountRegistry } from '../mount/registry.ts'
 import type { MountSpec } from './types.ts'
@@ -23,6 +23,8 @@ import type { MountEntry } from '../mount/mount.ts'
 import type { IndexCacheStore } from '../../cache/index/store.ts'
 import type { FileCache } from '../../cache/file/mixin.ts'
 import { withCacheMutation } from '../../cache/file/io.ts'
+import { checkReadCapability } from '../mount/read_policy.ts'
+import { Mount } from '../mount/spec.ts'
 
 /**
  * The `mounts` mapping in resolved form: every accepted spelling
@@ -34,12 +36,17 @@ export interface NormalizedMounts {
   bare: Record<string, VFS>
   modes: Record<string, MountMode>
   commandLimits: Record<string, Record<string, Limit>>
+  read: Record<string, ReadSpec>
 }
 
-export function normalizeMounts(mounts: Record<string, MountSpec>): NormalizedMounts {
+export function normalizeMounts(
+  mounts: Record<string, MountSpec>,
+  defaultRead: ReadSpec,
+): NormalizedMounts {
   const bare: Record<string, VFS> = {}
   const modes: Record<string, MountMode> = {}
   const commandLimits: Record<string, Record<string, Limit>> = {}
+  const read: Record<string, ReadSpec> = {}
   for (const [prefix, spec] of Object.entries(mounts)) {
     if (Array.isArray(spec)) {
       const [vfs, mode, mountCommandLimits] = spec as readonly [
@@ -50,11 +57,26 @@ export function normalizeMounts(mounts: Record<string, MountSpec>): NormalizedMo
       bare[prefix] = vfs
       modes[prefix] = mode
       if (mountCommandLimits !== undefined) commandLimits[prefix] = mountCommandLimits
+    } else if (spec instanceof Mount) {
+      bare[prefix] = spec.vfs
+      if (spec.options.mode !== undefined) modes[prefix] = spec.options.mode
+      // Node's own unwrap used to lift this; core owns it now that a
+      // Mount reaches here directly.
+      if (spec.options.commandLimits !== undefined) {
+        commandLimits[prefix] = spec.options.commandLimits
+      }
+      if (spec.options.read !== undefined) read[prefix] = spec.options.read
     } else {
       bare[prefix] = spec as VFS
     }
   }
-  return { bare, modes, commandLimits }
+  // Every mount spelling converges here, which is why this is where a
+  // read policy is checked against what its backend can honour: one
+  // verdict per mount, whatever door declared it.
+  for (const [prefix, vfs] of Object.entries(bare)) {
+    checkReadCapability(prefix, vfs, read[prefix] ?? defaultRead)
+  }
+  return { bare, modes, commandLimits, read }
 }
 
 /** Drop mount cache state atomically with deferred file-cache fills. */

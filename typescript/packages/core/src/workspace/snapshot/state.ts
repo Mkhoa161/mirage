@@ -54,7 +54,9 @@ import {
   RAMConsoleStore,
   exitOutcome,
 } from '../../shell/console/index.ts'
-import { ConsistencyPolicy, MountMode } from '../../types.ts'
+import { type ReadSpec, DEFAULT_READ_SPEC, MountMode } from '../../types.ts'
+import { resolveReadSpec } from '../mount/read_policy.ts'
+import { Mount } from '../mount/spec.ts'
 import { VERSION } from '../../version.ts'
 import type { NodeMeta } from '../mount/namespace/namespace.ts'
 import { SessionState, varsFromFields, varsToFields } from '../session/session.ts'
@@ -94,7 +96,8 @@ export async function toStateDict(ws: Workspace): Promise<WorkspaceStateDict> {
       index: i,
       prefix: m.prefix,
       mode: m.mode,
-      consistency: ConsistencyPolicy.LAZY,
+      read: m.read.policy,
+      ttl: m.read.ttl,
       vfs_class: m.vfs.kind,
       vfs_ref: vfsRefOf(m.vfs),
       vfs_state: state,
@@ -236,20 +239,45 @@ function captureCliConfig(install: CLIInstall): Record<string, unknown> | null {
   return null
 }
 
+/**
+ * Refuse a snapshot this loader's format has moved past.
+ *
+ * An absent version is v3 or older, not "current". It used to be
+ * harmless because every key the loader read had a default; v4 makes the
+ * read policy required, so an unversioned dict would land on a bad
+ * ReadSpec instead of this message.
+ *
+ * Both doors run it, mirroring Python's `check_format_version`.
+ * `buildMountArgs` builds a workspace from the state; `applyStateDict`
+ * restores into one that already exists, and is what `version checkout`,
+ * `version restore` and the agent sandbox's hydrate call. Checking in one
+ * door only meant the same bytes were refused through `Workspace.load`
+ * and half-restored through a checkout.
+ */
+export function checkFormatVersion(state: WorkspaceStateDict): void {
+  // Widened deliberately: the type says `version` is always present, but a
+  // dict written before the field existed comes back from JSON without it.
+  const saved = (state as { version?: number }).version
+  if (saved === undefined || saved < FORMAT_VERSION) {
+    const shown = saved === undefined ? 'unversioned' : `v${String(saved)}`
+    throw new Error(
+      `snapshot format ${shown} not supported (loader expects v${String(FORMAT_VERSION)})`,
+    )
+  }
+}
+
 export function buildMountArgs(
   state: WorkspaceStateDict,
   overrides: Record<string, VFS> = {},
   cliOverrides: CLIOverrides = {},
+  userOverrides?: ReadonlySet<string>,
 ): MountArgs {
-  if (state.version < FORMAT_VERSION) {
-    throw new Error(
-      `snapshot format v${String(state.version)} not supported ` +
-        `(loader expects v${String(FORMAT_VERSION)})`,
-    )
-  }
+  checkFormatVersion(state)
   const normalized: Record<string, VFS> = {}
+  const overridePrefixes = new Set<string>()
   for (const [prefix, vfs] of Object.entries(overrides)) {
     normalized[normMountPrefix(prefix)] = vfs
+    overridePrefixes.add(normMountPrefix(prefix))
   }
   // A mount with no override by now is one nobody can build: it asked to
   // be handed back live or was saved with a redacted secret, or the
@@ -273,15 +301,46 @@ export function buildMountArgs(
         `factory (register) or pass a live instance.`,
     )
   }
-  const mountArgs: Record<string, [VFS, MountMode]> = {}
+  const mountArgs: Record<string, Mount> = {}
   for (const m of state.mounts) {
     if (!VALID_MODES.includes(m.mode)) {
       throw new Error(`Workspace.fromState: mount '${m.prefix}' has invalid mode '${m.mode}'`)
     }
-    mountArgs[m.prefix] = [
-      normalized[normMountPrefix(m.prefix)] ?? new RAMVFS(),
-      m.mode as MountMode,
-    ]
+    const saved = normalized[normMountPrefix(m.prefix)]
+    // Required, never defaulted: a dict labelled v4 with the key missing
+    // would install a default on a mount saved carrying something else,
+    // and a junk policy or a null bound would restore a mount whose cache
+    // can never serve. `mode` three lines up is validated the same way.
+    // Widened deliberately: the type says both keys are present, but a
+    // dict written by a foreign or older writer comes back from JSON
+    // without them.
+    const entry = m as { read?: string; ttl?: number }
+    if (entry.read === undefined || entry.ttl === undefined) {
+      throw new Error(
+        `Workspace.fromState: mount '${m.prefix}' is missing its read policy; ` +
+          `regenerate the snapshot`,
+      )
+    }
+    // Coerced whatever happens, so a junk policy or a non-positive bound
+    // is refused here rather than restoring a mount whose cache can
+    // never serve -- even on a prefix whose spec is then discarded.
+    const savedSpec = resolveReadSpec(entry.read, entry.ttl)
+    // The saved policy belongs to the backend that was saved, so it
+    // applies only where that backend is what is being mounted. A mount
+    // handed back through the caller's `mounts=` -- which a
+    // redacted-credential mount *must* be -- may be a different backend
+    // entirely, and carrying `fresh` onto one that cannot revalidate
+    // would refuse a restore that used to succeed. Everything else here
+    // the loader reconstructs from the saved state itself, which is the
+    // same backend. Python reads the line straight off the branch it
+    // took (`mounts=` vs `_construct_vfs`); here `fromState` merges its
+    // rebuilds into the same map first, so it names its callers' set.
+    const foreign = userOverrides ?? overridePrefixes
+    const read: ReadSpec = foreign.has(normMountPrefix(m.prefix)) ? DEFAULT_READ_SPEC : savedSpec
+    mountArgs[m.prefix] = new Mount(saved ?? new RAMVFS(), {
+      mode: m.mode as MountMode,
+      read,
+    })
   }
   const cliEntries = state.clis ?? []
   const missingClis = cliEntries
@@ -308,7 +367,6 @@ export function buildMountArgs(
 
   return {
     mountArgs,
-    consistency: ConsistencyPolicy.LAZY,
     defaultSessionId: state.default_session_id,
     defaultAgentId: state.default_agent_id,
     ...(cliEntries.length > 0 ? { clis: cliArgs } : {}),
@@ -420,6 +478,7 @@ export async function applyStateDict(
   state: WorkspaceStateDict,
   options: { replaceCache?: boolean } = {},
 ): Promise<void> {
+  checkFormatVersion(state)
   const [sessions, seed] = await gateRestoredState(ws, state)
   if (options.replaceCache === true) await ws.cache.clear()
   for (const m of state.mounts) {

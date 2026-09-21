@@ -17,7 +17,15 @@ import {
   type IndexConfig,
   type RedisIndexConfig,
 } from '@struktoai/mirage-core/cache/index/config'
-import { ConsistencyPolicy, MountMode } from '@struktoai/mirage-core/types'
+import {
+  type ReadSpec,
+  DEFAULT_READ_TTL,
+  MountMode,
+  ReadPolicy,
+} from '@struktoai/mirage-core/types'
+
+const FRESH: ReadSpec = { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL }
+const BOUNDED: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { Workspace } from '../../workspace.ts'
@@ -76,7 +84,7 @@ describe('S3 cache consistency (mocked)', () => {
         { '/s3/': vfs },
         {
           mode: MountMode.WRITE,
-          consistency: ConsistencyPolicy.ALWAYS,
+          read: FRESH,
           index,
         },
       )
@@ -106,7 +114,7 @@ describe('S3 cache consistency (mocked)', () => {
     })
   }
 
-  it('ALWAYS revalidates a walk and a glob, not just a named operand', async () => {
+  it('fresh revalidates a walk and a glob, not just a named operand', async () => {
     // The second door, the one every shell read uses. A recursive walk and
     // a glob never named their files as operands, so the registry's
     // pre-command reconcile never saw them. Warming has to go through
@@ -116,7 +124,7 @@ describe('S3 cache consistency (mocked)', () => {
     mock.store.set(BUCKET, 'walk/b.txt', ENC.encode('v1\n'))
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /s3/walk/a.txt')
@@ -144,7 +152,7 @@ describe('S3 cache consistency (mocked)', () => {
     mock.store.set(BUCKET, 'cost/b.txt', ENC.encode('v1\n'))
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /s3/cost/a.txt')
@@ -169,7 +177,7 @@ describe('S3 cache consistency (mocked)', () => {
         '/x/': new S3VFS(makeConfig()),
         '/x/y/': new S3VFS({ ...makeConfig(), bucket: CHILD_BUCKET }),
       },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /x/p.txt')
@@ -195,7 +203,7 @@ describe('S3 cache consistency (mocked)', () => {
     }
     const ws = new Workspace(
       { '/s3/': new SnapshotFalseS3(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /s3/c.txt')
@@ -215,7 +223,7 @@ describe('S3 cache consistency (mocked)', () => {
     // cold+warm total is the same either way.
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /s3/c.txt')
@@ -228,18 +236,50 @@ describe('S3 cache consistency (mocked)', () => {
     }
   })
 
-  it('LAZY keeps serving the cached bytes after an out-of-band change', async () => {
+  it('bounded keeps serving the cached bytes after an out-of-band change', async () => {
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.LAZY },
+      { mode: MountMode.WRITE, read: BOUNDED },
     )
     const first = await ws.shell('cat /s3/c.txt')
     expect(DEC.decode(first.stdout)).toBe('v1')
     mock.store.set(BUCKET, 'c.txt', ENC.encode('v2'))
+    mock.resetCalls()
     const second = await ws.shell('cat /s3/c.txt')
     expect(DEC.decode(second.stdout)).toBe('v1')
+    // One HEAD, and it is the operand's own stat, not a revalidation --
+    // `cat` stats what it is given whatever the policy. No GET is the
+    // half that matters: the bytes came from the cache. Serving 'v1'
+    // alone would also be what a revalidation that fetched and compared
+    // produced, so the count is what distinguishes them.
+    expect(mock.commandCalls(HeadObjectCommand)).toBe(1)
+    expect(mock.commandCalls(GetObjectCommand)).toBe(0)
     await ws.close()
   })
+  it('a walk under bounded costs no per-file stat', async () => {
+    // The other side of 'a walk costs one backend stat per file'. The
+    // same shape under `fresh` is 3: the directory operand's own stat
+    // plus one per file. Under `bounded` only the operand's stat is
+    // paid, so the two per-file revalidations are exactly what the
+    // policy buys -- which is a claim only a call count can make.
+    mock.store.set(BUCKET, 'bcost/a.txt', ENC.encode('v1\n'))
+    mock.store.set(BUCKET, 'bcost/b.txt', ENC.encode('v1\n'))
+    const ws = new Workspace(
+      { '/s3/': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, read: BOUNDED },
+    )
+    try {
+      await ws.shell('cat /s3/bcost/a.txt')
+      await ws.shell('cat /s3/bcost/b.txt')
+      mock.resetCalls()
+      expect((await ws.shell('grep -r v /s3/bcost/')).exitCode).toBe(0)
+      expect(mock.commandCalls(HeadObjectCommand)).toBe(1)
+      expect(mock.commandCalls(GetObjectCommand)).toBe(0)
+    } finally {
+      await ws.close()
+    }
+  })
+
   it('keeps stat type=text after tee and touch', async () => {
     const ws = new Workspace({ '/s3': new S3VFS(makeConfig()) }, { mode: MountMode.WRITE })
     try {
@@ -261,7 +301,7 @@ describe('S3 cache consistency (mocked)', () => {
     // after the `;` still runs.
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
     try {
@@ -290,7 +330,7 @@ describe('S3 cache consistency (mocked)', () => {
     // routing reconcile stopped firing for a command the gate never covers.
     const ws = new Workspace(
       { '/s3/': new S3VFS(makeConfig()) },
-      { mode: MountMode.WRITE, consistency: ConsistencyPolicy.ALWAYS },
+      { mode: MountMode.WRITE, read: FRESH },
     )
     try {
       await ws.shell('cat /s3/c.txt')

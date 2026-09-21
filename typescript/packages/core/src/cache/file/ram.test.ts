@@ -190,3 +190,18 @@ describe('RAMFileCacheStore: a writer waiting on the lock', () => {
     },
   )
 })
+
+describe('isUnbounded', () => {
+  // One question, not `exists` plus a ttl lookup: a warm bounded read asks
+  // this on every serve, and a missing entry must answer false rather than
+  // reading as unbounded, or the gate would evict nothing and refuse
+  // everything.
+  it('distinguishes absent from bound-less', async () => {
+    const cache = new RAMFileCacheStore()
+    expect(await cache.isUnbounded('/absent')).toBe(false)
+    await cache.set('/no-bound', new TextEncoder().encode('x'))
+    expect(await cache.isUnbounded('/no-bound')).toBe(true)
+    await cache.set('/bounded', new TextEncoder().encode('x'), { ttl: 30 })
+    expect(await cache.isUnbounded('/bounded')).toBe(false)
+  })
+})

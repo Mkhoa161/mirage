@@ -19,7 +19,7 @@ import { CLISpec } from '../../../commands/cli/types.ts'
 import { IOResult } from '../../../io/types.ts'
 import { RAMVFS } from '../../../vfs/ram/ram.ts'
 import { createShellParser } from '../../../shell/parse/index.ts'
-import { ConsistencyPolicy, MountMode, PathSpec } from '../../../types.ts'
+import { MountMode, PathSpec } from '../../../types.ts'
 import { Workspace } from '../../workspace/workspace.ts'
 import { dropMountCaches } from './run.ts'
 
@@ -40,7 +40,6 @@ function warmWorkspace(): [Workspace, RAMVFS, RAMVFS] {
     { '/r': ram, '/o': other },
     {
       mode: MountMode.WRITE,
-      consistency: ConsistencyPolicy.LAZY,
       shellParserFactory: async () => createShellParser({ engineWasm, grammarWasm }),
     },
   )
