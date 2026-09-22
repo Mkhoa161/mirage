@@ -107,10 +107,10 @@ async function setCachedLocked(
   const fingerprint = latestFingerprint(records, path, ops, data.byteLength)
   if (ops.has('read') && fingerprint === null && (await cache.exists(path))) {
     // A tokenless read over a live entry is a warm read: these bytes
-    // came out of this entry, so re-setting would trade the backend
-    // fingerprint for the MD5 default and force a `fresh` mount to
-    // refetch, while fetching the blob back to compare it with itself
-    // is the file over the wire twice. Only `cp`'s guarded walk reads
+    // came out of this entry, so re-setting would drop the backend
+    // fingerprint and force a `fresh` mount to refetch, while fetching
+    // the blob back to compare it with itself is the file over the wire
+    // twice. Only `cp`'s guarded walk reads
     // the backend raw with an entry standing, and only under
     // `bounded`, which already calls that entry trusted.
     //

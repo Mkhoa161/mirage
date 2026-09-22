@@ -123,10 +123,10 @@ async def _set_cached_locked(
     fingerprint = latest_fingerprint(records, path, ops, len(data))
     if "read" in ops and fingerprint is None and await cache.exists(path):
         # A tokenless read over a live entry is a warm read: these
-        # bytes came out of this entry, so re-setting would trade the
-        # backend fingerprint for the MD5 default and force a ``fresh``
-        # mount to refetch, while fetching the blob back to compare it
-        # with itself is the file over the wire twice. Only `cp`'s
+        # bytes came out of this entry, so re-setting would drop the
+        # backend fingerprint and force a ``fresh`` mount to refetch,
+        # while fetching the blob back to compare it with itself is the
+        # file over the wire twice. Only `cp`'s
         # guarded walk reads the backend raw with an entry standing,
         # and only under ``bounded``, which already calls that entry
         # trusted.
