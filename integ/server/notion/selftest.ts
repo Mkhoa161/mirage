@@ -69,12 +69,13 @@ async function request(
   path: string,
   body?: JsonValue,
   status = 200,
+  version = '2025-09-03',
 ): Promise<Record<string, JsonValue>> {
   const response = await fetch(at + path, {
     method,
     headers: {
       Authorization: `Bearer ${TENANT}`,
-      'Notion-Version': '2025-09-03',
+      'Notion-Version': version,
       'Content-Type': 'application/json',
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -93,6 +94,157 @@ async function request(
 
 function results(body: Record<string, JsonValue>): Record<string, JsonValue>[] {
   return body.results as Record<string, JsonValue>[]
+}
+
+const DB = 'eeee1111-2222-3333-4444-555566667777'
+const DS = 'd5000000-2222-3333-4444-555566667777'
+const BOT = 'e0000000-0000-4000-8000-000000000001'
+
+function titles(body: Record<string, JsonValue>): string[] {
+  return results(body).map((row) => {
+    const name = (row.properties as Record<string, Record<string, JsonValue>>).Name
+    return String((name?.title as Record<string, JsonValue>[])[0]?.plain_text)
+  })
+}
+
+// The reads this fake used to answer unlike live Notion, on the v1 fixture with
+// one more dated row: users, date filters and sorts, filter_properties, a
+// search with no object filter, the 2022-06-28 shapes and id cursors. The
+// MCP-Atlas replay (notion_atlas.ts) pins the same behaviour against recorded
+// live replies; these pin it where no recording reaches.
+async function liveReads(at: string): Promise<void> {
+  await request(at, 'POST', '/reset', { tenants: [TENANT], fixture: 'v1' })
+  const users = await request(at, 'GET', '/v1/users')
+  eq(
+    'users list, integration last',
+    results(users).map((user) => user.id!),
+    ['user-1', 'user-2', BOT],
+  )
+  eq('users list envelope', [users.type!, users.user!], ['user', {}])
+  const first = await request(at, 'GET', '/v1/users?page_size=1')
+  eq('users cursor is the next id', first.next_cursor, 'user-2')
+  eq(
+    'users resume from an id',
+    results(await request(at, 'GET', '/v1/users?start_cursor=user-2')).map((user) => user.id!),
+    ['user-2', BOT],
+  )
+  const refused = await request(at, 'GET', '/v1/users?start_cursor=nope', undefined, 400)
+  eq('unknown cursor refused', refused.message, 'The start_cursor provided is invalid: nope')
+  eq('user by id', (await request(at, 'GET', '/v1/users/user-1')).name, 'Integ Author')
+  eq('integration by id', (await request(at, 'GET', `/v1/users/${BOT}`)).type, 'bot')
+  await request(at, 'GET', '/v1/users/nope', undefined, 404)
+
+  const created = await request(at, 'POST', '/v1/pages', {
+    parent: { data_source_id: DS },
+    properties: {
+      Name: { title: [{ text: { content: 'Kickoff' } }] },
+      Due: { date: { start: '2026-01-15' } },
+    },
+  })
+  eq(
+    'created row carries every column in schema order',
+    Object.keys(created.properties as Record<string, JsonValue>),
+    ['Name', 'Priority', 'Done', 'Stage', 'Tags', 'Due', 'Link', 'Notes'],
+  )
+  eq(
+    'unset columns are empty',
+    ['Priority', 'Done', 'Stage', 'Tags', 'Link', 'Notes'].map((name) => {
+      const prop = (created.properties as Record<string, Record<string, JsonValue>>)[name]!
+      return prop[String(prop.type)]!
+    }),
+    [null, false, null, [], null, []],
+  )
+  const query = (body: JsonValue, tail = '', version = '2025-09-03', status = 200) =>
+    request(at, 'POST', `/v1/data_sources/${DS}/query${tail}`, body, status, version)
+  const due = (cond: JsonValue): JsonValue => ({ filter: { property: 'Due', date: cond } })
+  eq('date before', titles(await query(due({ before: '2026-01-01' }))), [])
+  eq('date equals', titles(await query(due({ equals: '2026-02-01' }))), ['Write spec'])
+  eq('date on_or_after', titles(await query(due({ on_or_after: '2026-01-15' }))), [
+    'Write spec',
+    'Kickoff',
+  ])
+  eq('date after an instant', titles(await query(due({ after: '2026-01-15T12:00:00.000Z' }))), [
+    'Write spec',
+  ])
+  eq('date is_empty', titles(await query(due({ is_empty: true }))), ['Ship beta'])
+  await query(due({ past_week: {} }), '', '2025-09-03', 400)
+  eq(
+    'date sort ascending, undated last',
+    titles(await query({ sorts: [{ property: 'Due', direction: 'ascending' }] })),
+    ['Kickoff', 'Write spec', 'Ship beta'],
+  )
+  eq(
+    'date sort descending, undated last',
+    titles(await query({ sorts: [{ property: 'du', direction: 'descending' }] })),
+    ['Write spec', 'Kickoff', 'Ship beta'],
+  )
+  eq(
+    'filter_properties keeps the asked columns in the asked order',
+    results(await query({}, '?filter_properties=pri&filter_properties=Name')).map((row) =>
+      Object.keys(row.properties as Record<string, JsonValue>),
+    ),
+    [
+      ['Priority', 'Name'],
+      ['Priority', 'Name'],
+      ['Priority', 'Name'],
+    ],
+  )
+  const page = await query({ page_size: 1 })
+  eq('query cursor is the next row', page.next_cursor, 'ffff2222-3333-4444-5555-666677778888')
+  eq(
+    'query resumes from a row id',
+    titles(await query({ start_cursor: String(page.next_cursor) })),
+    ['Ship beta', 'Kickoff'],
+  )
+  await query({ start_cursor: '1' }, '', '2025-09-03', 400)
+  eq('2025-09-03 list type', [page.type!, page.page_or_data_source!], ['page_or_data_source', {}])
+  eq('2025-09-03 row parent', results(page)[0]!.parent, {
+    type: 'data_source_id',
+    data_source_id: DS,
+    database_id: DB,
+  })
+
+  const legacy = await request(
+    at,
+    'POST',
+    `/v1/databases/${DB}/query`,
+    { page_size: 1 },
+    200,
+    '2022-06-28',
+  )
+  eq('2022-06-28 list type', [legacy.type!, legacy.page_or_database!], ['page_or_database', {}])
+  eq('2022-06-28 row parent', results(legacy)[0]!.parent, { type: 'database_id', database_id: DB })
+  eq('page keys', Object.keys(results(legacy)[0]!), [
+    'object',
+    'id',
+    'created_time',
+    'last_edited_time',
+    'created_by',
+    'last_edited_by',
+    'cover',
+    'icon',
+    'parent',
+    'in_trash',
+    'is_archived',
+    'is_locked',
+    'properties',
+    'url',
+    'public_url',
+    'archived',
+  ])
+  const everything = await request(at, 'POST', '/v1/search', {}, 200, '2022-06-28')
+  eq('search with no filter holds the database', results(everything)[0]!.object, 'database')
+  eq(
+    '2022-06-28 database carries its schema',
+    Object.keys(results(everything)[0]!.properties as Record<string, JsonValue>).length,
+    8,
+  )
+  const named = await request(at, 'POST', '/v1/search', { query: 'tasks' })
+  eq(
+    'search finds a data source by title',
+    results(named).map((one) => one.object!),
+    ['data_source'],
+  )
 }
 
 async function main(): Promise<void> {
@@ -292,6 +444,7 @@ async function main(): Promise<void> {
         .sort(),
       ['child_page', 'paragraph'],
     )
+    await liveReads(at)
     process.stdout.write(`notion selftest: ${String(checks)} checks passed\n`)
   } finally {
     fake.child.kill('SIGTERM')
