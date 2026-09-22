@@ -7,9 +7,7 @@ from mirage.commands.builtin import find_eval
 from mirage.commands.builtin.find_parse import (parse_depth,
                                                 parse_find_expression,
                                                 parse_mtime, parse_size)
-from mirage.commands.builtin.find_printf import (expand_printf, printf_kind,
-                                                 printf_needs_stat)
-from mirage.commands.builtin.utils.identity import Identity, identity_of
+from mirage.commands.builtin.find_printf import printf_kind
 from mirage.commands.builtin.utils.output import format_records
 from mirage.commands.config import CommandOpts
 from mirage.commands.spec import SPECS
@@ -48,7 +46,6 @@ def parse_find_args(
             mindepth=expr.mindepth,
             empty=expr.uses_empty,
             tree=expr.tree,
-            printf=expr.printf,
         )
     ftype: FindType | str | None = type
     if type in (FindType.DIRECTORY.value, FindType.FILE.value):
@@ -145,108 +142,6 @@ def _matched_path(row: str, search: PathSpec) -> PathSpec:
                     vfs_path=mount_key(virtual, prefix),
                     resolved=True,
                     raw_path=row)
-
-
-async def _printf_stat(
-    row: str,
-    search: PathSpec,
-    stat: Callable[[PathSpec], Awaitable[FileStat]] | None,
-    stat_path: StatPath | None,
-    links: LinkView | None,
-) -> tuple[FileStat | None, FileStat | None]:
-    """The stat one -printf row renders from, plus what %Y classifies.
-
-    A namespace link answers first (it has no backend inode); its
-    second element is the target's stat through the workspace, None
-    when the link dangles. Every other row's second element is None
-    and unused, since %Y is %y there.
-
-    Args:
-        row (str): the display row.
-        search (PathSpec): the start point the row came from.
-        stat (Callable | None): bound overlay-aware stat, when wired.
-        stat_path (StatPath | None): the dispatcher's stat probe.
-        links (LinkView | None): the namespace's symlink facts.
-    """
-    virtual = find_eval.unrespell_raw(row, search.virtual, search.raw_path
-                                      or search.virtual)
-    if links is not None:
-        link_row = links.stat_at(virtual)
-        if link_row is not None:
-            return link_row, await links.target_stat(virtual)
-    return await _backend_stat(virtual, search, stat, stat_path), None
-
-
-async def _backend_stat(
-    virtual: str,
-    search: PathSpec,
-    stat: Callable[[PathSpec], Awaitable[FileStat]] | None,
-    stat_path: StatPath | None,
-) -> FileStat | None:
-    if stat is not None:
-        prefix = mount_prefix_of(search.virtual, search.vfs_path)
-        spec = PathSpec(virtual=virtual,
-                        directory=virtual,
-                        resolved=False,
-                        vfs_path=mount_key(virtual, prefix))
-        try:
-            return await stat(spec)
-        except (FileNotFoundError, NotADirectoryError, ValueError):
-            return None
-    if stat_path is not None:
-        # The dispatcher probe answers for every backend, including the
-        # ones that wire no cheap local stat (an object store); it is the
-        # same channel resolve_start classifies start points on.
-        return await stat_path(virtual)
-    return None
-
-
-async def _stat_with_index(stat: Callable[..., Awaitable[FileStat]],
-                           index: IndexCacheStore | None,
-                           spec: PathSpec) -> FileStat:
-    return await stat(spec, index)
-
-
-async def render_printf_rows(
-    pairs: list[tuple[str, PathSpec]],
-    fmt: str,
-    stat: Callable[[PathSpec], Awaitable[FileStat]] | None,
-    stat_path: StatPath | None,
-    links: LinkView | None,
-    missing: list[str],
-    identity: Identity | None = None,
-) -> tuple[ByteSource | None, IOResult]:
-    """Render matched rows through a -printf format.
-
-    Stats are fetched per row only when the format reads one (%s %y %m
-    %M %T), through the same overlay-aware channel the -mtime filter
-    uses, with namespace links answered first since a link row has no
-    backend inode. Warning lines (unrecognized directives) ride stderr
-    without touching the exit code, GNU's behavior; missing start points
-    keep forcing exit 1.
-
-    Args:
-        pairs (list[tuple[str, PathSpec]]): display rows with the start
-            point each came from.
-        fmt (str): the -printf format as typed.
-        stat (Callable | None): bound overlay-aware stat, when wired.
-        links (LinkView | None): the namespace's symlink facts.
-        missing (list[str]): diagnostics for start points not walked.
-        identity (Identity | None): who the session is, for the owner
-            directives on an entry that reports no owner of its own.
-    """
-    warnings: list[str] = []
-    needs = printf_needs_stat(fmt)
-    parts: list[str] = []
-    for row, search in pairs:
-        st, target = (await _printf_stat(row, search, stat, stat_path, links)
-                      if needs else (None, None))
-        parts.append(
-            expand_printf(fmt, row, search, st, warnings, target, identity))
-    err = missing + warnings
-    io = IOResult(stderr=("\n".join(err) + "\n").encode() if err else None,
-                  exit_code=1 if missing else 0)
-    return "".join(parts).encode(), io
 
 
 def apply_mount_prefix(results: list[str], mount_prefix: str) -> list[str]:
@@ -515,7 +410,6 @@ async def find(
     empty: bool = False,
     links: LinkView | None = None,
     follow: bool = False,
-    identity: Identity | None = None,
 ) -> tuple[ByteSource | None, IOResult]:
     args = parse_find_args(texts,
                            name=name,
@@ -532,11 +426,12 @@ async def find(
     ]
     # GNU find walks every start point in operand order — duplicates and
     # all — names each one it cannot stat, keeps going with the rest, and
-    # exits 1; the rows already found still print.
+    # exits 1; the rows already found still print. One run per start
+    # point, empty for one that matched nothing or is missing: the action
+    # layer reads a row's start point off its run (-printf's %P and %d).
     results: list[str] = []
     matched_runs: list[list[PathSpec]] = []
     missing: list[str] = []
-    printf_pairs: list[tuple[str, PathSpec]] = []
     for search_path in searches:
         rows, detail = await _find_root(search_path,
                                         args,
@@ -548,14 +443,10 @@ async def find(
                                         follow=follow)
         if rows is None:
             missing.append(missing_start_line(search_path, detail))
+            matched_runs.append([])
             continue
         results.extend(rows)
         matched_runs.append([_matched_path(row, search_path) for row in rows])
-        if args.printf is not None:
-            printf_pairs.extend((row, search_path) for row in rows)
-    if args.printf is not None:
-        return await render_printf_rows(printf_pairs, args.printf, stat,
-                                        stat_path, links, missing, identity)
     if missing:
         return format_records(results), IOResult(matched_runs=matched_runs,
                                                  stderr=("\n".join(missing) +
@@ -1071,8 +962,7 @@ async def find_generic(
                       mindepth=parsed.mindepth,
                       empty=parsed.empty,
                       links=opts.ns.links if opts.ns is not None else None,
-                      follow=parsed.follow,
-                      identity=identity_of(opts))
+                      follow=parsed.follow)
 
 
 async def find_walk_generic(
@@ -1116,7 +1006,6 @@ async def find_walk_generic(
     results: list[str] = []
     matched_runs: list[list[PathSpec]] = []
     missing: list[str] = []
-    printf_pairs: list[tuple[str, PathSpec]] = []
     for search in searches:
         # Same start-point rule as the native-op path, so what `find` does
         # with a file or a missing operand does not depend on whether the
@@ -1127,6 +1016,7 @@ async def find_walk_generic(
                                     is_link=is_link(links, search))
         if start.missing:
             missing.append(missing_start_line(search, start.detail))
+            matched_runs.append([])
             continue
         if not start.walk:
             rows = start.results
@@ -1149,13 +1039,6 @@ async def find_walk_generic(
                                                     search.raw_path))
         results.extend(rows)
         matched_runs.append([_matched_path(row, search) for row in rows])
-        if args.printf is not None:
-            printf_pairs.extend((row, search) for row in rows)
-    if args.printf is not None:
-        return await render_printf_rows(
-            printf_pairs, args.printf,
-            partial(_stat_with_index, stat, opts.index), stat_path, links,
-            missing, identity_of(opts))
     if missing:
         return format_records(results), IOResult(matched_runs=matched_runs,
                                                  stderr=("\n".join(missing) +

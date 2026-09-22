@@ -23,7 +23,8 @@ from mirage.commands.builtin.find_eval import (Action, ActionKind, And, Empty,
                                                PredNode, Prune, TrueNode, Type,
                                                tree_has_action, tree_has_prune,
                                                without_prune)
-from mirage.commands.builtin.types import ExecAction, FindAction, RowAction
+from mirage.commands.builtin.types import (ExecAction, FindAction,
+                                           PrintfAction, RowAction)
 from mirage.commands.errors import FindParseError
 from mirage.utils.dates import parse_date_expr
 
@@ -118,7 +119,6 @@ class FindExpr:
     mtime_min: float | None = None
     mtime_max: float | None = None
     uses_empty: bool = False
-    printf: str | None = None
     # In the order written: GNU runs actions per position, so
     # `-exec echo {} ";" -print -exec echo again {} ";"` alternates the
     # three per match.
@@ -373,7 +373,8 @@ def _settle_actions(state: _State) -> None:
     executor then runs ``actions`` on each row without knowing which
     node reached it, which is only right when they are all the same
     action (``-name a -print -o -name b -print``), never ``-print`` on
-    one arm and ``-print0`` or a different ``-exec`` on the other.
+    one arm and ``-print0``, a different ``-exec`` or a different
+    ``-printf`` format on the other.
 
     Args:
         state (_State): parser state, tree parsed.
@@ -390,6 +391,10 @@ def _settle_actions(state: _State) -> None:
         if isinstance(first, ExecAction) and isinstance(second, ExecAction):
             raise FindParseError(
                 f"find: -exec may run only one command {_POSITIONAL}")
+        if isinstance(first, PrintfAction) and isinstance(
+                second, PrintfAction):
+            raise FindParseError(
+                f"find: -printf may print only one format {_POSITIONAL}")
         raise FindParseError(f"find: {_action_word(first)} and "
                              f"{_action_word(second)} cannot be combined "
                              f"{_POSITIONAL}")
@@ -398,7 +403,11 @@ def _settle_actions(state: _State) -> None:
 
 
 def _action_word(action: FindAction) -> str:
-    return "-exec" if isinstance(action, ExecAction) else f"-{action.kind}"
+    if isinstance(action, ExecAction):
+        return "-exec"
+    if isinstance(action, PrintfAction):
+        return "-printf"
+    return f"-{action.kind}"
 
 
 _DELETE_PRUNE = ("find: The -delete action automatically turns on -depth, "
@@ -468,8 +477,7 @@ def _parse_primary(state: _State) -> PredNode:
     tok = _advance(state)
     if tok is None:
         raise FindParseError("find: expected predicate")
-    if ((state.expr.actions or state.expr.printf is not None)
-            and state.nested == 0 and not state.in_or
+    if (state.expr.actions and state.nested == 0 and not state.in_or
             and (tok in ("-empty", "-prune")
                  or tok in constants.FIND_VALUE_PREDICATES -
                  {"-printf", "-maxdepth", "-mindepth"})):
@@ -492,13 +500,9 @@ def _parse_primary(state: _State) -> PredNode:
         if tok == "-type":
             return _type_node(value)
         if tok == "-printf":
-            if state.expr.printf is not None:
-                raise FindParseError(
-                    "find: multiple -printf actions are not supported")
-            # An action, not a test: it always matches, replaces the
-            # default -print rendering, and the one format applies to
-            # every row the tree reached it for.
-            state.expr.printf = value
+            # An action, not a test: it always matches and replaces the
+            # default -print rendering, at its position in the chain.
+            state.expr.actions.append(PrintfAction(value))
             return _action_node(state, "printf")
         if tok == "-maxdepth":
             state.expr.maxdepth = parse_depth(value, "-maxdepth")
@@ -672,13 +676,6 @@ def parse_find_expression(tokens: list[str]) -> FindExpr:
     if _peek(state) is not None:
         raise FindParseError(f"find: unexpected token '{_peek(state)}'")
     state.expr.tree = tree
-    if state.expr.execs and state.expr.printf is not None:
-        # -printf rows are rendered by the backend's generic before the
-        # executor sees them, so there is no path left to hand -exec.
-        raise FindParseError("find: -exec cannot be combined with -printf")
-    if state.expr.actions and state.expr.printf is not None:
-        raise FindParseError(
-            "find: -printf cannot be combined with other actions")
     _settle_actions(state)
     if tree_has_prune(tree) and state.expr.depth_first:
         # GNU's words: -delete turns -depth on, and a -prune under -depth

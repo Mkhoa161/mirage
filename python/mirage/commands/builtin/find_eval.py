@@ -706,7 +706,6 @@ class FindArgs:
     or_names: list[str] | None = None
     empty: bool = False
     tree: PredNode | None = None
-    printf: str | None = None
 
 
 def args_to_tree(args: FindArgs) -> PredNode:
