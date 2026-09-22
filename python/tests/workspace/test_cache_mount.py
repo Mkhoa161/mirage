@@ -168,22 +168,14 @@ async def test_stat_keeps_overlay_under_bounded():
 
 @pytest.mark.asyncio
 async def test_a_guarded_cp_leaves_the_entry_it_read_past(tmp_path):
-    """`cp` is a write command, so it gets no read-through wrapper and
-    reads its source straight from the backend. Under a hide it takes
-    the primitive walk, whose per-file read lands in ``IOResult.reads``
-    carrying no backend token, and the fill then meets a live entry.
+    """Under ``bounded`` the guarded walk leaves the entry it read past.
 
-    Under ``bounded`` that entry is trusted for its bound, so the walk
-    leaves it as it found it: the copy still gets the current bytes and
-    the next ``cat`` still answers from the cache. The native strategy
-    (no hide) fills nothing and has always behaved this way, so the two
-    strategies now agree. Before, whether a stale entry was silently
-    healed turned on whether a hide happened to cover the source, which
-    is not something the read policy says anything about.
-
-    Root-mounted because `cp` keys its reads on ``src.virtual`` while
-    the runner re-prefixes, so on a prefixed mount the fill lands at
-    ``/r/r/dir/a.txt`` and no read ever looks there (#441, #629).
+    Every condition here is load-bearing and fails silently if changed.
+    The hide forces `cp` onto the primitive walk, whose per-file read
+    carries no backend token; the native strategy fills no cache at all.
+    The mount is the root because `cp` keys its reads on ``src.virtual``
+    while the runner re-prefixes, so on ``/r`` the fill lands at
+    ``/r/r/dir/a.txt`` and this asserts nothing (#441, #629).
     """
     (tmp_path / "dir").mkdir()
     (tmp_path / "dir" / "a.txt").write_bytes(b"v1\n")
