@@ -56,6 +56,7 @@ function actionWord(action: FindAction): string {
 
 function sameAction(a: FindAction, b: FindAction): boolean {
   if (a.kind !== b.kind) return false
+  if (a.kind === 'printf' && b.kind === 'printf') return a.format === b.format
   if (a.kind !== 'exec' || b.kind !== 'exec') return true
   return (
     a.batch === b.batch &&
@@ -131,8 +132,8 @@ function checkPositional(node: PredNode): void {
 // action written is in the tree, so the rows are exact; the executor then
 // runs `actions` on each row without knowing which node reached it, which
 // is only right when they are all the same action (`-name a -print -o -name
-// b -print`), never `-print` on one arm and `-print0` or a different
-// `-exec` on the other.
+// b -print`), never `-print` on one arm and `-print0`, a different `-exec`
+// or a different `-printf` format on the other.
 function settleActions(tree: PredNode, actions: readonly FindAction[]): FindAction[] {
   checkPositional(tree)
   const distinct: FindAction[] = []
@@ -143,6 +144,9 @@ function settleActions(tree: PredNode, actions: readonly FindAction[]): FindActi
   if (first !== undefined && second !== undefined) {
     if (first.kind === 'exec' && second.kind === 'exec') {
       throw new FindParseError(`find: -exec may run only one command ${POSITIONAL}`)
+    }
+    if (first.kind === 'printf' && second.kind === 'printf') {
+      throw new FindParseError(`find: -printf may print only one format ${POSITIONAL}`)
     }
     throw new FindParseError(
       `find: ${actionWord(first)} and ${actionWord(second)} cannot be combined ${POSITIONAL}`,
@@ -173,7 +177,6 @@ export interface FindExpr {
   mtimeMin: number | null
   mtimeMax: number | null
   usesEmpty: boolean
-  printf: string | null
   // In the order written: GNU runs actions per position, so
   // `-exec echo {} ";" -print -exec echo again {} ";"` alternates the
   // three per match.
@@ -320,7 +323,6 @@ export function parseFindExpression(tokens: string[]): FindExpr {
     mtimeMin: null as number | null,
     mtimeMax: null as number | null,
     usesEmpty: false,
-    printf: null as string | null,
     actions: [] as FindAction[],
     newer: [] as string[],
     depthFirst: false,
@@ -430,7 +432,7 @@ export function parseFindExpression(tokens: string[]): FindExpr {
     const tok = advance()
     if (tok === undefined) throw new FindParseError('find: expected predicate')
     if (
-      (g.actions.length > 0 || g.printf !== null) &&
+      g.actions.length > 0 &&
       nested === 0 &&
       !inOr &&
       (tok === '-empty' ||
@@ -450,13 +452,9 @@ export function parseFindExpression(tokens: string[]): FindExpr {
       if (tok === '-path') return { op: 'path', pattern: value }
       if (tok === '-type') return typeNode(value)
       if (tok === '-printf') {
-        if (g.printf !== null) {
-          throw new FindParseError('find: multiple -printf actions are not supported')
-        }
-        // An action, not a test: it always matches, replaces the default
-        // -print rendering, and the one format applies to every row the
-        // tree reached it for.
-        g.printf = value
+        // An action, not a test: it always matches and replaces the
+        // default -print rendering, at its position in the chain.
+        g.actions.push({ kind: 'printf', format: value })
         return actionNode('printf')
       }
       if (tok === '-maxdepth') {
@@ -594,14 +592,6 @@ export function parseFindExpression(tokens: string[]): FindExpr {
   const tree = orExpr()
   const trailing = peek()
   if (trailing !== undefined) throw new FindParseError(`find: unexpected token '${trailing}'`)
-  if (execActions(g.actions).length > 0 && g.printf !== null) {
-    // -printf rows are rendered by the backend's generic before the
-    // executor sees them, so there is no path left to hand -exec.
-    throw new FindParseError('find: -exec cannot be combined with -printf')
-  }
-  if (g.actions.length > 0 && g.printf !== null) {
-    throw new FindParseError('find: -printf cannot be combined with other actions')
-  }
   const actions = shape.positional ? settleActions(tree, g.actions) : g.actions
   if (treeHasPrune(tree) && g.depthFirst) {
     if (!shape.depthOption) throw new FindParseError(DELETE_PRUNE)

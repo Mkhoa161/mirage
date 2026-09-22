@@ -310,9 +310,9 @@ describe('parseFindExpression', () => {
 })
 
 describe('find -printf parsing', () => {
-  it('stores the format on the expression', () => {
+  it('stores the format on its action', () => {
     const expr = parseFindExpression(['-printf', '%p\\n'])
-    expect(expr.printf).toBe('%p\\n')
+    expect(expr.actions).toEqual([{ kind: 'printf', format: '%p\\n' }])
   })
 
   it('refuses a missing argument', () => {
@@ -321,7 +321,60 @@ describe('find -printf parsing', () => {
 
   it('combines with tests', () => {
     const expr = parseFindExpression(['-name', '*.txt', '-printf', '%f\\n'])
-    expect(expr.printf).toBe('%f\\n')
+    expect(expr.actions).toEqual([{ kind: 'printf', format: '%f\\n' }])
+  })
+
+  // GNU runs every action of the -a chain per row, in the order written.
+  it.each([
+    [
+      ['-printf', '%p\\n', '-exec', 'cat', '{}', ';'],
+      [
+        { kind: 'printf', format: '%p\\n' },
+        { kind: 'exec', argv: ['cat', '{}'], batch: false },
+      ],
+    ],
+    [
+      ['-exec', 'cat', '{}', ';', '-printf', '%p\\n'],
+      [
+        { kind: 'exec', argv: ['cat', '{}'], batch: false },
+        { kind: 'printf', format: '%p\\n' },
+      ],
+    ],
+    [
+      ['-printf', '%p ', '-print'],
+      [{ kind: 'printf', format: '%p ' }, { kind: 'print' }],
+    ],
+    [
+      ['-print0', '-printf', '%p'],
+      [{ kind: 'print0' }, { kind: 'printf', format: '%p' }],
+    ],
+    [
+      ['-printf', '%p', '-ls'],
+      [{ kind: 'printf', format: '%p' }, { kind: 'ls' }],
+    ],
+    [
+      ['-printf', '%p', '-delete'],
+      [{ kind: 'printf', format: '%p' }, { kind: 'delete' }],
+    ],
+    [
+      ['-printf', '%p ', '-printf', '%s\\n'],
+      [
+        { kind: 'printf', format: '%p ' },
+        { kind: 'printf', format: '%s\\n' },
+      ],
+    ],
+  ])('runs beside other actions in order: %j', (tokens, actions) => {
+    expect(parseFindExpression(tokens).actions).toEqual(actions)
+  })
+
+  it('refuses two formats under -o, like two -exec commands', () => {
+    expect(() =>
+      parseFindExpression(['-name', 'a', '-printf', 'A', '-o', '-name', 'b', '-printf', 'B']),
+    ).toThrow('find: -printf may print only one format under -o, ! or parentheses')
+    expect(
+      parseFindExpression(['-name', 'a', '-printf', '%p', '-o', '-name', 'b', '-printf', '%p'])
+        .actions,
+    ).toEqual([{ kind: 'printf', format: '%p' }])
   })
 })
 
@@ -381,12 +434,11 @@ describe('action placement', () => {
     ])(`lets ${action[0] ?? ''} end an arm: %j`, (...tokens) => {
       const expr = parseFindExpression(tokens)
       expect(treeHasAction(expr.tree)).toBe(true)
-      if (action[0] === '-printf') {
-        expect(expr.printf).toBe('%p')
-        expect(expr.actions).toEqual([])
-      } else {
-        expect(expr.actions).toEqual([{ kind: (action[0] ?? '').slice(1) }])
-      }
+      expect(expr.actions).toEqual([
+        action[0] === '-printf'
+          ? { kind: 'printf', format: '%p' }
+          : { kind: (action[0] ?? '').slice(1) },
+      ])
     })
     it(`allows ${action[0] ?? ''} after grouped tests`, () => {
       expect(() =>
@@ -518,7 +570,7 @@ describe('-prune', () => {
       '-printf',
       '%p',
     ])
-    expect(printf.printf).toBe('%p')
+    expect(printf.actions).toEqual([{ kind: 'printf', format: '%p' }])
     expect(treeHasAction(printf.tree)).toBe(true)
   })
 
@@ -620,17 +672,6 @@ it.each([
     ['(', '-newermt', '2000-01-01', ')'],
     'find: -newermt is supported only in a top-level -a chain, not under -o, ! or parentheses',
   ],
-  [['-printf', '%p\\n', '-exec', 'true', '{}', ';'], 'find: -exec cannot be combined with -printf'],
-  [['-exec', 'true', '{}', ';', '-printf', '%p\\n'], 'find: -exec cannot be combined with -printf'],
-  [['-printf', '%p\\n', '-print'], 'find: -printf cannot be combined with other actions'],
-  [['-print', '-printf', '%p\\n'], 'find: -printf cannot be combined with other actions'],
-  [['-printf', '%p\\n', '-print0'], 'find: -printf cannot be combined with other actions'],
-  [['-print0', '-printf', '%p\\n'], 'find: -printf cannot be combined with other actions'],
-  [['-printf', '%p\\n', '-ls'], 'find: -printf cannot be combined with other actions'],
-  [['-ls', '-printf', '%p\\n'], 'find: -printf cannot be combined with other actions'],
-  [['-printf', '%p\\n', '-delete'], 'find: -printf cannot be combined with other actions'],
-  [['-delete', '-printf', '%p\\n'], 'find: -printf cannot be combined with other actions'],
-  [['-printf', '%p', '-printf', '%f'], 'find: multiple -printf actions are not supported'],
-])('refuses detached newer tests and mixed printf: %s', (tokens, message) => {
+])('refuses detached newer tests: %s', (tokens, message) => {
   expect(() => parseFindExpression(tokens)).toThrow(message)
 })

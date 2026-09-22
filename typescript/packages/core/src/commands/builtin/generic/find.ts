@@ -39,8 +39,7 @@ import {
   type FindEntry,
   type PredNode,
 } from '../find_eval.ts'
-import { expandPrintf, printfKind, printfNeedsStat, type PrintfStatFacts } from '../find_printf.ts'
-import { identityOf } from '../utils/identity.ts'
+import { printfKind } from '../find_printf.ts'
 import type { LinkView } from '../../../ops/types.ts'
 import { pathAllowed } from '../../../context/session_context.ts'
 import { compareCodePoints } from '../../../utils/sort.ts'
@@ -64,6 +63,19 @@ function rowSpec(row: string, mountPrefix: string): PathSpec {
     directory: row,
     resolved: false,
     vfsPath: mountKey(row, mountPrefix),
+  })
+}
+
+// The structured row the action layer acts on: the resolved path, spelled
+// as it prints.
+function matchedPath(row: string, root: PathSpec): PathSpec {
+  const virtual = unrespellRaw(row, root.virtual, root.rawPath || root.virtual)
+  return new PathSpec({
+    virtual,
+    directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
+    vfsPath: mountKey(virtual, mountPrefixOf(root.virtual, root.vfsPath)),
+    rawPath: row,
+    resolved: true,
   })
 }
 
@@ -400,9 +412,13 @@ export async function findGeneric(
         }
   const matches: string[] = []
   const missing: string[] = []
-  const printfFmt = expr !== null ? expr.printf : null
-  const printfPairs: [string, PathSpec][] = []
+  // One run per start point, in operand order, empty for one that matched
+  // nothing or is missing: the action layer acts on each traversal on its
+  // own and reads a row's start point off its run (-printf's %P and %d).
+  const matchedRuns: PathSpec[][] = []
   for (const root of targets) {
+    const run: PathSpec[] = []
+    matchedRuns.push(run)
     // `-path` matches the row as printed; stamp the mount prefix and the
     // operand's spelling onto path nodes before the backend walks
     // mount-relative keys (#396). Bound per start point: options is
@@ -457,7 +473,7 @@ export async function findGeneric(
           const display = root.virtual === '/' ? '/' : rstripSlash(root.virtual)
           const added = respellRaw([display], root.virtual, root.rawPath)
           matches.push(...added)
-          for (const r of added) printfPairs.push([r, root])
+          for (const r of added) run.push(matchedPath(r, root))
         }
         continue
       }
@@ -550,33 +566,10 @@ export async function findGeneric(
     const visibleRows = unpruned.filter((row) => pathAllowed(row))
     const added = respellRaw(visibleRows, root.virtual, root.rawPath)
     matches.push(...added)
-    for (const r of added) printfPairs.push([r, root])
-  }
-  if (printfFmt !== null) {
-    return renderPrintfRows(printfPairs, printfFmt, stat, opts, missing)
+    for (const r of added) run.push(matchedPath(r, root))
   }
   // Start points print in operand order (GNU); each root's rows were
-  // sorted above, and a global sort here would interleave them. The
-  // rows ride out as one run per root, so the action layer can order
-  // and act on each traversal on its own.
-  const matchedRuns: PathSpec[][] = []
-  let lastRoot: PathSpec | null = null
-  for (const [row, root] of printfPairs) {
-    if (root !== lastRoot) {
-      matchedRuns.push([])
-      lastRoot = root
-    }
-    const virtual = unrespellRaw(row, root.virtual, root.rawPath || root.virtual)
-    matchedRuns[matchedRuns.length - 1]?.push(
-      new PathSpec({
-        virtual,
-        directory: virtual.slice(0, virtual.lastIndexOf('/')) || '/',
-        vfsPath: mountKey(virtual, mountPrefixOf(root.virtual, root.vfsPath)),
-        rawPath: row,
-        resolved: true,
-      }),
-    )
-  }
+  // sorted above, and a global sort here would interleave them.
   const out: ByteSource = ENC.encode(matches.length ? matches.join('\n') + '\n' : '')
   if (missing.length > 0) {
     return [
@@ -585,89 +578,4 @@ export async function findGeneric(
     ]
   }
   return [out, new IOResult({ matchedRuns })]
-}
-
-async function printfStat(
-  row: string,
-  root: PathSpec,
-  stat: ((spec: PathSpec) => Promise<FileStat>) | undefined,
-  opts: CommandOpts,
-): Promise<PrintfStatFacts | null> {
-  const virtual = unrespellRaw(row, root.virtual, root.rawPath !== '' ? root.rawPath : root.virtual)
-  const links = opts.ns?.links ?? null
-  const linkRow = links?.statAt(virtual)
-  if (links !== null && linkRow !== undefined && linkRow !== null) {
-    // %Y reads the target through the workspace, so a link into another
-    // mount classifies correctly and a dangling one reads N.
-    const target = await links.targetStat(virtual)
-    return {
-      size: linkRow.size ?? 0,
-      kind: 'l',
-      mtimeEpoch: modifiedTs(linkRow.modified ?? null) ?? 0,
-      mode: linkRow.mode,
-      targetKind: target === null ? 'N' : printfKind(target),
-      uid: linkRow.uid,
-      gid: linkRow.gid,
-    }
-  }
-  let st: FileStat | null = null
-  if (stat !== undefined) {
-    const prefix = mountPrefixOf(root.virtual, root.vfsPath)
-    const spec = new PathSpec({
-      virtual,
-      directory: virtual,
-      resolved: false,
-      vfsPath: mountKey(virtual, prefix),
-    })
-    try {
-      st = await stat(spec)
-    } catch {
-      st = null
-    }
-  } else if (opts.statPath !== undefined) {
-    // The dispatcher probe answers for every backend, including the ones
-    // that wire no cheap local stat (an object store); it is the same
-    // channel the start-point classifier uses.
-    st = await opts.statPath(virtual)
-  }
-  if (st === null) return null
-  return {
-    size: st.size ?? 0,
-    kind: printfKind(st),
-    mtimeEpoch: modifiedTs(st.modified ?? null) ?? 0,
-    mode: st.mode,
-    targetKind: null,
-    uid: st.uid,
-    gid: st.gid,
-  }
-}
-
-// Render matched rows through a -printf format. Stats are fetched per row
-// only when the format reads one (%s %y %m %M %T), through the same
-// overlay-aware channel the -mtime filter uses, with namespace links
-// answered first since a link row has no backend inode. Warning lines
-// (unrecognized directives) ride stderr without touching the exit code,
-// GNU's behavior; missing start points keep forcing exit 1. Mirrors the
-// Python render_printf_rows.
-async function renderPrintfRows(
-  pairs: [string, PathSpec][],
-  fmt: string,
-  stat: ((spec: PathSpec) => Promise<FileStat>) | undefined,
-  opts: CommandOpts,
-  missing: string[],
-): Promise<CommandFnResult> {
-  const warnings: string[] = []
-  const needs = printfNeedsStat(fmt)
-  const parts: string[] = []
-  for (const [row, root] of pairs) {
-    const st = needs ? await printfStat(row, root, stat, opts) : null
-    const base = root.rawPath !== '' ? root.rawPath : root.virtual
-    parts.push(expandPrintf(fmt, row, base, st, warnings, identityOf(opts)))
-  }
-  const err = [...missing, ...warnings]
-  const io = new IOResult({
-    stderr: err.length > 0 ? ENC.encode(err.join('\n') + '\n') : null,
-    exitCode: missing.length > 0 ? 1 : 0,
-  })
-  return [ENC.encode(parts.join('')), io]
 }
