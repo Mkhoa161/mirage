@@ -606,6 +606,9 @@ async function restoreSessions(
 
 function restoreCache(ws: Workspace, state: WorkspaceStateDict): void {
   if (!(ws.cache instanceof RAMFileCacheStore)) return
+  // A snapshot is a third door into the entry table, and a document is not
+  // obliged to spell "no token" the way this version does, so each token is
+  // folded the way the live write doors fold it.
   for (const e of state.cache.entries) {
     ws.cache.loadEntry(
       e.key,
@@ -613,11 +616,6 @@ function restoreCache(ws: Workspace, state: WorkspaceStateDict): void {
       new CacheEntry({
         size: e.size,
         cachedAt: e.cached_at,
-        // Folded the way the live write doors fold it: a snapshot is a
-        // third door into the entry table, and a document is not obliged
-        // to spell "no token" the way this version does. An entry restored
-        // holding `''` would answer isFresh(path, '') with true where a
-        // freshly written one answers false.
         fingerprint: tokenOrNull(e.fingerprint),
         ttl: e.ttl,
       }),

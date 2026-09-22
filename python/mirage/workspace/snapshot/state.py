@@ -540,6 +540,10 @@ def _restore_cache(ws, state: dict[str, Any]) -> None:
         # outside the workspace and isn't part of the snapshot anyway.
         return
     from mirage.cache.file.entry import CacheEntry
+
+    # A snapshot is a third door into the entry table, and a document is
+    # not obliged to spell "no token" the way this version does, so each
+    # token is folded the way the live write doors fold it.
     for entry in cache_state.get(CacheKey.ENTRIES, []):
         key = entry[CacheKey.KEY]
         data = entry[CacheKey.DATA]
@@ -547,11 +551,6 @@ def _restore_cache(ws, state: dict[str, Any]) -> None:
         cache._entries[key] = CacheEntry(
             size=entry.get(CacheKey.SIZE, len(data)),
             cached_at=entry.get(CacheKey.CACHED_AT, 0),
-            # Folded the way the live write doors fold it: a snapshot is a
-            # third door into the entry table, and a document is not
-            # obliged to spell "no token" the way this version does. An
-            # entry restored holding `""` would answer `is_fresh(path, "")`
-            # with True where a freshly written one answers False.
             fingerprint=entry.get(CacheKey.FINGERPRINT) or None,
             ttl=entry.get(CacheKey.TTL),
         )
