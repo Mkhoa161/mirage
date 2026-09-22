@@ -611,7 +611,7 @@ async def _stat_entry(
     stat: Callable[[PathSpec, IndexCacheStore | None], Awaitable[FileStat]],
     path: str,
     prefix: str,
-    index: IndexCacheStore,
+    index: IndexCacheStore | None,
 ) -> FileStat | None:
     spec = PathSpec(virtual=path,
                     directory=path,
@@ -632,7 +632,7 @@ async def _is_empty_entry(
     path: str,
     is_dir: bool,
     prefix: str,
-    index: IndexCacheStore,
+    index: IndexCacheStore | None,
     links: LinkView | None = None,
 ) -> bool:
     if is_dir:
@@ -655,7 +655,7 @@ async def _walk_collect(
                       Awaitable[list[str]]],
     stat: Callable[[PathSpec, IndexCacheStore | None], Awaitable[FileStat]],
     spec: PathSpec,
-    index: IndexCacheStore,
+    index: IndexCacheStore | None,
     maxdepth: int | None,
     depth: int,
     acc: list[tuple[str, str]],
@@ -799,7 +799,7 @@ async def walk_find(
     readdir: Callable[[PathSpec, IndexCacheStore | None],
                       Awaitable[list[str]]],
     stat: Callable[[PathSpec, IndexCacheStore | None], Awaitable[FileStat]],
-    index: IndexCacheStore,
+    index: IndexCacheStore | None,
     args: find_eval.FindArgs,
     links: LinkView | None = None,
     follow: bool = False,
