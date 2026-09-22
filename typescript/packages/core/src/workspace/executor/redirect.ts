@@ -169,6 +169,10 @@ export async function handleRedirect(
     for (const fd of r.fd === FD_BOTH ? [FD_STDOUT, FD_STDERR] : [r.fd]) closed.delete(fd)
     if (r.kind === RedirectKind.STDIN) {
       const scope = ensureScope(r.target)
+      if (scope.virtual === '/dev/stdin') {
+        inputs[r.fd] = inputs[FD_STDIN] ?? null
+        continue
+      }
       let data: unknown
       try {
         ;[data] = await dispatch('read', scope)

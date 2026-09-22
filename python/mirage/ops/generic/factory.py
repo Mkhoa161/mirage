@@ -98,10 +98,12 @@ def _make_path_write(fn: OpFn) -> OpFn:
     return mutate
 
 
-def _make_mkdir_parents(fn: OpFn) -> OpFn:
+def _make_mkdir_parents(fn: OpFn, force_parents: bool = True) -> OpFn:
 
     async def mkdir(accessor: Accessor, path: PathSpec, **kwargs) -> None:
-        await fn(accessor, path, parents=True)
+        await fn(accessor,
+                 path,
+                 parents=force_parents or kwargs.get("parents") is True)
 
     return mkdir
 
@@ -237,8 +239,7 @@ def make_generic_ops(
         _emit(ops, vfs_names, "create", _make_path_write(table.create), True,
               None, skip)
     if table.mkdir is not None:
-        mkdir_fn = (_make_mkdir_parents(table.mkdir)
-                    if mkdir_parents else _make_path_write(table.mkdir))
+        mkdir_fn = _make_mkdir_parents(table.mkdir, mkdir_parents)
         _emit(ops, vfs_names, "mkdir", mkdir_fn, True, None, skip)
     if table.unlink is not None:
         _emit(ops, vfs_names, "unlink", _make_path_write(table.unlink), True,
