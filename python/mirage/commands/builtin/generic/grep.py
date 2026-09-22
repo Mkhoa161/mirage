@@ -3,8 +3,7 @@ from dataclasses import replace
 from functools import partial
 
 from mirage.cache.read_through import (cache_aware_bound_bytes,
-                                       cache_aware_bound_stream,
-                                       cache_aware_read)
+                                       cache_aware_bound_stream)
 from mirage.commands.builtin.constants import BINARY_EXTENSIONS
 from mirage.commands.builtin.grep_binary import GrepFlags, grep_input
 from mirage.commands.builtin.grep_pattern import (compile_pattern,
@@ -179,9 +178,8 @@ async def grep(
     read_bytes = cache_aware_bound_bytes(read_bytes)
     if read_stream is not None:
         read_stream = cache_aware_bound_stream(read_stream)
-    read_stream = stdin_stream(
-        read_stream
-        if read_stream is not None else cache_aware_read(read_bytes), stdin)
+    operand_stream = stdin_stream(
+        read_stream if read_stream is not None else read_bytes, stdin)
     fl = FlagView(opts.flags, spec=SPECS["grep"])
     pattern, never_match = await resolve_pattern(texts, fl, read_bytes,
                                                  GREP_NO_PATTERN)
@@ -214,8 +212,8 @@ async def grep(
             if not file_admitted(p.virtual, f.filters):
                 return b"", io
             # Start the reader while the mount's cache context is still active.
-            source = read_stream(p) if read_stream is not None else wrap_bytes(
-                await rb(p.virtual))
+            source = (operand_stream(p) if is_stdin(p) or read_stream
+                      is not None else wrap_bytes(await rb(p.virtual)))
         except WALK_ERRORS as exc:
             return b"", IOResult(
                 exit_code=2,
@@ -273,8 +271,8 @@ async def grep(
                 return
             if not file_admitted(p.virtual, f.filters):
                 return
-            source = read_stream(p) if read_stream is not None else wrap_bytes(
-                await rb(p.virtual))
+            source = (operand_stream(p) if is_stdin(p) or read_stream
+                      is not None else wrap_bytes(await rb(p.virtual)))
             file_io = IOResult(exit_code=1)
             show = not f.no_filename and (f.with_filename or walked
                                           or len(paths) > 1)
