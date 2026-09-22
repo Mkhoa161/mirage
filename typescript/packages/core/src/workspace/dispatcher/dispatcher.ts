@@ -27,7 +27,6 @@ import {
   einval,
   enoent,
   enotempty,
-  eperm,
   isMissError,
   isMissingOp,
   noMount,
@@ -65,7 +64,6 @@ import { Reconciler } from '../reconcile.ts'
 import { sliceWindow } from '../../utils/ranges.ts'
 import { compareCodePoints } from '../../utils/sort.ts'
 import {
-  BACKEND_XATTR_PREFIX,
   DISPATCH_READ_OPS,
   DISPATCH_WRITE_OPS,
   HIDDEN_CREATE_OPS,
@@ -998,18 +996,16 @@ export class Dispatcher {
     const write = POLICY_WRITE_OPS.has(opName)
     await preOpsGate(this.policies, opName, path, write, owner, sessionId(), issuer)
     if (write) requireTurfWritable(mount, path)
-    const facts = await this.xattrFacts(mount, path)
+    await this.xattrTarget(mount, path)
     const stored = this.namespace.xattrs(path.virtual)
     const name = typeof kwargs.name === 'string' ? kwargs.name : ''
     let result: Uint8Array | string[] | null = null
     if (opName === 'listxattr') {
-      result = [...new Set([...facts.keys(), ...stored.keys()])].sort(compareCodePoints)
+      result = [...stored.keys()].sort(compareCodePoints)
     } else if (opName === 'getxattr') {
-      const found = facts.get(name) ?? stored.get(name)
+      const found = stored.get(name)
       if (found === undefined) throw noXattr(path.virtual)
       result = found
-    } else if (facts.has(name)) {
-      throw eperm(path.virtual)
     } else if (opName === 'setxattr') {
       if (kwargs.create === true && stored.has(name)) throw eexist(path.virtual)
       if (kwargs.replace === true && !stored.has(name)) throw noXattr(path.virtual)
@@ -1032,22 +1028,14 @@ export class Dispatcher {
   }
 
   /**
-   * The read-only attributes a path carries from its backend.
-   *
-   * Every string, integer or boolean fact the backend's stat reports in
-   * `extra` reads back as `user.mirage.<key>`: a Drive file id, an etag,
-   * a Box id. The stat also settles whether the path exists, which an
-   * attribute op answers first (ENOENT). A link node's own attributes
-   * and a directory that exists only in the namespace have no backend
-   * behind them, so they carry none. Mirrors Python's
-   * Dispatcher._xattr_facts.
+   * Settle that an attribute op's path exists, which it answers first. A
+   * link node's own attributes and a directory that exists only in the
+   * namespace have no backend behind them; anything else the backend's
+   * stat must find, or the op is ENOENT. Mirrors Python's
+   * Dispatcher._xattr_target.
    */
-  private async xattrFacts(
-    mount: MountEntry | null,
-    path: PathSpec,
-  ): Promise<Map<string, Uint8Array>> {
-    const facts = new Map<string, Uint8Array>()
-    if (this.namespace.isLink(path.virtual)) return facts
+  private async xattrTarget(mount: MountEntry | null, path: PathSpec): Promise<void> {
+    if (this.namespace.isLink(path.virtual)) return
     let stat: FileStat | null = null
     if (mount !== null) {
       const [vfs, scope] = await this.namespace.resolve(path.virtual, false)
@@ -1066,23 +1054,8 @@ export class Dispatcher {
         await this.reconciler.onOpMissing(mount, 'stat', path.virtual, err)
       }
     }
-    if (stat === null) {
-      if (this.namespaceResult('stat', path.virtual) instanceof FileStat) return facts
-      throw mount === null ? noMount(path.virtual) : enoent(path.virtual)
-    }
-    const encoder = new TextEncoder()
-    for (const key of Object.keys(stat.extra).sort(compareCodePoints)) {
-      const value = stat.extra[key]
-      if (typeof value === 'boolean') {
-        facts.set(BACKEND_XATTR_PREFIX + key, encoder.encode(value ? 'true' : 'false'))
-      } else if (
-        typeof value === 'string' ||
-        (typeof value === 'number' && Number.isInteger(value))
-      ) {
-        facts.set(BACKEND_XATTR_PREFIX + key, encoder.encode(String(value)))
-      }
-    }
-    return facts
+    if (stat !== null || this.namespaceResult('stat', path.virtual) instanceof FileStat) return
+    throw mount === null ? noMount(path.virtual) : enoent(path.virtual)
   }
 
   /**

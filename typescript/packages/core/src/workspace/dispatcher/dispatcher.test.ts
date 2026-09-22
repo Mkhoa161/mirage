@@ -665,37 +665,18 @@ describe('the door answers extended attributes from the node table', () => {
     }
   })
 
-  it('reads backend facts as user.mirage and refuses writers', async () => {
-    // A Drive folder's id is what the agent needed and could not find;
-    // every scalar fact a backend's stat carries reads back the same way,
-    // and a list-valued one is not an attribute at all.
+  it("keeps a backend stat's extra out of the attributes", async () => {
     const ws = await open()
     const stat = vi.spyOn(ws.opsRegistry, 'call')
     stat.mockImplementation(async (op, ...rest) => {
       if (op === 'stat') {
-        return new FileStat({
-          name: 'd',
-          type: FileType.DIRECTORY,
-          extra: { file_id: '1AbC', shared: true, count: 3, device_numbers: [1, 2] },
-        })
+        return new FileStat({ name: 'd', type: FileType.DIRECTORY, extra: { file_id: '1AbC' } })
       }
       return OpsRegistry.prototype.call.call(ws.opsRegistry, op, ...rest)
     })
     try {
       await ws.vfs.setxattr('/r/f', 'user.tag', ENC.encode('t'))
-      expect(await ws.vfs.listxattr('/r/f')).toEqual([
-        'user.mirage.count',
-        'user.mirage.file_id',
-        'user.mirage.shared',
-        'user.tag',
-      ])
-      expect(DEC.decode(await ws.vfs.getxattr('/r/f', 'user.mirage.file_id'))).toBe('1AbC')
-      await expect(
-        ws.vfs.setxattr('/r/f', 'user.mirage.file_id', ENC.encode('x')),
-      ).rejects.toMatchObject({ code: 'EPERM' })
-      await expect(ws.vfs.removexattr('/r/f', 'user.mirage.file_id')).rejects.toMatchObject({
-        code: 'EPERM',
-      })
+      expect(await ws.vfs.listxattr('/r/f')).toEqual(['user.tag'])
     } finally {
       stat.mockRestore()
       await ws.close()

@@ -652,8 +652,7 @@ class Ops:
                        session_id: str | None = None) -> bytes:
         """One extended attribute's value.
 
-        The node table answers: what a caller set, and the backend's own
-        facts under ``user.mirage.`` (a Drive file id, an etag).
+        The node table answers with what a caller set.
 
         Args:
             path (str): Virtual path.
@@ -701,7 +700,7 @@ class Ops:
         """Store an extended attribute on a path.
 
         Stored on the path's namespace node, so it works on every
-        backend and moves with a rename. A backend fact is read-only.
+        backend and moves with a rename.
 
         Args:
             path (str): Virtual path.
@@ -713,9 +712,6 @@ class Ops:
                 it is not (XATTR_REPLACE).
             nofollow (bool): write a link entry's own attributes.
             session_id (str | None): Session to run as outside a line.
-
-        Raises:
-            PermissionError: EPERM for a ``user.mirage.`` backend fact.
         """
         await self._call("setxattr",
                          path,
@@ -741,8 +737,7 @@ class Ops:
             session_id (str | None): Session to run as outside a line.
 
         Raises:
-            OSError: the attribute-not-set errno when it is not set;
-                EPERM for a ``user.mirage.`` backend fact.
+            OSError: the attribute-not-set errno when it is not set.
         """
         await self._call("removexattr",
                          path,
