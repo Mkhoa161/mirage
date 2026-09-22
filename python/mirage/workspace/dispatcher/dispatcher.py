@@ -26,6 +26,7 @@ from mirage.cache.manager import CacheManager
 from mirage.commands.builtin.utils.limit import apply_op_limit
 from mirage.context import (get_current_session, hidden_paths_intersect,
                             hidden_refusal, path_allowed)
+from mirage.errors import POSIX, FsCondition
 from mirage.io import IOResult, OpReport
 from mirage.observe.context import record, start_op
 from mirage.observe.record import OpRecord
@@ -36,7 +37,7 @@ from mirage.policy import post_ops_gate, pre_ops_gate
 from mirage.policy.errors import PolicyDenied, PolicyError
 from mirage.types import (DEFAULT_READ_TTL, CacheFacts, FileStat, FileType,
                           PathSpec, VFSName)
-from mirage.utils.errors import MISS_ERRORS, no_mount
+from mirage.utils.errors import MISS_ERRORS, enoent, no_mount
 from mirage.utils.hidden import move_reveals
 from mirage.utils.key_prefix import mount_key
 from mirage.utils.path import norm_dir, owner_prefix
@@ -51,7 +52,7 @@ from mirage.workspace.snapshot.drift import DriftQueue
 
 from mirage.workspace.dispatcher.constants import (  # isort: skip
     DISPATCH_READ_OPS, DISPATCH_WRITE_OPS, HIDDEN_CREATE_OPS, LINK_ENTRY_OPS,
-    NAMESPACE_TABLE_OPS, POLICY_WRITE_OPS, SETATTR_KEYS)
+    NAMESPACE_TABLE_OPS, POLICY_WRITE_OPS, SETATTR_KEYS, XATTR_OPS)
 
 
 def _memory_answered(report: OpReport | None,
@@ -73,6 +74,11 @@ def _memory_answered(report: OpReport | None,
     """
     if report is not None:
         report.served(VFSName.RAM.value, moved)
+
+
+def _no_xattr(path: PathSpec) -> OSError:
+    condition = POSIX[FsCondition.NO_XATTR]
+    return OSError(condition.errno, condition.phrase, path.virtual)
 
 
 def _visible_entries(entries: list[str], parent: str) -> list[str]:
@@ -308,6 +314,8 @@ class Dispatcher:
                 path = PathSpec.from_str_path(followed)
                 if not path_allowed(path.virtual):
                     raise hidden_refusal(path.virtual, op in HIDDEN_CREATE_OPS)
+        if op in XATTR_OPS:
+            return await self._xattr_op(op, path, kwargs, report), IOResult()
         mount = self._namespace.try_mount_for(path.virtual)
         if mount is None:
             # No mount serves the path, but the namespace may still know
@@ -430,6 +438,12 @@ class Dispatcher:
         if op in DISPATCH_WRITE_OPS:
             observed = time.time() if op in STAMP_WRITE_OPS else None
             await self.invalidate_after_write(mount, path, observed=observed)
+            if op in ("unlink", "rmdir"):
+                # The name no longer holds that file, so what was set on
+                # it (overlay mode and owner, extended attributes) goes
+                # with it, as the shell's rm already drops it: a file
+                # created there next starts bare on every surface.
+                await self._namespace.drop_overlay(path.virtual)
             if op == "rename" and isinstance(kwargs.get("dst"), PathSpec):
                 await self.invalidate_after_rename(mount, path, kwargs["dst"])
                 # rename(2) replaces the destination, so a node the
@@ -806,6 +820,96 @@ class Dispatcher:
             # The "nothing here" set exactly: a miss on one channel is
             # not absence on its own, so the caller tries the other.
             return None
+
+    async def _xattr_op(self, op: str, path: PathSpec, kwargs: dict[str, Any],
+                        report: OpReport | None) -> bytes | list[str] | None:
+        """Answer an extended-attribute op from the node table.
+
+        The attributes a caller sets live on the path's node, so they
+        survive on a backend that has no such slot and move with a
+        rename. The listing is sorted, so both hosts and every backend
+        agree on its order.
+        Gated like a setattr: both admission gates fire on the path's
+        turf, and a write needs a writable turf.
+
+        Args:
+            op (str): ``getxattr``, ``listxattr``, ``setxattr`` or
+                ``removexattr``.
+            path (PathSpec): the path, already followed unless the
+                caller asked for its link node itself.
+            kwargs (dict[str, Any]): ``name`` for all but listxattr,
+                ``value`` and the ``create``/``replace`` flags for
+                setxattr.
+            report (OpReport | None): the caller's report.
+        """
+        timer = start_op()
+        mount = self._namespace.try_mount_for(path.virtual)
+        owner = mount.prefix if mount is not None else ""
+        policies = self._namespace.registry.policies
+        write = op in POLICY_WRITE_OPS
+        await pre_ops_gate(policies, op, path, write, owner, _session_id())
+        if write:
+            require_turf_writable(mount, path)
+        await self._xattr_target(mount, path)
+        stored = self._namespace.xattrs(path.virtual)
+        name = str(kwargs.get("name", ""))
+        result: bytes | list[str] | None = None
+        if op == "listxattr":
+            result = sorted(stored)
+        elif op == "getxattr":
+            found = stored.get(name)
+            if found is None:
+                raise _no_xattr(path)
+            result = found
+        elif op == "setxattr":
+            if kwargs.get("create") and name in stored:
+                raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST),
+                                      path.virtual)
+            if kwargs.get("replace") and name not in stored:
+                raise _no_xattr(path)
+            await self._namespace.set_xattr(path.virtual, name,
+                                            bytes(kwargs.get("value") or b""))
+        else:
+            if name not in stored:
+                raise _no_xattr(path)
+            await self._namespace.remove_xattr(path.virtual, name)
+        record(op, path.virtual, VFSName.RAM.value,
+               len(result) if isinstance(result, bytes) else 0, timer)
+        if report is not None:
+            report.served(None, None)
+        bound = await post_ops_gate(policies, op, path, write, owner, result)
+        if bound is not None:
+            return await apply_op_limit(result, bound)
+        return result
+
+    async def _xattr_target(self, mount: MountEntry | None,
+                            path: PathSpec) -> None:
+        """Settle that an attribute op's path exists, which it answers first.
+
+        A link node's own attributes and a directory that exists only in
+        the namespace have no backend behind them; anything else the
+        backend's stat must find, or the op is ENOENT.
+
+        Args:
+            mount (MountEntry | None): the mount owning the path.
+            path (PathSpec): the path the op names.
+        """
+        if self._namespace.is_link(path.virtual):
+            return
+        stat: FileStat | None = None
+        if mount is not None:
+            await mount.ensure_ready()
+            try:
+                stat = await mount.execute_op("stat", path.virtual)
+            except FileNotFoundError:
+                await self._reconciler.on_op_missing(mount, "stat",
+                                                     path.virtual)
+        if stat is not None or isinstance(
+                self._namespace_result("stat", path.virtual), FileStat):
+            return
+        if mount is None:
+            raise no_mount(path.virtual)
+        raise enoent(path)
 
     async def _apply_setattr(self, mount: MountEntry, path: PathSpec,
                              kwargs: dict[str, Any]) -> dict[str, Any]:

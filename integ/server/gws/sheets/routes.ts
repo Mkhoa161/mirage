@@ -25,7 +25,8 @@ import type { Ctx } from '../../kit/typescript/index.ts'
 import { colIndexToLetter, parseA1, rangeLabel, rangeLabelFor } from './a1.ts'
 import type { A1Range } from './a1.ts'
 import { copySheetTo, sheetsBatchUpdate } from './batch.ts'
-import { clearRange, fmtSpreadsheet, rangeValues, tabExtent, writeValues } from './grid.ts'
+import { clearRange, rangeValues, tabExtent, writeValues } from './grid.ts'
+import { fmtSpreadsheet } from './spreadsheet.ts'
 import { batchClearValues, batchGetValues, batchUpdateValues, unparseable } from './values.ts'
 
 type GwsCtx = Ctx<GwsState>

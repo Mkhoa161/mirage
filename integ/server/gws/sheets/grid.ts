@@ -12,10 +12,11 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import type { SheetTab, Spreadsheet } from '../store/types.ts'
-import type { JsonValue } from '../../kit/typescript/index.ts'
+import type { SheetTab } from '../store/types.ts'
+import { asNum, asObj } from '../wire/json.ts'
 import type { JsonObj } from '../wire/json.ts'
 import type { A1Range } from './a1.ts'
+import { formatNumber } from './number.ts'
 
 // The grid a new spreadsheet gets, and the pixel sizes the live API
 // reports for its untouched rows and columns.
@@ -30,7 +31,38 @@ export function newTab(
   rows = GRID_ROWS,
   cols = GRID_COLUMNS,
 ): SheetTab {
-  return { sheetId, title, cells: new Map(), rows, cols }
+  return {
+    sheetId,
+    title,
+    cells: new Map(),
+    props: new Map(),
+    rows,
+    cols,
+    rowMeta: {},
+    columnMeta: {},
+    bandedRanges: [],
+    basicFilter: null,
+    conditionalFormats: [],
+  }
+}
+
+// A tab carried whole to a new id and title: values, formats, row and
+// column properties, banding, the filter and conditional formats. Banded
+// range ids are unique across a spreadsheet, so the copy's are minted anew
+// above `bandFloor`.
+export function copyTab(
+  tab: SheetTab,
+  sheetId: number,
+  title: string,
+  bandFloor: number,
+): SheetTab {
+  const copy = structuredClone(tab)
+  copy.sheetId = sheetId
+  copy.title = title
+  copy.bandedRanges.forEach((banded, i) => {
+    banded.bandedRangeId = bandFloor + i + 1
+  })
+  return copy
 }
 
 export function tabExtent(tab: SheetTab): { rows: number; cols: number } {
@@ -51,9 +83,7 @@ export function rangeValues(range: A1Range): string[][] {
   const out: string[][] = []
   for (let r = range.startRow; r <= endRow; r += 1) {
     const row: string[] = []
-    for (let c = range.startCol; c <= endCol; c += 1) {
-      row.push(range.tab.cells.get(`${String(r)},${String(c)}`) ?? '')
-    }
+    for (let c = range.startCol; c <= endCol; c += 1) row.push(shownAt(range.tab, r, c))
     while (row.length > 0 && row[row.length - 1] === '') row.pop()
     out.push(row)
   }
@@ -112,7 +142,12 @@ export function scientific(value: number): string {
 // The grid a tab reports, which the live API grows to hold what was
 // written: 1313 written rows report rowCount 1313, and rowMetadata has one
 // entry per row of the grid rather than a fixed 1000.
-export function tabGrid(tab: SheetTab): { rows: number; cols: number } {
+export interface Grid {
+  rows: number
+  cols: number
+}
+
+export function tabGrid(tab: SheetTab): Grid {
   const used = tabExtent(tab)
   return { rows: Math.max(tab.rows, used.rows), cols: Math.max(tab.cols, used.cols) }
 }
@@ -122,14 +157,16 @@ export function tabGrid(tab: SheetTab): { rows: number; cols: number } {
 // number 7 and reports `"7"`, `4.50` reports `"4.5"`, `TRUE` and `true` are
 // both the boolean reporting `"TRUE"`, and everything else stays the string
 // it was typed as. An untouched cell is `{}` -- no keys at all, since
-// ExtendedValue with no field set means empty.
+// ExtendedValue with no field set means empty. A number the cell's
+// numberFormat covers reports what the format renders (0.685 under `0.0%`
+// is `"68.5%"`).
 //
 // Not modeled, and a string here where live Sheets makes it a number: a
 // currency, percent, thousands-separated or date-shaped cell (`$5`, `50%`,
 // `1,234`, `2026-01-02`), which needs Sheets' locale-aware number formats.
 // A leading `+` is a formula in live Sheets (`+5` is formulaValue `"+5"`)
 // whose rendered value happens to match the number taken here.
-export function cellData(text: string): JsonObj {
+export function cellData(text: string, numberFormat?: JsonObj): JsonObj {
   if (text === '') return {}
   const trimmed = text.trim()
   if (BOOLEAN.test(trimmed)) {
@@ -143,44 +180,42 @@ export function cellData(text: string): JsonObj {
   if (DECIMAL.test(trimmed)) {
     const number = Number(trimmed)
     const value = { numberValue: number }
+    const formatted = numberFormat === undefined ? null : formatNumber(number, numberFormat)
     return {
       userEnteredValue: value,
       effectiveValue: value,
-      formattedValue: EXPONENT.test(trimmed) ? scientific(number) : String(number),
+      formattedValue: formatted ?? (EXPONENT.test(trimmed) ? scientific(number) : String(number)),
     }
   }
   const value = { stringValue: text }
   return { userEnteredValue: value, effectiveValue: value, formattedValue: text }
 }
 
-// One GridData for one range, in the shape `includeGridData=true` returns:
-// row entries up to the last written row inside the range, cell entries up
-// to the last written column of that row, `{}` for a row with nothing in
-// it, and metadata for every row and column the range covers, clipped to
-// the grid. `startRow`/`startColumn` are absent at zero because the live
-// API omits them there, and present for a range that starts further in.
-export function gridData(range: A1Range): JsonObj {
-  const tab = range.tab
-  const grid = tabGrid(tab)
-  const rowEnd = Math.min(range.endRow ?? grid.rows - 1, grid.rows - 1)
-  const colEnd = Math.min(range.endCol ?? grid.cols - 1, grid.cols - 1)
-  const span = (start: number, end: number): number => Math.max(end - start + 1, 0)
-  return {
-    ...(range.startRow > 0 ? { startRow: range.startRow } : {}),
-    ...(range.startCol > 0 ? { startColumn: range.startCol } : {}),
-    rowData: rangeValues(range).map(
-      (row): JsonValue => (row.length === 0 ? {} : { values: row.map(cellData) }),
-    ),
-    rowMetadata: Array.from({ length: span(range.startRow, rowEnd) }, (_, i) => ({
-      pixelSize: tab.rowPixels?.[range.startRow + i] ?? ROW_PIXELS,
-    })),
-    columnMetadata: Array.from({ length: span(range.startCol, colEnd) }, (_, i) => ({
-      pixelSize: tab.columnPixels?.[range.startCol + i] ?? COLUMN_PIXELS,
-    })),
-  }
+// The text values.get reports for a cell: what was typed, except where the
+// cell's numberFormat renders the number it holds.
+export function shownAt(tab: SheetTab, row: number, col: number): string {
+  const key = `${String(row)},${String(col)}`
+  const text = tab.cells.get(key) ?? ''
+  const numberFormat = asObj(asObj(tab.props.get(key)?.userEnteredFormat).numberFormat)
+  if (Object.keys(numberFormat).length === 0) return text
+  const value = asNum(asObj(cellData(text).effectiveValue).numberValue)
+  return value === undefined ? text : (formatNumber(value, numberFormat) ?? text)
 }
 
-function wholeTab(tab: SheetTab): A1Range {
+// One CellData's value, back into the text a cell stores; null when it
+// carries none.
+export function cellText(cell: JsonObj): string | null {
+  const value = cell.userEnteredValue
+  if (value === undefined) return null
+  const v = asObj(value)
+  if (typeof v.stringValue === 'string') return v.stringValue
+  if (typeof v.numberValue === 'number') return String(v.numberValue)
+  if (typeof v.boolValue === 'boolean') return v.boolValue ? 'TRUE' : 'FALSE'
+  if (typeof v.formulaValue === 'string') return v.formulaValue
+  return null
+}
+
+export function wholeTab(tab: SheetTab): A1Range {
   return { tab, startRow: 0, startCol: 0, endRow: null, endCol: null }
 }
 
@@ -192,41 +227,5 @@ export function tabProperties(tab: SheetTab, index: number): JsonObj {
     index,
     sheetType: 'GRID',
     gridProperties: { rowCount: grid.rows, columnCount: grid.cols },
-  }
-}
-
-// `ranges` narrows the reply the way the live API does: only the tabs a
-// range names come back, and each carries one GridData per range asked of
-// it, in request order. With no ranges every tab comes back whole.
-export function fmtSpreadsheet(
-  sheet: Spreadsheet,
-  id: string,
-  includeGridData = false,
-  ranges: readonly A1Range[] = [],
-): JsonObj {
-  const tabs =
-    ranges.length === 0 ? sheet.tabs : sheet.tabs.filter((t) => ranges.some((r) => r.tab === t))
-  const dataOf = (tab: SheetTab): JsonObj[] =>
-    ranges.length === 0
-      ? [gridData(wholeTab(tab))]
-      : ranges.filter((r) => r.tab === tab).map(gridData)
-  return {
-    spreadsheetId: id,
-    // The live API also carries defaultFormat and spreadsheetTheme here,
-    // which are styling this server has no model for and mirage never
-    // reads.
-    properties: {
-      title: sheet.title,
-      locale: 'en_US',
-      autoRecalc: 'ON_CHANGE',
-      timeZone: 'Etc/GMT',
-    },
-    sheets: tabs.map((tab) => ({
-      properties: tabProperties(tab, sheet.tabs.indexOf(tab)),
-      // Real Sheets omits `data` entirely without includeGridData, which
-      // is the whole reason mirage asks for it.
-      ...(includeGridData ? { data: dataOf(tab) } : {}),
-    })),
-    spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${id}/edit`,
   }
 }

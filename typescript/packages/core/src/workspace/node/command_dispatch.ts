@@ -61,8 +61,10 @@ import {
   handleChown,
   handleDf,
   handleExecPath,
+  handleGetfattr,
   handleLn,
   handleReadlink,
+  handleSetfattr,
   handleTouch,
   prepareMv,
   stripLinkOperands,
@@ -744,6 +746,15 @@ async function routeArgv(
   }
   if (name === 'readlink') {
     return await handleReadlink(namespace, dispatch, session, operands)
+  }
+
+  // Extended attributes: the door's node table and the backend's own
+  // facts; they read -h themselves.
+  if (name === 'getfattr') {
+    return await handleGetfattr(dispatch, session, operands)
+  }
+  if (name === 'setfattr') {
+    return await handleSetfattr(dispatch, session, operands)
   }
 
   // Metadata commands (namespace-routed: resolve-then-setattr with

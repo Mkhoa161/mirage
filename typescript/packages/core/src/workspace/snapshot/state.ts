@@ -59,7 +59,7 @@ import { type ReadSpec, DEFAULT_READ_SPEC, MountMode } from '../../types.ts'
 import { resolveReadSpec } from '../mount/read_policy.ts'
 import { Mount } from '../mount/spec.ts'
 import { VERSION } from '../../version.ts'
-import type { NodeMeta } from '../mount/namespace/namespace.ts'
+import { metaFromFields, metaToFields, type NodeMeta } from '../mount/namespace/namespace.ts'
 import { SessionState, varsFromFields, varsToFields } from '../session/session.ts'
 import type { Workspace } from '../workspace/workspace.ts'
 import type { MountArgs } from './config.ts'
@@ -171,16 +171,7 @@ export async function toStateDict(ws: Workspace): Promise<WorkspaceStateDict> {
   const fingerprints: FingerprintEntrySnapshot[] = captureFingerprints(ws.records, ws.registry)
   const liveOnly = liveOnlyMountPrefixes(ws.registry)
   const nodes: Record<string, NodeMetaSnapshot> = {}
-  for (const [path, meta] of ws.namespace.nodes) {
-    const entry: NodeMetaSnapshot = {}
-    if (meta.target !== undefined) entry.target = meta.target
-    if (meta.mtime !== undefined) entry.mtime = meta.mtime
-    if (meta.mode !== undefined) entry.mode = meta.mode
-    if (meta.uid !== undefined) entry.uid = meta.uid
-    if (meta.gid !== undefined) entry.gid = meta.gid
-    if (meta.atime !== undefined) entry.atime = meta.atime
-    nodes[path] = entry
-  }
+  for (const [path, meta] of ws.namespace.nodes) nodes[path] = metaToFields(meta)
   return {
     version: FORMAT_VERSION,
     mirage_version: VERSION,
@@ -518,14 +509,7 @@ export async function applyStateDict(
 async function restoreNodes(ws: Workspace, state: WorkspaceStateDict): Promise<void> {
   const entries = new Map<string, NodeMeta>()
   for (const [path, e] of Object.entries(state.nodes ?? {})) {
-    const meta: NodeMeta = {}
-    if (e.target !== undefined) meta.target = e.target
-    if (e.mtime !== undefined) meta.mtime = e.mtime
-    if (e.mode !== undefined) meta.mode = e.mode
-    if (e.uid !== undefined) meta.uid = e.uid
-    if (e.gid !== undefined) meta.gid = e.gid
-    if (e.atime !== undefined) meta.atime = e.atime
-    entries.set(path, meta)
+    entries.set(path, metaFromFields(e))
   }
   await ws.namespace.replaceNodes(entries)
 }

@@ -29,6 +29,8 @@ import {
   enotempty,
   isMissError,
   isMissingOp,
+  noMount,
+  noXattr,
   type FsError,
 } from '../../utils/errors.ts'
 import { Policies, PolicyDenied, postOpsGate, preOpsGate } from '../../policy/index.ts'
@@ -60,6 +62,7 @@ import type { MountEntry } from '../mount/mount.ts'
 import { mergeOverlayStat } from '../mount/namespace/overlay.ts'
 import { Reconciler } from '../reconcile.ts'
 import { sliceWindow } from '../../utils/ranges.ts'
+import { compareCodePoints } from '../../utils/sort.ts'
 import {
   DISPATCH_READ_OPS,
   DISPATCH_WRITE_OPS,
@@ -68,6 +71,7 @@ import {
   NAMESPACE_TABLE_OPS,
   POLICY_WRITE_OPS,
   SETATTR_KEYS,
+  XATTR_OPS,
 } from './constants.ts'
 import { requireTurfWritable } from './lineage.ts'
 import {
@@ -276,6 +280,9 @@ export class Dispatcher {
         if (!pathAllowed(p.virtual)) throw hiddenRefusal(p.virtual, HIDDEN_CREATE_OPS.has(opName))
       }
     }
+    if (XATTR_OPS.has(opName)) {
+      return [await this.xattrOp(opName, p, kwargs ?? {}, report, issuer), new IOResult()]
+    }
     const resolvedOwner = this.namespace.tryMountFor(p.virtual)
     let resolved: [VFS, PathSpec, MountMode]
     try {
@@ -480,6 +487,13 @@ export class Dispatcher {
     if (DISPATCH_WRITE_OPS.has(opName)) {
       const observed = STAMP_WRITE_OPS.has(opName) ? Date.now() / 1000 : null
       await this.invalidateAfterWriteByPath(p.virtual, observed)
+      if (opName === 'unlink' || opName === 'rmdir') {
+        // The name no longer holds that file, so what was set on it
+        // (overlay mode and owner, extended attributes) goes with it, as
+        // the shell's rm already drops it: a file created there next
+        // starts bare on every surface.
+        await this.namespace.dropOverlay(p.virtual)
+      }
       if (renameDst !== null) {
         await this.invalidateAfterRenameByPath(p.virtual, renameDst.virtual)
         // rename(2) replaces the destination, so a node the table holds
@@ -946,6 +960,102 @@ export class Dispatcher {
       if (isMissError(err) || isMissingOp(err, opName)) return null
       throw err
     }
+  }
+
+  /**
+   * Answer an extended-attribute op from the node table.
+   *
+   * The attributes a caller sets live on the path's node, so they
+   * survive on a backend that has no such slot and move with a rename;
+   * the backend's own facts are read off its stat on every call and
+   * refused to writers with EPERM, the answer for an attribute the
+   * filesystem keeps for itself. The listing is sorted, so both hosts
+   * and every backend agree on its order. Gated like a setattr: both
+   * admission gates fire on the path's turf, and a write needs a
+   * writable turf. Mirrors Python's Dispatcher._xattr_op.
+   *
+   * Args:
+   *   opName: `getxattr`, `listxattr`, `setxattr` or `removexattr`.
+   *   path: the path, already followed unless the caller asked for its
+   *     link node itself.
+   *   kwargs: `name` for all but listxattr, `value` and the
+   *     `create`/`replace` flags for setxattr.
+   *   report: the caller's report.
+   *   issuer: the mark on the op being served.
+   */
+  private async xattrOp(
+    opName: string,
+    path: PathSpec,
+    kwargs: OpKwargs,
+    report: OpReport | undefined,
+    issuer?: symbol,
+  ): Promise<unknown> {
+    const timer = startOp()
+    const mount = this.namespace.tryMountFor(path.virtual)
+    const owner = mount?.prefix ?? ''
+    const write = POLICY_WRITE_OPS.has(opName)
+    await preOpsGate(this.policies, opName, path, write, owner, sessionId(), issuer)
+    if (write) requireTurfWritable(mount, path)
+    await this.xattrTarget(mount, path)
+    const stored = this.namespace.xattrs(path.virtual)
+    const name = typeof kwargs.name === 'string' ? kwargs.name : ''
+    let result: Uint8Array | string[] | null = null
+    if (opName === 'listxattr') {
+      result = [...stored.keys()].sort(compareCodePoints)
+    } else if (opName === 'getxattr') {
+      const found = stored.get(name)
+      if (found === undefined) throw noXattr(path.virtual)
+      result = found
+    } else if (opName === 'setxattr') {
+      if (kwargs.create === true && stored.has(name)) throw eexist(path.virtual)
+      if (kwargs.replace === true && !stored.has(name)) throw noXattr(path.virtual)
+      const value = kwargs.value instanceof Uint8Array ? kwargs.value : new Uint8Array()
+      await this.namespace.setXattr(path.virtual, name, value)
+    } else {
+      if (!stored.has(name)) throw noXattr(path.virtual)
+      await this.namespace.removeXattr(path.virtual, name)
+    }
+    record(
+      opName,
+      path.virtual,
+      VFSName.RAM,
+      result instanceof Uint8Array ? result.byteLength : 0,
+      timer,
+    )
+    report?.served(null, null)
+    const bound = await postOpsGate(this.policies, opName, path, write, owner, result)
+    return bound !== null ? await applyOpLimit(result, bound) : result
+  }
+
+  /**
+   * Settle that an attribute op's path exists, which it answers first. A
+   * link node's own attributes and a directory that exists only in the
+   * namespace have no backend behind them; anything else the backend's
+   * stat must find, or the op is ENOENT. Mirrors Python's
+   * Dispatcher._xattr_target.
+   */
+  private async xattrTarget(mount: MountEntry | null, path: PathSpec): Promise<void> {
+    if (this.namespace.isLink(path.virtual)) return
+    let stat: FileStat | null = null
+    if (mount !== null) {
+      const [vfs, scope] = await this.namespace.resolve(path.virtual, false)
+      await mount.ensureReady()
+      const filetype = getExtension(scope.virtual)
+      try {
+        const found = await mount.use(() =>
+          this.opsRegistry.call('stat', vfs, vfs.accessor ?? NOOP_ACCESSOR_INSTANCE, scope, [], {
+            ...this.indexKwargs(mount),
+            ...(filetype !== null ? { filetype } : {}),
+          }),
+        )
+        stat = found instanceof FileStat ? found : null
+      } catch (err) {
+        if (!isMissingPath(err)) throw err
+        await this.reconciler.onOpMissing(mount, 'stat', path.virtual, err)
+      }
+    }
+    if (stat !== null || this.namespaceResult('stat', path.virtual) instanceof FileStat) return
+    throw mount === null ? noMount(path.virtual) : enoent(path.virtual)
   }
 
   /**

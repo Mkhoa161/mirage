@@ -251,6 +251,15 @@ describe('Ops policy door', () => {
     await expect(ws.vfs.writeFile('/data/locked/f.txt', 'hi')).rejects.toThrow(PolicyDenied)
     expect(await ws.vfs.exists('/data/locked/f.txt')).toBe(false)
   })
+
+  it('classifies setxattr and removexattr as writes', async () => {
+    const ws = mkGuarded()
+    const value = new TextEncoder().encode('v')
+    await expect(ws.vfs.setxattr('/data/locked/f.txt', 'user.a', value)).rejects.toThrow(
+      PolicyDenied,
+    )
+    await expect(ws.vfs.removexattr('/data/locked/f.txt', 'user.a')).rejects.toThrow(PolicyDenied)
+  })
 })
 
 // The facade is not a second pipeline: it hands every op to the

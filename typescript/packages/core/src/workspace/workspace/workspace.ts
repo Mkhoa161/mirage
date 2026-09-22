@@ -655,6 +655,28 @@ export class Workspace {
           // marks the links, so a row is built in one tier and in one
           // shape in both languages.
           return ((await dispatch('readdir', path)) as string[] | null) ?? []
+        case 'getxattr':
+          return await dispatch('getxattr', path, [], {
+            name: dst ?? '',
+            nofollow: attrs?.nofollow === true,
+          })
+        case 'listxattr':
+          return await dispatch('listxattr', path, [], { nofollow: attrs?.nofollow === true })
+        case 'setxattr':
+          await dispatch('setxattr', path, [], {
+            name: dst ?? '',
+            value: bytes ?? new Uint8Array(),
+            create: attrs?.create === true,
+            replace: attrs?.replace === true,
+            nofollow: attrs?.nofollow === true,
+          })
+          return undefined
+        case 'removexattr':
+          await dispatch('removexattr', path, [], {
+            name: dst ?? '',
+            nofollow: attrs?.nofollow === true,
+          })
+          return undefined
       }
     }
   }
