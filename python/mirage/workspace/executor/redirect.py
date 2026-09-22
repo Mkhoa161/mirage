@@ -220,6 +220,9 @@ async def handle_redirect(
         if r.kind == RedirectKind.STDIN:
             scope = _ensure_scope(r.target)
             try:
+                if scope.virtual == "/dev/stdin":
+                    inputs[r.fd] = inputs[FD_STDIN]
+                    continue
                 file_data, _ = await dispatch("read", scope)
             except FS_ERRORS as exc:
                 return _redirect_failure(scope, exc)

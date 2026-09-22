@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import type { ByteSource } from '../../../../../io/types.ts'
 import type { PathSpec } from '../../../../../types.ts'
 import { runCmp } from './cmp.ts'
 import { runComm } from './comm.ts'
@@ -47,12 +48,13 @@ export async function runRelay(
   // The session plane's door, for the generic that renders the session's
   // profile (ls -l).
   sessionView?: SessionView,
+  stdin: ByteSource | null = null,
 ): Promise<CrossResult> {
   if (cmdName === Cmd.LS) return runLs(scopes, flagKwargs, dispatch, ns, sessionView)
   if (cmdName === Cmd.CP) return runCp(scopes, flagKwargs, dispatch, storageKey)
   if (cmdName === Cmd.MV) return runMv(scopes, flagKwargs, dispatch, storageKey)
   if (cmdName === Cmd.DIFF) return runDiff(scopes, flagKwargs, dispatch)
-  if (cmdName === Cmd.PASTE) return runPaste(scopes, flagKwargs, dispatch)
+  if (cmdName === Cmd.PASTE) return runPaste(scopes, flagKwargs, dispatch, stdin)
   if (cmdName === Cmd.COMM) return runComm(scopes, flagKwargs, dispatch)
   if (cmdName === Cmd.JOIN) return runJoin(scopes, flagKwargs, dispatch)
   if (cmdName === Cmd.TAR) return runTar(textArgs, flagKwargs, dispatch)

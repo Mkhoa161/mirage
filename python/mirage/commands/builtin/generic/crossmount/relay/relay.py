@@ -26,6 +26,7 @@ from mirage.commands.builtin.generic.crossmount.relay.tar import run_tar
 from mirage.commands.builtin.generic.crossmount.relay.unzip import run_unzip
 from mirage.commands.builtin.generic.crossmount.types import Cmd, CrossResult
 from mirage.commands.spec.types import FlagValue
+from mirage.io.types import ByteSource
 from mirage.ops.types import NamespaceView, SessionView
 from mirage.runtime.types import DispatchFn
 from mirage.types import PathSpec
@@ -38,7 +39,8 @@ async def run_relay(cmd_name: str,
                     dispatch: DispatchFn,
                     storage_key: Callable[[PathSpec], str] | None = None,
                     ns: NamespaceView | None = None,
-                    session_view: SessionView | None = None) -> CrossResult:
+                    session_view: SessionView | None = None,
+                    stdin: ByteSource | None = None) -> CrossResult:
     """Run a command whose work must see every operand at once.
 
     Pure wiring: every operand is read or written through ``dispatch``
@@ -70,7 +72,7 @@ async def run_relay(cmd_name: str,
     if cmd_name == Cmd.DIFF:
         return await run_diff(scopes, flag_kwargs, dispatch)
     if cmd_name == Cmd.PASTE:
-        return await run_paste(scopes, flag_kwargs, dispatch)
+        return await run_paste(scopes, flag_kwargs, dispatch, stdin)
     if cmd_name == Cmd.COMM:
         return await run_comm(scopes, flag_kwargs, dispatch)
     if cmd_name == Cmd.JOIN:

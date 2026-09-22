@@ -13,6 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import type { ByteSource } from '../../../io/types.ts'
+import { FileStat, FileType, type PathSpec } from '../../../types.ts'
 
 export async function readStdinAsync(stdin: ByteSource | null): Promise<Uint8Array | null> {
   if (stdin === null) return null
@@ -50,4 +51,34 @@ function concat(chunks: Uint8Array[]): Uint8Array {
     offset += c.byteLength
   }
   return out
+}
+
+export function isStdin(path: PathSpec): boolean {
+  return path.rawPath === '-' || path.virtual === '/dev/stdin'
+}
+
+export function stdinStream(
+  read: (path: PathSpec) => AsyncIterable<Uint8Array>,
+  stdin: ByteSource | null,
+): (path: PathSpec) => AsyncIterable<Uint8Array> {
+  const source = resolveSource(stdin)[Symbol.asyncIterator]()
+  return async function* (path) {
+    if (!isStdin(path)) {
+      yield* read(path)
+      return
+    }
+    // All '-' operands share one cursor; a new operand must not replay bytes.
+    for (;;) {
+      const next = await source.next()
+      if (next.done === true) return
+      yield next.value
+    }
+  }
+}
+
+export function stdinStat(
+  stat: (path: PathSpec) => Promise<FileStat>,
+): (path: PathSpec) => Promise<FileStat> {
+  return (path) =>
+    isStdin(path) ? Promise.resolve(new FileStat({ name: '-', type: FileType.FIFO })) : stat(path)
 }

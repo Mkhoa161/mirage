@@ -12,6 +12,8 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { isStdin } from '../utils/stream.ts'
+import { stdinStream, stdinStat } from '../utils/stream.ts'
 import { guardInput } from '../utils/limit.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { FlagView } from '../../spec/flag_view.ts'
@@ -165,7 +167,8 @@ export async function grepGeneric(
   readdir: Readdir,
   stream: Stream,
 ): Promise<CommandFnResult> {
-  const cachedStream = cacheAwareStream(stream)
+  stat = stdinStat(stat)
+  const cachedStream = stdinStream(cacheAwareStream(stream), opts.stdin)
   stream = (path) => guardInput(cachedStream(path), opts)
   const fl = new FlagView(opts.flags, specOf('grep'))
   const resolution = await resolvePattern(name, texts, opts.flags, paths, opts.mountPrefix, stream)
@@ -221,7 +224,7 @@ export async function grepGeneric(
   const st = mountParentStat((p: string) => stat(makeSpec(p, first)), mounts)
   if (!f.recursive && paths.length === 1 && !(f.filesOnly || f.quiet || f.filesWithoutMatch)) {
     try {
-      const info = await st(first.virtual)
+      const info = isStdin(first) ? await stat(first) : await st(first.virtual)
       if (info.type === FileType.DIRECTORY)
         return [
           new Uint8Array(),
@@ -239,7 +242,7 @@ export async function grepGeneric(
           source,
           pat,
           f,
-          first.rawPath,
+          isStdin(first) ? '(standard input)' : first.rawPath,
           f.withFilename && !f.noFilename,
           singleIO,
           false,
@@ -270,7 +273,7 @@ export async function grepGeneric(
 
   async function* scan(p: PathSpec, walked = false): AsyncIterable<Uint8Array> {
     try {
-      const info = await st(p.virtual)
+      const info = isStdin(p) ? await stat(p) : await st(p.virtual)
       if (info.type === FileType.DIRECTORY) {
         if (!f.recursive) {
           warn(`${name}: ${p.rawPath}: Is a directory`)
@@ -311,7 +314,7 @@ export async function grepGeneric(
         stream(p),
         pat,
         f,
-        p.rawPath,
+        isStdin(p) ? '(standard input)' : p.rawPath,
         show,
         fileIO,
         printed,

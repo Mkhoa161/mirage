@@ -15,7 +15,9 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TypeVar
 
-from mirage.io.types import ByteSource
+from mirage.commands.builtin.utils.operands import normalized_read
+from mirage.io.types import ByteSource, materialize
+from mirage.types import FileStat, FileType, PathSpec, PolymorphicReadFn
 
 # The backend config a platform command threads through to its reader.
 # Generic rather than a union: the config and the reader that consumes
@@ -85,3 +87,47 @@ async def resolve_text_input(
     if raw is not None:
         return raw.decode(errors="replace")
     raise ValueError(error_message)
+
+
+def is_stdin(path: PathSpec) -> bool:
+    return path.raw_path == "-" or path.virtual == "/dev/stdin"
+
+
+def stdin_stream(
+        read: PolymorphicReadFn, stdin: ByteSource | None
+) -> Callable[[PathSpec], AsyncIterator[bytes]]:
+    backend = normalized_read(read)
+    source = resolve_source(stdin)
+
+    async def stream(path: PathSpec) -> AsyncIterator[bytes]:
+        if is_stdin(path):
+            async for chunk in source:
+                yield chunk
+        else:
+            async for chunk in backend(path):
+                yield chunk
+
+    return stream
+
+
+def stdin_bytes(
+        read: Callable[..., Awaitable[bytes]],
+        stdin: ByteSource | None) -> Callable[[PathSpec], Awaitable[bytes]]:
+    stream = stdin_stream(read, stdin)
+
+    async def read_bytes(path: PathSpec) -> bytes:
+        return await materialize(stream(path))
+
+    return read_bytes
+
+
+def stdin_stat(
+    stat: Callable[..., Awaitable[FileStat]]
+) -> Callable[[PathSpec], Awaitable[FileStat]]:
+
+    async def probe(path: PathSpec) -> FileStat:
+        if is_stdin(path):
+            return FileStat(name="-", type=FileType.FIFO)
+        return await stat(path)
+
+    return probe
