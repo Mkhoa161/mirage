@@ -117,6 +117,42 @@ async def test_read_wrapper_forwards_index():
 
 
 @pytest.mark.asyncio
+async def test_emulated_append_reads_current_bytes_and_creates_missing():
+    table = make_table(write=AsyncMock())
+    table.read_bytes.side_effect = [b"old", b"oldnew", FileNotFoundError()]
+    op = next(o for o in make_generic_ops("x", table) if o.name == "append")
+    acc = NOOPAccessor()
+    for data in (b"new", b"!", b"created"):
+        await op.fn(acc, PATH, data)
+    assert [call.args[2] for call in table.write.await_args_list
+            ] == [b"oldnew", b"oldnew!", b"created"]
+
+
+@pytest.mark.asyncio
+async def test_emulated_append_does_not_overwrite_after_read_failure():
+    table = make_table(write=AsyncMock())
+    table.read_bytes.side_effect = PermissionError(PATH.virtual)
+    op = next(o for o in make_generic_ops("x", table) if o.name == "append")
+    with pytest.raises(PermissionError):
+        await op.fn(NOOPAccessor(), PATH, b"new")
+    table.write.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_native_append_skips_emulation_and_overrides_still_win():
+    table = make_table(write=AsyncMock(), append=AsyncMock())
+    ops = make_generic_ops("x", table)
+    op = next(o for o in ops if o.name == "append")
+    acc = NOOPAccessor()
+    await op.fn(acc, PATH, b"new")
+    table.append.assert_awaited_once_with(acc, PATH, b"new")
+    table.read_bytes.assert_not_awaited()
+    table.write.assert_not_awaited()
+    assert not any(o.name == "append" for o in make_generic_ops(
+        "x", make_table(write=AsyncMock()), overrides={"append"}))
+
+
+@pytest.mark.asyncio
 async def test_emulated_truncate_pads_and_cuts():
     table = make_table(write=AsyncMock())
     ops = make_generic_ops("x", table, emulate_truncate=True)

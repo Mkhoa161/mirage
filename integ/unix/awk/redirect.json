@@ -24,7 +24,7 @@
         "gdrive-folder",
         "box"
       ],
-      "command": "printf 'a 1\\nb 2\\na 3\\n' | awk '{ print $2 > (\"/data/\" $1 \".txt\") }'; cat /data/a.txt /data/b.txt",
+      "command": "printf 'a 1\\nb 2\\na 3\\n' | awk '{ print $2 > (\"/data/awk-split-\" $1 \".txt\") }'; cat /data/awk-split-a.txt /data/awk-split-b.txt",
       "expect": {
         "exit": 0,
         "stdout": "1\n3\n2\n",
