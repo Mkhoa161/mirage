@@ -1,17 +1,3 @@
-// ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-// ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
-
 import { spawn } from 'node:child_process'
 import type { ChildProcessByStdio } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -181,6 +167,28 @@ async function main(): Promise<void> {
     await request(at, 'PATCH', `/v1/blocks/${hid}`, { in_trash: false })
 
     const before = results(await request(at, 'GET', `/v1/blocks/${PAGE}/children`))
+    for (const type of ['child_page', 'child_database']) {
+      const relationship = { type, [type]: { title: 'Invalid relationship' } }
+      for (const child of [
+        relationship,
+        { type: 'toggle', toggle: { rich_text: [], children: [relationship] } },
+      ]) {
+        const children = [paragraph('must not be inserted'), child]
+        await request(at, 'PATCH', `/v1/blocks/${PAGE}/children`, { children }, 400)
+        await request(
+          at,
+          'POST',
+          '/v1/pages',
+          { parent: { page_id: PAGE }, properties: {}, children },
+          400,
+        )
+        eq(
+          'relationship refusal leaves parent unchanged',
+          results(await request(at, 'GET', `/v1/blocks/${PAGE}/children`)),
+          before,
+        )
+      }
+    }
     for (const children of [
       [JSON.stringify(paragraph('bad'))],
       [paragraph('valid'), { type: 'divider', divider: { children: [paragraph('invalid')] } }],
@@ -238,6 +246,51 @@ async function main(): Promise<void> {
         (nested[0]!.paragraph as Record<string, JsonValue>).rich_text as Record<string, JsonValue>[]
       )[0]!.plain_text,
       'inside',
+    )
+    const deep = results(
+      await request(at, 'PATCH', `/v1/blocks/${String(nested[0]!.id)}/children`, {
+        children: [paragraph('deep descendant')],
+      }),
+    )
+    await request(at, 'PATCH', `/v1/blocks/${String(nested[0]!.id)}`, { archived: true })
+    const childPage = await request(at, 'POST', '/v1/pages', {
+      parent: { page_id: page.id! },
+      properties: {},
+      children: [paragraph('preserved page content')],
+    })
+    const childContent = results(
+      await request(at, 'GET', `/v1/blocks/${String(childPage.id)}/children`),
+    )
+    const untouched = await request(at, 'GET', `/v1/blocks/${hid}`)
+    await request(at, 'PATCH', `/v1/pages/${String(page.id)}/markdown`, {
+      type: 'replace_content',
+      replace_content: { new_str: 'replacement' },
+    })
+    for (const block of [...blocks, ...nested, ...deep]) {
+      await request(at, 'GET', `/v1/blocks/${String(block.id)}`, undefined, 404)
+      eq(
+        'removed subtree has no stored children',
+        results(await request(at, 'GET', `/v1/blocks/${String(block.id)}/children`)),
+        [],
+      )
+    }
+    await request(at, 'GET', `/v1/pages/${String(childPage.id)}`)
+    eq(
+      'replacement preserves child page contents',
+      results(await request(at, 'GET', `/v1/blocks/${String(childPage.id)}/children`)),
+      childContent,
+    )
+    eq(
+      'replacement leaves other trees intact',
+      await request(at, 'GET', `/v1/blocks/${hid}`),
+      untouched,
+    )
+    eq(
+      'replacement preserves child page block and inserts new content',
+      results(await request(at, 'GET', `/v1/blocks/${String(page.id)}/children`))
+        .map((block) => String(block.type))
+        .sort(),
+      ['child_page', 'paragraph'],
     )
     process.stdout.write(`notion selftest: ${String(checks)} checks passed\n`)
   } finally {

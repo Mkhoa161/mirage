@@ -6,7 +6,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "printf 'a 1\\nb 2\\na 3\\n' | awk '{ print $2 > (\"/data/\" $1 \".txt\") }'; cat /data/a.txt /data/b.txt",
       "expect": {
@@ -21,7 +37,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "echo old > /data/out; awk 'BEGIN { print \"a\" > \"/data/out\"; print \"b\" > \"/data/out\" }'; cat /data/out",
       "expect": {
@@ -36,7 +68,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "echo old > /data/out; awk 'BEGIN { print \"a\" >> \"/data/out\"; print \"b\" >> \"/data/out\" }'; cat /data/out",
       "expect": {
@@ -51,7 +99,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "awk 'BEGIN { print \"a\" > \"/data/out\"; print close(\"/data/out\"); print \"b\" > \"/data/out\"; print close(\"missing\") }'; cat /data/out",
       "expect": {
@@ -66,7 +130,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "cd /data; awk 'BEGIN { printf \"%s:%d\", \"hi\", 7 > \"out\"; printf \"!\" > \"out\" }'; cat out",
       "expect": {
@@ -81,7 +161,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "echo old > /data/out; awk 'BEGIN { printf \"\" > \"/data/out\" }'; wc -c < /data/out",
       "expect": {
@@ -96,7 +192,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "printf 'x\\ny\\n' | awk 'BEGIN { print \"start\" > \"/data/out\" } { print > \"/data/out\" } END { print \"end\" > \"/data/out\" }'; cat /data/out",
       "expect": {
@@ -111,7 +223,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "awk 'BEGIN { print \"start\" > \"/data/out\"; exit 3 } END { print \"end\" > \"/data/out\" }'; echo $?; cat /data/out",
       "expect": {
@@ -126,7 +254,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "echo old > /data/out; awk 'BEGIN { print \"a\" >> \"/data/out\"; print \"b\" > \"/data/out\"; close(\"/data/out\"); print \"c\" >> \"/data/out\" }'; cat /data/out",
       "expect": {
@@ -141,7 +285,23 @@
       "targets": [
         "ram",
         "disk",
-        "opfs"
+        "redis",
+        "opfs",
+        "s3",
+        "gridfs",
+        "s3-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
       ],
       "command": "awk 'BEGIN { print \"before\" > \"/data/out\"; print 1/0 } END { print \"end\" > \"/data/out\" }'; echo $?; cat /data/out",
       "expect": {

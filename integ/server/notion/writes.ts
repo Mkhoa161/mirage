@@ -494,6 +494,12 @@ export async function createCommentRoute(ctx: Ctx<C>): Promise<Reply> {
   return createComment(ctx.db, ctx.tenant, meta, ctx.minter, asObject(ctx.json()))
 }
 
+async function deleteBlockTree(db: C, tenant: string, id: string): Promise<void> {
+  const children = await db.notionBlock.findMany({ where: { tenant, parentId: id } })
+  for (const child of children) await deleteBlockTree(db, tenant, child.id)
+  await db.notionBlock.delete({ where: { tenant_id: { tenant, id } } })
+}
+
 // `ntn pages edit --content` replaces a page's body wholesale, which the API
 // models as one typed operation rather than a block-by-block diff.
 export async function replaceMarkdown(ctx: Ctx<C>): Promise<Reply> {
@@ -514,7 +520,7 @@ export async function replaceMarkdown(ctx: Ctx<C>): Promise<Reply> {
   const kept = await ctx.db.notionBlock.findMany({ where: { tenant: ctx.tenant, parentId: id } })
   for (const one of kept) {
     if (one.type === 'child_page' || one.type === 'child_database') continue
-    await ctx.db.notionBlock.delete({ where: { tenant_id: { tenant: ctx.tenant, id: one.id } } })
+    await deleteBlockTree(ctx.db, ctx.tenant, one.id)
   }
   if (specs.length > 0) {
     const meta = await metaOf(ctx.db, ctx.tenant)

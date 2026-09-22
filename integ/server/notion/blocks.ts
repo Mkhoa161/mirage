@@ -93,6 +93,11 @@ export function validateChildren(
         ? child.type
         : Object.keys(child).find((key) => BLOCK_TYPES.has(key))
     if (type === undefined || type === '') return validation(`${at}.type should be defined.`)
+    if (type === 'child_page' || type === 'child_database') {
+      return validation(
+        `Use the ${type === 'child_page' ? 'page' : 'database'} endpoint to create this block.`,
+      )
+    }
     if (child.object !== undefined && child.object !== 'block')
       return validation(`${at}.object should be "block".`)
     const value = child[type]
