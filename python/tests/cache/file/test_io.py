@@ -219,9 +219,9 @@ async def test_apply_io_tokenless_read_keeps_the_entry_it_found(cache):
     """The one case the existence check answers differently from the
     byte compare it replaces: a read that reached the backend while an
     entry stood, with no token to stamp. Only `cp`'s guarded primitive
-    walk reads that way, and LAZY already calls the entry it kept
-    trusted, so preserving it is the policy's answer rather than an
-    accidental repair."""
+    walk reads that way, and ``bounded`` already calls the entry it
+    kept trusted, so preserving it is the policy's answer rather than
+    an accidental repair."""
     cold = IOResult(reads={"/s3/f.txt": b"old"}, cache=["/s3/f.txt"])
     await cache_io.apply_io(cache,
                             cold,

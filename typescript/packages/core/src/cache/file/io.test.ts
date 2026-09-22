@@ -240,8 +240,8 @@ describe('backend fingerprint threading', () => {
     // The one case the existence check answers differently from the byte
     // compare it replaces: a read that reached the backend while an entry
     // stood, with no token to stamp. Only `cp`'s guarded primitive walk
-    // reads that way, and LAZY already calls the entry it kept trusted, so
-    // preserving it is the policy's answer rather than an accidental
+    // reads that way, and `bounded` already calls the entry it kept trusted,
+    // so preserving it is the policy's answer rather than an accidental
     // repair.
     const cache = new RAMFileCacheStore()
     const cold = new IOResult({
