@@ -17,8 +17,8 @@ from collections.abc import AsyncIterator, Callable
 
 from mirage.commands.builtin.constants import BINARY_EXTENSIONS
 from mirage.commands.builtin.grep_context import grep_context_lines
-from mirage.commands.builtin.grep_offsets import (decode_line, encode_line,
-                                                  line_offsets, match_offset,
+from mirage.commands.builtin.grep_offsets import (MatchOffsets, decode_line,
+                                                  encode_line, line_offsets,
                                                   prefix_of)
 from mirage.commands.builtin.grep_pattern import compile_pattern
 from mirage.commands.builtin.grep_select import (NO_FILTERS, WalkFilters,
@@ -29,6 +29,7 @@ from mirage.commands.builtin.utils.types import (AsyncReadBytes, AsyncReaddir,
 from mirage.commands.resolve import get_extension
 from mirage.io.async_line_iterator import AsyncLineIterator
 from mirage.io.types import IOResult
+from mirage.io.yield_budget import YieldBudget
 from mirage.types import FileStat, FileType
 from mirage.utils.errors import WALK_ERRORS, fs_strerror
 
@@ -111,6 +112,8 @@ def grep_lines(
                 # is already incremented above and -c, -l and the exit
                 # status see it.
                 if not invert:
+                    match_offsets = MatchOffsets(
+                        start, line) if byte_offsets else None
                     for found in compiled.finditer(line):
                         text = found.group(0)
                         if not text:
@@ -118,8 +121,8 @@ def grep_lines(
                         results.append(
                             prefix_of(
                                 i if line_numbers else None,
-                                match_offset(start, line, found.start(
-                                )) if byte_offsets else None) + text)
+                                match_offsets.at(found.start(
+                                )) if match_offsets else None) + text)
             else:
                 results.append(
                     prefix_of(i if line_numbers else None,
@@ -288,6 +291,7 @@ async def grep_stream(
                 io.exit_code = 0
             yield chunk
         return
+    budget = YieldBudget()
     match_count = 0
     line_num = 0
     # GNU counts bytes from the start of the input, the terminator the
@@ -317,14 +321,17 @@ async def grep_stream(
                 # no match to print: `grep -ov abc` is zero bytes where
                 # GNU's own -c still says 1.
                 if not invert:
+                    match_offsets = MatchOffsets(
+                        line_start, line) if byte_offsets else None
                     for m in pat.finditer(line):
+                        await budget.run()
                         text = m.group()
                         if not text:
                             continue
                         fields = prefix_of(
                             line_num if line_numbers else None,
-                            match_offset(line_start, line, m.start())
-                            if byte_offsets else None)
+                            match_offsets.at(m.start())
+                            if match_offsets else None)
                         yield encode_line(f"{fields}{text}\n")
             elif line_numbers or byte_offsets:
                 fields = prefix_of(line_num if line_numbers else None,

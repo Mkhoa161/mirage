@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { YieldBudget } from '../../io/yield_budget.ts'
 import { fsStrerror } from '../../utils/errors.ts'
 import { AsyncLineIterator } from '../../io/async_line_iterator.ts'
 import { type IOResult } from '../../io/types.ts'
@@ -19,7 +20,7 @@ import { type FileStat, FileType } from '../../types.ts'
 import { getExtension } from '../resolve.ts'
 import { BINARY_EXTENSIONS } from './constants.ts'
 import { grepContextLines } from './grep_context.ts'
-import { decodeLine, encodeLine, lineOffsets, matchOffset, prefixOf } from './grep_offsets.ts'
+import { decodeLine, encodeLine, lineOffsets, MatchOffsets, prefixOf } from './grep_offsets.ts'
 import { compilePattern } from './grep_pattern.ts'
 import { NO_FILTERS, type WalkFilters, dirAdmitted, fileAdmitted } from './grep_select.ts'
 import { splitLines } from './utils/lines.ts'
@@ -92,6 +93,7 @@ export function grepLines(
         // selected, which is what -c, -l and the exit status read.
         if (!opts.invert && reGlobal !== null) {
           reGlobal.lastIndex = 0
+          const matchOffsets = byteOffsets ? new MatchOffsets(start, line) : null
           for (;;) {
             const m = reGlobal.exec(line)
             if (m === null) break
@@ -103,7 +105,7 @@ export function grepLines(
             }
             const fields = prefixOf(
               opts.lineNumbers ? i + 1 : null,
-              byteOffsets ? matchOffset(start, line, m.index) : null,
+              matchOffsets?.at(m.index) ?? null,
             )
             results.push(fields + m[0])
           }
@@ -211,6 +213,7 @@ export async function* grepStream(
     return
   }
   if (opts.io !== undefined) opts.io.exitCode = 1
+  const budget = new YieldBudget()
   let matchCount = 0
   let lineNum = 0
   const byteOffsets = opts.byteOffsets === true
@@ -243,7 +246,10 @@ export async function* grepStream(
         // GNU's own -c still says 1).
         if (!opts.invert && reGlobal !== null) {
           reGlobal.lastIndex = 0
+          const matchOffsets = byteOffsets ? new MatchOffsets(lineStart, line) : null
           for (;;) {
+            const pending = budget.run()
+            if (pending !== undefined) await pending
             const m = reGlobal.exec(line)
             if (m === null) break
             // A global regex that matched the empty string leaves lastIndex
@@ -255,7 +261,7 @@ export async function* grepStream(
             }
             const fields = prefixOf(
               opts.lineNumbers ? lineNum : null,
-              byteOffsets ? matchOffset(lineStart, line, m.index) : null,
+              matchOffsets?.at(m.index) ?? null,
             )
             yield encodeLine(fields + m[0] + '\n')
           }
