@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { tokenOrNull } from '../../cache/file/utils.ts'
 import { CacheEntry } from '../../cache/file/entry.ts'
 import { RAMFileCacheStore } from '../../cache/file/ram.ts'
 import type { VFS } from '../../vfs/base.ts'
@@ -605,6 +606,9 @@ async function restoreSessions(
 
 function restoreCache(ws: Workspace, state: WorkspaceStateDict): void {
   if (!(ws.cache instanceof RAMFileCacheStore)) return
+  // A snapshot is a third door into the entry table, and a document is not
+  // obliged to spell "no token" the way this version does, so each token is
+  // folded the way the live write doors fold it.
   for (const e of state.cache.entries) {
     ws.cache.loadEntry(
       e.key,
@@ -612,7 +616,7 @@ function restoreCache(ws: Workspace, state: WorkspaceStateDict): void {
       new CacheEntry({
         size: e.size,
         cachedAt: e.cached_at,
-        fingerprint: e.fingerprint,
+        fingerprint: tokenOrNull(e.fingerprint),
         ttl: e.ttl,
       }),
     )

@@ -13,6 +13,7 @@
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import asyncio
+import hashlib
 
 import pytest
 
@@ -132,7 +133,7 @@ async def test_apply_io_exhausted_stream_uses_record_fingerprint(cache):
 async def test_apply_io_warm_reapply_preserves_fingerprint(cache):
     """A warm read re-applies cache-served bytes with no backend read
     record; the entry's backend fingerprint must survive, not be
-    replaced by the MD5-of-content default."""
+    dropped for the no-token default."""
     cold = IOResult(reads={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
     await cache_io.apply_io(cache,
                             cold,
@@ -407,11 +408,27 @@ async def test_drain_threshold_per_task_not_shared():
 @pytest.mark.asyncio
 async def test_apply_io_stamps_a_write_token_on_written_bytes(cache):
     """A write record's token reaches a written path's entry; before
-    this, the entry fell back to md5(content)."""
+    this, the entry fell back to a fabricated md5(content)."""
     io = IOResult(writes={"/s3/f.txt": b"new"}, cache=["/s3/f.txt"])
     await cache_io.apply_io(
         cache, io, records=[_record("write", "/s3/f.txt", "etag-put-2", 3)])
     assert await cache.is_fresh("/s3/f.txt", "etag-put-2")
+
+
+@pytest.mark.asyncio
+async def test_a_write_token_for_other_bytes_leaves_the_entry_tokenless(cache):
+    """The byte-length guard refuses a token whose length disagrees with
+    the bytes being stored. The entry then carries no token at all, so it
+    matches neither the refused token nor a hash of its own content --
+    the fabricated md5 that used to stand in here was a valid validator
+    only on a simple-PUT S3 object, by coincidence of ETag format."""
+    io = IOResult(writes={"/s3/f.txt": b"new"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(
+        cache, io, records=[_record("write", "/s3/f.txt", "etag-put-2", 99)])
+    assert await cache.get("/s3/f.txt") == b"new"
+    assert not await cache.is_fresh("/s3/f.txt", "etag-put-2")
+    assert not await cache.is_fresh("/s3/f.txt",
+                                    hashlib.md5(b"new").hexdigest())
 
 
 @pytest.mark.asyncio

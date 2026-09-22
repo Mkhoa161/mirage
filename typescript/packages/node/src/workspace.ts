@@ -32,7 +32,6 @@ import type { MountSnapshot } from '@struktoai/mirage-core/workspace/snapshot/ty
 import { buildVfs, knownVfsNames } from './vfs/registry.ts'
 import type { VFS } from '@struktoai/mirage-core/vfs/base'
 import './compression_codecs.ts'
-import './cache/file/utils.ts'
 import './runtime/sandbox/daytona/runtime.ts'
 import './secrets/constants.ts'
 

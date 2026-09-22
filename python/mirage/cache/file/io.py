@@ -46,8 +46,10 @@ def latest_fingerprint(records: list[OpRecord] | None, path: str,
     returned (S3 ETag, OneDrive cTag, Postgres sha256), and an
     object-store write record with the token its PUT answered.
     Threading it into the cache entry lets a ``fresh`` mount's ``is_fresh``
-    compare like with like; the MD5-of-content default only matches
-    simple-PUT S3 objects.
+    compare like with like. None means the bytes carry no token, and the
+    entry then stores none: an unverifiable copy is dropped and re-read,
+    which is what a fabricated one produced anyway on every backend whose
+    token is not an md5 of the content.
 
     ``ops`` is the direction the caller took, never both. One line's
     records span every statement and pipeline segment (``IOResult.merge``
@@ -81,8 +83,8 @@ def latest_fingerprint(records: list[OpRecord] | None, path: str,
                 # that one on the source's length instead). A token for
                 # a different length describes
                 # different bytes, and a wrong token reads as fresh for
-                # the life of the entry, so answer none and let the
-                # content default stand.
+                # the life of the entry, so answer none and let the entry
+                # carry no token at all.
                 return None
             return rec.fingerprint
     return None
@@ -121,9 +123,9 @@ async def _set_cached_locked(
     fingerprint = latest_fingerprint(records, path, ops, len(data))
     if fingerprint is None and await cache.get(path) == data:
         # Warm read: the bytes were served from this cache, so there is
-        # no backend read record. Re-setting would replace the backend
-        # fingerprint stamped on the cold read with the MD5 default and
-        # force a ``fresh`` mount to evict and refetch on every read.
+        # no backend read record. Re-setting would drop the backend
+        # fingerprint stamped on the cold read and force a ``fresh`` mount
+        # to evict and refetch on every read.
         return
     await cache.set(path, data, fingerprint=fingerprint, ttl=ttl)
 
