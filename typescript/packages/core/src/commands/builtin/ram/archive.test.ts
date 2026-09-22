@@ -585,6 +585,124 @@ describe('zip / unzip', () => {
     const { out } = await runCmd(RAM_ZIP, vfs, [archive, operand], { r: true }, [], '/data')
     expect(DEC.decode(out)).toBe('  adding: data/d/\n  adding: data/d/a.txt\n')
   })
+  // Pinned against Info-ZIP 3.0 on debian:stable-slim.
+  it('zip -r of . stores its contents at the archive root', async () => {
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/d')
+    vfs.store.dirs.add('/d/sub')
+    vfs.store.files.set('/d/[Content_Types].xml', ENC.encode('x'))
+    vfs.store.files.set('/d/sub/b.txt', ENC.encode('beta'))
+    const { out } = await runCmd(
+      RAM_ZIP,
+      vfs,
+      [PathSpec.fromStrPath('/out.zip'), dirSpec('/d', '.')],
+      { r: true },
+    )
+    expect(DEC.decode(out)).toBe(
+      '  adding: [Content_Types].xml\n  adding: sub/\n  adding: sub/b.txt\n',
+    )
+  })
+
+  it('strips only the leading ./ run, from names and -x patterns', async () => {
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/d')
+    vfs.store.dirs.add('/d/sub')
+    vfs.store.files.set('/d/a.txt', ENC.encode('alpha'))
+    vfs.store.files.set('/d/sub/b.txt', ENC.encode('beta'))
+    const { out } = await runCmd(
+      RAM_ZIP,
+      vfs,
+      [
+        PathSpec.fromStrPath('/out.zip'),
+        dirSpec('/d/a.txt', '././a.txt'),
+        dirSpec('/d/sub', 'sub/.'),
+        dirSpec('/d/sub/b.txt', './sub/b.txt'),
+      ],
+      { r: true, x: ['./sub/b.txt'] },
+    )
+    expect(DEC.decode(out)).toBe('  adding: a.txt\n  adding: sub/./\n  adding: sub/./b.txt\n')
+  })
+
+  it('zip of . without -r has nothing to do', async () => {
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/d')
+    vfs.store.files.set('/d/a.txt', ENC.encode('alpha'))
+    const { exitCode, stderr } = await runCmd(
+      RAM_ZIP,
+      vfs,
+      [dirSpec('/out.zip', 'out.zip'), dirSpec('/d', '.')],
+      {},
+    )
+    expect(exitCode).toBe(12)
+    expect(DEC.decode(stderr)).toBe('\nzip error: Nothing to do! (out.zip)\n')
+  })
+
+  it('stores one path named twice once', async () => {
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/d')
+    vfs.store.files.set('/d/a.txt', ENC.encode('alpha'))
+    const { out, exitCode } = await runCmd(
+      RAM_ZIP,
+      vfs,
+      [
+        PathSpec.fromStrPath('/out.zip'),
+        dirSpec('/d', '.'),
+        dirSpec('/d/a.txt', 'a.txt'),
+        dirSpec('/d/a.txt', 'a.txt'),
+      ],
+      { r: true },
+    )
+    expect(exitCode).toBe(0)
+    expect(DEC.decode(out)).toBe('  adding: a.txt\n')
+  })
+
+  it('refuses two paths that store under one name', async () => {
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/d')
+    vfs.store.files.set('/d/a.txt', ENC.encode('alpha'))
+    const { exitCode, stderr } = await runCmd(
+      RAM_ZIP,
+      vfs,
+      [
+        dirSpec('/out.zip', 'out.zip'),
+        dirSpec('/d/a.txt', './a.txt'),
+        dirSpec('/d/a.txt', 'a.txt'),
+      ],
+      {},
+    )
+    expect(exitCode).toBe(16)
+    expect(vfs.store.files.has('/out.zip')).toBe(false)
+    expect(DEC.decode(stderr)).toBe(
+      '\tzip warning:   first full name: ./a.txt\n' +
+        '                      second full name: a.txt\n' +
+        '                     name in zip file repeated: a.txt\n' +
+        '\nzip error: Invalid command arguments (cannot repeat names in zip file)\n',
+    )
+  })
+
+  it('names -j as the cause of a repeated name, and -q keeps only the error', async () => {
+    const vfs = new RAMVFS()
+    vfs.store.dirs.add('/d')
+    vfs.store.dirs.add('/d/sub')
+    vfs.store.files.set('/d/a.txt', ENC.encode('alpha'))
+    vfs.store.files.set('/d/sub/a.txt', ENC.encode('again'))
+    const paths = [
+      dirSpec('/out.zip', 'out.zip'),
+      dirSpec('/d/sub/a.txt', 'sub/a.txt'),
+      dirSpec('/d/a.txt', 'a.txt'),
+    ]
+    const loud = await runCmd(RAM_ZIP, vfs, paths, { j: true })
+    expect(loud.exitCode).toBe(16)
+    expect(DEC.decode(loud.stderr)).toContain(
+      '                     name in zip file repeated: a.txt\n' +
+        '                     this may be a result of using -j\n',
+    )
+    const quiet = await runCmd(RAM_ZIP, vfs, paths, { j: true, q: true })
+    expect(quiet.exitCode).toBe(16)
+    expect(DEC.decode(quiet.stderr)).toBe(
+      '\nzip error: Invalid command arguments (cannot repeat names in zip file)\n',
+    )
+  })
 })
 
 describe('unzip members', () => {

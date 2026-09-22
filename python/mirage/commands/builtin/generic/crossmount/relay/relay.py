@@ -24,6 +24,7 @@ from mirage.commands.builtin.generic.crossmount.relay.mv import run_mv
 from mirage.commands.builtin.generic.crossmount.relay.paste import run_paste
 from mirage.commands.builtin.generic.crossmount.relay.tar import run_tar
 from mirage.commands.builtin.generic.crossmount.relay.unzip import run_unzip
+from mirage.commands.builtin.generic.crossmount.relay.zip_cmd import run_zip
 from mirage.commands.builtin.generic.crossmount.types import Cmd, CrossResult
 from mirage.commands.spec.types import FlagValue
 from mirage.io.types import ByteSource
@@ -49,7 +50,7 @@ async def run_relay(cmd_name: str,
 
     Args:
         cmd_name (str): One of cp, mv, diff, cmp, paste, comm, join, tar,
-            unzip, ls.
+            unzip, zip, ls.
         scopes (list[PathSpec]): Path operands in command-line order.
         text_args (list[str]): Positional text operands (tar's member
             selectors; empty for the transfer and merge commands).
@@ -59,7 +60,8 @@ async def run_relay(cmd_name: str,
             identity, for the transfer commands that must tell a real
             move from one whose two prefixes address a single store.
         ns (NamespaceView | None): Name-plane facts for the generics that
-            render them (ls: links, attr overlay, child mounts).
+            render them (ls: links, attr overlay, child mounts) and for
+            the archivers' scan (tar, zip: links, mount boundaries).
         session_view (SessionView | None): The session plane's door, for
             the generic that renders the session's profile (ls -l).
     """
@@ -78,7 +80,9 @@ async def run_relay(cmd_name: str,
     if cmd_name == Cmd.JOIN:
         return await run_join(scopes, flag_kwargs, dispatch)
     if cmd_name == Cmd.TAR:
-        return await run_tar(scopes, text_args, flag_kwargs, dispatch)
+        return await run_tar(scopes, text_args, flag_kwargs, dispatch, ns)
     if cmd_name == Cmd.UNZIP:
         return await run_unzip(scopes, text_args, flag_kwargs, dispatch)
+    if cmd_name == Cmd.ZIP:
+        return await run_zip(scopes, flag_kwargs, dispatch, ns)
     return await run_cmp(scopes, flag_kwargs, dispatch)
