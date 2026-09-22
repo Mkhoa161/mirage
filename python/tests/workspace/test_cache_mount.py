@@ -164,3 +164,48 @@ async def test_stat_keeps_overlay_under_bounded():
         await ws.dispatch("stat", _stat_scope("/data/gone.txt"))
 
     assert ws.namespace.meta_for("/data/gone.txt") is not None
+
+
+@pytest.mark.asyncio
+async def test_a_guarded_cp_leaves_the_entry_it_read_past(tmp_path):
+    """`cp` is a write command, so it gets no read-through wrapper and
+    reads its source straight from the backend. Under a hide it takes
+    the primitive walk, whose per-file read lands in ``IOResult.reads``
+    carrying no backend token, and the fill then meets a live entry.
+
+    Under ``bounded`` that entry is trusted for its bound, so the walk
+    leaves it as it found it: the copy still gets the current bytes and
+    the next ``cat`` still answers from the cache. The native strategy
+    (no hide) fills nothing and has always behaved this way, so the two
+    strategies now agree. Before, whether a stale entry was silently
+    healed turned on whether a hide happened to cover the source, which
+    is not something the read policy says anything about.
+
+    Root-mounted because `cp` keys its reads on ``src.virtual`` while
+    the runner re-prefixes, so on a prefixed mount the fill lands at
+    ``/r/r/dir/a.txt`` and no read ever looks there (#441, #629).
+    """
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir" / "a.txt").write_bytes(b"v1\n")
+    disk = DiskVFS(root=str(tmp_path))
+    disk.caches_reads = True
+    ws = Workspace({"/": disk},
+                   mode=MountMode.WRITE,
+                   read=ReadSpec(policy=ReadPolicy.BOUNDED))
+    ws.create_session("agent", profile={"paths": {"hide": ["/dir/.secret"]}})
+
+    cold = await (await ws.shell("cat /dir/a.txt",
+                                 session_id="agent")).stdout_str()
+    assert cold == "v1\n"
+
+    (tmp_path / "dir" / "a.txt").write_bytes(b"v2\n")
+    copied = await ws.shell("cp -r /dir /copy", session_id="agent")
+    assert copied.exit_code == 0
+
+    made = await (await ws.shell("cat /copy/a.txt",
+                                 session_id="agent")).stdout_str()
+    assert made == "v2\n", "the copy has to hold the bytes the walk read"
+    served = await (await ws.shell("cat /dir/a.txt",
+                                   session_id="agent")).stdout_str()
+    assert served == "v1\n", ("the guarded walk overwrote the entry it read "
+                              "past")
