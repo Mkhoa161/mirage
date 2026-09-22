@@ -347,6 +347,23 @@ async def test_an_entry_with_no_token_is_never_fresh():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("remote", ["etag-1", "", None])
+async def test_a_tokenless_entry_answers_no_whatever_it_is_asked(remote):
+    # Including a remote that is itself absent. `_probe` never asks then
+    # -- it answers UNKNOWN on a stat that carries no fingerprint, one
+    # line earlier -- but the store is what has to hold the rule: two
+    # absences comparing equal is a FRESH verdict on a copy nothing
+    # verified, and the redis store, whose meta key is simply missing,
+    # already answers False for the same pair. A store that disagrees
+    # with its twin only for an input the caller is not supposed to
+    # send is the shape that passes every RAM-backed test and diverges
+    # in production.
+    cache = RAMFileCacheStore()
+    await cache.set("/a", b"data")
+    assert not await cache.is_fresh("/a", remote)
+
+
+@pytest.mark.asyncio
 async def test_is_unbounded_distinguishes_absent_from_boundless():
     """One question, not `exists` plus a ttl lookup.
 

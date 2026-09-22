@@ -231,6 +231,20 @@ describe('a fill that carries no token', () => {
       expect(await cache.isFresh('/a', '')).toBe(false)
     },
   )
+
+  it.each(['etag-1', '', null])('answers no when asked with %o', async (remote) => {
+    // Including a remote that is itself absent. `_probe` never asks then
+    // (it answers UNKNOWN on a stat carrying no fingerprint, one line
+    // earlier), but the store is what has to hold the rule: two absences
+    // comparing equal is a FRESH verdict on a copy nothing verified, and
+    // the redis store, whose meta key is simply missing, already answers
+    // false for the same pair. A store that disagrees with its twin only
+    // for an input the caller is not supposed to send is the shape that
+    // passes every RAM-backed test and diverges in production.
+    const cache = new RAMFileCacheStore()
+    await cache.set('/a', encode('data'))
+    expect(await cache.isFresh('/a', remote as unknown as string)).toBe(false)
+  })
 })
 
 describe('isUnbounded', () => {

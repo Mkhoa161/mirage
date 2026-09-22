@@ -203,7 +203,13 @@ export class RAMFileCacheStore extends RAMVFS implements FileCache {
   isFresh(key: string, remoteFingerprint: string): Promise<boolean> {
     const entry = this.entries.get(key)
     if (entry === undefined) return Promise.resolve(false)
-    return Promise.resolve(entry.fingerprint === remoteFingerprint)
+    // An entry that carries no token verifies against nothing, and says
+    // so here rather than relying on the caller to ask only when it holds
+    // one. Without the first clause a caller arriving with no remote
+    // token compares null to null and is told the copy is fresh; the
+    // redis store, whose meta key is simply absent, would answer false
+    // for the same pair.
+    return Promise.resolve(entry.fingerprint !== null && entry.fingerprint === remoteFingerprint)
   }
 
   isUnbounded(key: string): Promise<boolean> {
