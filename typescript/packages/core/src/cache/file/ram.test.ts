@@ -12,8 +12,9 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+
+import { md5Hex } from '../../utils/hash.ts'
 import { RAMFileCacheStore } from './ram.ts'
 
 function encode(s: string): Uint8Array {
@@ -216,7 +217,9 @@ describe('a fill that carries no token', () => {
     const cache = new RAMFileCacheStore()
     await cache[operation]('/a', encode('data'))
     expect(await cache.isFresh('/a', 'etag-1')).toBe(false)
-    expect(await cache.isFresh('/a', createHash('md5').update('data').digest('hex'))).toBe(false)
+    // md5Hex, not node:crypto: the exact function the deleted fallback
+    // called, and core's own helper, so the test stays runtime-agnostic.
+    expect(await cache.isFresh('/a', md5Hex(encode('data')))).toBe(false)
   })
 
   it.each(['set', 'add'] as const)(
