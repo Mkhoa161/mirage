@@ -77,3 +77,17 @@ export function movedParents(
   }
   return [target]
 }
+
+// An item lives in its parent's drive, so a move across drives carries the
+// item and everything under it. My Drive has no drive id.
+export function followParentDrive(st: GwsState, item: DriveItem): void {
+  const driveId = st.files.get(item.parents[0] ?? '')?.driveId
+  const moving = [item]
+  for (let current = moving.pop(); current !== undefined; current = moving.pop()) {
+    if (driveId === undefined) delete current.driveId
+    else current.driveId = driveId
+    for (const child of st.files.values()) {
+      if (child.parents.includes(current.id)) moving.push(child)
+    }
+  }
+}

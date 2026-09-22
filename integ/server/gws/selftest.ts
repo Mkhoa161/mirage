@@ -752,6 +752,45 @@ async function gridRangesHttp(at: string): Promise<void> {
   eq('ranges: an unknown tab is a 400', bad.status, 400)
 }
 
+async function driveMoveHttp(at: string): Promise<void> {
+  const base = `${at}/_run/drivemove`
+  check('drive move world seeds', (await reset(base, { tenants: ['t1'], epoch: EPOCH })) === 200)
+  const drive = String(obj((await post(`${base}/drive/v3/drives`, 't1', { name: 'Team' })).body).id)
+  const folder = String(
+    obj(
+      (
+        await post(`${base}/drive/v3/files`, 't1', {
+          name: 'Carry',
+          mimeType: 'application/vnd.google-apps.folder',
+        })
+      ).body,
+    ).id,
+  )
+  await post(`${base}/drive/v3/files`, 't1', { name: 'Child', parents: [folder] })
+  const move = (to: string): ReturnType<typeof api> =>
+    api(`${base}/drive/v3/files/${folder}?addParents=${to}`, 't1', { method: 'PATCH', body: '{}' })
+  const inDrive = async (): Promise<string[]> => {
+    const got = await api(`${base}/drive/v3/files?driveId=${drive}&corpora=drive`, 't1')
+    return field(obj(got.body).files, 'name')
+      .filter((name) => name !== 'Team')
+      .sort()
+  }
+  eq('drive move: a folder moves into a shared drive', (await move(drive)).status, 200)
+  eq('drive move: it lists there with its child', await inDrive(), ['Carry', 'Child'])
+  eq('drive move: and no longer in My Drive', await fileNames(base, 't1'), [])
+  eq('drive move: it moves back', (await move('root')).status, 200)
+  eq('drive move: back in My Drive with its child', (await fileNames(base, 't1')).sort(), [
+    'Carry',
+    'Child',
+  ])
+  eq('drive move: and gone from the shared drive', await inDrive(), [])
+  await api(`${base}/drive/v3/drives/${drive}`, 't1', { method: 'DELETE' })
+  eq('drive move: deleting the drive keeps what left it', (await fileNames(base, 't1')).sort(), [
+    'Carry',
+    'Child',
+  ])
+}
+
 async function main(): Promise<void> {
   compatibilityDirect()
   sheetsFormatsDirect()
@@ -761,6 +800,7 @@ async function main(): Promise<void> {
   try {
     await compatibilityHttp(at)
     await gridRangesHttp(at)
+    await driveMoveHttp(at)
     // ---- the base world is fixture rows, not constructor state
     check('a bare /reset seeds', (await reset(at, { tenants: ['t1'], epoch: EPOCH })) === 200)
     const labels = await api(`${at}/gmail/v1/users/me/labels`, 't1')

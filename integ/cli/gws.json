@@ -1482,6 +1482,32 @@
         "stdout": "[null,null]\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "gw_sheets_dimension_properties_clip_to_the_grid",
+      "seq": 563110,
+      "targets": [
+        "cli-gws"
+      ],
+      "command": "SID=$(gws sheets spreadsheets create --json '{\"properties\":{\"title\":\"Clip Probe\"}}' | jq -r .spreadsheetId); gws sheets spreadsheets batchUpdate --params \"{\\\"spreadsheetId\\\":\\\"$SID\\\"}\" --json '{\"requests\":[{\"updateDimensionProperties\":{\"range\":{\"sheetId\":0,\"dimension\":\"ROWS\",\"startIndex\":998,\"endIndex\":2000000000},\"properties\":{\"pixelSize\":40},\"fields\":\"pixelSize\"}}]}' | jq -c .replies; gws sheets spreadsheets get --params \"{\\\"spreadsheetId\\\":\\\"$SID\\\",\\\"includeGridData\\\":true,\\\"ranges\\\":\\\"Sheet1!A998:A1000\\\"}\" | jq -c '.sheets[0] | [.properties.gridProperties.rowCount, .data[0].rowMetadata]'",
+      "expect": {
+        "exit": 0,
+        "stdout": "[{}]\n[1000,[{\"pixelSize\":21},{\"pixelSize\":40},{\"pixelSize\":40}]]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "gw_sheets_dimension_properties_refuse_a_start_past_the_grid",
+      "seq": 563111,
+      "targets": [
+        "cli-gws"
+      ],
+      "command": "SID=$(gws sheets spreadsheets create --json '{\"properties\":{\"title\":\"Past Probe\"}}' | jq -r .spreadsheetId); gws sheets spreadsheets batchUpdate --params \"{\\\"spreadsheetId\\\":\\\"$SID\\\"}\" --json '{\"requests\":[{\"updateDimensionProperties\":{\"range\":{\"sheetId\":0,\"dimension\":\"COLUMNS\",\"startIndex\":26,\"endIndex\":30},\"properties\":{\"pixelSize\":40},\"fields\":\"pixelSize\"}}]}' 2>&1 | grep -cF \"Invalid requests[0].updateDimensionProperties: Cannot update a column that doesn't exist. Tried to update column index 26 but there are only 26 columns.\"",
+      "expect": {
+        "exit": 0,
+        "stdout": "1\n",
+        "stderr": ""
+      }
     }
   ]
 }

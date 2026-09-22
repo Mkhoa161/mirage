@@ -37,7 +37,7 @@ import {
 import type { Ctx } from '../../kit/typescript/index.ts'
 import { createDriveItem, deleteTree, fmtFile, pushRevision } from './item.ts'
 import { exportFile, listFiles } from './list.ts'
-import { movedParents, refuseParents } from './parents.ts'
+import { followParentDrive, movedParents, refuseParents } from './parents.ts'
 
 // The old fake spelled a resource id `[^/:]+`, so a path whose id half holds
 // an in-segment verb matched no route rather than being read as an id.
@@ -191,7 +191,9 @@ function patchFile(ctx: GwsCtx): Reply {
     idList(ctx.query.get('removeParents')),
   )
   if (isReply(parents)) return parents
+  const moved = parents[0] !== item.parents[0]
   item.parents = parents
+  if (moved) followParentDrive(ctx.db, item)
   const name = asStr(body.name)
   if (name !== undefined) {
     item.name = name

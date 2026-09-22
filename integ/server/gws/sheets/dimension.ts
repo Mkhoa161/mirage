@@ -21,7 +21,7 @@ import { CELL_DATA, DIMENSION_PROPERTIES, canonical, ordered } from './fields.ts
 import { writeCell } from './format.ts'
 import { ROW_PIXELS, COLUMN_PIXELS, tabGrid } from './grid.ts'
 import { applyMask } from './mask.ts'
-import { boundsOf, gridOf, maskOf } from './request.ts'
+import { boundsOf, gridOf, invalid, maskOf } from './request.ts'
 import type { At } from './request.ts'
 
 export type Dimension = 'ROWS' | 'COLUMNS'
@@ -122,7 +122,9 @@ export function updateCells(sheet: Spreadsheet, body: JsonObj, at: At): JsonObj 
 // A mask over the DimensionProperties of every row or column in the range.
 // What the API derives (hiddenByFilter, developer metadata, a data source
 // column) is accepted and left alone, and hiddenByUser false is the
-// default, so it is not kept.
+// default, so it is not kept. Probed live on 2026-09-21: an endIndex past
+// the grid is clipped to it, and a startIndex at or past it is refused
+// whatever the end.
 export function updateDimensionProperties(
   sheet: Spreadsheet,
   body: JsonObj,
@@ -130,11 +132,21 @@ export function updateDimensionProperties(
 ): JsonObj | Reply {
   const range = resolveDimensionRange(sheet, asObj(body.range), at)
   if (isReply(range)) return range
+  const grid = tabGrid(range.tab)
+  const [limit, noun] = range.dimension === 'ROWS' ? [grid.rows, 'row'] : [grid.cols, 'column']
+  if (range.startIndex >= limit) {
+    return invalid(
+      at,
+      `Cannot update a ${noun} that doesn't exist. Tried to update ${noun} index ` +
+        `${String(range.startIndex)} but there are only ${String(limit)} ${noun}s.`,
+    )
+  }
   const paths = maskOf(body.fields, DIMENSION_PROPERTIES, at)
   if (isReply(paths)) return paths
   const source = canonical(asObj(body.properties), DIMENSION_PROPERTIES)
   const meta = range.dimension === 'ROWS' ? range.tab.rowMeta : range.tab.columnMeta
-  for (let i = range.startIndex; i < range.endIndex; i += 1) {
+  const end = Math.min(range.endIndex, limit)
+  for (let i = range.startIndex; i < end; i += 1) {
     const next = applyMask(meta[String(i)] ?? {}, source, paths, DIMENSION_PROPERTIES)
     delete next.hiddenByFilter
     delete next.developerMetadata
