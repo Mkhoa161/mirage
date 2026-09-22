@@ -198,7 +198,16 @@ export async function grepGeneric(
     try {
       const source = guardInput(resolveSource(opts.stdin, GREP_NO_PATTERN), opts)
       return [
-        grepInput(source, pat, f, '(standard input)', f.withFilename && !f.noFilename, io),
+        grepInput(
+          source,
+          pat,
+          f,
+          '(standard input)',
+          f.withFilename && !f.noFilename,
+          io,
+          false,
+          opts.signal,
+        ),
         io,
       ]
     } catch (error) {
@@ -226,7 +235,16 @@ export async function grepGeneric(
       const source = stream(first)
       const singleIO = new IOResult()
       return [
-        grepInput(source, pat, f, first.rawPath, f.withFilename && !f.noFilename, singleIO),
+        grepInput(
+          source,
+          pat,
+          f,
+          first.rawPath,
+          f.withFilename && !f.noFilename,
+          singleIO,
+          false,
+          opts.signal,
+        ),
         singleIO,
       ]
     } catch (error) {
@@ -289,7 +307,16 @@ export async function grepGeneric(
       if (!fileAdmitted(p.virtual, f.filters)) return
       const fileIO = new IOResult({ exitCode: 1 })
       const show = !f.noFilename && (f.withFilename || walked || paths.length > 1)
-      for await (const chunk of grepInput(stream(p), pat, f, p.rawPath, show, fileIO, printed)) {
+      for await (const chunk of grepInput(
+        stream(p),
+        pat,
+        f,
+        p.rawPath,
+        show,
+        fileIO,
+        printed,
+        opts.signal,
+      )) {
         printed = true
         yield chunk
       }
