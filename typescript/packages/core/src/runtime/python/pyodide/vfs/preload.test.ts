@@ -233,6 +233,46 @@ describe('preloadInto', () => {
     warn.mockRestore()
   })
 
+  // The door lists it unclassified; the preload asks once more and, on a
+  // second failure, seeds it as neither a file nor absent.
+  it('marks an entry the mount will not stat as unclassified, and never reads it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'readdir' && path === '/ram/') {
+        return Promise.resolve(['/ram/ok.txt', '/ram/bad.json'])
+      }
+      if (op === 'stat' && path === '/ram/ok.txt') return Promise.resolve(fileStat(1))
+      if (op === 'stat' && path === '/ram/bad.json') {
+        return Promise.reject(new Error('upstream 502 Bad Gateway'))
+      }
+      if (op === 'read' && path === '/ram/ok.txt') return Promise.resolve(new Uint8Array([7]))
+      return Promise.reject(new Error(`unexpected ${op} ${path}`))
+    })
+    const seed = new MirageFsSeed()
+    await preloadInto(seed, new RuntimeVFS(dispatch), '/ram/')
+    expect([...seed.unclassified]).toEqual(['/ram/bad.json'])
+    expect(seed.files.has('/ram/bad.json')).toBe(false)
+    expect(
+      dispatch.mock.calls.filter(([op, p]) => op === 'stat' && p === '/ram/bad.json'),
+    ).toHaveLength(2)
+    expect(dispatch).not.toHaveBeenCalledWith('read', '/ram/bad.json')
+    warn.mockRestore()
+  })
+
+  // Gone between the listing and the stat: absence is the honest seed.
+  it('leaves out an entry the second stat finds gone', async () => {
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'readdir' && path === '/ram/') return Promise.resolve(['/ram/gone.txt'])
+      if (op === 'stat') return Promise.reject(Object.assign(new Error('gone'), { code: 'ENOENT' }))
+      return Promise.reject(new Error(`unexpected ${op} ${path}`))
+    })
+    const seed = new MirageFsSeed()
+    await preloadInto(seed, new RuntimeVFS(dispatch), '/ram/')
+    expect(seed.unclassified.size).toBe(0)
+    expect(seed.unreadable.size).toBe(0)
+    expect(seed.files.size).toBe(0)
+  })
+
   it('skips a failing subtree and still preloads sibling files', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {

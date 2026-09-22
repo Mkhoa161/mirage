@@ -12,7 +12,10 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import type { RuntimeVFS, VFSEntry } from '../../../vfs.ts'
+import { ConcurrencyLimiter } from '../../../../concurrency/limiter.ts'
+import { LISTING_ENTRY_CONCURRENCY } from '../../../constants.ts'
+import { isMissingPath } from '../../../../utils/errors.ts'
+import { isUnclassified, type RuntimeVFS, type VFSEntry, type VFSStat } from '../../../vfs.ts'
 
 export interface FSLike {
   mkdirTree(path: string): void
@@ -25,6 +28,11 @@ export interface FSLike {
    * when nothing will write to it.
    */
   markUnreadable?(path: string): void
+  /**
+   * Note a listed entry the mount would not stat. A target that does not
+   * implement this omits the entry, as it omits an unreadable file.
+   */
+  markUnclassified?(path: string): void
   /**
    * Note a namespace symlink and its target. A target that cannot hold
    * links omits them, which is what every seed did before links were
@@ -46,13 +54,15 @@ export interface FSLike {
  * Carry a row's mode and stamp onto the target it was just written to.
  *
  * The row already holds both (the door stats every entry it does not
- * slash-mark), so this costs no extra call. Without it a seeded tree
+ * slash-mark, and leaves both off one it could not classify), so this
+ * costs no extra call. Without it a seeded tree
  * reports the tree's own defaults: 0o644 whatever the mount says, and
  * an mtime of the moment the node was built, so every file a guest
  * stats looks like it was modified this second.
  *
- * A slash-marked row carries neither and is left alone; so is a link,
- * whose mode is fixed at 0o777 on every POSIX system.
+ * A slash-marked or unclassified row carries neither and is left
+ * alone; so is a link, whose mode is fixed at 0o777 on every POSIX
+ * system.
  */
 function applyMeta(fs: FSLike, entry: VFSEntry): void {
   if (entry.mode !== undefined) fs.chmod?.(entry.path, entry.mode)
@@ -77,6 +87,26 @@ async function preloadEntry(fs: FSLike, vfs: RuntimeVFS, entry: VFSEntry): Promi
         `mirage preload: cannot read link ${entry.path}: ${err instanceof Error ? err.message : String(err)}`,
       )
     }
+    return
+  }
+  if (isUnclassified(entry)) {
+    // The door's stat of this entry failed, and the guest will have no
+    // way to ask again once the run starts, so this is its stat: an
+    // answer seeds the entry as what the mount says it is, an entry
+    // that is gone stays out, and any other failure seeds a node that
+    // refuses both stat and open.
+    let st: VFSStat
+    try {
+      st = await vfs.stat(entry.path)
+    } catch (err) {
+      if (isMissingPath(err)) return
+      fs.markUnclassified?.(entry.path)
+      console.warn(
+        `mirage preload: cannot stat ${entry.path}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+      return
+    }
+    await preloadEntry(fs, vfs, { path: entry.path, ...st })
     return
   }
   if (entry.isDir) {
@@ -125,6 +155,12 @@ async function preloadEntry(fs: FSLike, vfs: RuntimeVFS, entry: VFSEntry): Promi
 /**
  * Copy one mount prefix into a synchronous target.
  *
+ * Works at most `LISTING_ENTRY_CONCURRENCY` of a directory's entries
+ * at once, since each is a read (or a subtree's listing) of its own.
+ * An entry the door could not classify is stat'd once more here: the
+ * answer seeds it as usual, and a second failure seeds a node whose
+ * stat and open both report it, never a guess at a file.
+ *
  * Args:
  *   fs: the tree collector to fill.
  *   vfs: the runtime's mount vocabulary to read through.
@@ -135,5 +171,15 @@ export async function preloadInto(fs: FSLike, vfs: RuntimeVFS, prefix: string): 
   const prefixWithoutSlash = prefixWithSlash.slice(0, -1)
   fs.mkdirTree(prefixWithoutSlash)
   const entries = await vfs.readdir(prefixWithSlash)
-  await Promise.all(entries.map((entry) => preloadEntry(fs, vfs, entry)))
+  const limiter = new ConcurrencyLimiter(LISTING_ENTRY_CONCURRENCY)
+  await Promise.all(
+    entries.map(async (entry) => {
+      const release = await limiter.acquire()
+      try {
+        await preloadEntry(fs, vfs, entry)
+      } finally {
+        release()
+      }
+    }),
+  )
 }

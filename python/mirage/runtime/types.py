@@ -137,16 +137,17 @@ class VFSStat:
 class VFSEntry:
     """One directory entry as the mounts report it (TS ``VFSEntry``).
 
-    Resolved once at the door off the stat index the readdir just
-    populated, so no guest pays one stat per entry for a fact the door
-    already had.
+    Resolved once at the door by the entry's own stat, so no guest
+    pays one stat per entry for a fact the door already had. An entry
+    the door did not classify (a guest that asked for names only, or a
+    stat that failed) rides as a size-0 non-directory with no mode.
 
     Args:
         path (str): the entry's virtual path, in the door's own
             spelling (a backend that slash-marks directories keeps the
             trailing slash).
         size (int): rendered content bytes, 0 for directories and for
-            entries whose stat answered absent.
+            unclassified entries.
         is_dir (bool): the entry is a directory.
         is_link (bool): the entry is a namespace symlink. Marked from
             the name plane, which is the only authority for one: no
@@ -156,8 +157,9 @@ class VFSEntry:
         mode (int | None): the entry's full st_mode, None when this row
             carries no stat. A backend that slash-marks its directories
             is listed without one, which is the whole point of the
-            mark, so the row says "not known" rather than inventing a
-            default the guest cannot tell from a real answer.
+            mark, and so is an unclassified entry, so the row says "not
+            known" rather than inventing a default the guest cannot
+            tell from a real answer.
         mtime_ns (int | None): modification time in epoch nanoseconds,
             None on the same rows and for the same reason. 0 is a real
             answer here (1970-01-01T00:00:00Z, and what an unknown

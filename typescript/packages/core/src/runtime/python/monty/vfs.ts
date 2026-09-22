@@ -218,11 +218,17 @@ export class MontyVFS {
     }
   }
 
-  /** The directory's entries. Throws when it is not a directory. */
+  /**
+   * The directory's entries. Throws when it is not a directory.
+   *
+   * Unclassified: every caller reads a row's path or only whether the
+   * listing answered, and a guest that wants a kind stats the entry
+   * itself, so the door stats nothing per entry.
+   */
   async readdir(path: string): Promise<VFSEntry[]> {
     const prefix = path.endsWith('/') ? path : path + '/'
     try {
-      return await this.core.readdir(prefix)
+      return await this.core.readdir(prefix, false)
     } catch (caught) {
       throw asGuestError(caught, path)
     }
