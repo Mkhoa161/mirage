@@ -3,7 +3,8 @@ from dataclasses import replace
 from functools import partial
 
 from mirage.cache.read_through import (cache_aware_bound_bytes,
-                                       cache_aware_bound_stream)
+                                       cache_aware_bound_stream,
+                                       cache_aware_read)
 from mirage.commands.builtin.constants import BINARY_EXTENSIONS
 from mirage.commands.builtin.grep_binary import GrepFlags, grep_input
 from mirage.commands.builtin.grep_pattern import (compile_pattern,
@@ -179,7 +180,8 @@ async def grep(
     if read_stream is not None:
         read_stream = cache_aware_bound_stream(read_stream)
     read_stream = stdin_stream(
-        read_stream if read_stream is not None else read_bytes, stdin)
+        read_stream
+        if read_stream is not None else cache_aware_read(read_bytes), stdin)
     fl = FlagView(opts.flags, spec=SPECS["grep"])
     pattern, never_match = await resolve_pattern(texts, fl, read_bytes,
                                                  GREP_NO_PATTERN)

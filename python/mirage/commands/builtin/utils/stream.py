@@ -99,13 +99,14 @@ def stdin_stream(
     backend = normalized_read(read)
     source = resolve_source(stdin)
 
-    async def stream(path: PathSpec) -> AsyncIterator[bytes]:
-        if is_stdin(path):
-            async for chunk in source:
-                yield chunk
-        else:
-            async for chunk in backend(path):
-                yield chunk
+    async def input_stream() -> AsyncIterator[bytes]:
+        async for chunk in source:
+            yield chunk
+
+    def stream(path: PathSpec) -> AsyncIterator[bytes]:
+        # Bind the backend stream while its mount cache context is active.
+        # Byte consumption stays lazy; only stdin needs a shared cursor.
+        return input_stream() if is_stdin(path) else backend(path)
 
     return stream
 

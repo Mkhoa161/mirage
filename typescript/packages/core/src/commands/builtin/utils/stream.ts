@@ -62,11 +62,7 @@ export function stdinStream(
   stdin: ByteSource | null,
 ): (path: PathSpec) => AsyncIterable<Uint8Array> {
   const source = resolveSource(stdin)[Symbol.asyncIterator]()
-  return async function* (path) {
-    if (!isStdin(path)) {
-      yield* read(path)
-      return
-    }
+  async function* inputStream(): AsyncIterable<Uint8Array> {
     // All '-' operands share one cursor; a new operand must not replay bytes.
     for (;;) {
       const next = await source.next()
@@ -74,6 +70,9 @@ export function stdinStream(
       yield next.value
     }
   }
+  // Bind the backend stream while its mount cache context is active.
+  // Byte consumption stays lazy; only stdin needs a shared cursor.
+  return (path) => (isStdin(path) ? inputStream() : read(path))
 }
 
 export function stdinStat(
