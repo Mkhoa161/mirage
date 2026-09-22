@@ -92,10 +92,18 @@ def _make_data_write(fn: OpFn) -> OpFn:
 
 def _make_emulated_append(read_bytes: OpFn, write_bytes: OpFn) -> OpFn:
 
-    async def append(accessor: Accessor, path: PathSpec, data: bytes,
+    async def append(accessor: Accessor,
+                     path: PathSpec,
+                     data: bytes,
+                     *,
+                     index: IndexCacheStore | None = None,
                      **kwargs) -> None:
+        # The read takes the caller's index, like every other read here:
+        # an id-addressed backend (Box, Drive) turns a path into an id
+        # through it, and without one every read is a miss, so each append
+        # would overwrite what the last one wrote.
         try:
-            existing = await read_bytes(accessor, path, index=NULL_INDEX)
+            existing = await read_bytes(accessor, path, index)
         except FileNotFoundError:
             await write_bytes(accessor, path, data)
             return
@@ -112,10 +120,12 @@ def _make_path_write(fn: OpFn) -> OpFn:
     return mutate
 
 
-def _make_mkdir_parents(fn: OpFn) -> OpFn:
+def _make_mkdir_parents(fn: OpFn, force_parents: bool = True) -> OpFn:
 
     async def mkdir(accessor: Accessor, path: PathSpec, **kwargs) -> None:
-        await fn(accessor, path, parents=True)
+        await fn(accessor,
+                 path,
+                 parents=force_parents or kwargs.get("parents") is True)
 
     return mkdir
 
@@ -257,8 +267,7 @@ def make_generic_ops(
         _emit(ops, vfs_names, "create", _make_path_write(table.create), True,
               None, skip)
     if table.mkdir is not None:
-        mkdir_fn = (_make_mkdir_parents(table.mkdir)
-                    if mkdir_parents else _make_path_write(table.mkdir))
+        mkdir_fn = _make_mkdir_parents(table.mkdir, mkdir_parents)
         _emit(ops, vfs_names, "mkdir", mkdir_fn, True, None, skip)
     if table.unlink is not None:
         _emit(ops, vfs_names, "unlink", _make_path_write(table.unlink), True,

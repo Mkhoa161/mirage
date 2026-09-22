@@ -183,6 +183,14 @@ describe('makeGenericOps', () => {
     expect(write).toHaveBeenNthCalledWith(3, ACCESSOR, PATH, new Uint8Array([4]))
   })
 
+  it('forwards the index into the emulated append pre-read', async () => {
+    const table = makeTable({ write: vi.fn() })
+    const op = appendOp(table)
+    const index = {} as never
+    await op.fn(ACCESSOR, PATH, [new Uint8Array([1])], { index })
+    expect(table.readBytes).toHaveBeenCalledWith(ACCESSOR, PATH, index)
+  })
+
   it('does not overwrite after an append pre-read fails', async () => {
     const write = vi.fn()
     const error = Object.assign(new Error('denied'), { code: 'EACCES' })

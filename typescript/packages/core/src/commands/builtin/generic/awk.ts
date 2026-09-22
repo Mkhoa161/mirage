@@ -12,6 +12,8 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { isStdin } from '../utils/stream.ts'
+import { stdinStream } from '../utils/stream.ts'
 import { specOf } from '../../spec/builtins.ts'
 import { FlagView } from '../../spec/flag_view.ts'
 import { mountKey, mountPrefixOf } from '../../../utils/key_prefix.ts'
@@ -239,6 +241,7 @@ export async function awkGeneric(
   opts: CommandOpts,
   stream: Stream,
 ): Promise<CommandFnResult> {
+  stream = stdinStream(stream, opts.stdin)
   const f = parseFlags(opts)
   let program: string
   if (f.programFiles.length > 0) {
@@ -283,7 +286,7 @@ export async function awkGeneric(
   if (paths.length > 0) {
     // FILENAME reports the operand as typed, matching every awk.
     sources = paths.map((p) => [p.rawPath, stream(p)] as const)
-    cache = paths.map((p) => p.mountPath)
+    cache = paths.filter((p) => !isStdin(p)).map((p) => p.mountPath)
   } else {
     sources = [['', resolveSource(opts.stdin)]]
     cache = []

@@ -6,7 +6,8 @@ from contextlib import aclosing
 from mirage.cache.index import NULL_INDEX, IndexCacheStore
 from mirage.commands.builtin.generic.awk_types import (FS_ESCAPES, USAGE,
                                                        AwkFlags)
-from mirage.commands.builtin.utils.stream import resolve_source
+from mirage.commands.builtin.utils.stream import (is_stdin, resolve_source,
+                                                  stdin_stream)
 from mirage.commands.constants import ROOT_CWD
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
@@ -264,10 +265,11 @@ async def awk(
     if f.field_separator is not None:
         interp.set_var("FS", text_value(unescape(f.field_separator)))
 
+    read_stream = stdin_stream(read_stream, stdin)
     if paths:
         # FILENAME reports the operand as typed, matching every awk.
         sources = [(p.raw_path, read_stream(p)) for p in paths]
-        cache = [p.mount_path for p in paths]
+        cache = [p.mount_path for p in paths if not is_stdin(p)]
     else:
         sources = [("", resolve_source(stdin))]
         cache = []

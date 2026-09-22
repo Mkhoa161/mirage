@@ -175,11 +175,15 @@ export function makeGenericOps<A extends Accessor>(
   } else if (write) {
     emit(
       'append',
-      async (accessor, path, args) => {
+      async (accessor, path, args, kwargs) => {
         const data = extractWriteData(args)
         let existing: Uint8Array
+        // The read takes the caller's index, like every other read here: an
+        // id-addressed backend (Box, Drive) turns a path into an id through
+        // it, and without one every read is a miss, so each append would
+        // overwrite what the last one wrote.
         try {
-          existing = await table.readBytes(asA(accessor), path)
+          existing = await table.readBytes(asA(accessor), path, kwargs.index)
         } catch (error) {
           if (!isMissingPath(error)) throw error
           return write(asA(accessor), path, data)
