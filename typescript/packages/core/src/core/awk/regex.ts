@@ -13,21 +13,7 @@
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
 import { AwkSyntaxError } from './errors.ts'
-
-const POSIX_CLASSES: Readonly<Record<string, string>> = {
-  alpha: 'a-zA-Z',
-  digit: '0-9',
-  alnum: 'a-zA-Z0-9',
-  upper: 'A-Z',
-  lower: 'a-z',
-  space: ' \\t\\n\\r\\f\\v',
-  blank: ' \\t',
-  punct: '!-/:-@\\[-`{-~',
-  print: ' -~',
-  graph: '!-~',
-  cntrl: '\\x00-\\x1f\\x7f',
-  xdigit: '0-9A-Fa-f',
-}
+import { translateBracket } from '../../utils/posix.ts'
 
 const WORD_BOUNDARY_ESCAPES: Readonly<Record<string, string>> = {
   y: '\\b',
@@ -52,55 +38,6 @@ export interface EreMatch {
 
 function regexError(pattern: string): AwkSyntaxError {
   return new AwkSyntaxError(REGEX_ERROR.replace('{pattern}', () => pattern))
-}
-
-/** Translate one bracket expression; returns the index past its `]`. */
-function translateBracket(pattern: string, start: number, out: string[]): number {
-  let idx = start + 1
-  out.push('[')
-  if (pattern.charAt(idx) === '^') {
-    out.push('^')
-    idx += 1
-  }
-  // A `]` in the first position is a literal member in an ERE, but the
-  // host engine would read it as the end of the bracket expression.
-  if (pattern.charAt(idx) === ']') {
-    out.push('\\]')
-    idx += 1
-  }
-  while (idx < pattern.length) {
-    const ch = pattern.charAt(idx)
-    if (ch === ']') {
-      out.push(']')
-      return idx + 1
-    }
-    if (pattern.startsWith('[:', idx)) {
-      const close = pattern.indexOf(':]', idx + 2)
-      if (close === -1) {
-        out.push('\\[')
-        idx += 1
-        continue
-      }
-      const expansion = POSIX_CLASSES[pattern.slice(idx + 2, close)]
-      if (expansion === undefined) throw regexError(pattern)
-      out.push(expansion)
-      idx = close + 2
-      continue
-    }
-    if (ch === '\\' && idx + 1 < pattern.length) {
-      out.push(pattern.slice(idx, idx + 2))
-      idx += 2
-      continue
-    }
-    if (ch === '[') {
-      out.push('\\[')
-      idx += 1
-      continue
-    }
-    out.push(ch)
-    idx += 1
-  }
-  throw regexError(pattern)
 }
 
 /**

@@ -15,21 +15,7 @@
 import re
 
 from mirage.core.awk.errors import AwkSyntaxError
-
-POSIX_CLASSES = {
-    "alpha": "a-zA-Z",
-    "digit": "0-9",
-    "alnum": "a-zA-Z0-9",
-    "upper": "A-Z",
-    "lower": "a-z",
-    "space": " \\t\\n\\r\\f\\v",
-    "blank": " \\t",
-    "punct": "!-/:-@\\[-`{-~",
-    "print": " -~",
-    "graph": "!-~",
-    "cntrl": "\\x00-\\x1f\\x7f",
-    "xdigit": "0-9A-Fa-f",
-}
+from mirage.utils.posix import POSIX_CLASSES, translate_bracket
 
 WORD_BOUNDARY_ESCAPES = {"y": "\\b", "<": "\\b", ">": "\\b", "B": "\\B"}
 
@@ -40,57 +26,6 @@ REGEX_ERROR = ("awk: syntax error in regular expression {pattern} "
                "at source line 1")
 
 CACHE: dict[str, re.Pattern[str]] = {}
-
-
-def translate_bracket(pattern: str, start: int, out: list[str]) -> int:
-    """Translate one bracket expression, expanding POSIX classes.
-
-    Args:
-        pattern (str): the whole ERE source.
-        start (int): index of the opening ``[``.
-        out (list[str]): accumulator receiving translated text.
-
-    Returns:
-        int: index just past the closing ``]``.
-    """
-    idx = start + 1
-    out.append("[")
-    if idx < len(pattern) and pattern[idx] == "^":
-        out.append("^")
-        idx += 1
-    # A `]` in the first position is a literal member in an ERE, but
-    # Python would read it as the end of the bracket expression.
-    if idx < len(pattern) and pattern[idx] == "]":
-        out.append("\\]")
-        idx += 1
-    while idx < len(pattern):
-        ch = pattern[idx]
-        if ch == "]":
-            out.append("]")
-            return idx + 1
-        if pattern.startswith("[:", idx):
-            close = pattern.find(":]", idx + 2)
-            if close == -1:
-                out.append("\\[")
-                idx += 1
-                continue
-            name = pattern[idx + 2:close]
-            if name not in POSIX_CLASSES:
-                raise AwkSyntaxError(REGEX_ERROR.format(pattern=pattern))
-            out.append(POSIX_CLASSES[name])
-            idx = close + 2
-            continue
-        if ch == "\\" and idx + 1 < len(pattern):
-            out.append(pattern[idx:idx + 2])
-            idx += 2
-            continue
-        if ch == "[":
-            out.append("\\[")
-            idx += 1
-            continue
-        out.append(ch)
-        idx += 1
-    raise AwkSyntaxError(REGEX_ERROR.format(pattern=pattern))
 
 
 def translate(pattern: str) -> str:

@@ -83,3 +83,9 @@ export interface CommentRow {
   lastEditedTime: string
   createdBy: string
 }
+
+export interface BlockSpec {
+  type: string
+  payload: Json
+  children: BlockSpec[]
+}

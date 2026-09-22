@@ -305,7 +305,7 @@ async function runIo(program: string, stdin: string): Promise<[string, number, s
 describe('awk fatal paths', () => {
   it.each([
     ['{getline line; print line}', 'awk: getline is not supported in mirage\n'],
-    ['{print > "out.txt"}', "awk: output redirection to 'out.txt' is not supported in mirage\n"],
+    ['{print > "out.txt"}', 'awk: file output requires a workspace\n'],
     ['{system("ls")}', 'awk: system() is not supported in mirage\n'],
   ])('refuses %j', async (program, message) => {
     expect(await runIo(program, 'a\n')).toEqual(['', 2, message])

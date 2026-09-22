@@ -27,9 +27,9 @@ from mirage.core.awk.nodes import (ArrayRef, Assign, Block, Break, BuiltinCall,
                                    DoWhile, Exit, Expr, ExprStmt, Field, For,
                                    ForIn, Getline, If, InArray, IncDec,
                                    Logical, MatchOp, Next, NextFile, Not, Num,
-                                   Print, Printf, Program, Regex, Return, Rule,
-                                   RuleKind, Stmt, Str, Ternary, Unary, Var,
-                                   While)
+                                   Print, Printf, Program, RedirKind, Regex,
+                                   Return, Rule, RuleKind, Stmt, Str, Ternary,
+                                   Unary, Var, While)
 # yapf: enable
 from mirage.core.awk.regex import compile_ere
 from mirage.core.awk.value import (UNINIT, Value, ValueKind, compare,
@@ -52,6 +52,7 @@ SCALAR_DEFAULTS = {
 COUNTERS = frozenset({"NR", "FNR", "NF"})
 
 ARITY = {
+    "close": 1,
     "atan2": 2,
     "cos": 1,
     "exp": 1,
@@ -122,8 +123,8 @@ class Interpreter:
         self.globals: dict[str, Value] = {}
         self.tables: dict[str, dict[str, Value]] = {}
         self.frames: list[Frame] = []
-        self.out: list[str] = []
-        self.err: list[str] = []
+        self.output: list[tuple[str | None, str, bool]] = []
+        self.open_files: set[str] = set()
         self.record = ""
         self.record_fs = " "
         self.record_paragraph = False
@@ -530,8 +531,14 @@ class Interpreter:
             return self.builtin_sub(node, name == "gsub")
         if name == "split":
             return self.builtin_split(args)
-        if name in ("close", "fflush"):
-            return num(0.0)
+        if name == "close":
+            target = to_str(self.eval(args[0]), self.convfmt())
+            if target not in self.open_files:
+                return num(-1)
+            self.open_files.remove(target)
+            return num(0)
+        if name == "fflush":
+            return num(0)
         if name == "system":
             raise AwkRuntimeError("awk: system() is not supported in mirage")
         raise AwkRuntimeError(f"awk: calling undefined function {name}")
@@ -631,17 +638,21 @@ class Interpreter:
         """
         redirect = node.redirect
         if redirect is None:
-            self.out.append(body)
+            self.output.append((None, body, False))
             return
         name = to_str(self.eval(redirect.target), self.convfmt())
+        if redirect.kind == RedirKind.PIPE:
+            raise AwkRuntimeError(
+                "awk: output pipes are not supported in mirage")
         if name in STDOUT_NAMES:
-            self.out.append(body)
+            self.output.append((None, body, False))
             return
         if name == STDERR_NAME:
-            self.err.append(body)
+            self.output.append((STDERR_NAME, body, False))
             return
-        raise AwkRuntimeError(
-            f"awk: output redirection to '{name}' is not supported in mirage")
+        append = name in self.open_files or redirect.kind == RedirKind.APPEND
+        self.open_files.add(name)
+        self.output.append((name, body, append))
 
     def exec_stmt(self, node: Stmt) -> None:
         """Execute a statement node.
@@ -842,15 +853,23 @@ class Interpreter:
 
     def drain(self) -> str:
         """Take everything buffered for stdout since the last drain."""
-        body = "".join(self.out)
-        self.out.clear()
-        return body
+        out = "".join(body for name, body, _ in self.output if name is None)
+        self.output = [event for event in self.output if event[0] is not None]
+        return out
 
     def drain_err(self) -> str:
         """Take everything written to /dev/stderr since the last drain."""
-        body = "".join(self.err)
-        self.err.clear()
-        return body
+        out = "".join(body for name, body, _ in self.output
+                      if name == STDERR_NAME)
+        self.output = [
+            event for event in self.output if event[0] != STDERR_NAME
+        ]
+        return out
+
+    def drain_output(self) -> list[tuple[str | None, str, bool]]:
+        """Take ordered output events for the async host to apply."""
+        pending, self.output = self.output, []
+        return pending
 
 
 __all__ = [

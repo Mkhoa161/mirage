@@ -17,9 +17,10 @@ import { VFSName } from '../../types.ts'
 import { DATABRICKS_VOLUME_OPS } from './index.ts'
 
 describe('DATABRICKS_VOLUME_OPS', () => {
-  it('exposes the same nine ops as Python', () => {
+  it('exposes the same ten ops as Python', () => {
     const names = DATABRICKS_VOLUME_OPS.map((op) => op.name).sort()
     expect(names).toEqual([
+      'append',
       'create',
       'mkdir',
       'read',
@@ -38,7 +39,9 @@ describe('DATABRICKS_VOLUME_OPS', () => {
         (op) => op.name,
       ),
     )
-    expect(writes).toEqual(new Set(['create', 'mkdir', 'rename', 'rmdir', 'unlink', 'write']))
+    expect(writes).toEqual(
+      new Set(['append', 'create', 'mkdir', 'rename', 'rmdir', 'unlink', 'write']),
+    )
   })
 
   it('targets the databricks_volume VFS', () => {

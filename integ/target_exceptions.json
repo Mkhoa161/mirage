@@ -478,6 +478,56 @@
     "integ/bash/command/findexec.json :: find_delete_under_or_removes_the_other_arm": {
       "hf": "hf has no directory removal: `rm -r` of the case's own directory answers `rm: directory remove not supported on this backend`, so the case can neither clean up after itself nor pin GNU's refusal of `-delete` on a directory still holding the kept file. hf still runs every sibling that deletes files only.",
       "hf-prefix": "hf has no directory removal: `rm -r` of the case's own directory answers `rm: directory remove not supported on this backend`, so the case can neither clean up after itself nor pin GNU's refusal of `-delete` on a directory still holding the kept file. hf still runs every sibling that deletes files only."
+    },
+    "integ/unix/awk/redirect.json :: awk_split_dynamic": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_open_once": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_append": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_reopen": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_printf_relative": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_empty_write": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_begin_main_end": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_exit_end": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_mixed_modes": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
+    },
+    "integ/unix/awk/redirect.json :: awk_fatal_preserves_writes": {
+      "databricks": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "databricks-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes.",
+      "sharepoint-prefix": "This case creates output files directly under /data. This target cannot serve arbitrary file creation there, as with the existing printf-based seeding cases. All 19 writable sibling targets exercise the dispatcher writes."
     }
   }
 }

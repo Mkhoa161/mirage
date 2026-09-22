@@ -36,6 +36,7 @@ def test_registers_read_write_op_surface():
         ("readdir", False),
         ("stat", False),
         ("write", True),
+        ("append", True),
         ("create", True),
         ("mkdir", True),
         ("unlink", True),

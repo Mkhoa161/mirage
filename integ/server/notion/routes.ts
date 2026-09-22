@@ -36,6 +36,7 @@ import {
   listCommentsRoute,
   replaceMarkdown,
   updatePageRoute,
+  updateBlockRoute,
 } from './writes.ts'
 
 // Every route is behind the token check, so it is applied once here rather
@@ -75,6 +76,7 @@ export function notionRoutes(): KitRoute<C>[] {
     write('PATCH', '/v1/pages/:id/markdown', replaceMarkdown),
     write('PATCH', '/v1/pages/:id', updatePageRoute),
     write('PATCH', '/v1/blocks/:id/children', appendChildrenRoute),
+    write('PATCH', '/v1/blocks/:id', updateBlockRoute),
     write('DELETE', '/v1/blocks/:id', deleteBlockRoute),
     write('POST', '/v1/comments', createCommentRoute),
   ]

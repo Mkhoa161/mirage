@@ -708,8 +708,7 @@ async def test_awk_runs_what_the_scraper_refused(program, stdin, expected):
     [
         ("{getline line; print line}",
          "awk: getline is not supported in mirage\n"),
-        ('{print > "out.txt"}', "awk: output redirection to 'out.txt' "
-         "is not supported in mirage\n"),
+        ('{print > "out.txt"}', "awk: file output requires a workspace\n"),
         ('{system("ls")}', "awk: system() is not supported in mirage\n"),
     ],
 )

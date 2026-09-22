@@ -16,6 +16,7 @@ import type { Accessor } from '../../accessor/base.ts'
 import type { OpKwargs, RegisteredOp } from '../registry.ts'
 import { extractWriteData } from '../write_args.ts'
 import { isUnsatisfiableRange, sliceWindow } from '../../utils/ranges.ts'
+import { isMissingPath } from '../../utils/errors.ts'
 import type { PathSpec } from '../../types.ts'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,7 +86,9 @@ const expectLength = (value: unknown): number => {
  * table that already feeds `makeGenericCommands`, so a backend declares
  * its core surface once. Ops whose table field is undefined are
  * omitted, mirroring how the command factory skips write commands on
- * read-only backends.
+ * read-only backends. A writable table without native append uses async
+ * read-modify-write; like emulated truncate, this is not atomic against
+ * concurrent writers.
  */
 export function makeGenericOps<A extends Accessor>(
   vfs: string | readonly string[],
@@ -167,6 +170,29 @@ export function makeGenericOps<A extends Accessor>(
     emit(
       'append',
       (accessor, path, args) => append(asA(accessor), path, extractWriteData(args)),
+      true,
+    )
+  } else if (write) {
+    emit(
+      'append',
+      async (accessor, path, args, kwargs) => {
+        const data = extractWriteData(args)
+        let existing: Uint8Array
+        // The read takes the caller's index, like every other read here: an
+        // id-addressed backend (Box, Drive) turns a path into an id through
+        // it, and without one every read is a miss, so each append would
+        // overwrite what the last one wrote.
+        try {
+          existing = await table.readBytes(asA(accessor), path, kwargs.index)
+        } catch (error) {
+          if (!isMissingPath(error)) throw error
+          return write(asA(accessor), path, data)
+        }
+        const joined = new Uint8Array(existing.length + data.length)
+        joined.set(existing)
+        joined.set(data, existing.length)
+        return write(asA(accessor), path, joined)
+      },
       true,
     )
   }

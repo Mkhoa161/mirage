@@ -90,6 +90,28 @@ def _make_data_write(fn: OpFn) -> OpFn:
     return write
 
 
+def _make_emulated_append(read_bytes: OpFn, write_bytes: OpFn) -> OpFn:
+
+    async def append(accessor: Accessor,
+                     path: PathSpec,
+                     data: bytes,
+                     *,
+                     index: IndexCacheStore | None = None,
+                     **kwargs) -> None:
+        # The read takes the caller's index, like every other read here:
+        # an id-addressed backend (Box, Drive) turns a path into an id
+        # through it, and without one every read is a miss, so each append
+        # would overwrite what the last one wrote.
+        try:
+            existing = await read_bytes(accessor, path, index)
+        except FileNotFoundError:
+            await write_bytes(accessor, path, data)
+            return
+        await write_bytes(accessor, path, existing + data)
+
+    return append
+
+
 def _make_path_write(fn: OpFn) -> OpFn:
 
     async def mutate(accessor: Accessor, path: PathSpec, **kwargs) -> None:
@@ -192,7 +214,9 @@ def make_generic_ops(
     wrappers from the table that already feeds
     ``make_generic_commands``, so a backend declares its core surface
     once. Ops whose table field is None are omitted, mirroring how the
-    command factory skips write commands on read-only backends.
+    command factory skips write commands on read-only backends. A writable
+    table without native append uses read-modify-write, which is async but
+    not atomic against concurrent writers, like emulated truncate.
 
     ``index`` is forwarded into read/readdir/stat for every backend, so
     there is deliberately no ``forward_index`` knob here, in either
@@ -235,6 +259,10 @@ def make_generic_ops(
     if table.append is not None:
         _emit(ops, vfs_names, "append", _make_data_write(table.append), True,
               None, skip)
+    elif table.write is not None:
+        _emit(ops, vfs_names, "append",
+              _make_emulated_append(table.read_bytes, table.write), True, None,
+              skip)
     if table.create is not None:
         _emit(ops, vfs_names, "create", _make_path_write(table.create), True,
               None, skip)

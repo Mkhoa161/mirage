@@ -12,6 +12,13 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import {
+  BLOCK_TYPES,
+  supportsChildren,
+  validateChildren,
+  validatePayload,
+  validation,
+} from './blocks.ts'
 import type { Ctx, Minter, Reply } from '../kit/typescript/index.ts'
 import type { C } from './config.ts'
 import { MAX_PAGE_SIZE } from './config.ts'
@@ -27,7 +34,15 @@ import {
 import { markdownOf, metaOf } from './store.ts'
 import { markdownToBlocks, richToMd } from './text.ts'
 import { markdownReply } from './reads.ts'
-import type { BlockRow, CommentRow, DatabaseRow, Json, MetaRow, PageRow } from './types.ts'
+import type {
+  BlockSpec,
+  BlockRow,
+  CommentRow,
+  DatabaseRow,
+  Json,
+  MetaRow,
+  PageRow,
+} from './types.ts'
 import {
   apiError,
   asObject,
@@ -50,6 +65,11 @@ async function createPage(
   minter: Minter,
   body: Json,
 ): Promise<Reply> {
+  const children = validateChildren(body.children === undefined ? [] : body.children)
+  if (!Array.isArray(children)) return children
+  if (body.children !== undefined && body.markdown !== undefined) {
+    return validation('body.children and body.markdown cannot both be provided.')
+  }
   const parent = asObject(body.parent)
   let parentType = 'workspace'
   let parentId: string | null = null
@@ -87,8 +107,6 @@ async function createPage(
   const schema = schemaOf(owner)
   const schemaBefore = JSON.stringify(schema)
   const properties = normalizeProperties(asObject(body.properties), schema)
-  await persistSchema(db, tenant, owner, schema, schemaBefore)
-  const id = mintId(minter, 'a0000000')
   // `ntn pages create --content` sends Markdown rather than properties; the
   // first heading becomes the title, exactly as the official CLI documents.
   const markdown = typeof body.markdown === 'string' ? body.markdown : ''
@@ -104,6 +122,10 @@ async function createPage(
   if (title !== '' && Object.keys(properties).length === 0) {
     Object.assign(properties, titleProp(title, titleColumnOf(schema)))
   }
+  const specs = body.children === undefined ? validateChildren(fromMarkdown) : children
+  if (!Array.isArray(specs)) return specs
+  await persistSchema(db, tenant, owner, schema, schemaBefore)
+  const id = mintId(minter, 'a0000000')
   await db.notionPage.create({
     data: {
       id,
@@ -139,9 +161,7 @@ async function createPage(
       },
     })
   }
-  if (fromMarkdown.length > 0) {
-    await appendChildren(db, tenant, meta, minter, id, { children: fromMarkdown })
-  }
+  if (specs.length > 0) await insertChildren(db, tenant, meta, minter, id, specs, 0)
   const created = (await db.notionPage.findFirst({ where: { tenant, id } })) as PageRow
   return { status: 200, body: pageJson(created) }
 }
@@ -154,21 +174,18 @@ async function appendChildren(
   parentId: string,
   body: Json,
 ): Promise<Reply> {
-  const children = Array.isArray(body.children) ? body.children : []
   const parentPage = await db.notionPage.findFirst({ where: { tenant, id: parentId } })
   const parentBlock = await db.notionBlock.findFirst({ where: { tenant, id: parentId } })
   if (parentPage === null && parentBlock === null) return notFound('block', parentId)
-  // Validate every child before touching the table: a refused request
-  // must leave no partial insert and no shifted sibling behind.
-  const specs: [string, Json][] = []
-  for (const child of children) {
-    const spec = asObject(child)
-    const type = typeof spec.type === 'string' ? spec.type : ''
-    if (type === '' || spec[type] === undefined) {
-      return apiError(400, 'validation_error', 'body.children[].type should be defined.')
-    }
-    specs.push([type, asObject(spec[type])])
+  if (
+    parentPage === null &&
+    parentBlock !== null &&
+    !supportsChildren(parentBlock.type, JSON.parse(parentBlock.payloadJson) as Json)
+  ) {
+    return validation(`${parentBlock.type} blocks cannot have children.`)
   }
+  const specs = validateChildren(body.children)
+  if (!Array.isArray(specs)) return specs
   let at = await db.notionBlock.count({ where: { tenant, parentId } })
   let anchorPos: number | null = null
   const after = typeof body.after === 'string' ? body.after : null
@@ -187,38 +204,12 @@ async function appendChildren(
     }
     await db.notionBlock.updateMany({
       where: { tenant, parentId, position: { gt: anchor.position } },
-      data: { position: { increment: children.length } },
+      data: { position: { increment: specs.length } },
     })
     anchorPos = anchor.position
     at = anchor.position + 1
   }
-  const created: Json[] = []
-  for (const [type, payload] of specs) {
-    const id = mintId(minter, 'b0000000')
-    await db.notionBlock.create({
-      data: {
-        id,
-        tenant,
-        parentId,
-        position: at++,
-        type,
-        payloadJson: JSON.stringify(normalizeBlockPayload(payload)),
-        hasChildren: false,
-        createdTime: meta.createdTime,
-        lastEditedTime: meta.lastEditedTime,
-        createdBy: meta.createdBy,
-        lastEditedBy: meta.lastEditedBy,
-      },
-    })
-    const row = (await db.notionBlock.findFirst({ where: { tenant, id } })) as BlockRow
-    created.push(blockJson(row))
-  }
-  if (parentBlock !== null) {
-    await db.notionBlock.update({
-      where: { tenant_id: { tenant, id: parentId } },
-      data: { hasChildren: true },
-    })
-  }
+  const created = await insertChildren(db, tenant, meta, minter, parentId, specs, at)
   // With `after`, the live API answers with the inserted blocks AND every
   // sibling behind them, in order (probed); a plain append returns just
   // the inserted blocks.
@@ -234,6 +225,51 @@ async function appendChildren(
     status: 200,
     body: { object: 'list', results, has_more: false, next_cursor: null },
   }
+}
+
+async function insertChildren(
+  db: C,
+  tenant: string,
+  meta: MetaRow,
+  minter: Minter,
+  parentId: string,
+  specs: BlockSpec[],
+  at: number,
+): Promise<Json[]> {
+  const created: Json[] = []
+  for (const { type, payload, children } of specs) {
+    const id = mintId(minter, 'b0000000')
+    await db.notionBlock.create({
+      data: {
+        id,
+        tenant,
+        parentId,
+        position: at++,
+        type,
+        payloadJson: JSON.stringify(normalizeBlockPayload(payload)),
+        hasChildren: children.length > 0,
+        createdTime: meta.createdTime,
+        lastEditedTime: meta.lastEditedTime,
+        createdBy: meta.createdBy,
+        lastEditedBy: meta.lastEditedBy,
+      },
+    })
+    if (children.length > 0) {
+      await insertChildren(db, tenant, meta, minter, id, children, 0)
+    }
+    const row = (await db.notionBlock.findFirst({ where: { tenant, id } })) as BlockRow
+    created.push(blockJson(row))
+  }
+  if (
+    specs.length > 0 &&
+    (await db.notionBlock.findFirst({ where: { tenant, id: parentId } })) !== null
+  ) {
+    await db.notionBlock.update({
+      where: { tenant_id: { tenant, id: parentId } },
+      data: { hasChildren: true },
+    })
+  }
+  return created
 }
 
 async function createComment(
@@ -346,6 +382,50 @@ export async function deleteBlock(db: C, tenant: string, id: string): Promise<Re
   return { status: 200, body: { ...body, archived: true, in_trash: true } }
 }
 
+async function updateBlock(db: C, tenant: string, id: string, body: Json): Promise<Reply> {
+  const row = await db.notionBlock.findFirst({ where: { tenant, id } })
+  if (row === null) return notFound('block', id)
+  if (body.type !== undefined && body.type !== row.type) {
+    return validation(`body.type should be "${row.type}".`)
+  }
+  for (const field of ['archived', 'in_trash']) {
+    if (body[field] !== undefined && typeof body[field] !== 'boolean') {
+      return validation(`body.${field} should be a boolean.`)
+    }
+  }
+  for (const key of Object.keys(body)) {
+    if (BLOCK_TYPES.has(key) && key !== row.type)
+      return validation(`Block type cannot be changed from ${row.type} to ${key}.`)
+  }
+  const payload = JSON.parse(row.payloadJson) as Json
+  const patch = body[row.type]
+  if (patch !== undefined) {
+    if (row.type === 'child_page' || row.type === 'child_database') {
+      return validation(
+        `Use the ${row.type === 'child_page' ? 'page' : 'database'} endpoint to update this block.`,
+      )
+    }
+    const error = validatePayload(row.type, patch, `body.${row.type}`)
+    if (error !== null) return error
+    if (asObject(patch).children !== undefined)
+      return validation('Block children cannot be updated with this endpoint.')
+    Object.assign(payload, asObject(patch))
+    if (row.hasChildren && !supportsChildren(row.type, payload)) {
+      return validation('A block with children cannot be made non-toggleable.')
+    }
+  }
+  const trash = body.in_trash ?? body.archived
+  if (typeof trash === 'boolean') await setTrashed(db, tenant, id, trash)
+  const updated = await db.notionBlock.update({
+    where: { tenant_id: { tenant, id } },
+    data: { payloadJson: JSON.stringify(normalizeBlockPayload(payload)) },
+  })
+  return {
+    status: 200,
+    body: { ...blockJson(updated), archived: updated.inTrash, in_trash: updated.inTrash },
+  }
+}
+
 async function updatePage(db: C, tenant: string, id: string, body: Json): Promise<Reply> {
   const row = (await db.notionPage.findFirst({ where: { tenant, id } })) as PageRow | null
   if (row === null) return notFound('page', id)
@@ -414,6 +494,12 @@ export async function createCommentRoute(ctx: Ctx<C>): Promise<Reply> {
   return createComment(ctx.db, ctx.tenant, meta, ctx.minter, asObject(ctx.json()))
 }
 
+async function deleteBlockTree(db: C, tenant: string, id: string): Promise<void> {
+  const children = await db.notionBlock.findMany({ where: { tenant, parentId: id } })
+  for (const child of children) await deleteBlockTree(db, tenant, child.id)
+  await db.notionBlock.delete({ where: { tenant_id: { tenant, id } } })
+}
+
 // `ntn pages edit --content` replaces a page's body wholesale, which the API
 // models as one typed operation rather than a block-by-block diff.
 export async function replaceMarkdown(ctx: Ctx<C>): Promise<Reply> {
@@ -428,17 +514,24 @@ export async function replaceMarkdown(ctx: Ctx<C>): Promise<Reply> {
   if (typeof replacement !== 'string') {
     return apiError(400, 'validation_error', 'body.replace_content.new_str should be defined.')
   }
+  const blocks = replacement === '' ? [] : markdownToBlocks(replacement)
+  const specs = validateChildren(blocks)
+  if (!Array.isArray(specs)) return specs
   const kept = await ctx.db.notionBlock.findMany({ where: { tenant: ctx.tenant, parentId: id } })
   for (const one of kept) {
     if (one.type === 'child_page' || one.type === 'child_database') continue
-    await ctx.db.notionBlock.delete({ where: { tenant_id: { tenant: ctx.tenant, id: one.id } } })
+    await deleteBlockTree(ctx.db, ctx.tenant, one.id)
   }
-  const blocks = replacement === '' ? [] : markdownToBlocks(replacement)
-  if (blocks.length > 0) {
+  if (specs.length > 0) {
     const meta = await metaOf(ctx.db, ctx.tenant)
-    await appendChildren(ctx.db, ctx.tenant, meta, ctx.minter, id, { children: blocks })
+    const at = await ctx.db.notionBlock.count({ where: { tenant: ctx.tenant, parentId: id } })
+    await insertChildren(ctx.db, ctx.tenant, meta, ctx.minter, id, specs, at)
   }
   const lines: string[] = []
   await markdownOf(ctx.db, ctx.tenant, id, 0, lines)
   return markdownReply(id, lines)
+}
+
+export async function updateBlockRoute(ctx: Ctx<C>): Promise<Reply> {
+  return updateBlock(ctx.db, ctx.tenant, ctx.params.id ?? '', asObject(ctx.json()))
 }

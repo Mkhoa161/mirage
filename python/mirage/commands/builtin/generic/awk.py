@@ -8,6 +8,7 @@ from mirage.commands.builtin.generic.awk_types import (FS_ESCAPES, USAGE,
                                                        AwkFlags)
 from mirage.commands.builtin.utils.stream import (is_stdin, resolve_source,
                                                   stdin_stream)
+from mirage.commands.constants import ROOT_CWD
 from mirage.commands.errors import UsageError
 from mirage.commands.spec import SPECS
 from mirage.commands.spec.flag_view import FlagView
@@ -19,7 +20,10 @@ from mirage.core.awk.value import text as text_value
 from mirage.io.cooperative import chunks
 from mirage.io.types import ByteSource, IOResult
 from mirage.io.yield_budget import YieldBudget
+from mirage.runtime.types import DispatchFn
 from mirage.types import PathSpec
+from mirage.utils.errors import WALK_ERRORS, fs_strerror
+from mirage.utils.path import resolve_path
 
 
 def parse_flags(fl: FlagView) -> AwkFlags:
@@ -75,27 +79,40 @@ def split_assignments(raw: Sequence[str]) -> dict[str, str]:
     return out
 
 
-def _settle(io: IOResult, interp: Interpreter,
-            failure: AwkRuntimeError | AwkSyntaxError | None) -> bytes:
-    """Close a phase: move /dev/stderr text and a fatal error onto ``io``.
-
-    Every awk treats a runtime error as fatal at exit 2 and keeps what it
-    had already written, so the pending stdout is handed back either way.
-
-    Args:
-        io (IOResult): the result whose exit code and stderr to set.
-        interp (Interpreter): the interpreter holding buffered output.
-        failure (AwkRuntimeError | AwkSyntaxError | None): the fatal
-            error, when there is one; a dynamic regex fails as syntax.
-    """
-    err = interp.drain_err()
+async def _settle(io: IOResult, interp: Interpreter,
+                  failure: AwkRuntimeError | AwkSyntaxError | None,
+                  dispatch: DispatchFn | None,
+                  cwd: PathSpec) -> tuple[bytes, bool]:
+    out: list[str] = []
+    err = ""
+    pending = interp.drain_output()
+    for name, body, append in pending:
+        if name is None:
+            out.append(body)
+        elif name == "/dev/stderr":
+            err += body
+        else:
+            if dispatch is None:
+                failure = AwkRuntimeError(
+                    "awk: file output requires a workspace")
+                break
+            path = PathSpec.from_str_path(resolve_path(name, cwd.virtual))
+            try:
+                await dispatch("append" if append else "write",
+                               path,
+                               data=body.encode())
+            except WALK_ERRORS as exc:
+                detail = fs_strerror(exc) or "Cannot write output file"
+                failure = AwkRuntimeError(
+                    f'awk: cannot open "{name}" for output ({detail})')
+                break
     if failure is not None:
         io.exit_code = 2
         err += f"{failure}\n"
     if err:
         held = io.stderr if isinstance(io.stderr, bytes) else b""
         io.stderr = held + err.encode()
-    return interp.drain().encode()
+    return "".join(out).encode(), failure is not None
 
 
 async def _records(source: AsyncIterator[bytes],
@@ -133,6 +150,8 @@ async def _awk_stream(
     sources: Sequence[tuple[str, AsyncIterator[bytes]]],
     interp: Interpreter,
     io: IOResult,
+    dispatch: DispatchFn | None,
+    cwd: PathSpec,
 ) -> AsyncIterator[bytes]:
     exited = False
     try:
@@ -141,9 +160,13 @@ async def _awk_stream(
         io.exit_code = stop.code & 0xFF
         exited = True
     except (AwkRuntimeError, AwkSyntaxError) as exc:
-        yield _settle(io, interp, exc)
+        chunk, _ = await _settle(io, interp, exc, dispatch, cwd)
+        yield chunk
         return
-    yield _settle(io, interp, None)
+    chunk, failed = await _settle(io, interp, None, dispatch, cwd)
+    yield chunk
+    if failed:
+        return
     if not exited and interp.has_main_rules():
         for name, source in sources:
             if exited:
@@ -153,25 +176,33 @@ async def _awk_stream(
                 async with aclosing(_records(source, interp)) as records:
                     async for record in records:
                         interp.run_record(record)
-                        chunk = _settle(io, interp, None)
+                        chunk, failed = await _settle(io, interp, None,
+                                                      dispatch, cwd)
                         if chunk:
                             yield chunk
+                        if failed:
+                            return
                         if interp.skip_file:
                             break
             except ExitProgram as stop:
                 io.exit_code = stop.code & 0xFF
                 exited = True
             except (AwkRuntimeError, AwkSyntaxError) as exc:
-                yield _settle(io, interp, exc)
+                chunk, _ = await _settle(io, interp, exc, dispatch, cwd)
+                yield chunk
                 return
     try:
         interp.run_end()
     except ExitProgram as stop:
         io.exit_code = stop.code & 0xFF
     except (AwkRuntimeError, AwkSyntaxError) as exc:
-        yield _settle(io, interp, exc)
+        chunk, _ = await _settle(io, interp, exc, dispatch, cwd)
+        yield chunk
         return
-    yield _settle(io, interp, None)
+    chunk, failed = await _settle(io, interp, None, dispatch, cwd)
+    yield chunk
+    if failed:
+        return
 
 
 async def awk(
@@ -183,6 +214,8 @@ async def awk(
     read_stream: Callable[..., AsyncIterator[bytes]],
     stdin: ByteSource | None = None,
     index: IndexCacheStore = NULL_INDEX,
+    dispatch: DispatchFn | None = None,
+    cwd: PathSpec = ROOT_CWD,
 ) -> tuple[ByteSource | None, IOResult]:
     """Run an awk program over backend paths or stdin.
 
@@ -242,7 +275,7 @@ async def awk(
         cache = []
 
     io = IOResult(cache=cache)
-    return _awk_stream(sources, interp, io), io
+    return _awk_stream(sources, interp, io, dispatch, cwd), io
 
 
 __all__ = ["awk"]
