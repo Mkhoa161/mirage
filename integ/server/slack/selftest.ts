@@ -157,13 +157,26 @@ async function main(): Promise<void> {
       decoded((paged.response_metadata as Json).next_cursor),
       `next_ts:${REPLY.replace('.', '')}`,
     )
+    const after = (
+      await call('conversations.replies', { channel: 'C4', ts: THREAD, oldest: THREAD })
+    ).messages as Json[]
     eq(
       'oldest bounds a thread, exclusive by default',
-      (
-        (await call('conversations.replies', { channel: 'C4', ts: THREAD, oldest: THREAD }))
-          .messages as Json[]
-      ).map((m) => m.ts!),
+      after.map((m) => m.ts!),
       [REPLY],
+    )
+    eq(
+      'a reply bounded away from its parent still names its author',
+      after[0]!.parent_user_id!,
+      'U3',
+    )
+    const before = (
+      await call('conversations.replies', { channel: 'C4', ts: THREAD, latest: REPLY })
+    ).messages as Json[]
+    eq(
+      'a parent bounded away from its replies still counts them',
+      [before.length, before[0]!.reply_count!, before[0]!.latest_reply!],
+      [1, 1, REPLY],
     )
     eq(
       'an unknown thread is refused',

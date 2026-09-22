@@ -102,7 +102,9 @@ export async function conversationsList(ctx: Ctx<C>): Promise<Reply> {
 
 // A thread oldest first: the parent, then its replies. `ts` may name the
 // parent or any reply in it, and an unthreaded message answers alone.
-// `oldest` / `latest` bound it, exclusive unless `inclusive` is set.
+// `oldest` / `latest` bound it, exclusive unless `inclusive` is set. The bounds
+// pick which messages come back, never what the parent counts or whom a reply
+// names as its parent's author.
 export async function conversationsReplies(ctx: Ctx<C>): Promise<Reply> {
   const args = argsOf(ctx)
   const channel = args.get('channel') ?? ''
@@ -113,12 +115,13 @@ export async function conversationsReplies(ctx: Ctx<C>): Promise<Reply> {
   const inclusive = ['true', '1'].includes(args.get('inclusive') ?? '')
   const oldest = args.get('oldest')
   const latest = args.get('latest')
-  const thread = (
-    (await ctx.db.message.findMany({
-      where: { tenant: ctx.tenant, channelId: channel, OR: [{ ts: root }, { threadTs: root }] },
-      orderBy: { ts: 'asc' },
-    })) as MessageRow[]
-  ).filter((m) => {
+  const whole = (await ctx.db.message.findMany({
+    where: { tenant: ctx.tenant, channelId: channel, OR: [{ ts: root }, { threadTs: root }] },
+    orderBy: { ts: 'asc' },
+  })) as MessageRow[]
+  const parent = whole.find((m) => m.ts === root)
+  const replies = whole.filter((m) => m.ts !== root)
+  const thread = whole.filter((m) => {
     const ts = Number(m.ts)
     if (oldest !== null && (inclusive ? ts < Number(oldest) : ts <= Number(oldest))) return false
     if (latest !== null && (inclusive ? ts > Number(latest) : ts >= Number(latest))) return false
@@ -132,7 +135,6 @@ export async function conversationsReplies(ctx: Ctx<C>): Promise<Reply> {
   if (start === null) return fail('invalid_cursor')
   const size = pageSize(ctx, 1000, 1000)
   const next = thread[start + size]
-  const replies = thread.filter((m) => m.ts !== root)
   const files = await filesIn(ctx.db, ctx.tenant, channel)
   const messages = thread.slice(start, start + size).map((m) => {
     const out = messageJson(
@@ -140,7 +142,7 @@ export async function conversationsReplies(ctx: Ctx<C>): Promise<Reply> {
       files.filter((f) => f.messageTs === m.ts),
       ctx.url.origin,
     ) as Record<string, JsonValue>
-    if (m.ts !== root) return { ...out, parent_user_id: thread[0]?.userId ?? '' }
+    if (m.ts !== root) return { ...out, parent_user_id: parent?.userId ?? '' }
     if (replies.length === 0) return out
     const people = [...new Set(replies.map((r) => r.userId))]
     return {
