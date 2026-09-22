@@ -12,6 +12,8 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { RedirKind } from './nodes.ts'
+
 import {
   charLength,
   indexOf,
@@ -82,6 +84,7 @@ const SCALAR_DEFAULTS: Readonly<Record<string, string>> = {
 const COUNTERS: ReadonlySet<string> = new Set(['NR', 'FNR', 'NF'])
 
 const ARITY: Readonly<Record<string, number>> = {
+  close: 1,
   atan2: 2,
   cos: 1,
   exp: 1,
@@ -146,8 +149,8 @@ export class Interpreter {
   private readonly globals = new Map<string, Value>()
   private readonly tables = new Map<string, AwkArray>()
   private readonly frames: Frame[] = []
-  private out: string[] = []
-  private err: string[] = []
+  private output: [string | null, string, boolean][] = []
+  private readonly openFiles = new Set<string>()
   private record = ''
   private recordFs = ' '
   private recordParagraph = false
@@ -497,7 +500,8 @@ export class Interpreter {
     }
     if (name === 'sub' || name === 'gsub') return this.builtinSub(node, name === 'gsub')
     if (name === 'split') return this.builtinSplit(args)
-    if (name === 'close' || name === 'fflush') return num(0)
+    if (name === 'close') return num(this.openFiles.delete(this.strArg(args, 0)) ? 0 : -1)
+    if (name === 'fflush') return num(0)
     if (name === 'system') throw new AwkRuntimeError('awk: system() is not supported in mirage')
     throw new AwkRuntimeError(`awk: calling undefined function ${name}`)
   }
@@ -591,19 +595,24 @@ export class Interpreter {
   private write(body: string, node: Print | Printf): void {
     const redirect = node.redirect
     if (redirect === null) {
-      this.out.push(body)
+      this.output.push([null, body, false])
       return
     }
     const name = toStr(this.eval(redirect.target), this.convfmt())
+    if (redirect.kind === RedirKind.PIPE) {
+      throw new AwkRuntimeError('awk: output pipes are not supported in mirage')
+    }
     if (STDOUT_NAMES.has(name)) {
-      this.out.push(body)
+      this.output.push([null, body, false])
       return
     }
     if (name === STDERR_NAME) {
-      this.err.push(body)
+      this.output.push([STDERR_NAME, body, false])
       return
     }
-    throw new AwkRuntimeError(`awk: output redirection to '${name}' is not supported in mirage`)
+    const append = this.openFiles.has(name) || redirect.kind === RedirKind.APPEND
+    this.openFiles.add(name)
+    this.output.push([name, body, append])
   }
 
   private execStmt(node: Stmt): void {
@@ -785,15 +794,26 @@ export class Interpreter {
 
   /** Take everything buffered for stdout since the last drain. */
   drain(): string {
-    const body = this.out.join('')
-    this.out = []
-    return body
+    const out = this.output
+      .filter(([name]) => name === null)
+      .map(([, body]) => body)
+      .join('')
+    this.output = this.output.filter(([name]) => name !== null)
+    return out
   }
 
-  /** Take everything written to /dev/stderr since the last drain. */
   drainErr(): string {
-    const body = this.err.join('')
-    this.err = []
-    return body
+    const out = this.output
+      .filter(([name]) => name === STDERR_NAME)
+      .map(([, body]) => body)
+      .join('')
+    this.output = this.output.filter(([name]) => name !== STDERR_NAME)
+    return out
+  }
+
+  drainOutput(): [string | null, string, boolean][] {
+    const pending = this.output
+    this.output = []
+    return pending
   }
 }

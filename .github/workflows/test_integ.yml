@@ -567,6 +567,10 @@ jobs:
         working-directory: integ
         run: pnpm run gws:selftest
 
+      - name: Assert the notion fake (block writes and validation)
+        working-directory: integ
+        run: pnpm run notion:selftest
+
       # github's corpus coverage is the `gh` porcelain, which never builds
       # history: a client that does calls POST /git/trees then /git/commits, and
       # that is the only path on which a commit can state its own author and

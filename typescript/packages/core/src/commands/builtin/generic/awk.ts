@@ -31,7 +31,7 @@ import {
 } from '../../../core/awk/index.ts'
 import { UsageError } from '../../errors.ts'
 import { FS_ESCAPES, USAGE, type AwkFlags } from './awk_types.ts'
-import { isMissingPath } from '../../../utils/errors.ts'
+import { isMissingPath, isWalkError, fsStrerror } from '../../../utils/errors.ts'
 import { resolvePath } from '../../../utils/path.ts'
 import { resolveSource } from '../utils/stream.ts'
 
@@ -88,8 +88,34 @@ function exitStatus(code: number): number {
  * Every awk treats a runtime error as fatal at exit 2 and keeps what it
  * had already written, so the pending stdout is handed back either way.
  */
-function settle(io: IOResult, interp: Interpreter, failure: Error | null): Uint8Array {
-  let err = interp.drainErr()
+async function settle(
+  io: IOResult,
+  interp: Interpreter,
+  failure: Error | null,
+  opts: CommandOpts,
+): Promise<[Uint8Array, boolean]> {
+  const out: string[] = []
+  let err = ''
+  const pending = interp.drainOutput()
+  for (const [name, body, append] of pending) {
+    if (name === null) out.push(body)
+    else if (name === '/dev/stderr') err += body
+    else {
+      if (opts.dispatch === undefined) {
+        failure = new AwkRuntimeError('awk: file output requires a workspace')
+        break
+      }
+      const path = PathSpec.fromStrPath(resolvePath(name, opts.cwd))
+      try {
+        await opts.dispatch(append ? 'append' : 'write', path, [ENC.encode(body)])
+      } catch (error) {
+        if (!isWalkError(error)) throw error
+        const detail = fsStrerror(error) ?? 'Cannot write output file'
+        failure = new AwkRuntimeError(`awk: cannot open "${name}" for output (${detail})`)
+        break
+      }
+    }
+  }
   if (failure !== null) {
     io.exitCode = 2
     err += `${failure.message}\n`
@@ -98,7 +124,7 @@ function settle(io: IOResult, interp: Interpreter, failure: Error | null): Uint8
     const held = io.stderr instanceof Uint8Array ? DEC.decode(io.stderr) : ''
     io.stderr = ENC.encode(held + err)
   }
-  return ENC.encode(interp.drain())
+  return [ENC.encode(out.join('')), failure !== null]
 }
 
 function isFatal(err: unknown): err is AwkRuntimeError | AwkSyntaxError {
@@ -146,6 +172,7 @@ async function* awkStream(
   sources: readonly Source[],
   interp: Interpreter,
   io: IOResult,
+  opts: CommandOpts,
 ): AsyncIterable<Uint8Array> {
   let exited = false
   try {
@@ -155,11 +182,16 @@ async function* awkStream(
       io.exitCode = exitStatus(err.code)
       exited = true
     } else if (isFatal(err)) {
-      yield settle(io, interp, err)
+      const [chunk] = await settle(io, interp, err, opts)
+      yield chunk
       return
     } else throw err
   }
-  yield settle(io, interp, null)
+  {
+    const [chunk, failed] = await settle(io, interp, null, opts)
+    yield chunk
+    if (failed) return
+  }
   if (!exited && interp.hasMainRules()) {
     for (const [name, source] of sources) {
       if (exited) break
@@ -167,8 +199,9 @@ async function* awkStream(
       try {
         for await (const record of records(source, interp)) {
           interp.runRecord(record)
-          const chunk = settle(io, interp, null)
+          const [chunk, failed] = await settle(io, interp, null, opts)
           if (chunk.length > 0) yield chunk
+          if (failed) return
           if (interp.skipFile) break
         }
       } catch (err) {
@@ -176,7 +209,8 @@ async function* awkStream(
           io.exitCode = exitStatus(err.code)
           exited = true
         } else if (isFatal(err)) {
-          yield settle(io, interp, err)
+          const [chunk] = await settle(io, interp, err, opts)
+          yield chunk
           return
         } else throw err
       }
@@ -187,11 +221,16 @@ async function* awkStream(
   } catch (err) {
     if (err instanceof ExitProgram) io.exitCode = exitStatus(err.code)
     else if (isFatal(err)) {
-      yield settle(io, interp, err)
+      const [chunk] = await settle(io, interp, err, opts)
+      yield chunk
       return
     } else throw err
   }
-  yield settle(io, interp, null)
+  {
+    const [chunk, failed] = await settle(io, interp, null, opts)
+    yield chunk
+    if (failed) return
+  }
 }
 
 export async function awkGeneric(
@@ -250,5 +289,5 @@ export async function awkGeneric(
     cache = []
   }
   const io = new IOResult({ cache })
-  return [awkStream(sources, interp, io), io]
+  return [awkStream(sources, interp, io, opts), io]
 }
