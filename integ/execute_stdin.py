@@ -150,23 +150,25 @@ def check_large_json(client: httpx.Client, wid: str, host: str) -> None:
                      separators=(',', ':')).encode()
     source = b'[' + b','.join([row] * count) + b']'
     execute(client, wid, 'cat > /work/matches.json', source)
-    for flags in ('-o', '-bo'):
-        expected = ''.join(
-            (f'{3 + i * (len(row) + 1)}:' if flags == '-bo' else '') +
-            'formattedValue\n' for i in range(count))
-        for operand, stdin in (('/work/matches.json', None), ('', source)):
-            started = time.monotonic()
-            result = execute(
-                client, wid,
-                f'grep {flags} formattedValue {operand} | sha256sum', stdin)
-            elapsed = time.monotonic() - started
-            assert result['stdout'].split()[0] == hashlib.sha256(
-                expected.encode()).hexdigest()
-            assert elapsed < 10, (host, flags, operand, elapsed)
+    for command in ('grep', 'rg'):
+        for flags in ('-o', '-bo'):
+            expected = ''.join(
+                (f'{3 + i * (len(row) + 1)}:' if flags == '-bo' else '') +
+                'formattedValue\n' for i in range(count))
+            for operand, stdin in (('/work/matches.json', None), ('', source)):
+                started = time.monotonic()
+                result = execute(
+                    client, wid,
+                    f'{command} {flags} formattedValue {operand} | sha256sum',
+                    stdin)
+                elapsed = time.monotonic() - started
+                assert result['stdout'].split()[0] == hashlib.sha256(
+                    expected.encode()).hexdigest()
+                assert elapsed < 10, (host, flags, operand, elapsed)
     head = execute(client, wid,
                    'grep -o formattedValue /work/matches.json | head -n 2')
     assert head['stdout'] == 'formattedValue\n' * 2
-    print(f'{host}: 16,000 Unicode grep matches, file/stdin -o/-bo OK',
+    print(f'{host}: 16,000 Unicode grep/rg matches, file/stdin -o/-bo OK',
           flush=True)
 
     # Generate the nested document without retaining 350,000 Python dicts.

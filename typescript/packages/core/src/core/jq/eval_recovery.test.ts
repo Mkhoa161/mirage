@@ -23,5 +23,23 @@ describe('jq evaluator recovery', () => {
     expect(loadJq).toHaveBeenCalledTimes(2)
     expect(poisonedRaw).toHaveBeenCalledTimes(1)
     expect(healthyRaw).toHaveBeenCalledTimes(2)
+    for (const message of [
+      'unreachable',
+      'memory access out of bounds',
+      'Aborted(Assertion failed)',
+    ]) {
+      const other = new WebAssembly.RuntimeError(message)
+      healthyRaw.mockImplementationOnce(() => {
+        throw other
+      })
+      vi.mocked(loadJq).mockResolvedValueOnce({ raw: healthyRaw } as unknown as Jq)
+      const failed = jqEval(null, '.')
+      await expect(failed).rejects.toThrow(message)
+      await expect(failed).rejects.not.toThrow('256 MiB')
+      await expect(failed).rejects.not.toThrow('Reduce the input')
+      await expect(failed).rejects.toMatchObject({ cause: other })
+      expect(await jqEval({ ok: 42 }, '.ok')).toEqual([42])
+    }
+    expect(loadJq).toHaveBeenCalledTimes(5)
   })
 })

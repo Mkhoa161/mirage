@@ -200,10 +200,15 @@ export async function jqEval(
     if (!(error instanceof WebAssembly.RuntimeError)) throw error
     instance = null
     const bytes = new TextEncoder().encode(input).byteLength
+    // This is the pinned build's reproduced allocation-abort signature.
+    const detail =
+      error.message === 'Aborted(). Build with -sASSERTIONS for more info.'
+        ? 'This jq-wasm build has a 256 MiB heap limit; parsed JSON and query ' +
+          'allocations can exceed the input size. Reduce the input or use a native jq runtime. '
+        : `WebAssembly trap: ${error.message}. `
     throw new Error(
       `WASM evaluation failed for ${String(bytes)} bytes of JSON input. ` +
-        'This jq-wasm build has a 256 MiB heap limit; parsed JSON and query ' +
-        'allocations can exceed the input size. Reduce the input or use a native jq runtime. ' +
+        detail +
         'The evaluator has been reset for the next call.',
       { cause: error },
     )
