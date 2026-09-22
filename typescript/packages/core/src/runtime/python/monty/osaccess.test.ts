@@ -530,6 +530,20 @@ describe('MirageOSAccess mounted open and append', () => {
     expect(await access.handle('Path.mkdir', ['/ram/d'], { exist_ok: true })).toBeNull()
   })
 
+  // The follow-stat of a dangling link misses, but the listed name is
+  // still there: O_EXCL refuses it rather than creating through it.
+  it('refuses an exclusive open of a dangling link it listed', async () => {
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'readdir') return Promise.resolve(['/ram/lnk'])
+      return Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+    })
+    const access = accessOn(dispatch, {}, ['/ram'], ['lnk'])
+    await expect(Promise.resolve(access.handle('open', ['/ram/lnk', 'x']))).rejects.toThrow(
+      '[Errno 17] File exists',
+    )
+    expect(dispatch.mock.calls.some(([op]) => op === 'create')).toBe(false)
+  })
+
   it('mkdir on an existing file raises FileExistsError even under exist_ok', async () => {
     const dispatch = listing(['/ram/a.txt'])
     const access = accessOn(dispatch)

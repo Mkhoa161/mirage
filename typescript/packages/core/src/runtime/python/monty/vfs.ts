@@ -294,7 +294,8 @@ export class MontyVFS {
    * (an open refuses a directory, a mkdir accepts one). That row is
    * classified by the path's own stat: one request for the path asked
    * about, never one per sibling. A link row takes its target's kind
-   * the same way, since the stat follows it.
+   * the same way, since the stat follows it; a dangling one keeps its
+   * own row, because the name is there even when its target is not.
    */
   async entryFor(path: string): Promise<VFSEntry | null> {
     if (this.missing.has(path)) return null
@@ -307,8 +308,12 @@ export class MontyVFS {
       return null
     }
     if (found.isDir || found.mode !== undefined) return found
-    const row = await this.stat(path)
-    if (row === null) return null
+    const row = await this.orNull(path, ABSENT_PATH, () => this.core.stat(path))
+    if (row === null) {
+      if (found.isLink === true) return found
+      this.missing.add(path)
+      return null
+    }
     return { ...row, path: found.path, ...(found.isLink === true ? { isLink: true } : {}) }
   }
 
