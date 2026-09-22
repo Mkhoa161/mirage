@@ -77,14 +77,6 @@ function latestFingerprint(
   return null
 }
 
-function bytesEqual(a: Uint8Array | null, b: Uint8Array): boolean {
-  if (a?.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
-
 async function setCached(
   cache: FileCache,
   path: string,
@@ -113,11 +105,18 @@ async function setCachedLocked(
   ttl: number | null,
 ): Promise<void> {
   const fingerprint = latestFingerprint(records, path, ops, data.byteLength)
-  if (fingerprint === null && bytesEqual(await cache.get(path), data)) {
-    // Warm read: the bytes were served from this cache, so there is no
-    // backend read record. Re-setting would drop the backend fingerprint
-    // stamped on the cold read and force a `fresh` mount to evict and
-    // refetch on every read.
+  if (ops.has('read') && fingerprint === null && (await cache.exists(path))) {
+    // A tokenless read over a live entry is a warm read: these bytes
+    // came out of this entry, so re-setting would drop the backend
+    // fingerprint and force a `fresh` mount to refetch, while fetching
+    // the blob back to compare it with itself is the file over the wire
+    // twice. Only `cp`'s guarded walk reads
+    // the backend raw with an entry standing, and only under
+    // `bounded`, which already calls that entry trusted.
+    //
+    // The direction gate keeps a write writing: a backend that stamps
+    // no write token would otherwise skip the set and leave pre-write
+    // bytes standing.
     return
   }
   await cache.set(path, data, { fingerprint, ttl })

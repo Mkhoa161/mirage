@@ -164,3 +164,40 @@ async def test_stat_keeps_overlay_under_bounded():
         await ws.dispatch("stat", _stat_scope("/data/gone.txt"))
 
     assert ws.namespace.meta_for("/data/gone.txt") is not None
+
+
+@pytest.mark.asyncio
+async def test_a_guarded_cp_leaves_the_entry_it_read_past(tmp_path):
+    """Under ``bounded`` the guarded walk leaves the entry it read past.
+
+    Every condition here is load-bearing and fails silently if changed.
+    The hide forces `cp` onto the primitive walk, whose per-file read
+    carries no backend token; the native strategy fills no cache at all.
+    The mount is the root because `cp` keys its reads on ``src.virtual``
+    while the runner re-prefixes, so on ``/r`` the fill lands at
+    ``/r/r/dir/a.txt`` and this asserts nothing (#441, #629).
+    """
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir" / "a.txt").write_bytes(b"v1\n")
+    disk = DiskVFS(root=str(tmp_path))
+    disk.caches_reads = True
+    ws = Workspace({"/": disk},
+                   mode=MountMode.WRITE,
+                   read=ReadSpec(policy=ReadPolicy.BOUNDED))
+    ws.create_session("agent", profile={"paths": {"hide": ["/dir/.secret"]}})
+
+    cold = await (await ws.shell("cat /dir/a.txt",
+                                 session_id="agent")).stdout_str()
+    assert cold == "v1\n"
+
+    (tmp_path / "dir" / "a.txt").write_bytes(b"v2\n")
+    copied = await ws.shell("cp -r /dir /copy", session_id="agent")
+    assert copied.exit_code == 0
+
+    made = await (await ws.shell("cat /copy/a.txt",
+                                 session_id="agent")).stdout_str()
+    assert made == "v2\n", "the copy has to hold the bytes the walk read"
+    served = await (await ws.shell("cat /dir/a.txt",
+                                   session_id="agent")).stdout_str()
+    assert served == "v1\n", ("the guarded walk overwrote the entry it read "
+                              "past")

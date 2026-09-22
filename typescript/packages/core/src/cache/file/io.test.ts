@@ -19,7 +19,7 @@ import { md5Hex } from '../../utils/hash.ts'
 import { CachableAsyncIterator } from '../../io/cachable_iterator.ts'
 import { IOResult } from '../../io/types.ts'
 import { OpRecord } from '../../observe/record.ts'
-import type { CacheFacts } from '../../types.ts'
+import type { CacheFacts, PathSpec } from '../../types.ts'
 import { applyIo } from './io.ts'
 import { RAMFileCacheStore } from './ram.ts'
 
@@ -104,6 +104,21 @@ function opRecord(op: string, path: string, fingerprint: string | null, nbytes =
 
 function readRecord(path: string, fingerprint: string | null): OpRecord {
   return opRecord('read', path, fingerprint)
+}
+
+class CountingCache extends RAMFileCacheStore {
+  gets = 0
+  existsCalls = 0
+
+  override async get(key: string): Promise<Uint8Array | null> {
+    this.gets += 1
+    return await super.get(key)
+  }
+
+  override async exists(key: string | PathSpec): Promise<boolean> {
+    this.existsCalls += 1
+    return await super.exists(key)
+  }
 }
 
 describe('backend fingerprint threading', () => {
@@ -193,6 +208,77 @@ describe('backend fingerprint threading', () => {
     await sleep(50)
     expect(DEC.decode((await cache.get('/s3/f.txt')) ?? undefined)).toBe('hello')
     expect(await cache.isFresh('/s3/f.txt', 'etag-multipart-2')).toBe(true)
+  })
+
+  it('does not refetch the blob on a warm re-apply', async () => {
+    // A warm re-apply asks whether the entry exists, never for its bytes.
+    // The read-through already served them out of that entry, so fetching
+    // the blob back to compare it with itself was the whole cost of #1009
+    // -- on a Redis cache, the file over the wire twice.
+    const cache = new CountingCache()
+    const cold = new IOResult({
+      reads: { '/s3/f.txt': ENC.encode('hello') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, cold, undefined, [readRecord('/s3/f.txt', 'etag-3')])
+    cache.gets = 0
+    cache.existsCalls = 0
+    const warm = new IOResult({
+      reads: { '/s3/f.txt': ENC.encode('hello') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, warm, undefined, [])
+    expect(cache.gets).toBe(0)
+    expect(cache.existsCalls).toBe(1)
+    expect(await cache.isFresh('/s3/f.txt', 'etag-3')).toBe(true)
+  })
+
+  it('replaces a live entry of the same bytes on a write without a token', async () => {
+    // A write always writes: the guard's existence check is gated on
+    // the read direction, so a backend that stamps no write token cannot
+    // skip the set and leave a pre-write entry standing. The bytes are
+    // identical here, so only the fingerprint can show it happened -- and
+    // the direction short-circuits before the cache is asked anything, so
+    // the write path costs no lookup at all.
+    const cache = new CountingCache()
+    const cold = new IOResult({
+      reads: { '/s3/f.txt': ENC.encode('hello') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, cold, undefined, [readRecord('/s3/f.txt', 'etag-3')])
+    cache.gets = 0
+    cache.existsCalls = 0
+    const rewrite = new IOResult({
+      writes: { '/s3/f.txt': ENC.encode('hello') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, rewrite, undefined, [])
+    expect(cache.gets).toBe(0)
+    expect(cache.existsCalls).toBe(0)
+    expect(DEC.decode((await cache.get('/s3/f.txt')) ?? undefined)).toBe('hello')
+    expect(await cache.isFresh('/s3/f.txt', 'etag-3')).toBe(false)
+  })
+
+  it('keeps the entry it found on a tokenless read', async () => {
+    // The one case the existence check answers differently from the byte
+    // compare it replaces: a read that reached the backend while an entry
+    // stood, with no token to stamp. Only `cp`'s guarded primitive walk
+    // reads that way, and `bounded` already calls the entry it kept trusted,
+    // so preserving it is the policy's answer rather than an accidental
+    // repair.
+    const cache = new RAMFileCacheStore()
+    const cold = new IOResult({
+      reads: { '/s3/f.txt': ENC.encode('old') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, cold, undefined, [readRecord('/s3/f.txt', 'etag-3')])
+    const raw = new IOResult({
+      reads: { '/s3/f.txt': ENC.encode('new') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, raw, undefined, [])
+    expect(DEC.decode((await cache.get('/s3/f.txt')) ?? undefined)).toBe('old')
+    expect(await cache.isFresh('/s3/f.txt', 'etag-3')).toBe(true)
   })
 })
 

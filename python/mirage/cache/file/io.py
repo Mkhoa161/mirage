@@ -121,11 +121,19 @@ async def _set_cached_locked(
     ttl: int | None,
 ) -> None:
     fingerprint = latest_fingerprint(records, path, ops, len(data))
-    if fingerprint is None and await cache.get(path) == data:
-        # Warm read: the bytes were served from this cache, so there is
-        # no backend read record. Re-setting would drop the backend
-        # fingerprint stamped on the cold read and force a ``fresh`` mount
-        # to evict and refetch on every read.
+    if "read" in ops and fingerprint is None and await cache.exists(path):
+        # A tokenless read over a live entry is a warm read: these
+        # bytes came out of this entry, so re-setting would drop the
+        # backend fingerprint and force a ``fresh`` mount to refetch,
+        # while fetching the blob back to compare it with itself is the
+        # file over the wire twice. Only `cp`'s
+        # guarded walk reads the backend raw with an entry standing,
+        # and only under ``bounded``, which already calls that entry
+        # trusted.
+        #
+        # The direction gate keeps a write writing: a backend that
+        # stamps no write token would otherwise skip the set and leave
+        # pre-write bytes standing.
         return
     await cache.set(path, data, fingerprint=fingerprint, ttl=ttl)
 

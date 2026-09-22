@@ -156,6 +156,83 @@ async def test_apply_io_changed_data_without_record_resets_entry(cache):
     assert not await cache.is_fresh("/s3/f.txt", "etag-3")
 
 
+class _CountingCache(RAMFileCacheStore):
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.gets = 0
+        self.exists_calls = 0
+
+    async def get(self, key: str) -> bytes | None:
+        self.gets += 1
+        return await super().get(key)
+
+    async def exists(self, key: str) -> bool:
+        self.exists_calls += 1
+        return await super().exists(key)
+
+
+@pytest.mark.asyncio
+async def test_apply_io_warm_reapply_does_not_refetch_the_blob():
+    """A warm re-apply asks whether the entry exists, never for its
+    bytes. The read-through already served them out of that entry, so
+    fetching the blob back to compare it with itself was the whole cost
+    of #1009 -- on a Redis cache, the file over the wire twice."""
+    cache = _CountingCache()
+    cold = IOResult(reads={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache,
+                            cold,
+                            records=[_read_record("/s3/f.txt", "etag-3")])
+    cache.gets = 0
+    cache.exists_calls = 0
+    warm = IOResult(reads={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache, warm, records=[])
+    assert cache.gets == 0
+    assert cache.exists_calls == 1
+    assert await cache.is_fresh("/s3/f.txt", "etag-3")
+
+
+@pytest.mark.asyncio
+async def test_apply_io_write_of_identical_bytes_replaces_the_entry():
+    """A write always writes: the guard's existence check is gated on
+    the read direction, so a backend that stamps no write token cannot
+    skip the set and leave a pre-write entry standing. The bytes are
+    identical here, so only the fingerprint can show it happened -- and
+    the direction short-circuits before the cache is asked anything, so
+    the write path costs no lookup at all."""
+    cache = _CountingCache()
+    cold = IOResult(reads={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache,
+                            cold,
+                            records=[_read_record("/s3/f.txt", "etag-3")])
+    cache.gets = 0
+    cache.exists_calls = 0
+    rewrite = IOResult(writes={"/s3/f.txt": b"hello"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache, rewrite, records=[])
+    assert cache.gets == 0
+    assert cache.exists_calls == 0
+    assert await cache.get("/s3/f.txt") == b"hello"
+    assert not await cache.is_fresh("/s3/f.txt", "etag-3")
+
+
+@pytest.mark.asyncio
+async def test_apply_io_tokenless_read_keeps_the_entry_it_found(cache):
+    """The one case the existence check answers differently from the
+    byte compare it replaces: a read that reached the backend while an
+    entry stood, with no token to stamp. Only `cp`'s guarded primitive
+    walk reads that way, and ``bounded`` already calls the entry it
+    kept trusted, so preserving it is the policy's answer rather than
+    an accidental repair."""
+    cold = IOResult(reads={"/s3/f.txt": b"old"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache,
+                            cold,
+                            records=[_read_record("/s3/f.txt", "etag-3")])
+    raw = IOResult(reads={"/s3/f.txt": b"new"}, cache=["/s3/f.txt"])
+    await cache_io.apply_io(cache, raw, records=[])
+    assert await cache.get("/s3/f.txt") == b"old"
+    assert await cache.is_fresh("/s3/f.txt", "etag-3")
+
+
 @pytest.mark.asyncio
 async def test_apply_io_drain_uses_fingerprint_recorded_during_drain():
     """Streaming backends set the record fingerprint lazily when the GET
