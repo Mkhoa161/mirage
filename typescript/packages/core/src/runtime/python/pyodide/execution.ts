@@ -74,18 +74,27 @@ export class PyodideExecution {
     arm: () => void,
     disarm: () => void,
   ): [Uint8Array, Uint8Array, number] {
-    return this.call('run', { ...request, stdin: request.stdin ?? undefined }, arm, disarm) as [
-      Uint8Array,
-      Uint8Array,
-      number,
-    ]
+    const [stdout, stderr, exitCode] = this.call(
+      'run',
+      { ...request, stdin: request.stdin ?? undefined },
+      arm,
+      disarm,
+    ) as [number[], number[], number]
+    return [new Uint8Array(stdout), new Uint8Array(stderr), exitCode]
   }
 
   evaluate(
     code: string,
     inputs: Record<string, EvalValue>,
   ): [string, Uint8Array, Uint8Array, boolean, boolean] {
-    return this.call('evaluate', code, inputs) as [string, Uint8Array, Uint8Array, boolean, boolean]
+    const [value, stdout, stderr, ok, syntax] = this.call('evaluate', code, inputs) as [
+      string,
+      number[],
+      number[],
+      boolean,
+      boolean,
+    ]
+    return [value, new Uint8Array(stdout), new Uint8Array(stderr), ok, syntax]
   }
 
   repl(
@@ -93,7 +102,13 @@ export class PyodideExecution {
     session: string,
     inputs: Record<string, EvalValue>,
   ): [Uint8Array, Uint8Array, number, EvalStatus] {
-    return this.call('repl', code, session, inputs) as [Uint8Array, Uint8Array, number, EvalStatus]
+    const [stdout, stderr, exitCode, status] = this.call('repl', code, session, inputs) as [
+      number[],
+      number[],
+      number,
+      EvalStatus,
+    ]
+    return [new Uint8Array(stdout), new Uint8Array(stderr), exitCode, status]
   }
 
   seedSysPath(paths: readonly string[]): string[] {

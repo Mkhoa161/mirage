@@ -48,8 +48,10 @@ class OutputCapture(io.RawIOBase):
         finally:
             self.close()
 
-    def getvalue(self):
-        return bytes(self.data)
+    def to_list(self):
+        # Pyodide's toJs buffer conversion slices with signed wasm32 addresses:
+        # above 2 GiB it reads the wrong bytes. Transfer numeric values.
+        return list(self.data)
 
 
 repl_session_globals = {}
@@ -178,7 +180,7 @@ def run(request, arm_interrupt, disarm_interrupt):
             os.getcwd = saved_getcwd
             saved_chdir(saved_cwd)
 
-    return (out_bytes.getvalue(), err_bytes.getvalue(), exit_code)
+    return (out_bytes.to_list(), err_bytes.to_list(), exit_code)
 
 
 def evaluate(user_code, eval_inputs):
@@ -224,7 +226,7 @@ def evaluate(user_code, eval_inputs):
             finally:
                 sys.stdout, sys.stderr = saved_stdout, saved_stderr
 
-    return (value_json, out_bytes.getvalue(), err_bytes.getvalue(), ok, syntax)
+    return (value_json, out_bytes.to_list(), err_bytes.to_list(), ok, syntax)
 
 
 def repl(user_code, repl_session_id, repl_inputs):
@@ -292,7 +294,7 @@ def repl(user_code, repl_session_id, repl_inputs):
                 sys.stderr = saved_stderr
                 sys.stdin = saved_stdin
 
-    return (out_bytes.getvalue(), err_bytes.getvalue(), exit_code, status)
+    return (out_bytes.to_list(), err_bytes.to_list(), exit_code, status)
 
 
 def seed_sys_path(paths):
