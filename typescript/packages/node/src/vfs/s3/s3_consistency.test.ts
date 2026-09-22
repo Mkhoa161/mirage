@@ -27,7 +27,6 @@ import {
 const FRESH: ReadSpec = { policy: ReadPolicy.FRESH, ttl: DEFAULT_READ_TTL }
 const BOUNDED: ReadSpec = { policy: ReadPolicy.BOUNDED, ttl: DEFAULT_READ_TTL }
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createHash } from 'node:crypto'
 import { GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { applyIo } from '@struktoai/mirage-core/cache/file/io'
 import { IOResult } from '@struktoai/mirage-core/io/types'
@@ -244,11 +243,11 @@ describe('S3 cache consistency (mocked)', () => {
       mock.resetCalls()
       expect(DEC.decode((await ws.shell('cat /s3/c.txt')).stdout)).toBe('v1')
       expect(mock.commandCalls(GetObjectCommand)).toBe(0)
-      // Names the mechanism, not just its consequence: a zero-GET second
-      // read only implies *some* match, this says which token it was.
-      expect(
-        await ws.cache.isFresh('/s3/c.txt', createHash('md5').update('v1').digest('hex')),
-      ).toBe(true)
+      // No assertion here about *which* token the refetch stamped: this
+      // mock builds its ETag as md5(content) with an empty suffix, so the
+      // backend's token and a fabricated md5 are the same string and the
+      // claim cannot be tested on this fixture. It is pinned where the
+      // suffix makes the two distinguishable -- write_fingerprint.test.ts.
     } finally {
       await ws.close()
     }

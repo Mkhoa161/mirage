@@ -14,6 +14,7 @@
 
 import asyncio
 import os
+import pathlib
 
 import pytest
 import pytest_asyncio
@@ -234,6 +235,56 @@ async def test_remove_cancels_pending_drain(cache):
 # `_invalidation.stale`, so a writer cannot be parked here at all. It
 # stays as the shared cross-language contract (TypeScript's redis store
 # awaits its client first, so the window is live there).
+
+
+@pytest.mark.asyncio
+async def test_a_token_bearing_set_bounds_its_meta_key_too(cache):
+    # The other side of the branch the tokenless case added: when there IS
+    # a token the meta key still has to take the ttl. Leaving it immortal
+    # lets it outlive the data key redis expires, and the next is_fresh
+    # then matches a token describing bytes that are gone -- the same
+    # false positive the tokenless delete exists to prevent, one branch
+    # over.
+    await cache.set("/a", b"data", fingerprint="etag-1", ttl=100)
+    assert await cache._cache_client.ttl(cache._meta_key("/a")) > 0
+    assert await cache._cache_client.ttl(cache._data_key("/a")) > 0
+
+
+@pytest.mark.asyncio
+async def test_a_tokenless_add_still_bounds_its_data_key(cache):
+    # add.lua nests the meta EXPIRE inside the data EXPIRE, so a mistake
+    # in that nesting takes the data key's bound with it. This is the
+    # combination the background drain now reaches: it calls `add` with
+    # whatever `latest_fingerprint` returned -- which may be None -- and
+    # the mount's bound. An immortal tokenless entry is the one thing
+    # `bounded` can never expire.
+    assert await cache.add("/a", b"data", ttl=100)
+    assert await cache._cache_client.ttl(cache._data_key("/a")) > 0
+    assert not await cache._cache_client.exists(cache._meta_key("/a"))
+
+
+@pytest.mark.asyncio
+async def test_a_losing_tokenless_add_leaves_the_incumbent_token_alone(cache):
+    # The early return has to happen before the meta delete. A drain that
+    # finishes late correctly declines to overwrite a newer fill; if it
+    # still dropped that fill's token on the way out, the survivor would
+    # be unverifiable and a `fresh` mount would refetch it on every read
+    # -- turning this PR's measured one-off cost into a permanent one.
+    await cache.set("/a", b"new", fingerprint="etag-new")
+    assert not await cache.add("/a", b"stale-drain")
+    assert await cache.get("/a") == b"new"
+    assert await cache.is_fresh("/a", "etag-new")
+
+
+def test_the_two_add_lua_copies_are_byte_identical():
+    # `redis.py` says so in a comment and nothing enforced it. This PR is
+    # the first edit to the file, and the '' sentinel only works if both
+    # hosts run the same script.
+    root = pathlib.Path(__file__).resolve().parents[3].parent
+    py = (root / "python/mirage/cache/file/add.lua").read_bytes()
+    ts = (root /
+          "typescript/packages/node/src/cache/file/add.lua").read_bytes()
+    assert py == ts
 
 
 @pytest.mark.asyncio

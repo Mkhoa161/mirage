@@ -263,6 +263,87 @@ async def test_an_empty_token_is_stored_as_none(operation):
 
 
 @pytest.mark.asyncio
+async def test_a_snapshot_round_trip_preserves_both_token_states():
+    # Capture and restore in one test because the pair is the contract:
+    # a tokenless entry that came back holding md5(data) would read as
+    # FRESH on a simple-PUT S3 object, and a token-bearing entry that came
+    # back holding None would refetch forever. Both are silent.
+    import json
+
+    from mirage.workspace.snapshot.keys import CacheKey
+    from mirage.workspace.snapshot.state import _restore_cache
+
+    src = RAMFileCacheStore()
+    await src.set("/none", b"data")
+    await src.set("/tok", b"data", fingerprint="etag-1")
+    captured = [{
+        CacheKey.KEY: k,
+        CacheKey.DATA: src._store.files[k],
+        CacheKey.FINGERPRINT: e.fingerprint,
+        CacheKey.TTL: e.ttl,
+        CacheKey.CACHED_AT: e.cached_at,
+        CacheKey.SIZE: e.size,
+    } for k, e in src._entries.items()]
+    # Through JSON, because that is what a snapshot actually survives.
+    for entry in captured:
+        entry[CacheKey.DATA] = entry[CacheKey.DATA].decode()
+    revived = json.loads(json.dumps(captured))
+    for entry in revived:
+        entry[CacheKey.DATA] = entry[CacheKey.DATA].encode()
+
+    dst = RAMFileCacheStore()
+
+    class _WS:
+        pass
+
+    ws = _WS()
+    ws._cache = dst
+    _restore_cache(ws, {"cache": {"entries": revived}})
+
+    assert dst._entries["/none"].fingerprint is None
+    assert not await dst.is_fresh("/none", hashlib.md5(b"data").hexdigest())
+    assert await dst.is_fresh("/tok", "etag-1")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored", ["", None])
+async def test_a_restored_entry_folds_a_tokenless_spelling_like_a_write(
+        stored):
+    # The snapshot is a third door into the entry table, and it has to
+    # agree with `set`/`add` about what "no token" is. A document is not
+    # obliged to spell it the way this version does: an older writer
+    # stored `""`, and an entry restored holding it would answer
+    # `is_fresh(path, "")` with True where a freshly written one answers
+    # False -- a false FRESH, which is the one direction that serves wrong
+    # bytes.
+    from mirage.workspace.snapshot.keys import CacheKey
+    from mirage.workspace.snapshot.state import _restore_cache
+
+    cache = RAMFileCacheStore()
+
+    class _WS:
+        pass
+
+    ws = _WS()
+    ws._cache = cache
+    _restore_cache(
+        ws, {
+            "cache": {
+                "entries": [{
+                    CacheKey.KEY: "/a",
+                    CacheKey.DATA: b"x",
+                    CacheKey.FINGERPRINT: stored,
+                    CacheKey.TTL: None,
+                    CacheKey.CACHED_AT: 0,
+                    CacheKey.SIZE: 1,
+                }]
+            }
+        })
+    assert cache._entries["/a"].fingerprint is None
+    assert not await cache.is_fresh("/a", "")
+
+
+@pytest.mark.asyncio
 async def test_an_entry_with_no_token_is_never_fresh():
     cache = RAMFileCacheStore()
     await cache.set("/a", b"data")

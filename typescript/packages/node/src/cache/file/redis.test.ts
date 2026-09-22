@@ -17,6 +17,7 @@ import { CachableAsyncIterator } from '@struktoai/mirage-core/io/cachable_iterat
 import { IOResult } from '@struktoai/mirage-core/io/types'
 import { OpRecord } from '@struktoai/mirage-core/observe/record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { RedisClientType } from 'redis'
 import { RedisFileCacheStore } from './redis.ts'
 
 const REDIS_URL = process.env.REDIS_URL
@@ -47,9 +48,95 @@ describe.skipIf(skip)('RedisFileCacheStore', () => {
     await cache.close()
   })
 
-  // The invalidation guard is exercised in core's ram.test.ts: on this
-  // store nothing suspends between `invalidation.enter` and its `stale`
-  // check once the client is warm, so a writer cannot be parked here.
+  it.each(['set', 'add'] as const)(
+    '%s discards a fill invalidated while it awaited the client',
+    async (method) => {
+      // This store's window is its own: `set` and `add` both
+      // `await this.cacheClient()` between `invalidation.enter` and the
+      // `stale` check. core's ram.test.ts covers the lock path, a
+      // different suspension point, so neither stands in for the other.
+      // (Python's redis store has no await there at all -- see the note in
+      // tests/cache/file/test_redis_cache.py -- so this case is one-host.)
+      //
+      // The client is gated rather than merely raced: letting the
+      // invalidation run to completion while the writer is held is what
+      // separates "the guard discarded the fill" from "the fill landed and
+      // the invalidation deleted it afterwards". Both end with the key
+      // absent, so a racy version of this test passes with the guard
+      // removed -- measured, not assumed.
+      for (const invalidate of [
+        () => cache.clear(),
+        () => cache.remove('pending'),
+        () => cache.evictPrefix('pend'),
+      ]) {
+        const real = cache.cacheClient.bind(cache)
+        let release!: () => void
+        const gate = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        // One-shot: only the writer is held. `clear`, `remove` and
+        // `evictPrefix` reach for the same client, so a gate that held
+        // every call would deadlock the invalidation instead of ordering
+        // it.
+        let held = false
+        cache.cacheClient = async (): Promise<RedisClientType> => {
+          if (!held) {
+            held = true
+            await gate
+          }
+          return real()
+        }
+        // Held across the whole invalidation: the writer has taken its
+        // stamp and is parked inside the gated client, so `invalidate()`
+        // runs to completion before the writer ever reaches its stale
+        // check. Releasing first is what makes this racy and vacuous.
+        const fill = cache[method]('pending', new Uint8Array([1, 2, 3]))
+        await invalidate()
+        release()
+        cache.cacheClient = real
+        await fill
+        expect(await cache.get('pending')).toBeNull()
+        await cache.remove('pending')
+      }
+    },
+  )
+
+  it('a tokenless add still bounds its data key', async () => {
+    // add.lua nests the meta EXPIRE inside the data EXPIRE, so a mistake
+    // in that nesting takes the data key's bound with it. This is the
+    // combination the background drain now reaches: it calls `add` with
+    // whatever latestFingerprint returned -- which may be null -- and the
+    // mount's bound. An immortal tokenless entry is the one thing
+    // `bounded` can never expire.
+    expect(await cache.add('a', new Uint8Array([1]), { ttl: 100 })).toBe(true)
+    const c = await cache.cacheClient()
+    expect(await c.ttl(`${prefix}data:a`)).toBeGreaterThan(0)
+    expect(await c.exists(`${prefix}meta:a`)).toBe(0)
+  })
+
+  it('a losing tokenless add leaves the incumbent token alone', async () => {
+    // The early return has to happen before the meta delete. A drain that
+    // finishes late correctly declines to overwrite a newer fill; if it
+    // still dropped that fill's token on the way out, the survivor would
+    // be unverifiable and a `fresh` mount would refetch it on every read.
+    await cache.set('a', new Uint8Array([2]), { fingerprint: 'etag-new' })
+    expect(await cache.add('a', new Uint8Array([3]))).toBe(false)
+    expect(await cache.get('a')).toEqual(new Uint8Array([2]))
+    expect(await cache.isFresh('a', 'etag-new')).toBe(true)
+  })
+
+  it('a token-bearing set bounds its meta key too', async () => {
+    // The other side of the branch the tokenless case added: when there
+    // IS a token the meta key still has to take the ttl. Leaving it
+    // immortal lets it outlive the data key redis expires, and the next
+    // isFresh then matches a token describing bytes that are gone -- the
+    // same false positive the tokenless delete exists to prevent, one
+    // branch over.
+    await cache.set('a', new Uint8Array([1]), { fingerprint: 'etag-1', ttl: 100 })
+    const c = await cache.cacheClient()
+    expect(await c.ttl(`${prefix}meta:a`)).toBeGreaterThan(0)
+    expect(await c.ttl(`${prefix}data:a`)).toBeGreaterThan(0)
+  })
 
   it('a fill with no token writes no meta key', async () => {
     await cache.set('a', new Uint8Array([1]))

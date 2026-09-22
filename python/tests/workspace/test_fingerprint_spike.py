@@ -148,7 +148,7 @@ def test_a_tokenless_entry_costs_one_extra_get_then_carries_the_etag():
             read=ReadSpec(policy=ReadPolicy.FRESH),
         )
 
-        async def run() -> tuple[int, int, bool]:
+        async def run() -> tuple[int, int]:
             # No `records`: the bytes land in the cache carrying no token,
             # which is exactly what the md5 default used to paper over.
             await ws.apply_io(
@@ -162,17 +162,19 @@ def test_a_tokenless_entry_costs_one_extra_get_then_carries_the_etag():
             io2 = await ws.shell("cat /s3/data.txt")
             await io2.materialize_stdout()
             after_second = client.calls["get_object"]
-            etag = await ws.cache.is_fresh("/s3/data.txt",
-                                           client._etag(b"payload\n"))
-            return after_first - before, after_second - after_first, etag
+            return after_first - before, after_second - after_first
 
-        first, second, carries_etag = asyncio.run(run())
+        first, second = asyncio.run(run())
 
     assert first == 1, "the unverifiable entry is dropped and re-read once"
     assert second == 0, (
-        "and the refetched entry carries the backend ETag, so the read "
+        "and the refetched entry carries a token that matches, so the read "
         "after it is served from cache")
-    assert carries_etag, "the stamped token is the backend's own"
+    # Deliberately not asserting *which* token the refetch stamped: this
+    # mock builds its ETag as md5(content) with an empty suffix, so the
+    # backend's token and a fabricated md5 are the same string and the
+    # claim cannot be tested on this fixture. It is pinned where the suffix
+    # makes the two distinguishable -- test_write_fingerprint.py.
 
 
 def _always_mount(objects):

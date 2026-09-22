@@ -12,6 +12,7 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import { tokenOrNull } from '../../cache/file/utils.ts'
 import { CacheEntry } from '../../cache/file/entry.ts'
 import { RAMFileCacheStore } from '../../cache/file/ram.ts'
 import type { VFS } from '../../vfs/base.ts'
@@ -612,7 +613,12 @@ function restoreCache(ws: Workspace, state: WorkspaceStateDict): void {
       new CacheEntry({
         size: e.size,
         cachedAt: e.cached_at,
-        fingerprint: e.fingerprint,
+        // Folded the way the live write doors fold it: a snapshot is a
+        // third door into the entry table, and a document is not obliged
+        // to spell "no token" the way this version does. An entry restored
+        // holding `''` would answer isFresh(path, '') with true where a
+        // freshly written one answers false.
+        fingerprint: tokenOrNull(e.fingerprint),
         ttl: e.ttl,
       }),
     )
