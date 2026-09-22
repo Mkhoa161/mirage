@@ -14,6 +14,8 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { md5Hex } from '../../utils/hash.ts'
+
 import { CachableAsyncIterator } from '../../io/cachable_iterator.ts'
 import { IOResult } from '../../io/types.ts'
 import { OpRecord } from '../../observe/record.ts'
@@ -138,6 +140,27 @@ describe('backend fingerprint threading', () => {
     const io = new IOResult({ reads: { '/s3/f.txt': stream }, cache: ['/s3/f.txt'] })
     await applyIo(cache, io, undefined, [readRecord('/s3/f.txt', 'etag-multipart-2')])
     expect(await cache.isFresh('/s3/f.txt', 'etag-multipart-2')).toBe(true)
+  })
+
+  it('leaves the entry tokenless when a write token describes other bytes', async () => {
+    // The byte-length guard refuses a token whose length disagrees with the
+    // bytes stored. The entry then carries no token at all, so it matches
+    // neither the refused token nor a hash of its own content -- the
+    // fabricated md5 that used to stand in here was a valid validator only
+    // on a simple-PUT S3 object, by coincidence of ETag format.
+    const cache = new RAMFileCacheStore()
+    const io = new IOResult({
+      writes: { '/s3/f.txt': ENC.encode('new') },
+      cache: ['/s3/f.txt'],
+    })
+    await applyIo(cache, io, undefined, [opRecord('write', '/s3/f.txt', 'etag-put-2', 99)])
+    expect(DEC.decode((await cache.get('/s3/f.txt')) ?? undefined)).toBe('new')
+    expect(await cache.isFresh('/s3/f.txt', 'etag-put-2')).toBe(false)
+    // md5Hex, not node:crypto: this is the exact function the deleted
+    // fallback called, so the assertion pins "the entry does not carry
+    // what the old code would have fabricated" rather than merely "some
+    // md5". It is core's own helper, so the test stays runtime-agnostic.
+    expect(await cache.isFresh('/s3/f.txt', md5Hex(ENC.encode('new')))).toBe(false)
   })
 
   it('preserves the entry fingerprint on a warm re-apply', async () => {

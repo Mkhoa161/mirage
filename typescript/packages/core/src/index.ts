@@ -26,7 +26,6 @@
 // root is typescript/, which leaves the consumers out of view.
 
 export { Accessor } from './accessor/base.ts'
-export { defaultFingerprint } from './cache/file/utils.ts'
 export { IndexEntry } from './cache/index/config.ts'
 export type { RedisIndexConfig } from './cache/index/config.ts'
 export { RedisIndexCacheStore } from './cache/index/redis.ts'

@@ -115,6 +115,68 @@ def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
         "cache; a second get_object means the entry was evicted")
 
 
+def test_a_tokenless_entry_costs_one_extra_get_then_carries_the_etag():
+    """The measured price of storing no token instead of a fabricated md5.
+
+    On s3 the ETag of a simple unencrypted PUT *is* md5(content), so the
+    old fallback was a valid validator there -- the one backend where it
+    was. An entry that reaches the cache with no token (here through the
+    programmatic ``apply_io`` door, which defaults ``records=None``) can
+    no longer claim freshness, so the next read under ``fresh`` refetches
+    once. After that the entry carries the backend's own ETag and the
+    read after it is served from cache: the cost is one GET, once, not a
+    refetch per read.
+
+    The TypeScript twin lives in
+    ``packages/node/src/vfs/s3/s3_consistency.test.ts`` rather than beside
+    this file's port, because that is where the s3 mock harness and the
+    other GET-count pins are.
+    """
+    store = {"data.txt": b"payload\n"}
+    session = MultiBucketSession({"test-bucket": store})
+    client = session._client
+    with patch_s3_session(session):
+        config = S3Config(
+            bucket="test-bucket",
+            region="us-east-1",
+            aws_access_key_id="fake",
+            aws_secret_access_key="fake",
+        )
+        ws = Workspace(
+            {"/s3": (S3VFS(config), MountMode.WRITE)},
+            mode=MountMode.WRITE,
+            read=ReadSpec(policy=ReadPolicy.FRESH),
+        )
+
+        async def run() -> tuple[int, int]:
+            # No `records`: the bytes land in the cache carrying no token,
+            # which is exactly what the md5 default used to paper over.
+            await ws.apply_io(
+                IOResult(reads={"/s3/data.txt": b"payload\n"},
+                         cache=["/s3/data.txt"]))
+            assert not await ws.cache.is_fresh("/s3/data.txt", "anything")
+            before = client.calls["get_object"]
+            io1 = await ws.shell("cat /s3/data.txt")
+            await io1.materialize_stdout()
+            after_first = client.calls["get_object"]
+            io2 = await ws.shell("cat /s3/data.txt")
+            await io2.materialize_stdout()
+            after_second = client.calls["get_object"]
+            return after_first - before, after_second - after_first
+
+        first, second = asyncio.run(run())
+
+    assert first == 1, "the unverifiable entry is dropped and re-read once"
+    assert second == 0, (
+        "and the refetched entry carries a token that matches, so the read "
+        "after it is served from cache")
+    # Deliberately not asserting *which* token the refetch stamped: this
+    # mock builds its ETag as md5(content) with an empty suffix, so the
+    # backend's token and a fabricated md5 are the same string and the
+    # claim cannot be tested on this fixture. It is pinned where the suffix
+    # makes the two distinguishable -- test_write_fingerprint.py.
+
+
 def _always_mount(objects):
     config = S3Config(
         bucket="test-bucket",

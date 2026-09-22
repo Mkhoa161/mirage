@@ -1563,6 +1563,40 @@
         "stdout": "1: [a]\n2: [b]\n3: [c]\n4: [d\n]\n",
         "stderr": ""
       }
+    },
+    {
+      "id": "awk_interp_begin_assign_float",
+      "seq": 991246,
+      "targets": [
+        "ram",
+        "disk",
+        "redis",
+        "opfs",
+        "s3",
+        "databricks",
+        "gridfs",
+        "s3-prefix",
+        "databricks-prefix",
+        "gridfs-prefix",
+        "hf",
+        "hf-prefix",
+        "dropbox",
+        "dropbox-root",
+        "onedrive",
+        "sharepoint",
+        "sharepoint-prefix",
+        "ssh",
+        "nextcloud",
+        "gdrive",
+        "gdrive-folder",
+        "box"
+      ],
+      "command": "awk 'BEGIN {a=7*7.172100067138672; print a}'",
+      "expect": {
+        "exit": 0,
+        "stdout": "50.2047\n",
+        "stderr": ""
+      }
     }
   ]
 }

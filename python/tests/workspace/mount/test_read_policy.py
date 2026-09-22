@@ -229,8 +229,8 @@ def test_fresh_is_refused_on_a_backend_that_caches_but_stamps_nothing():
 def test_fresh_is_refused_on_ssh_rather_than_warned():
     # #1101 Q8 recommended warn-and-serve on the grounds that ssh's mtime
     # is forgeable but usable. It is worse than that: ssh stamps no read
-    # fingerprint at all, so a cached entry holds md5(content) against an
-    # mtime stat token and fresh would refetch on every read, forever.
+    # fingerprint at all, so a cached entry holds no token to compare
+    # against an mtime stat token and fresh would refetch on every read.
     vfs = SSHVFS(SSHConfig(host="h", username="u"))
     assert vfs.caches_reads is True
     with pytest.raises(ValueError) as exc:

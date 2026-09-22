@@ -182,8 +182,8 @@ export interface S3Mock {
  *
  * `etagSuffix` mirrors the python mock's `MultiBucketS3Client.etag_suffix`:
  * a non-empty value makes every ETag differ from md5(content), the way a
- * multipart or SSE-KMS upload's does, so a test can tell a backend token
- * apart from the cache's md5 default.
+ * multipart or SSE-KMS upload's does, so a test can tell a real backend
+ * token apart from a fabricated md5 of the content.
  */
 export interface S3MockOptions {
   etagSuffix?: string
@@ -206,7 +206,14 @@ export function installS3Mock(
     const data = store.get(input.Bucket, input.Key)
     if (data === undefined) throw notFound()
     const sliced = sliceRange(data, input.Range)
-    return Promise.resolve({ Body: mockBody(sliced), ContentLength: sliced.byteLength })
+    // From the whole object, never the slice: an ETag describes the object,
+    // and real S3 (and the python mock) return it on GetObject too. Without
+    // it a read stamps no token and the cache entry carries none.
+    return Promise.resolve({
+      Body: mockBody(sliced),
+      ContentLength: sliced.byteLength,
+      ETag: etag(data),
+    })
   })
 
   mock.on(HeadObjectCommand).callsFake((input: { Bucket: string; Key: string }) => {

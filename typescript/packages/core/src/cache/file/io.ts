@@ -37,8 +37,10 @@ export function withCacheMutation<T>(cache: FileCache, fn: () => Promise<T>): Pr
  * Backends stamp a read record with the content identifier they returned
  * (S3 ETag, OneDrive cTag, Postgres sha256), and an object-store write
  * record with the token its PUT answered. Threading it into the cache
- * entry lets a `fresh` mount's `isFresh` compare like with like; the
- * MD5-of-content default only matches simple-PUT S3 objects.
+ * entry lets a `fresh` mount's `isFresh` compare like with like. null means
+ * the bytes carry no token, and the entry then stores none: an unverifiable
+ * copy is dropped and re-read, which is what a fabricated one produced
+ * anyway on every backend whose token is not an md5 of the content.
  *
  * `ops` is the direction the caller took, never both. One line's records
  * span every statement and pipeline segment (`IOResult.merge` unions

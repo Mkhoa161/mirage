@@ -23,7 +23,7 @@ from tests.e2e.s3_mock import MultiBucketSession, patch_s3_session
 
 # Non-empty suffix: the mock's ETag is then NOT md5(content), the way a
 # multipart or SSE-KMS upload's is not, so a cache entry carrying the
-# backend's token is distinguishable from one carrying the md5 default.
+# backend's token is distinguishable from a fabricated md5.
 SUFFIX = "-2"
 
 
@@ -77,7 +77,7 @@ def test_write_record_carries_the_backend_token():
 
 def test_written_path_caches_the_backend_token_not_md5():
     """The cache entry for a path mirage wrote must hold what the PUT
-    answered. Holding md5(content) is only right by accident on a
+    answered. Holding a fabricated md5(content) is only right by accident on a
     simple-PUT object, and never right on a multipart one."""
     store: dict[str, bytes] = {}
     with _workspace(store,
@@ -97,14 +97,16 @@ def test_written_path_caches_the_backend_token_not_md5():
         backend_token, md5_default = asyncio.run(run())
 
     assert backend_token, "the entry must carry the token the PUT answered"
-    assert not md5_default, "and not the md5-of-content default"
+    # The md5 is now simply one of infinitely many tokens the entry does
+    # not carry, rather than the specific wrong answer it used to hold.
+    assert not md5_default, "and not a fabricated md5 of the content"
 
 
 def test_always_reads_a_written_path_from_cache():
     """The cost assertion. With the backend's token on the entry the
-    freshness probe matches and the read is served from cache; with the
-    md5 default it never matches a suffixed ETag, so every read evicts
-    and refetches."""
+    freshness probe matches and the read is served from cache; with no
+    token it never matches a suffixed ETag, so every read evicts and
+    refetches."""
     store: dict[str, bytes] = {}
     with _workspace(store, ReadSpec(policy=ReadPolicy.FRESH)) as (ws, client):
 
