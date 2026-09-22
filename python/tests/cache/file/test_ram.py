@@ -14,10 +14,13 @@
 
 import asyncio
 import hashlib
+import json
 
 import pytest
 
 from mirage.cache.file.ram import RAMFileCacheStore
+from mirage.workspace.snapshot.keys import CacheKey
+from mirage.workspace.snapshot.state import _restore_cache
 
 
 @pytest.mark.asyncio
@@ -268,11 +271,6 @@ async def test_a_snapshot_round_trip_preserves_both_token_states():
     # a tokenless entry that came back holding md5(data) would read as
     # FRESH on a simple-PUT S3 object, and a token-bearing entry that came
     # back holding None would refetch forever. Both are silent.
-    import json
-
-    from mirage.workspace.snapshot.keys import CacheKey
-    from mirage.workspace.snapshot.state import _restore_cache
-
     src = RAMFileCacheStore()
     await src.set("/none", b"data")
     await src.set("/tok", b"data", fingerprint="etag-1")
@@ -316,9 +314,6 @@ async def test_a_restored_entry_folds_a_tokenless_spelling_like_a_write(
     # `is_fresh(path, "")` with True where a freshly written one answers
     # False -- a false FRESH, which is the one direction that serves wrong
     # bytes.
-    from mirage.workspace.snapshot.keys import CacheKey
-    from mirage.workspace.snapshot.state import _restore_cache
-
     cache = RAMFileCacheStore()
 
     class _WS:

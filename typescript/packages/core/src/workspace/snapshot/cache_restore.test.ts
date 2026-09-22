@@ -35,8 +35,12 @@ describe('a cache entry restored from a snapshot', () => {
       try {
         await ws.cache.set('/m/a.txt', ENC.encode('x'), { fingerprint: 'etag-1' })
         const state = await toStateDict(ws)
-        expect(state.cache.entries).toHaveLength(1)
-        state.cache.entries[0]!.fingerprint = stored
+        const [entry] = state.cache.entries
+        // Throws rather than asserts so the narrowing is real: a capture
+        // that stopped emitting the entry would otherwise edit nothing and
+        // the test would pass having restored an empty table.
+        if (entry === undefined) throw new Error('snapshot captured no cache entry')
+        entry.fingerprint = stored
         await applyStateDict(ws, state, { replaceCache: true })
         expect(await ws.cache.isFresh('/m/a.txt', '')).toBe(false)
         expect(await ws.cache.isFresh('/m/a.txt', 'etag-1')).toBe(false)

@@ -26,7 +26,7 @@ describe('tokenOrNull', () => {
     ['', null],
     ['etag-1', 'etag-1'],
   ])('folds %j to %j', (input, expected) => {
-    expect(tokenOrNull(input as string | null | undefined)).toBe(expected)
+    expect(tokenOrNull(input)).toBe(expected)
   })
 })
 
@@ -38,7 +38,7 @@ describe('parseLimit', () => {
     ['2MB', 2 * 1024 * 1024],
     ['1GB', 1024 * 1024 * 1024],
   ])('parses %j as %i bytes', (input, expected) => {
-    expect(parseLimit(input as string | number)).toBe(expected)
+    expect(parseLimit(input)).toBe(expected)
   })
 })
 
