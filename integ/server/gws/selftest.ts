@@ -240,6 +240,7 @@ function compatibilityDirect(): void {
   check('direct Sheets exposes pixel metadata', arr(whole.columnMetadata).length === 26)
   for (const failure of [
     { unsupported: {} },
+    { constructor: {} },
     { autoResizeDimensions: { dimensions: { sheetId: 99, dimension: 'ROWS' } } },
   ]) {
     const before = structuredClone(st.sheets.get(file.id))

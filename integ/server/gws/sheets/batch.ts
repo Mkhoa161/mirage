@@ -218,7 +218,7 @@ export function sheetsBatchUpdate(st: GwsState, id: string, requests: JsonObj[])
         'INVALID_ARGUMENT',
       )
     }
-    const handler = HANDLERS[kind]
+    const handler = Object.hasOwn(HANDLERS, kind) ? HANDLERS[kind] : undefined
     if (handler === undefined) return unsupported(kind, index)
     const reply = handler(sheet, asObj(request[kind]), { index, kind })
     if (isReply(reply)) return reply
