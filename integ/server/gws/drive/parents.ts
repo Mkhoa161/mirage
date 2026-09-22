@@ -58,15 +58,26 @@ function within(st: GwsState, id: string, folder: string): boolean {
 // old one whether or not the caller removed it, because the item keeps one
 // parent; adding the parent it is also removing cancels out; removing the
 // only parent lands it in the root; removing a parent it lacks is a no-op.
-// A folder cannot move under itself.
+// A folder cannot move under itself, nor from My Drive into a shared drive
+// (Drive documents that refusal). A shared drive's top-level folder has no
+// parent to change; its refusal is Drive's documented permission error, not
+// probed, because a consumer account cannot create a shared drive.
 export function movedParents(
   st: GwsState,
   item: DriveItem,
   add: readonly string[],
   remove: readonly string[],
 ): string[] | Reply {
+  if (add.length === 0 && remove.length === 0) return item.parents
   const refused = refuseParents(st, add)
   if (refused !== null) return refused
+  if (st.drives.has(item.id)) {
+    return driveError(
+      403,
+      `The user does not have sufficient permissions for file ${item.id}.`,
+      'insufficientFilePermissions',
+    )
+  }
   const target = add.find((id) => !remove.includes(id))
   if (target === undefined) {
     const kept = item.parents.filter((p) => !remove.includes(p))
@@ -74,6 +85,14 @@ export function movedParents(
   }
   if (item.mimeType === FOLDER_MIME && within(st, target, item.id)) {
     return driveError(400, 'Bad Request', 'badRequest')
+  }
+  const intoDrive = st.files.get(target)?.driveId !== undefined
+  if (item.mimeType === FOLDER_MIME && item.driveId === undefined && intoDrive) {
+    return driveError(
+      403,
+      'Moving folders into shared drives is not supported.',
+      'teamDrivesFolderMoveInNotSupported',
+    )
   }
   return [target]
 }

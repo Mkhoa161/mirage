@@ -755,39 +755,66 @@ async function gridRangesHttp(at: string): Promise<void> {
 async function driveMoveHttp(at: string): Promise<void> {
   const base = `${at}/_run/drivemove`
   check('drive move world seeds', (await reset(base, { tenants: ['t1'], epoch: EPOCH })) === 200)
-  const drive = String(obj((await post(`${base}/drive/v3/drives`, 't1', { name: 'Team' })).body).id)
-  const folder = String(
-    obj(
-      (
-        await post(`${base}/drive/v3/files`, 't1', {
-          name: 'Carry',
-          mimeType: 'application/vnd.google-apps.folder',
-        })
-      ).body,
-    ).id,
-  )
-  await post(`${base}/drive/v3/files`, 't1', { name: 'Child', parents: [folder] })
-  const move = (to: string): ReturnType<typeof api> =>
-    api(`${base}/drive/v3/files/${folder}?addParents=${to}`, 't1', { method: 'PATCH', body: '{}' })
-  const inDrive = async (): Promise<string[]> => {
-    const got = await api(`${base}/drive/v3/files?driveId=${drive}&corpora=drive`, 't1')
+  const FOLDER = 'application/vnd.google-apps.folder'
+  const idOf = async (path: string, body: JsonValue): Promise<string> =>
+    String(obj((await post(`${base}${path}`, 't1', body)).body).id)
+  const patch = (id: string, query: string, body: JsonValue = {}): ReturnType<typeof api> =>
+    api(`${base}/drive/v3/files/${id}?${query}`, 't1', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    })
+  const listed = async (driveId?: string): Promise<string[]> => {
+    const query = driveId === undefined ? '' : `?driveId=${driveId}&corpora=drive`
+    const got = await api(`${base}/drive/v3/files${query}`, 't1')
     return field(obj(got.body).files, 'name')
-      .filter((name) => name !== 'Team')
+      .filter((name) => name !== 'Team' && name !== 'Other')
       .sort()
   }
-  eq('drive move: a folder moves into a shared drive', (await move(drive)).status, 200)
-  eq('drive move: it lists there with its child', await inDrive(), ['Carry', 'Child'])
-  eq('drive move: and no longer in My Drive', await fileNames(base, 't1'), [])
-  eq('drive move: it moves back', (await move('root')).status, 200)
-  eq('drive move: back in My Drive with its child', (await fileNames(base, 't1')).sort(), [
-    'Carry',
-    'Child',
+  const refusal = (reply: { status: number; body: JsonValue }): JsonValue => [
+    reply.status,
+    String(obj(arr(obj(obj(reply.body).error).errors)[0]).reason),
+  ]
+  const team = await idOf('/drive/v3/drives', { name: 'Team' })
+  const other = await idOf('/drive/v3/drives', { name: 'Other' })
+  const stay = await idOf('/drive/v3/files', { name: 'Stay', mimeType: FOLDER })
+  const loose = await idOf('/drive/v3/files', { name: 'Loose', mimeType: 'text/plain' })
+  const carry = await idOf('/drive/v3/files', { name: 'Carry', mimeType: FOLDER, parents: [team] })
+  await idOf('/drive/v3/files', { name: 'Child', mimeType: 'text/plain', parents: [carry] })
+
+  eq(
+    'drive move: a My Drive folder cannot move into a shared drive',
+    refusal(await patch(stay, `addParents=${team}`)),
+    [403, 'teamDrivesFolderMoveInNotSupported'],
+  )
+  eq('drive move: a My Drive file can', (await patch(loose, `addParents=${team}`)).status, 200)
+  eq('drive move: the shared drive lists it', await listed(team), ['Carry', 'Child', 'Loose'])
+  eq('drive move: My Drive keeps the refused folder', await listed(), ['Stay'])
+  eq(
+    'drive move: a folder moves between shared drives',
+    (await patch(carry, `addParents=${other}`)).status,
+    200,
+  )
+  eq('drive move: its child goes with it', await listed(other), ['Carry', 'Child'])
+  eq('drive move: and leaves the drive it came from', await listed(team), ['Loose'])
+  eq('drive move: it moves out to My Drive', (await patch(carry, 'addParents=root')).status, 200)
+  eq('drive move: with its child', await listed(), ['Carry', 'Child', 'Stay'])
+  eq(
+    'drive move: files.update renames a drive root',
+    (await patch(team, '', { name: 'Team' })).status,
+    200,
+  )
+  eq('drive move: a drive root cannot move', refusal(await patch(team, 'addParents=root')), [
+    403,
+    'insufficientFilePermissions',
   ])
-  eq('drive move: and gone from the shared drive', await inDrive(), [])
-  await api(`${base}/drive/v3/drives/${drive}`, 't1', { method: 'DELETE' })
-  eq('drive move: deleting the drive keeps what left it', (await fileNames(base, 't1')).sort(), [
+  eq('drive move: the drive still holds its files', await listed(team), ['Loose'])
+  for (const id of [team, other]) {
+    await api(`${base}/drive/v3/drives/${id}`, 't1', { method: 'DELETE' })
+  }
+  eq('drive move: deleting the drives keeps what left them', await listed(), [
     'Carry',
     'Child',
+    'Stay',
   ])
 }
 
