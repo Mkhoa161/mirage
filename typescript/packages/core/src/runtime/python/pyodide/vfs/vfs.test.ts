@@ -501,11 +501,13 @@ _errnos = ','.join(map(str, _errnos))
     await py.runPythonAsync(`
 import os
 _st = os.stat('${p}late.json')
+_perm = _st.st_mode & 0o7777
+_size = _st.st_size
 _body = open('${p}late.json').read()
 `)
     expect(py.globals.get('_body')).toBe('{"id": 7}')
-    expect(py.globals.get('_st').st_mode & 0o7777).toBe(STORE_MODE)
-    expect(py.globals.get('_st').st_size).toBe(9)
+    expect(py.globals.get('_perm')).toBe(STORE_MODE)
+    expect(py.globals.get('_size')).toBe(9)
   })
 
   // Over a worker the node is placed from the listing and its stat is the

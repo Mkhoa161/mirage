@@ -154,6 +154,10 @@ export class RuntimeVFS {
   private readonly dispatch: BridgeDispatchFn
   private readonly resolver: MountResolver
   private readonly noAppend = new Set<string>()
+  // One cap for every listing this door classifies, so listings that
+  // run together (a preload walking a tree) share it rather than each
+  // bringing its own.
+  private readonly classifying = new ConcurrencyLimiter(LISTING_ENTRY_CONCURRENCY)
 
   constructor(dispatch: BridgeDispatchFn, resolver: MountResolver = new PrefixResolver(() => [])) {
     this.dispatch = dispatch
@@ -226,9 +230,10 @@ export class RuntimeVFS {
    * A backend that slash-marks directories skips the stat; every other
    * entry is classified by its own stat, which is RAM when the readdir
    * filled the index and a backend request when the mount keeps none.
-   * At most `LISTING_ENTRY_CONCURRENCY` of those run at once, so a large
-   * directory on an unindexed mount does not put every entry's request
-   * on the wire together.
+   * At most `LISTING_ENTRY_CONCURRENCY` of those run at once across
+   * every listing this door serves, so a large directory on an
+   * unindexed mount does not put every entry's request on the wire
+   * together.
    *
    * An entry whose stat fails, for any reason, rides unclassified: a
    * size-0 non-directory with no mode and no stamp, the row that says
@@ -264,7 +269,6 @@ export class RuntimeVFS {
     // (ENOENT, or a link cycle the namespace refuses to resolve) must
     // fail as readdir, not as the mark read.
     const links = this.resolver.linkChildren(path)
-    const limiter = new ConcurrencyLimiter(LISTING_ENTRY_CONCURRENCY)
     return await Promise.all(
       out.map(async (raw): Promise<VFSEntry> => {
         if (typeof raw !== 'string') {
@@ -276,7 +280,7 @@ export class RuntimeVFS {
         if (raw.endsWith('/')) return { path: raw, size: 0, isDir: true, ...linked }
         const unclassified: VFSEntry = { path: raw, size: 0, isDir: false, ...linked }
         if (!classify) return unclassified
-        const release = await limiter.acquire()
+        const release = await this.classifying.acquire()
         let st: VFSStat
         try {
           st = await this.stat(raw)

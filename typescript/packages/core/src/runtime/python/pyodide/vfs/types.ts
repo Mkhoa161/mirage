@@ -91,11 +91,7 @@ export interface FSNode {
   contents?: Uint8Array
   usedBytes?: number
   unreadable?: boolean
-  /**
-   * Placed from a listing row the door could not classify, so its kind,
-   * size and stamps are a guess. `getattr` asks the mount before it
-   * answers, and the guess never reaches the guest as a stat.
-   */
+  /** Placed from an unclassified listing row; `getattr` asks the mount first. */
   unclassified?: boolean
   loaded?: boolean
   /**

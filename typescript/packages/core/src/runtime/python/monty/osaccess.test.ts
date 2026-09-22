@@ -516,6 +516,20 @@ describe('MirageOSAccess mounted open and append', () => {
     expect(calls).toEqual([['/ram/x/y', { parents: true }]])
   })
 
+  // RAM lists a directory as a bare name, and the listing no longer
+  // stats it, so the kind has to come from the path's own stat.
+  it('refuses to open a mounted directory listed without a slash', async () => {
+    const access = accessOn(listing(['/ram/d', '/ram/d/a.txt'], ['/ram/d']))
+    await expect(Promise.resolve(access.handle('open', ['/ram/d', 'r']))).rejects.toThrow(
+      '[Errno 21] Is a directory',
+    )
+  })
+
+  it('mkdir under exist_ok accepts a mounted directory listed without a slash', async () => {
+    const access = accessOn(listing(['/ram/d', '/ram/d/a.txt'], ['/ram/d']))
+    expect(await access.handle('Path.mkdir', ['/ram/d'], { exist_ok: true })).toBeNull()
+  })
+
   it('mkdir on an existing file raises FileExistsError even under exist_ok', async () => {
     const dispatch = listing(['/ram/a.txt'])
     const access = accessOn(dispatch)
