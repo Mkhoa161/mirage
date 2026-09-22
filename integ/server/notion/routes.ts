@@ -24,6 +24,8 @@ import {
   retrieveDataSource,
   retrieveDatabase,
   retrievePage,
+  retrieveUser,
+  listUsers,
   search,
   unauthorized,
   whoami,
@@ -58,6 +60,8 @@ function write(method: string, path: string, handler: KitHandler<C>): KitRoute<C
 export function notionRoutes(): KitRoute<C>[] {
   return [
     get('/v1/users/me', whoami),
+    get('/v1/users/:id', retrieveUser),
+    get('/v1/users', listUsers),
     get('/v1/pages/:id/markdown', pageMarkdown),
     get('/v1/pages/:id', retrievePage),
     get('/v1/data_sources/:id', retrieveDataSource),

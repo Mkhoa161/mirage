@@ -23,6 +23,7 @@ import type { Ctx, Minter, Reply } from '../kit/typescript/index.ts'
 import type { C } from './config.ts'
 import { MAX_PAGE_SIZE } from './config.ts'
 import {
+  fillSchema,
   normalizeBlockPayload,
   normalizeProperties,
   persistSchema,
@@ -33,7 +34,7 @@ import {
 } from './props.ts'
 import { markdownOf, metaOf } from './store.ts'
 import { markdownToBlocks, richToMd } from './text.ts'
-import { markdownReply } from './reads.ts'
+import { apiVersion, markdownReply } from './reads.ts'
 import type {
   BlockSpec,
   BlockRow,
@@ -48,10 +49,12 @@ import {
   asObject,
   blockJson,
   commentJson,
+  cursorOf,
   databaseIdOf,
   defaultUrl,
   intOr,
   idAt,
+  listJson,
   mintId,
   notFound,
   pageJson,
@@ -64,6 +67,7 @@ async function createPage(
   meta: MetaRow,
   minter: Minter,
   body: Json,
+  version: string,
 ): Promise<Reply> {
   const children = validateChildren(body.children === undefined ? [] : body.children)
   if (!Array.isArray(children)) return children
@@ -133,7 +137,9 @@ async function createPage(
       parentType,
       parentId,
       titleText: title,
-      propertiesJson: JSON.stringify(properties),
+      propertiesJson: JSON.stringify(
+        owner === null ? properties : fillSchema(properties, schema, meta),
+      ),
       iconJson: body.icon !== undefined ? JSON.stringify(body.icon) : null,
       coverJson: body.cover !== undefined ? JSON.stringify(body.cover) : null,
       createdTime: meta.createdTime,
@@ -163,7 +169,7 @@ async function createPage(
   }
   if (specs.length > 0) await insertChildren(db, tenant, meta, minter, id, specs, 0)
   const created = (await db.notionPage.findFirst({ where: { tenant, id } })) as PageRow
-  return { status: 200, body: pageJson(created) }
+  return { status: 200, body: pageJson(created, version) }
 }
 
 async function appendChildren(
@@ -221,10 +227,7 @@ async function appendChildren(
     })
     results = fromAnchor.map((row) => blockJson(row as BlockRow))
   }
-  return {
-    status: 200,
-    body: { object: 'list', results, has_more: false, next_cursor: null },
-  }
+  return { status: 200, body: listJson(results, null, 'block') }
 }
 
 async function insertChildren(
@@ -335,7 +338,7 @@ async function listComments(db: C, tenant: string, q: URLSearchParams): Promise<
     orderBy: [{ position: 'asc' }, { id: 'asc' }],
   })) as CommentRow[]
   const size = intOr(q.get('page_size'), MAX_PAGE_SIZE)
-  return { status: 200, body: pageOf(rows.map(commentJson), q.get('start_cursor'), size) }
+  return pageOf(rows.map(commentJson), cursorOf(q.get('start_cursor')), size, 'comment')
 }
 
 // A child page is one object in two tables (see the schema's NotionPage note),
@@ -426,7 +429,13 @@ async function updateBlock(db: C, tenant: string, id: string, body: Json): Promi
   }
 }
 
-async function updatePage(db: C, tenant: string, id: string, body: Json): Promise<Reply> {
+async function updatePage(
+  db: C,
+  tenant: string,
+  id: string,
+  body: Json,
+  version: string,
+): Promise<Reply> {
   const row = (await db.notionPage.findFirst({ where: { tenant, id } })) as PageRow | null
   if (row === null) return notFound('page', id)
   const data: Record<string, unknown> = {}
@@ -453,7 +462,7 @@ async function updatePage(db: C, tenant: string, id: string, body: Json): Promis
   if (body.cover !== undefined) data.coverJson = JSON.stringify(body.cover)
   await db.notionPage.update({ where: { tenant_id: { tenant, id } }, data })
   const updated = (await db.notionPage.findFirst({ where: { tenant, id } })) as PageRow
-  return { status: 200, body: pageJson(updated) }
+  return { status: 200, body: pageJson(updated, version) }
 }
 
 // The route-shaped wrappers. Every write reads the same three pieces of
@@ -462,11 +471,12 @@ async function updatePage(db: C, tenant: string, id: string, body: Json): Promis
 // parsed body.
 export async function createPageRoute(ctx: Ctx<C>): Promise<Reply> {
   const meta = await metaOf(ctx.db, ctx.tenant)
-  return createPage(ctx.db, ctx.tenant, meta, ctx.minter, asObject(ctx.json()))
+  return createPage(ctx.db, ctx.tenant, meta, ctx.minter, asObject(ctx.json()), apiVersion(ctx))
 }
 
 export async function updatePageRoute(ctx: Ctx<C>): Promise<Reply> {
-  return updatePage(ctx.db, ctx.tenant, ctx.params.id ?? '', asObject(ctx.json()))
+  const id = ctx.params.id ?? ''
+  return updatePage(ctx.db, ctx.tenant, id, asObject(ctx.json()), apiVersion(ctx))
 }
 
 export async function appendChildrenRoute(ctx: Ctx<C>): Promise<Reply> {
