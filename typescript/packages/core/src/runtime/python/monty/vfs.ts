@@ -295,7 +295,8 @@ export class MontyVFS {
    * classified by the path's own stat: one request for the path asked
    * about, never one per sibling. A link row takes its target's kind
    * the same way, since the stat follows it; a dangling one keeps its
-   * own row, because the name is there even when its target is not.
+   * own row, with no mode, because the name is there even when its
+   * target is not.
    */
   async entryFor(path: string): Promise<VFSEntry | null> {
     if (this.missing.has(path)) return null

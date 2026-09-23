@@ -544,6 +544,20 @@ describe('MirageOSAccess mounted open and append', () => {
     expect(dispatch.mock.calls.some(([op]) => op === 'create')).toBe(false)
   })
 
+  // A read follows the link, so a dangling one fails at open, as POSIX
+  // and python's monty answer, rather than handing back a handle whose
+  // first read fails.
+  it('refuses a read open of a dangling link it listed', async () => {
+    const dispatch = vi.fn<BridgeDispatchFn>((op, path) => {
+      if (op === 'readdir') return Promise.resolve(['/ram/lnk'])
+      return Promise.reject(Object.assign(new Error(`gone: ${path}`), { code: 'ENOENT' }))
+    })
+    const access = accessOn(dispatch, {}, ['/ram'], ['lnk'])
+    await expect(Promise.resolve(access.handle('open', ['/ram/lnk', 'r']))).rejects.toThrow(
+      '[Errno 2] No such file or directory',
+    )
+  })
+
   it('mkdir on an existing file raises FileExistsError even under exist_ok', async () => {
     const dispatch = listing(['/ram/a.txt'])
     const access = accessOn(dispatch)
