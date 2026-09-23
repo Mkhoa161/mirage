@@ -49,6 +49,10 @@ const SCRIPT = [
   'rm /m/m/moved.txt',
   'mkdir /m/m/e; rmdir /m/m/e',
   'mkdir /m/m/d; touch /m/m/d/f; rm -r /m/m/d',
+  'gzip -k /m/m/k.txt',
+  'gunzip -k -f /m/m/k.txt.gz',
+  'split -l 1 /m/m/k.txt /m/m/x',
+  'csplit -f /m/m/cs /m/m/k.txt 2',
 ]
 
 // Namespace ops record against the enclosing frame, not the backend.
@@ -65,6 +69,23 @@ const EXEMPT = new Set([
 const K = '/m/m/k.txt'
 const NEW = '/m/m/new.txt'
 const C = '/m/m/c.txt'
+const GZ = '/m/m/k.txt.gz'
+
+// gzip, gunzip, split and csplit build their output spec from the operand's
+// key; each output must still be recorded under its virtual path.
+const GENERIC_OUT: [string, string][] = [
+  ['read', K],
+  ['write', GZ],
+  ['read', GZ],
+  ['write', K],
+  ['read', K],
+  ['write', '/m/m/xaa'],
+  ['write', '/m/m/xab'],
+  ['write', '/m/m/xac'],
+  ['read', K],
+  ['write', '/m/m/cs00'],
+  ['write', '/m/m/cs01'],
+]
 
 function underM(records: readonly OpRecord[]): [string, string][] {
   return records
@@ -102,6 +123,7 @@ const NATIVE_APPEND: [string, string][] = [
   ['read', K],
   ['read', K],
   ['write', '/m/m/d/f'],
+  ...GENERIC_OUT,
 ]
 
 describe('record paths name the virtual path (node backends)', () => {
@@ -155,6 +177,7 @@ describe('record paths name the virtual path (node backends)', () => {
         ['rmdir', '/m/m/e'],
         ['write', '/m/m/d/f'],
         ['rm_r', '/m/m/d'],
+        ...GENERIC_OUT,
         ['create', C],
         ['read', C],
         ['write', C],
@@ -182,12 +205,13 @@ describe('record paths name the virtual path (node backends)', () => {
       ['write', NEW],
       ['write', '/m/m/k2.txt'],
       ['write', '/m/m/d/f'],
+      ...GENERIC_OUT.filter(([op]) => op === 'write'),
       ['write', C],
     ])
   })
 })
 
-// T1a's script plus reads of a mount-root key. A record made with the
+// T1a's script plus reads and writes of a mount-root key. A record made with the
 // mount-relative key `/k2.txt` resolves to `/`, not `/m`, so every record
 // must resolve to the mount whose id it carries.
 const SWEEP = [
@@ -197,6 +221,12 @@ const SWEEP = [
   'wc -c /m/k2.txt',
   'tail -c 1 /m/k2.txt',
   'ls /m/m',
+  'cat /m/k2.txt',
+  'echo y >> /m/k2.txt',
+  'echo z | tee -a /m/k2.txt',
+  'truncate -s 1 /m/k2.txt',
+  'touch /m/k3.txt',
+  'gzip -k /m/k2.txt',
 ]
 
 interface Swept {

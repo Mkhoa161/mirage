@@ -15,6 +15,7 @@
 import { specOf } from '../../spec/builtins.ts'
 import { FlagView } from '../../spec/flag_view.ts'
 import { stripSlash } from '../../../utils/slash.ts'
+import { mountedPath } from '../../../utils/key_prefix.ts'
 import { AsyncLineIterator } from '../../../io/async_line_iterator.ts'
 import { IOResult } from '../../../io/types.ts'
 import { PathSpec } from '../../../types.ts'
@@ -387,6 +388,13 @@ function makePathSpec(virtual: string): PathSpec {
   })
 }
 
+// The output's spec on the operand's mount; stdin-only input has no operand
+// to read a prefix from.
+function outSpec(anchor: PathSpec | undefined, outPath: string): PathSpec {
+  if (anchor === undefined) return makePathSpec(outPath)
+  return mountedPath(anchor, '/' + outPath.replace(/^\/+/, ''))
+}
+
 function outputPath(
   prefix: string,
   suffix: (index: number) => string,
@@ -455,6 +463,7 @@ export async function splitGeneric(
   const fl = new FlagView(opts.flags, specOf('split'))
   if (paths.length > 2) throw extraOperandError(CommandName.SPLIT, paths[2]?.rawPath ?? '')
   const prefixPath = paths.length >= 2 && paths[1] !== undefined ? paths[1].mountPath : 'x'
+  const anchor = paths.length >= 2 ? paths[1] : paths[0]
   const linesValue = fl.asStr('lines')
   const bytesValue = fl.asStr('bytes')
   const numberValue = fl.asStr('number')
@@ -520,7 +529,7 @@ export async function splitGeneric(
     for (const part of chunkParts(all, chunks, separator)) {
       const outPath = outputPath(prefixPath, suffixFn, i, additionalSuffix)
       i += 1
-      await write(makePathSpec(outPath), part)
+      await write(outSpec(anchor, outPath), part)
       writes[outPath] = part
     }
   } else if (byteLimit > 0) {
@@ -533,7 +542,7 @@ export async function splitGeneric(
       while (buf.byteLength >= byteLimit) {
         const outPath = outputPath(prefixPath, suffixFn, fileIdx, additionalSuffix)
         const data = buf.slice(0, byteLimit)
-        await write(makePathSpec(outPath), data)
+        await write(outSpec(anchor, outPath), data)
         writes[outPath] = data
         buf = buf.slice(byteLimit)
         fileIdx += 1
@@ -541,7 +550,7 @@ export async function splitGeneric(
     }
     if (buf.byteLength > 0) {
       const outPath = outputPath(prefixPath, suffixFn, fileIdx, additionalSuffix)
-      await write(makePathSpec(outPath), buf)
+      await write(outSpec(anchor, outPath), buf)
       writes[outPath] = buf
     }
   } else {
@@ -553,7 +562,7 @@ export async function splitGeneric(
       if (lineBuf.length >= linesPerFile) {
         const outPath = outputPath(prefixPath, suffixFn, fileIdx, additionalSuffix)
         const data = joinRecords(lineBuf, separator)
-        await write(makePathSpec(outPath), data)
+        await write(outSpec(anchor, outPath), data)
         writes[outPath] = data
         lineBuf.length = 0
         fileIdx += 1
@@ -562,7 +571,7 @@ export async function splitGeneric(
     if (lineBuf.length > 0) {
       const outPath = outputPath(prefixPath, suffixFn, fileIdx, additionalSuffix)
       const data = joinRecords(lineBuf, separator)
-      await write(makePathSpec(outPath), data)
+      await write(outSpec(anchor, outPath), data)
       writes[outPath] = data
     }
   }

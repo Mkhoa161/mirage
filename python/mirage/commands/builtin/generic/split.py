@@ -17,6 +17,7 @@ from mirage.commands.spec.usage import extra_operand_error
 from mirage.io.async_line_iterator import AsyncLineIterator
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
+from mirage.utils.key_prefix import mounted_path
 
 
 class ChunkKind(Enum):
@@ -418,6 +419,19 @@ def _suffix_name(index: int, alphabet: str, auto: bool, width: int,
     return _to_base(value, alphabet, width)
 
 
+def _out_spec(anchor: PathSpec | None, out_path: str) -> PathSpec:
+    """Spec for an output file on the operand's mount.
+
+    Args:
+        anchor (PathSpec | None): Operand on the executing mount, read for
+            its prefix; None when the only input is stdin.
+        out_path (str): The output's mount-local key.
+    """
+    if anchor is None:
+        return PathSpec.from_str_path(out_path)
+    return mounted_path(anchor, "/" + out_path.lstrip("/"))
+
+
 async def split(
     paths: list[PathSpec],
     *,
@@ -439,6 +453,7 @@ async def split(
         raise extra_operand_error(CommandName.SPLIT, paths[2].raw_path
                                   or paths[2].virtual)
     prefix_name = paths[1].mount_path if len(paths) >= 2 else "x"
+    anchor = paths[1] if len(paths) >= 2 else paths[0] if paths else None
     if lines_per_file == 0 and byte_limit == 0 and chunks is None:
         lines_per_file = 1000
     suffix_fn = partial(
@@ -467,7 +482,7 @@ async def split(
         # N files for `-n N` however short the input is.
         for i, part in enumerate(chunk_parts(all_data, chunks, separator)):
             out_path = (prefix_name + suffix_fn(i) + additional_suffix)
-            await write_bytes(PathSpec.from_str_path(out_path), part)
+            await write_bytes(_out_spec(anchor, out_path), part)
             writes[out_path] = part
     elif byte_limit > 0:
         buf = bytearray()
@@ -477,14 +492,14 @@ async def split(
                 out_path = (prefix_name + suffix_fn(file_idx) +
                             additional_suffix)
                 data = bytes(buf[:byte_limit])
-                await write_bytes(PathSpec.from_str_path(out_path), data)
+                await write_bytes(_out_spec(anchor, out_path), data)
                 writes[out_path] = data
                 buf = buf[byte_limit:]
                 file_idx += 1
         if buf:
             out_path = (prefix_name + suffix_fn(file_idx) + additional_suffix)
             data = bytes(buf)
-            await write_bytes(PathSpec.from_str_path(out_path), data)
+            await write_bytes(_out_spec(anchor, out_path), data)
             writes[out_path] = data
     else:
         line_buf: list[bytes] = []
@@ -499,14 +514,14 @@ async def split(
                 out_path = (prefix_name + suffix_fn(file_idx) +
                             additional_suffix)
                 data = separator.join(line_buf) + separator
-                await write_bytes(PathSpec.from_str_path(out_path), data)
+                await write_bytes(_out_spec(anchor, out_path), data)
                 writes[out_path] = data
                 line_buf = []
                 file_idx += 1
         if line_buf:
             out_path = (prefix_name + suffix_fn(file_idx) + additional_suffix)
             data = separator.join(line_buf) + separator
-            await write_bytes(PathSpec.from_str_path(out_path), data)
+            await write_bytes(_out_spec(anchor, out_path), data)
             writes[out_path] = data
 
     return None, IOResult(writes=writes)

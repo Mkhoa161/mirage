@@ -41,6 +41,10 @@ SCRIPT = [
     "rm /m/m/moved.txt",
     "mkdir /m/m/e; rmdir /m/m/e",
     "mkdir /m/m/d; touch /m/m/d/f; rm -r /m/m/d",
+    "gzip -k /m/m/k.txt",
+    "gunzip -k -f /m/m/k.txt.gz",
+    "split -l 1 /m/m/k.txt /m/m/x",
+    "csplit -f /m/m/cs /m/m/k.txt 2",
 ]
 
 # Namespace ops record at the door with the virtual path already, so they
@@ -59,6 +63,23 @@ K = "/m/m/k.txt"
 NEW = "/m/m/new.txt"
 DF = "/m/m/d/f"
 C = "/m/m/c.txt"
+GZ = "/m/m/k.txt.gz"
+
+# gzip, gunzip, split and csplit build their output spec from the operand's
+# key; each output must still be recorded under its virtual path.
+_GENERIC_OUT = [
+    ("read", K),
+    ("write", GZ),
+    ("read", GZ),
+    ("write", K),
+    ("read", K),
+    ("write", "/m/m/xaa"),
+    ("write", "/m/m/xab"),
+    ("write", "/m/m/xac"),
+    ("read", K),
+    ("write", "/m/m/cs00"),
+    ("write", "/m/m/cs01"),
+]
 
 # Op sequences were measured by running SCRIPT on each backend; every path is
 # predicted as the operand's virtual path, never copied from the measurement.
@@ -73,6 +94,7 @@ _NATIVE_APPEND = [
     ("read", K),
     ("read", K),
     ("write", DF),
+    *_GENERIC_OUT,
     ("create", C),
     ("append", C),
 ]
@@ -94,13 +116,14 @@ _S3 = [
     ("rmdir", "/m/m/e"),
     ("write", DF),
     ("rm_r", "/m/m/d"),
+    *_GENERIC_OUT,
     ("create", C),
     ("read", C),
     ("write", C),
 ]
 
-# ssh records nothing for tee -a, cat (cached), cp, mv, rm, rmdir, rm -r or
-# the op-door append.
+# ssh records nothing for tee -a, cat (cached), cp, mv, rm, rmdir, rm -r,
+# split's streamed read or the op-door append.
 _SSH = [
     ("write", K),
     ("read", K),
@@ -108,6 +131,8 @@ _SSH = [
     ("write", NEW),
     ("truncate", NEW),
     ("write", DF),
+    *_GENERIC_OUT[:4],
+    *_GENERIC_OUT[5:],
     ("create", C),
 ]
 
@@ -208,7 +233,7 @@ def test_record_paths_are_virtual(ptype, tmp_path):
 
 # A mount-root key: a site that records the mount-relative "/k2.txt" names a
 # path the root mount owns, so the invariant catches it where the key named
-# like its mount (/m/m/k.txt) cannot.
+# like its mount (/m/m/k.txt) cannot. Reads and writes both touch it.
 SWEEP = SCRIPT + [
     "cat /m/k2.txt",
     "head -c 1 /m/k2.txt",
@@ -216,6 +241,11 @@ SWEEP = SCRIPT + [
     "wc -c /m/k2.txt",
     "tail -c 1 /m/k2.txt",
     "ls /m/m",
+    "echo y >> /m/k2.txt",
+    "echo z | tee -a /m/k2.txt",
+    "truncate -s 1 /m/k2.txt",
+    "touch /m/k3.txt",
+    "gzip -k /m/k2.txt",
 ]
 
 

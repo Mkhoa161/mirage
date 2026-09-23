@@ -5,6 +5,7 @@ from mirage.commands.builtin.utils.lines import split_lines
 from mirage.commands.builtin.utils.stream import read_stdin_async
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
+from mirage.utils.key_prefix import mounted_path
 
 
 def _split_by_patterns(
@@ -33,6 +34,19 @@ def _split_by_patterns(
     return parts
 
 
+def _out_spec(anchor: PathSpec | None, out_path: str) -> PathSpec:
+    """Spec for an output file on the operand's mount.
+
+    Args:
+        anchor (PathSpec | None): Operand on the executing mount, read for
+            its prefix; None when the only input is stdin.
+        out_path (str): The output's mount-local key.
+    """
+    if anchor is None:
+        return PathSpec.from_str_path(out_path)
+    return mounted_path(anchor, "/" + out_path.lstrip("/"))
+
+
 async def csplit(
     paths: list[PathSpec],
     patterns: list[str],
@@ -48,6 +62,8 @@ async def csplit(
     suppress_matched: bool = False,
     elide_empty: bool = False,
 ) -> tuple[ByteSource | None, IOResult]:
+    anchor = prefix if isinstance(prefix,
+                                  PathSpec) else (paths[0] if paths else None)
     if isinstance(prefix, PathSpec):
         prefix = prefix.mount_path
     suffix_fmt = suffix_format if suffix_format else f"%0{digits}d"
@@ -67,7 +83,7 @@ async def csplit(
                 continue
             filename = prefix + (suffix_fmt % idx)
             data = ("\n".join(part) + "\n").encode() if part else b""
-            await write_bytes(PathSpec.from_str_path(filename), data)
+            await write_bytes(_out_spec(anchor, filename), data)
             writes[filename] = data
             sizes.append(str(len(data)))
     except Exception:

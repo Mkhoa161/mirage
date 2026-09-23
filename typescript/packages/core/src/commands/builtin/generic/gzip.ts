@@ -14,23 +14,14 @@
 
 import { specOf } from '../../spec/builtins.ts'
 import { FlagView } from '../../spec/flag_view.ts'
-import { stripSlash } from '../../../utils/slash.ts'
+import { mountedPath } from '../../../utils/key_prefix.ts'
 import { IOResult, materialize, type ByteSource } from '../../../io/types.ts'
-import { PathSpec } from '../../../types.ts'
+import type { PathSpec } from '../../../types.ts'
 import { gzip, gunzip } from '../../../utils/compress.ts'
 import type { CommandFnResult, CommandOpts } from '../../config.ts'
 import { resolveSource } from '../utils/stream.ts'
 
 const ENC = new TextEncoder()
-
-function makePathSpec(virtual: string): PathSpec {
-  return new PathSpec({
-    virtual,
-    directory: virtual,
-    vfsPath: stripSlash(virtual),
-    resolved: true,
-  })
-}
 
 function concat(chunks: Uint8Array[]): Uint8Array {
   let total = 0
@@ -95,7 +86,7 @@ export async function gzipGeneric(
       outPath = pStripped + '.gz'
       outData = await gzip(raw)
     }
-    await write(makePathSpec(outPath), outData)
+    await write(mountedPath(p, outPath), outData)
     writes[outPath] = outData
     if (!keep) await unlink(p)
   }

@@ -11,6 +11,7 @@ from mirage.commands.spec.types import FlagValue
 from mirage.io.types import ByteSource, IOResult
 from mirage.types import PathSpec
 from mirage.utils.compress import gzip_compress_stream, gzip_decompress_stream
+from mirage.utils.key_prefix import mounted_path
 
 
 def extract_level(fl: FlagView) -> int:
@@ -75,7 +76,7 @@ async def gzip(
             out_data = zlib.compress(raw,
                                      level=level,
                                      wbits=zlib.MAX_WBITS | 16)
-        await write_bytes(PathSpec.from_str_path(out_path), out_data)
+        await write_bytes(mounted_path(p, out_path), out_data)
         writes[out_path] = out_data
         if not keep:
             await unlink(p)
