@@ -24,8 +24,8 @@ const CHUNK = 1 << 20
 
 export async function read(accessor: DiskAccessor, path: PathSpec): Promise<Uint8Array> {
   const timer = startOp()
-  const virtual = path.mountPath
-  const full = resolveSafe(accessor.root, virtual)
+  const key = path.mountPath
+  const full = resolveSafe(accessor.root, key)
   let data: Buffer
   try {
     data = await readFile(full)
@@ -35,7 +35,7 @@ export async function read(accessor: DiskAccessor, path: PathSpec): Promise<Uint
     }
     throw err
   }
-  record('read', virtual, VFSName.DISK, data.byteLength, timer)
+  record('read', path.virtual, VFSName.DISK, data.byteLength, timer)
   return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
 }
 
@@ -60,8 +60,8 @@ export async function readRange(
   size: number | null,
 ): Promise<Uint8Array> {
   const timer = startOp()
-  const virtual = path.mountPath
-  const full = resolveSafe(accessor.root, virtual)
+  const key = path.mountPath
+  const full = resolveSafe(accessor.root, key)
   let handle
   try {
     handle = await open(full, 'r')
@@ -76,7 +76,7 @@ export async function readRange(
       const buf = Buffer.allocUnsafe(size)
       const { bytesRead } = await handle.read(buf, 0, size, offset)
       const out = new Uint8Array(buf.buffer, buf.byteOffset, bytesRead)
-      record('read', virtual, VFSName.DISK, bytesRead, timer)
+      record('read', path.virtual, VFSName.DISK, bytesRead, timer)
       return out
     }
     const parts: Buffer[] = []
@@ -91,7 +91,7 @@ export async function readRange(
       at += bytesRead
     }
     const joined = Buffer.concat(parts, total)
-    record('read', virtual, VFSName.DISK, total, timer)
+    record('read', path.virtual, VFSName.DISK, total, timer)
     return new Uint8Array(joined.buffer, joined.byteOffset, joined.byteLength)
   } finally {
     await handle.close()

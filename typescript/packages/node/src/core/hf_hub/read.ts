@@ -73,6 +73,6 @@ export async function read(
     : undefined
   const timer = startOp()
   const data = await hubBytes(accessor.token, url, window)
-  record('read', raw, accessor.vfsName, data.length, timer)
+  record('read', path.virtual, accessor.vfsName, data.length, timer)
   return data
 }

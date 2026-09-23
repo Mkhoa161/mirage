@@ -38,5 +38,5 @@ async def create(accessor: DiskAccessor, path_spec: PathSpec) -> None:
     with disk_errors(path_spec.virtual):
         async with aiofiles.open(p, "wb") as f:
             await f.write(b"")
-    record("create", path, "disk", 0, timer)
+    record("create", path_spec.virtual, "disk", 0, timer)
     await invalidate_after_write(path_spec)

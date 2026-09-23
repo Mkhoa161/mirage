@@ -32,5 +32,5 @@ async def truncate(accessor: RAMAccessor, path: PathSpec, length: int) -> None:
         data = b""
     store.files[p] = data[:length].ljust(length, b"\0")
     store.modified[p] = now_iso()
-    record("truncate", path.mount_path, "ram", 0, timer)
+    record("truncate", path.virtual, "ram", 0, timer)
     await invalidate_after_write(path)

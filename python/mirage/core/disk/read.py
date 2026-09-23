@@ -42,7 +42,7 @@ async def read_bytes(accessor: DiskAccessor,
             data = await f.read()
     except FileNotFoundError as exc:
         raise FileNotFoundError(virtual) from exc
-    record("read", path, "disk", len(data), timer)
+    record("read", virtual, "disk", len(data), timer)
     return data
 
 
@@ -71,5 +71,5 @@ async def read_range(accessor: DiskAccessor,
             data = await (f.read() if size is None else f.read(size))
     except FileNotFoundError as exc:
         raise FileNotFoundError(virtual) from exc
-    record("read", path, "disk", len(data), timer)
+    record("read", virtual, "disk", len(data), timer)
     return data

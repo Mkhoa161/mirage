@@ -5,6 +5,7 @@ import mirage.core.msgraph.drive_ops as drive_ops
 import mirage.core.onedrive.write as write_mod
 from mirage.accessor.onedrive import OneDriveAccessor, OneDriveConfig
 from mirage.core.onedrive.write import write_bytes
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 
 
@@ -101,3 +102,23 @@ async def test_upload_resumes_from_next_expected_ranges(monkeypatch):
         await write_bytes(_accessor(), PathSpec.from_str_path("/Docs/a.txt"),
                           b"abcdef")
     assert ranges == ["bytes 0-3/6", "bytes 2-5/6"]
+
+
+@pytest.mark.asyncio
+async def test_write_records_the_virtual_path():
+    # The record carried vfs_path ("m/k.txt", slashless); under a mount
+    # prefix the guess turned it into "/odm/k.txt". No prefix is pushed
+    # here, so the record must already be virtual.
+    spec = PathSpec(virtual="/m/m/k.txt",
+                    directory="/m/m/",
+                    vfs_path="m/k.txt")
+    scope = RecordingScope()
+    try:
+        with aioresponses() as m:
+            m.put(_BASE + "/root:/m/k.txt:/content",
+                  status=201,
+                  payload={"id": "X"})
+            await write_bytes(_accessor(), spec, b"hello")
+    finally:
+        scope.close()
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

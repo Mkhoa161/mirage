@@ -361,7 +361,6 @@ export async function readItem(
   config: MsGraphConfigResolved,
   loc: DriveLoc,
   virtual: string,
-  label: string,
   backend: string,
   offset = 0,
   size: number | null = null,
@@ -389,7 +388,7 @@ export async function readItem(
     } else {
       data = await graphGetBytes(config, loc.item('/content'), window)
     }
-    record('read', label, backend, data.length, timer, { fingerprint, revision })
+    record('read', virtual, backend, data.length, timer, { fingerprint, revision })
     return data
   } catch (error) {
     if (error instanceof GraphError && error.status === 404) throw enoent(virtual)
@@ -401,11 +400,10 @@ export async function* streamItem(
   config: MsGraphConfigResolved,
   loc: DriveLoc,
   virtual: string,
-  label: string,
   backend: string,
 ): AsyncIterable<Uint8Array> {
   const pinned = revisionFor(virtual)
-  const rec = recordStream('read', label, backend)
+  const rec = recordStream('read', virtual, backend)
   let url = loc.item('/content')
   let auth = true
   try {

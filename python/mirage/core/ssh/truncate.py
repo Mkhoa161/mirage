@@ -26,5 +26,5 @@ async def truncate(accessor: SSHAccessor,
     timer = start_op()
     sftp = await accessor.sftp()
     await sftp.truncate(_abs(config, path.mount_path), length)
-    record("truncate", path.mount_path, "ssh", 0, timer)
+    record("truncate", path.virtual, "ssh", 0, timer)
     await invalidate_after_write(path)

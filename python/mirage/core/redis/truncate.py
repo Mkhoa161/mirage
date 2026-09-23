@@ -32,5 +32,5 @@ async def truncate(accessor: RedisAccessor, path: PathSpec,
         data = b""
     await store.set_file(p, data[:length].ljust(length, b"\0"))
     await store.set_modified(p, now_iso())
-    record("truncate", path.mount_path, "redis", 0, timer)
+    record("truncate", path.virtual, "redis", 0, timer)
     await invalidate_after_write(path)

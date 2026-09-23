@@ -37,7 +37,6 @@ export async function readFileVersioned(
   tm: TokenManager,
   fileId: string,
   virtual: string,
-  label: string,
   offset = 0,
   size: number | null = null,
 ): Promise<Uint8Array> {
@@ -55,7 +54,7 @@ export async function readFileVersioned(
   } else {
     data = await downloadFile(tm, fileId, window)
   }
-  record('read', label, 'gdrive', data.length, timer, { fingerprint, revision })
+  record('read', virtual, 'gdrive', data.length, timer, { fingerprint, revision })
   return data
 }
 
@@ -101,7 +100,7 @@ export async function read(
     return sliceWindow(await readSpreadsheet(accessor.tokenManager, entry.id), offset, size)
   if (rt === 'gdrive/gslide')
     return sliceWindow(await readPresentation(accessor.tokenManager, entry.id), offset, size)
-  return readFileVersioned(accessor.tokenManager, entry.id, path.virtual, key, offset, size)
+  return readFileVersioned(accessor.tokenManager, entry.id, path.virtual, offset, size)
 }
 
 export async function* stream(

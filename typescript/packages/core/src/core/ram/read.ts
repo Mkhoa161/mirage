@@ -48,6 +48,6 @@ export function read(
     throw enoent(path)
   }
   const data = offset === 0 && size === null ? whole : sliceWindow(whole, offset, size)
-  record('read', p, VFSName.RAM, data.byteLength, timer)
+  record('read', path.virtual, VFSName.RAM, data.byteLength, timer)
   return Promise.resolve(data)
 }

@@ -22,6 +22,7 @@ from mirage.cache.index.ram import RAMIndexCacheStore
 from mirage.core.gdrive.read import read
 from mirage.core.google.client import TokenManager
 from mirage.core.google.config import GoogleConfig
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 from mirage.utils.ranges import ByteWindow
 
@@ -262,3 +263,32 @@ async def test_read_propagates_parent_refresh_failure(accessor, index):
                          directory="/missing.txt"),
                 index,
             )
+
+
+@pytest.mark.asyncio
+async def test_recorded_read_names_the_virtual_path(accessor, index):
+    # The record must carry the full virtual path; a slashless vfs_path
+    # ("m/k.txt") names no file the cache or a snapshot pin can match.
+    # No recorder prefix is pushed, so nothing can repair the spelling.
+    await index.set_dir("/m/m", [("k.txt",
+                                  IndexEntry(id="file123",
+                                             name="k.txt",
+                                             resource_type="gdrive/file",
+                                             vfs_name="k.txt"))])
+    scope = RecordingScope()
+    try:
+        with patch("mirage.core.gdrive.read.download_file",
+                   new_callable=AsyncMock,
+                   return_value=b"bytes"), \
+             patch("mirage.core.gdrive.read.capture_file_metadata",
+                   new_callable=AsyncMock,
+                   return_value=("fp", "rev")):
+            data = await read(
+                accessor,
+                PathSpec(virtual="/m/m/k.txt",
+                         directory="/m/m/",
+                         vfs_path="m/k.txt"), index)
+    finally:
+        scope.close()
+    assert data == b"bytes"
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

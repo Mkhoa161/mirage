@@ -15,6 +15,7 @@
 import pytest
 
 from mirage.core.hf_buckets.stream import range_read, read_stream
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 
 
@@ -43,3 +44,20 @@ async def test_read_stream_handles_empty_file(make_acc):
         c async for c in read_stream(acc, PathSpec.from_str_path("/empty"))
     ]
     assert b"".join(chunks) == b""
+
+
+@pytest.mark.asyncio
+async def test_stream_records_the_virtual_path(make_acc):
+    # stream recorded mount_path ("/m/k.txt"); the record must name the
+    # virtual path, with no recorder prefix pushed.
+    acc = make_acc({"m/k.txt": b"hello"})
+    spec = PathSpec(virtual="/m/m/k.txt",
+                    directory="/m/m/",
+                    vfs_path="m/k.txt")
+    scope = RecordingScope()
+    try:
+        chunks = [c async for c in read_stream(acc, spec)]
+    finally:
+        scope.close()
+    assert b"".join(chunks) == b"hello"
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

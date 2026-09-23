@@ -27,13 +27,13 @@ export async function appendBytes(
   data: Uint8Array,
 ): Promise<void> {
   const timer = startOp()
-  const virtual = p.mountPath
-  const full = resolveSafe(accessor.root, virtual)
+  const key = p.mountPath
+  const full = resolveSafe(accessor.root, key)
   try {
     await appendFile(full, data)
   } catch (err) {
     throw diskError(err, p)
   }
-  record('append', virtual, VFSName.DISK, data.byteLength, timer)
+  record('append', p.virtual, VFSName.DISK, data.byteLength, timer)
   await invalidateAfterWrite(p)
 }

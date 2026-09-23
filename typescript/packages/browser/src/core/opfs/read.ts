@@ -44,10 +44,10 @@ export async function read(
   const size = options?.size ?? null
   const root = accessor.rootHandle
   const timer = startOp()
-  const virtual = path.mountPath
+  const key = path.mountPath
   let handle: FileSystemFileHandle
   try {
-    handle = await resolveFileHandle(root, virtual, { create: false })
+    handle = await resolveFileHandle(root, key, { create: false })
   } catch (err) {
     if (isNotFound(err)) throw enoent(path)
     if (err instanceof DOMException && err.name === 'TypeMismatchError') throw eisdir(path)
@@ -59,6 +59,6 @@ export async function read(
       ? file
       : file.slice(offset, size === null ? undefined : offset + size)
   const bytes = new Uint8Array(await window.arrayBuffer())
-  record('read', virtual, VFSName.OPFS, bytes.byteLength, timer)
+  record('read', path.virtual, VFSName.OPFS, bytes.byteLength, timer)
   return bytes
 }

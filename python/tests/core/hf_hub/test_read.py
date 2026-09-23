@@ -17,7 +17,8 @@ from unittest.mock import patch
 import pytest
 
 from mirage.core.hf_hub.read import read_bytes, resolve_entry
-from tests.core.hf_hub.conftest import ps
+from mirage.observe.context import RecordingScope
+from tests.core.hf_hub.conftest import file_row, ps, seed
 
 
 @pytest.mark.asyncio
@@ -77,3 +78,20 @@ async def test_resolve_entry_returns_the_row(loaded):
     from mirage.cache.index import NULL_INDEX
     entry = await resolve_entry(loaded, ps("a.txt"), NULL_INDEX)
     assert entry.size == 7
+
+
+@pytest.mark.asyncio
+@patch("mirage.core.hf_hub.read.hub_bytes")
+async def test_read_records_the_virtual_path(mock_bytes, accessor):
+    # read recorded mount_path ("/m/k.txt"). The repo holds a folder
+    # named like the mount, so that differs from the virtual path; no
+    # recorder prefix is pushed.
+    seed(accessor, file_row("m/k.txt", 5))
+    mock_bytes.return_value = b"hello"
+    scope = RecordingScope()
+    try:
+        data = await read_bytes(accessor, ps("m/k.txt", "/m"))
+    finally:
+        scope.close()
+    assert data == b"hello"
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

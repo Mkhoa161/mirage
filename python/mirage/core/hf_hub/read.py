@@ -84,5 +84,5 @@ async def read_bytes(accessor: HfHubAccessor,
                         size=size) if offset or size is not None else None
     timer = start_op()
     data = await hub_bytes(accessor.token, url, window, session=accessor.pool)
-    record("read", raw, accessor.VFS_NAME, len(data), timer)
+    record("read", path.virtual, accessor.VFS_NAME, len(data), timer)
     return data

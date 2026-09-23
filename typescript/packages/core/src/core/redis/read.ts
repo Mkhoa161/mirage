@@ -46,6 +46,6 @@ export async function read(
   if (data === null) {
     throw enoent(path)
   }
-  record('read', p, VFSName.REDIS, data.byteLength, timer)
+  record('read', path.virtual, VFSName.REDIS, data.byteLength, timer)
   return data
 }

@@ -47,7 +47,7 @@ async def read_stream(
     raw = path.mount_path
     key = raw.lstrip("/")
     op = accessor.operator()
-    rec = record_stream("read", raw, accessor.VFS_NAME)
+    rec = record_stream("read", path.virtual, accessor.VFS_NAME)
     try:
         async with await op.open(key, "rb") as f:
             while True:

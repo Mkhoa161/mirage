@@ -21,17 +21,17 @@ import { isNotFound, resolveFileHandle } from './utils.ts'
 
 export async function* stream(accessor: OPFSAccessor, path: PathSpec): AsyncIterable<Uint8Array> {
   const root = accessor.rootHandle
-  const virtual = path.mountPath
+  const key = path.mountPath
   let handle: FileSystemFileHandle
   try {
-    handle = await resolveFileHandle(root, virtual, { create: false })
+    handle = await resolveFileHandle(root, key, { create: false })
   } catch (err) {
     if (isNotFound(err)) throw enoent(path)
     if (err instanceof DOMException && err.name === 'TypeMismatchError') throw eisdir(path)
     throw err
   }
   const file = await handle.getFile()
-  const rec = recordStream('read', virtual, VFSName.OPFS)
+  const rec = recordStream('read', path.virtual, VFSName.OPFS)
   const reader = file.stream().getReader()
   for (;;) {
     const { value, done } = await reader.read()

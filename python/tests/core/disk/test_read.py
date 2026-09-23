@@ -17,6 +17,7 @@ import pytest
 from mirage.accessor.disk import DiskAccessor
 from mirage.cache.index import RAMIndexCacheStore
 from mirage.core.disk.read import read_bytes, read_range
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 from mirage.utils.key_prefix import mount_key
 
@@ -104,3 +105,22 @@ async def test_read_range_missing_file_raises(tmp_path):
                      virtual="/missing.bin",
                      directory="/missing.bin"), RAMIndexCacheStore(ttl=0), 0,
             5)
+
+
+@pytest.mark.asyncio
+async def test_read_range_records_the_virtual_path(tmp_path):
+    # read_range recorded mount_path ("/m/k.txt"). The directory is named
+    # like the mount, so that differs from the virtual path; no recorder
+    # prefix is pushed.
+    (tmp_path / "m").mkdir()
+    (tmp_path / "m" / "k.txt").write_bytes(b"hello")
+    spec = PathSpec(virtual="/m/m/k.txt",
+                    directory="/m/m/",
+                    vfs_path="m/k.txt")
+    scope = RecordingScope()
+    try:
+        data = await read_range(DiskAccessor(tmp_path), spec, offset=1, size=3)
+    finally:
+        scope.close()
+    assert data == b"ell"
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

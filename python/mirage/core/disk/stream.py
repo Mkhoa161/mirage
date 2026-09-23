@@ -37,7 +37,7 @@ async def read_stream(accessor: DiskAccessor,
     virtual = path_spec.virtual
     path = path_spec.mount_path
     root = accessor.root
-    rec = record_stream("read", path, "disk")
+    rec = record_stream("read", virtual, "disk")
     p = _resolve(root, path)
     try:
         async with aiofiles.open(p, "rb") as f:

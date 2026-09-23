@@ -15,6 +15,7 @@
 import pytest
 
 from mirage.core.hf_buckets.read import read_bytes
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 
 
@@ -44,3 +45,21 @@ async def test_read_bytes_offset_only(make_acc):
     acc = make_acc({"x": b"abcdef"})
     out = await read_bytes(acc, PathSpec.from_str_path("/x"), offset=3)
     assert out == b"def"
+
+
+@pytest.mark.asyncio
+async def test_read_records_the_virtual_path(make_acc):
+    # read recorded mount_path ("/m/k.txt"). The key is named like the
+    # mount, so that differs from the virtual path; no recorder prefix is
+    # pushed.
+    acc = make_acc({"m/k.txt": b"hello"})
+    spec = PathSpec(virtual="/m/m/k.txt",
+                    directory="/m/m/",
+                    vfs_path="m/k.txt")
+    scope = RecordingScope()
+    try:
+        out = await read_bytes(acc, spec)
+    finally:
+        scope.close()
+    assert out == b"hello"
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

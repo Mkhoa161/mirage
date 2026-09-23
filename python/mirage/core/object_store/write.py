@@ -71,7 +71,7 @@ def make_write_bytes(driver: ObjectStoreDriver[A, C]) -> WriteFn[A]:
         async with driver.connect(accessor) as conn:
             meta = await _put(driver, conn, key, data, path_spec)
         record("write",
-               path,
+               path_spec.virtual,
                driver.vfs,
                len(data),
                timer,
@@ -98,7 +98,7 @@ def make_create(driver: ObjectStoreDriver[A, C]) -> PathFn[A]:
         async with driver.connect(accessor) as conn:
             meta = await _put(driver, conn, key, b"", path_spec)
         record("create",
-               path,
+               path_spec.virtual,
                driver.vfs,
                0,
                timer,
@@ -128,7 +128,7 @@ def make_truncate(driver: ObjectStoreDriver[A, C]) -> TruncateFn[A]:
             result = data[:length].ljust(length, b"\0")
             meta = await _put(driver, conn, key, result, path_spec)
         record("truncate",
-               path,
+               path_spec.virtual,
                driver.vfs,
                0,
                timer,

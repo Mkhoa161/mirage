@@ -31,7 +31,7 @@ async def stream(accessor: RAMAccessor,
     if key not in store.files:
         raise enoent(virtual)
     data = store.files[key]
-    rec = record_stream("read", path, "ram")
+    rec = record_stream("read", virtual, "ram")
     if rec is not None:
         rec.bytes = len(data)
     yield data

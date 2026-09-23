@@ -90,15 +90,13 @@ class BaseVFS:
     # Distinct from caches_reads, which asks whether the gate can fire.
     #
     # onedrive and sharepoint look like they qualify and do not: both
-    # stamp a cTag on stat and on read, so on token kind alone the
-    # refusal reads as unnecessary. It is correct for a second reason
-    # the flag does not name -- both label the read record with
-    # `path.vfs_path`, which carries no leading slash, so `record()`
-    # builds a malformed key ("/oda/b.txt" rather than "/od/a/b.txt")
-    # and the cTag can never be matched against the cache entry. The
-    # backends that do qualify pass `path_spec.mount_path` instead.
-    # gdrive carries the same slashless label on top of its token-kind
-    # mismatch. Fix the label before reconsidering the flag.
+    # stamp a cTag on stat and on read, and both label the read record
+    # with the virtual path, so on token kind alone the refusal reads as
+    # unnecessary. The read-side cTag, though, is captured only while a
+    # recorder is active (a gated metadata call), so an unrecorded read
+    # stamps nothing to compare. The flag stays withheld pending the
+    # #1165 read-token contract. gdrive additionally mismatches token
+    # kinds.
     READ_REVALIDATABLE: bool = False
 
     def __init__(

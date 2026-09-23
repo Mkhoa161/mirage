@@ -43,7 +43,7 @@ export async function* stream(
     accessor.revision,
     accessor.repoPath(raw),
   )
-  const rec = recordStream('read', raw, accessor.vfsName)
+  const rec = recordStream('read', path.virtual, accessor.vfsName)
   for await (const chunk of hubStream(accessor.token, url)) {
     if (rec !== null) rec.bytes += chunk.length
     yield chunk

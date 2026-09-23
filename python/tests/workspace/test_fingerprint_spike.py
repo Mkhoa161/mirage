@@ -115,6 +115,38 @@ def test_s3_always_warm_read_serves_cache_for_non_md5_fingerprint():
         "cache; a second get_object means the entry was evicted")
 
 
+def test_s3_fresh_warm_read_hits_cache_for_a_key_named_like_its_mount():
+    # The cache finds the read's token through the record path. With key
+    # "m/a.txt" under /m, a mount-relative record ("/m/a.txt") names the
+    # wrong entry, the warm read finds no token and refetches.
+    store = {"m/a.txt": b"name,age\nalice,30\n"}
+    session = MultiBucketSession({"test-bucket": store}, etag_suffix="-2")
+    client = session._client
+    with patch_s3_session(session):
+        config = S3Config(
+            bucket="test-bucket",
+            region="us-east-1",
+            aws_access_key_id="fake",
+            aws_secret_access_key="fake",
+        )
+        ws = Workspace(
+            {"/m": (S3VFS(config), MountMode.WRITE)},
+            mode=MountMode.WRITE,
+            read=ReadSpec(policy=ReadPolicy.FRESH),
+        )
+
+        async def run() -> tuple[bytes, bytes]:
+            io1 = await ws.shell("cat /m/m/a.txt")
+            first = await io1.materialize_stdout()
+            io2 = await ws.shell("cat /m/m/a.txt")
+            second = await io2.materialize_stdout()
+            return first, second
+
+        first, second = asyncio.run(run())
+    assert first == second == b"name,age\nalice,30\n"
+    assert client.calls["get_object"] == 1
+
+
 def test_a_tokenless_entry_costs_one_extra_get_then_carries_the_etag():
     """The measured price of storing no token instead of a fabricated md5.
 

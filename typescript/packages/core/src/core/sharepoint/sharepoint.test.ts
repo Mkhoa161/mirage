@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { SharePointAccessor } from '../../accessor/sharepoint.ts'
 import { RAMIndexCacheStore } from '../../cache/index/ram.ts'
+import { runWithRecording } from '../../observe/context.ts'
 import { PathSpec } from '../../types.ts'
-import { find, readdir } from './index.ts'
+import { create, find, read, readdir, stream, write } from './index.ts'
 
 function requestUrl(input: URL | RequestInfo): string {
   if (typeof input === 'string') return input
@@ -114,5 +115,86 @@ describe('SharePoint unscoped find', () => {
     expect(await find(accessor, PathSpec.fromStrPath('/sp/Team', 'Team'), { type: 'f' })).toEqual([
       '/Team/Documents/a.txt',
     ])
+  })
+})
+
+// A key named like its mount, on a site- and drive-scoped mount so `m/k.txt`
+// is the item path: the record must name the virtual path, not the slashless
+// vfsPath. No mount prefix is pushed, so the body holds across the recorder
+// change.
+describe('SharePoint record paths', () => {
+  const spec = new PathSpec({ virtual: '/m/m/k.txt', vfsPath: 'm/k.txt', directory: '/m/m/' })
+
+  function scopedFetch(): ReturnType<typeof vi.fn> {
+    return vi.fn((input: URL | RequestInfo) => {
+      const url = requestUrl(input)
+      if (url.includes('/sites?')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ value: [{ id: 'site-id', displayName: 'Team', name: 'team' }] }),
+            { status: 200 },
+          ),
+        )
+      }
+      if (url.includes('/drives?') || url.endsWith('/drives')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ value: [{ id: 'drive-id', name: 'Documents' }] }), {
+            status: 200,
+          }),
+        )
+      }
+      if (url === 'https://download.test/file') {
+        return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 'item',
+            cTag: 'ctag-1',
+            versions: [{ id: 'v1', lastModifiedDateTime: '2026-01-01T00:00:00Z' }],
+            '@microsoft.graph.downloadUrl': 'https://download.test/file',
+          }),
+          { status: 200 },
+        ),
+      )
+    })
+  }
+
+  function scopedAccessor(): SharePointAccessor {
+    return new SharePointAccessor({ accessToken: 'token', site: 'Team', drive: 'Documents' })
+  }
+
+  it('write records the virtual path', async () => {
+    vi.stubGlobal('fetch', scopedFetch())
+    const [, records] = await runWithRecording(() =>
+      write(scopedAccessor(), spec, new TextEncoder().encode('hello')),
+    )
+    expect(records.map((r) => r.op)).toEqual(['write'])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  it('create records the virtual path', async () => {
+    vi.stubGlobal('fetch', scopedFetch())
+    const [, records] = await runWithRecording(() => create(scopedAccessor(), spec))
+    expect(records.map((r) => r.op)).toEqual(['write'])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  it('read records the virtual path', async () => {
+    vi.stubGlobal('fetch', scopedFetch())
+    const [data, records] = await runWithRecording(() => read(scopedAccessor(), spec))
+    expect([...data]).toEqual([1, 2, 3])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  it('stream records the virtual path', async () => {
+    vi.stubGlobal('fetch', scopedFetch())
+    const [bytes, records] = await runWithRecording(async () => {
+      const out: number[] = []
+      for await (const chunk of stream(scopedAccessor(), spec)) out.push(...chunk)
+      return out
+    })
+    expect(bytes).toEqual([1, 2, 3])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
   })
 })

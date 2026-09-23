@@ -341,7 +341,6 @@ async def capture_item_metadata(config: MsGraphConfig,
 async def read_item(config: MsGraphConfig,
                     loc: DriveLoc,
                     virtual: str,
-                    label: str,
                     backend: str,
                     offset: int = 0,
                     size: int | None = None,
@@ -382,7 +381,7 @@ async def read_item(config: MsGraphConfig,
             raise enoent(virtual)
         raise
     record("read",
-           label,
+           virtual,
            backend,
            len(data),
            timer,
@@ -394,12 +393,11 @@ async def read_item(config: MsGraphConfig,
 async def stream_item(config: MsGraphConfig,
                       loc: DriveLoc,
                       virtual: str,
-                      label: str,
                       backend: str,
                       chunk_size: int = 8192,
                       session: SessionArg = None) -> AsyncIterator[bytes]:
     pinned = revision_for(virtual)
-    rec = record_stream("read", label, backend)
+    rec = record_stream("read", virtual, backend)
     url = loc.item("/content")
     auth = True
     try:

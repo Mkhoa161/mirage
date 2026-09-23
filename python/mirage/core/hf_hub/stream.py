@@ -60,7 +60,7 @@ async def read_stream(
     raw = path.mount_path
     url = resolve_url(accessor.endpoint, accessor.repo_type, accessor.repo_id,
                       accessor.revision, accessor.repo_path(raw))
-    rec = record_stream("read", raw, accessor.VFS_NAME)
+    rec = record_stream("read", path.virtual, accessor.VFS_NAME)
     async for chunk in hub_stream(accessor.token,
                                   url,
                                   chunk_size,

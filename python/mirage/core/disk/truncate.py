@@ -42,5 +42,5 @@ async def truncate(accessor: DiskAccessor, path_spec: PathSpec,
     result = data[:length].ljust(length, b"\0")
     async with aiofiles.open(p, "wb") as f:
         await f.write(result)
-    record("truncate", path, "disk", 0, timer)
+    record("truncate", path_spec.virtual, "disk", 0, timer)
     await invalidate_after_write(path_spec)

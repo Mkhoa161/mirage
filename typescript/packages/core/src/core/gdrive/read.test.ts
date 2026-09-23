@@ -31,7 +31,7 @@ import { IndexEntry } from '../../cache/index/config.ts'
 import { RAMIndexCacheStore } from '../../cache/index/ram.ts'
 import { PathSpec } from '../../types.ts'
 import type { TokenManager } from '../google/client.ts'
-import { runWithRevisions } from '../../observe/context.ts'
+import { runWithRecording, runWithRevisions } from '../../observe/context.ts'
 import * as drive from '../google/drive.ts'
 import { read, readFileVersioned } from './read.ts'
 import * as versions from './versions.ts'
@@ -154,7 +154,7 @@ describe('gdrive versioned reads', () => {
     const enc = new TextEncoder()
     vi.mocked(versions.downloadRevision).mockResolvedValue(enc.encode('pinned'))
     const data = await runWithRevisions(new Map([['/data/f.txt', 'r1']]), () =>
-      readFileVersioned(STUB_TOKEN_MANAGER, 'f1', '/data/f.txt', 'f.txt'),
+      readFileVersioned(STUB_TOKEN_MANAGER, 'f1', '/data/f.txt'),
     )
     expect(new TextDecoder().decode(data)).toBe('pinned')
     expect(versions.downloadRevision).toHaveBeenCalledWith(
@@ -169,8 +169,34 @@ describe('gdrive versioned reads', () => {
   it('an unpinned unrecorded read skips the metadata call', async () => {
     const enc = new TextEncoder()
     vi.mocked(drive.downloadFile).mockResolvedValue(enc.encode('live'))
-    const data = await readFileVersioned(STUB_TOKEN_MANAGER, 'f1', '/data/f.txt', 'f.txt')
+    const data = await readFileVersioned(STUB_TOKEN_MANAGER, 'f1', '/data/f.txt')
     expect(new TextDecoder().decode(data)).toBe('live')
     expect(versions.captureFileMetadata).not.toHaveBeenCalled()
+  })
+})
+
+// A key named like its mount: the record must name the virtual path, not the
+// mount-relative key the prefix guess cannot repair (`/m/k.txt`). No mount
+// prefix is pushed, so the body holds across the recorder change.
+describe('gdrive read record path', () => {
+  it('records the virtual path for a binary file', async () => {
+    vi.mocked(versions.captureFileMetadata).mockResolvedValue([null, null])
+    vi.mocked(drive.downloadFile).mockResolvedValue(new TextEncoder().encode('live'))
+    const index = new RAMIndexCacheStore()
+    await index.setDir('/m/m', [
+      [
+        'k.txt',
+        new IndexEntry({
+          id: 'f1',
+          name: 'k.txt',
+          resourceType: 'gdrive/file',
+          vfsName: 'k.txt',
+        }),
+      ],
+    ])
+    const path = new PathSpec({ virtual: '/m/m/k.txt', vfsPath: 'm/k.txt', directory: '/m/m/' })
+    const [data, records] = await runWithRecording(() => read(makeAccessor(), path, index))
+    expect(new TextDecoder().decode(data)).toBe('live')
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
   })
 })

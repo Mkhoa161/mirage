@@ -45,7 +45,6 @@ async def read_bytes(
 async def read_file_versioned(token_manager: TokenManager,
                               file_id: str,
                               virtual: str,
-                              label: str,
                               offset: int = 0,
                               size: int | None = None) -> bytes:
     """Download a binary file honouring snapshot revision pins.
@@ -57,8 +56,8 @@ async def read_file_versioned(token_manager: TokenManager,
     Args:
         token_manager (TokenManager): OAuth2 token manager.
         file_id (str): file ID.
-        virtual (str): full virtual path (pin lookup key).
-        label (str): mount-relative path recorded with the read.
+        virtual (str): full virtual path, the pin lookup key and the
+            recorded path.
         offset (int): first byte to read.
         size (int | None): how many bytes, or None for the rest.
     """
@@ -76,7 +75,7 @@ async def read_file_versioned(token_manager: TokenManager,
     else:
         data = await download_file(token_manager, file_id, window)
     record("read",
-           label,
+           virtual,
            "gdrive",
            len(data),
            timer,
@@ -127,5 +126,5 @@ async def read(
         rendered = await read_presentation(accessor.token_manager, entry.id)
     else:
         return await read_file_versioned(accessor.token_manager, entry.id,
-                                         virtual, key, offset, size)
+                                         virtual, offset, size)
     return slice_window(rendered, offset, size)

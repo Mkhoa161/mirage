@@ -12,9 +12,11 @@
 // limitations under the License.
 // ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { runWithRecording } from '@struktoai/mirage-core/observe/context'
+import { PathSpec } from '@struktoai/mirage-core/types'
 import type { DiskAccessor } from '../../accessor/disk.ts'
 import { spec, tmpRoot } from '../../test-utils.ts'
 import { read, readRange } from './read.ts'
@@ -71,5 +73,31 @@ describe('core/disk/readRange', () => {
     await expect(readRange(accessor, spec('/missing'), undefined, 0, 4)).rejects.toMatchObject({
       code: 'ENOENT',
     })
+  })
+})
+
+// A key named like its mount: the record must name the virtual path, not the
+// mount-relative `/m/k.txt` the prefix guess leaves alone. No mount prefix is
+// pushed, so the body holds across the recorder change.
+describe('core/disk/readRange record path', () => {
+  const path = new PathSpec({ virtual: '/m/m/k.txt', vfsPath: 'm/k.txt', directory: '/m/m/' })
+
+  beforeEach(async () => {
+    await mkdir(join(root, 'm'))
+    await writeFile(join(root, 'm', 'k.txt'), '0123456789')
+  })
+
+  it('a sized window records the virtual path', async () => {
+    const [data, records] = await runWithRecording(() => readRange(accessor, path, undefined, 0, 1))
+    expect(new TextDecoder().decode(data)).toBe('0')
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  it('a rest-of-file window records the virtual path', async () => {
+    const [data, records] = await runWithRecording(() =>
+      readRange(accessor, path, undefined, 0, null),
+    )
+    expect(new TextDecoder().decode(data)).toBe('0123456789')
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
   })
 })

@@ -4,7 +4,7 @@ import { OneDriveAccessor } from '../../accessor/onedrive.ts'
 import { RAMIndexCacheStore } from '../../cache/index/ram.ts'
 import { runWithRecording } from '../../observe/context.ts'
 import { PathSpec } from '../../types.ts'
-import { find, read, readdir, stat, write } from './index.ts'
+import { create, find, read, readdir, stat, stream, write } from './index.ts'
 
 function requestUrl(input: URL | RequestInfo): string {
   if (typeof input === 'string') return input
@@ -243,5 +243,72 @@ describe('OneDrive filesystem operations', () => {
     await expect(readdir(accessor, path, new RAMIndexCacheStore())).rejects.toMatchObject({
       code: 'ENOENT',
     })
+  })
+})
+
+// A key named like its mount: the record must name the virtual path, not the
+// slashless vfsPath the prefix guess would turn into `/mm/k.txt` or leave
+// bare. No mount prefix is pushed, so the body holds across the recorder
+// change.
+describe('OneDrive record paths', () => {
+  const spec = new PathSpec({ virtual: '/m/m/k.txt', vfsPath: 'm/k.txt', directory: '/m/m/' })
+
+  function versionedFetch(): ReturnType<typeof vi.fn> {
+    return vi.fn((input: URL | RequestInfo) => {
+      const url = requestUrl(input)
+      if (url === 'https://download.test/file') {
+        return Promise.resolve(new Response(new Uint8Array([1, 2, 3]), { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            cTag: 'ctag-1',
+            versions: [{ id: 'v1', lastModifiedDateTime: '2026-01-01T00:00:00Z' }],
+            '@microsoft.graph.downloadUrl': 'https://download.test/file',
+          }),
+          { status: 200 },
+        ),
+      )
+    })
+  }
+
+  it('write records the virtual path', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'i' }))))
+    const accessor = new OneDriveAccessor({ accessToken: 'token' })
+    const [, records] = await runWithRecording(() =>
+      write(accessor, spec, new TextEncoder().encode('hello')),
+    )
+    expect(records.map((r) => r.op)).toEqual(['write'])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  it('create records the virtual path', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'i' }))))
+    const accessor = new OneDriveAccessor({ accessToken: 'token' })
+    const [, records] = await runWithRecording(() => create(accessor, spec))
+    expect(records.map((r) => r.op)).toEqual(['write'])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  // msgraph readItem, through its public caller.
+  it('read records the virtual path', async () => {
+    vi.stubGlobal('fetch', versionedFetch())
+    const accessor = new OneDriveAccessor({ accessToken: 'token' })
+    const [data, records] = await runWithRecording(() => read(accessor, spec))
+    expect([...data]).toEqual([1, 2, 3])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
+  })
+
+  // msgraph streamItem, through its public caller.
+  it('stream records the virtual path', async () => {
+    vi.stubGlobal('fetch', versionedFetch())
+    const accessor = new OneDriveAccessor({ accessToken: 'token' })
+    const [bytes, records] = await runWithRecording(async () => {
+      const out: number[] = []
+      for await (const chunk of stream(accessor, spec)) out.push(...chunk)
+      return out
+    })
+    expect(bytes).toEqual([1, 2, 3])
+    expect(records.map((r) => r.path)).toEqual(['/m/m/k.txt'])
   })
 })

@@ -40,6 +40,6 @@ export async function truncate(
   const out = new Uint8Array(length)
   out.set(data.subarray(0, Math.min(data.byteLength, length)))
   await writeFile(full, out)
-  record('truncate', path.mountPath, VFSName.DISK, 0, timer)
+  record('truncate', path.virtual, VFSName.DISK, 0, timer)
   await invalidateAfterWrite(path)
 }

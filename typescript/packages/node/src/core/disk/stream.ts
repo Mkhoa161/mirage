@@ -21,9 +21,9 @@ import { enoent } from '@struktoai/mirage-core/utils/errors'
 import { resolveSafe } from './utils.ts'
 
 export async function* stream(accessor: DiskAccessor, path: PathSpec): AsyncIterable<Uint8Array> {
-  const virtual = path.mountPath
-  const full = resolveSafe(accessor.root, virtual)
-  const rec = recordStream('read', virtual, VFSName.DISK)
+  const key = path.mountPath
+  const full = resolveSafe(accessor.root, key)
+  const rec = recordStream('read', path.virtual, VFSName.DISK)
   const rs = createReadStream(full, { highWaterMark: 65536 })
   try {
     for await (const chunk of rs) {

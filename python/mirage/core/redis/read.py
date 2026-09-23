@@ -45,7 +45,7 @@ async def read_bytes(accessor: RedisAccessor,
         data = await store.get_file(key)
     if data is None:
         raise enoent(virtual)
-    record("read", path, "redis", len(data), timer)
+    record("read", virtual, "redis", len(data), timer)
     return data
 
 

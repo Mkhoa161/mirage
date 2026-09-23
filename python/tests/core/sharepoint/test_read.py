@@ -1,8 +1,11 @@
+import re
+
 import pytest
 from aioresponses import CallbackResult, aioresponses
 
 from mirage.accessor.sharepoint import SharePointAccessor, SharePointConfig
 from mirage.core.sharepoint.read import read_bytes
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 from mirage.utils.key_prefix import mount_key
 
@@ -67,3 +70,31 @@ async def test_read_range():
         data = await read_bytes(_accessor(), path, offset=2, size=3)
     assert captured["range"] == "bytes=2-4"
     assert data == b"llo"
+
+
+@pytest.mark.asyncio
+async def test_recorded_read_names_the_virtual_path():
+    # read passes vfs_path as the msgraph record label; the record must
+    # carry the virtual path, with no recorder prefix pushed.
+    accessor = SharePointAccessor(SharePointConfig(access_token="tok"))
+    accessor.site_cache["m"] = _SITE_ID
+    accessor.drive_cache[(_SITE_ID, "Documents")] = _DRIVE_ID
+    spec = PathSpec(virtual="/m/m/Documents/k.txt",
+                    directory="/m/m/Documents/",
+                    vfs_path="m/Documents/k.txt")
+    scope = RecordingScope()
+    try:
+        with aioresponses() as m:
+            m.get(re.compile(r".*/root:/k\.txt(\?.*)?$"),
+                  payload={
+                      "id": "01",
+                      "cTag": "c1",
+                      "versions": []
+                  })
+            m.get(f"{_BASE}/drives/{_DRIVE_ID}/root:/k.txt:/content",
+                  body=b"bytes")
+            data = await read_bytes(accessor, spec)
+    finally:
+        scope.close()
+    assert data == b"bytes"
+    assert [r.path for r in scope.records] == ["/m/m/Documents/k.txt"]

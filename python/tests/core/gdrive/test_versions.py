@@ -99,7 +99,7 @@ async def test_read_file_versioned_pinned(gdrive_accessor):
                 new_callable=AsyncMock,
         ) as live_read:
             data = await read_file_versioned(gdrive_accessor.token_manager,
-                                             "f1", "/data/f.txt", "f.txt")
+                                             "f1", "/data/f.txt")
     finally:
         reset_revisions(token)
     assert data == b"pinned"
@@ -119,7 +119,7 @@ async def test_read_file_versioned_unpinned_reads_live(gdrive_accessor):
             new_callable=AsyncMock,
     ) as capture:
         data = await read_file_versioned(gdrive_accessor.token_manager, "f1",
-                                         "/data/f.txt", "f.txt")
+                                         "/data/f.txt")
     assert data == b"live"
     # No active recorder: the extra metadata call is skipped.
     capture.assert_not_awaited()

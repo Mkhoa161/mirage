@@ -32,7 +32,7 @@ export async function truncate(
   out.set(existing.subarray(0, Math.min(existing.byteLength, length)))
   accessor.store.files.set(p, out)
   accessor.store.modified.set(p, nowIso())
-  record('truncate', p, VFSName.RAM, 0, timer)
+  record('truncate', path.virtual, VFSName.RAM, 0, timer)
   await invalidateAfterWrite(path)
   return Promise.resolve()
 }

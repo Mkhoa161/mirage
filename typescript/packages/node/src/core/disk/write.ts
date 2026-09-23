@@ -27,8 +27,8 @@ export async function writeBytes(
   data: Uint8Array,
 ): Promise<void> {
   const timer = startOp()
-  const virtual = p.mountPath
-  const full = resolveSafe(accessor.root, virtual)
+  const key = p.mountPath
+  const full = resolveSafe(accessor.root, key)
   // A write is not `mkdir -p`: GNU reports ENOENT on a missing parent
   // rather than building the chain, and the store-backed backends refuse
   // the same way. Only the virtual path may reach a stderr line.
@@ -37,6 +37,6 @@ export async function writeBytes(
   } catch (err) {
     throw diskError(err, p)
   }
-  record('write', virtual, VFSName.DISK, data.byteLength, timer)
+  record('write', p.virtual, VFSName.DISK, data.byteLength, timer)
   await invalidateAfterWrite(p)
 }

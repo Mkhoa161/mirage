@@ -164,7 +164,7 @@ def test_write_records_the_token_the_put_returned(accessor):
         make_write_bytes(make_driver(store))(accessor, spec("/a/b/c.txt"),
                                              b"hi"))
     assert [(r.op, r.path, r.fingerprint)
-            for r in records] == [("write", "/a/b/c.txt", "fp-a/b/c.txt")]
+            for r in records] == [("write", "/mnt/a/b/c.txt", "fp-a/b/c.txt")]
 
 
 def test_create_records_the_token_the_put_returned(accessor):
@@ -172,15 +172,15 @@ def test_create_records_the_token_the_put_returned(accessor):
     records = _recorded(
         make_create(make_driver(store))(accessor, spec("/a/new.txt")))
     assert [(r.op, r.path, r.fingerprint)
-            for r in records] == [("create", "/a/new.txt", "fp-a/new.txt")]
+            for r in records] == [("create", "/mnt/a/new.txt", "fp-a/new.txt")]
 
 
 def test_truncate_records_the_token_the_put_returned(accessor):
     store = FakeStore({"a/cut.txt": b"hello"})
     records = _recorded(
         make_truncate(make_driver(store))(accessor, spec("/a/cut.txt"), 2))
-    assert [(r.op, r.path, r.fingerprint)
-            for r in records] == [("truncate", "/a/cut.txt", "fp-a/cut.txt")]
+    assert [(r.op, r.path, r.fingerprint) for r in records
+            ] == [("truncate", "/mnt/a/cut.txt", "fp-a/cut.txt")]
 
 
 def test_write_records_no_token_when_the_store_reports_none(accessor):

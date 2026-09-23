@@ -253,6 +253,25 @@ describe('S3 cache consistency (mocked)', () => {
     }
   })
 
+  it('a key named like its mount is served from cache on the second read', async () => {
+    // The cache compares the read record's path against the virtual path, so
+    // a record that names `/m/a.txt` for key `m/a.txt` under `/m` would miss
+    // it and refetch. TS s3 already records the virtual path; this guards it.
+    mock.store.set(BUCKET, 'm/a.txt', ENC.encode('v1'))
+    const ws = new Workspace(
+      { '/m': new S3VFS(makeConfig()) },
+      { mode: MountMode.WRITE, read: FRESH },
+    )
+    try {
+      mock.resetCalls()
+      expect(DEC.decode((await ws.shell('cat /m/m/a.txt')).stdout)).toBe('v1')
+      expect(DEC.decode((await ws.shell('cat /m/m/a.txt')).stdout)).toBe('v1')
+      expect(mock.commandCalls(GetObjectCommand)).toBe(1)
+    } finally {
+      await ws.close()
+    }
+  })
+
   it('a warm read costs a gate probe', async () => {
     // A warm `cat` is three stats: the routing reconcile, cat's own operand
     // stat, and the gate's probe. Two means the gate stopped probing a named

@@ -39,5 +39,5 @@ async def write_bytes(accessor: DiskAccessor, path_spec: PathSpec,
     with disk_errors(path_spec.virtual):
         async with aiofiles.open(p, "wb") as f:
             await f.write(data)
-    record("write", path, "disk", len(data), timer)
+    record("write", path_spec.virtual, "disk", len(data), timer)
     await invalidate_after_write(path_spec)

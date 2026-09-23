@@ -1,8 +1,11 @@
+import re
+
 import pytest
 from aioresponses import aioresponses
 
 from mirage.accessor.onedrive import OneDriveAccessor, OneDriveConfig
 from mirage.core.onedrive.stream import range_read, read_stream
+from mirage.observe.context import RecordingScope
 from mirage.types import PathSpec
 from mirage.utils.key_prefix import mount_key
 
@@ -80,3 +83,28 @@ async def test_range_read_returns_requested_bytes():
                                 PathSpec.from_str_path("/Docs/a.txt"), 2, 5)
     assert data == b"cde"
     assert captured["range"] == "bytes=2-4"
+
+
+@pytest.mark.asyncio
+async def test_recorded_stream_names_the_virtual_path():
+    # stream passes vfs_path as the msgraph record label; the record must
+    # carry the virtual path, with no recorder prefix pushed.
+    spec = PathSpec(virtual="/m/m/k.txt",
+                    directory="/m/m/",
+                    vfs_path="m/k.txt")
+    base = "https://graph.microsoft.com/v1.0/me/drive"
+    scope = RecordingScope()
+    try:
+        with aioresponses() as m:
+            m.get(re.compile(r".*/root:/m/k\.txt(\?.*)?$"),
+                  payload={
+                      "id": "01",
+                      "cTag": "c1",
+                      "versions": []
+                  })
+            m.get(base + "/root:/m/k.txt:/content", body=b"bytes")
+            chunks = [c async for c in read_stream(_accessor(), spec)]
+    finally:
+        scope.close()
+    assert b"".join(chunks) == b"bytes"
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

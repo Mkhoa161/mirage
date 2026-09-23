@@ -107,7 +107,6 @@ export async function read(
     accessor.config,
     accessor.loc(resolved, path.vfsPath),
     path.virtual,
-    path.vfsPath,
     'sharepoint',
     options?.offset ?? 0,
     options?.size ?? null,
@@ -124,7 +123,6 @@ export async function* stream(
     accessor.config,
     accessor.loc(resolved, path.vfsPath),
     path.virtual,
-    path.vfsPath,
     'sharepoint',
   )
 }
@@ -223,7 +221,7 @@ export async function write(
   const resolved = await resolvedItem(accessor, path)
   const timer = startOp()
   await writeItem(accessor.config, accessor.loc(resolved, path.vfsPath), data)
-  record('write', path.vfsPath, 'sharepoint', data.length, timer)
+  record('write', path.virtual, 'sharepoint', data.length, timer)
   await invalidateAfterWrite(path)
 }
 

@@ -17,7 +17,8 @@ from unittest.mock import patch
 import pytest
 
 from mirage.core.hf_hub.stream import range_read, read_stream
-from tests.core.hf_hub.conftest import ps
+from mirage.observe.context import RecordingScope
+from tests.core.hf_hub.conftest import file_row, ps, seed
 
 
 async def _chunks(*payload):
@@ -49,3 +50,19 @@ async def test_range_read_is_end_exclusive(mock_bytes, loaded):
     await range_read(loaded, ps("a.txt"), 2, 5)
     window = mock_bytes.await_args.args[2]
     assert (window.offset, window.size) == (2, 3)
+
+
+@pytest.mark.asyncio
+@patch("mirage.core.hf_hub.stream.hub_stream")
+async def test_stream_records_the_virtual_path(mock_stream, accessor):
+    # stream recorded mount_path ("/m/k.txt"); the record must name the
+    # virtual path, with no recorder prefix pushed.
+    seed(accessor, file_row("m/k.txt", 4))
+    mock_stream.return_value = _chunks(b"ab", b"cd")
+    scope = RecordingScope()
+    try:
+        got = [c async for c in read_stream(accessor, ps("m/k.txt", "/m"))]
+    finally:
+        scope.close()
+    assert got == [b"ab", b"cd"]
+    assert [r.path for r in scope.records] == ["/m/m/k.txt"]

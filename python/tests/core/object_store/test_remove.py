@@ -164,21 +164,22 @@ def test_unlink_records_a_retraction(accessor):
     store = FakeStore({"a/b.txt": b"x"})
     assert _recorded(
         make_unlink(make_driver(store))(accessor, spec("/a/b.txt"))) == [
-            ("unlink", "/a/b.txt")
+            ("unlink", "/mnt/a/b.txt")
         ]
 
 
 def test_remove_prefix_records_a_retraction(accessor):
     store = FakeStore({"a/b.txt": b"x"})
     assert _recorded(
-        make_remove_prefix(make_driver(store))(accessor,
-                                               spec("/a"))) == [("rm_r", "/a")]
+        make_remove_prefix(make_driver(store))(accessor, spec("/a"))) == [
+            ("rm_r", "/mnt/a")
+        ]
 
 
 def test_rmdir_records_a_retraction_when_it_deletes_the_marker(accessor):
     store = FakeStore({"a/": b""})
     assert _recorded(make_rmdir(make_driver(store))(accessor, spec("/a"))) == [
-        ("rmdir", "/a")
+        ("rmdir", "/mnt/a")
     ]
 
 
@@ -199,7 +200,7 @@ def test_unlink_records_even_when_the_delete_raises(accessor):
         with pytest.raises(RuntimeError):
             await make_unlink(driver)(accessor, spec("/a/b.txt"))
 
-    assert _recorded(run()) == [("unlink", "/a/b.txt")]
+    assert _recorded(run()) == [("unlink", "/mnt/a/b.txt")]
 
 
 async def _boom(conn: FakeStore, key: str) -> None:

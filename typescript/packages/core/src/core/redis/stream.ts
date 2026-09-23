@@ -28,7 +28,7 @@ export async function* stream(
   const p = norm(path.mountPath)
   const data = await accessor.store.getFile(p)
   if (data === null) throw enoent(path)
-  const rec = recordStream('read', p, VFSName.REDIS)
+  const rec = recordStream('read', path.virtual, VFSName.REDIS)
   if (rec !== null) rec.bytes = data.byteLength
   yield data
 }

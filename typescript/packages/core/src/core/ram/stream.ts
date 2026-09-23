@@ -23,7 +23,7 @@ export async function* stream(accessor: RAMAccessor, path: PathSpec): AsyncItera
   const p = norm(path.mountPath)
   const data = accessor.store.files.get(p)
   if (data === undefined) throw enoent(path)
-  const rec = recordStream('read', p, VFSName.RAM)
+  const rec = recordStream('read', path.virtual, VFSName.RAM)
   if (rec !== null) rec.bytes = data.byteLength
   yield data
 }

@@ -49,7 +49,7 @@ async def read_bytes(accessor: RAMAccessor,
     data = store.files[key]
     if offset or size is not None:
         data = slice_window(data, offset, size)
-    record("read", path, "ram", len(data), timer)
+    record("read", virtual, "ram", len(data), timer)
     return data
 
 

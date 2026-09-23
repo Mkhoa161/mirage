@@ -36,6 +36,6 @@ export async function truncate(
   out.set(data.subarray(0, copyLen), 0)
   await store.setFile(p, out)
   await store.setModified(p, nowIso())
-  record('truncate', p, VFSName.REDIS, 0, timer)
+  record('truncate', path.virtual, VFSName.REDIS, 0, timer)
   await invalidateAfterWrite(p)
 }
