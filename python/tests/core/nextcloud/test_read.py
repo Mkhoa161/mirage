@@ -35,9 +35,7 @@ async def test_read_bytes_missing_raises_filenotfound(make_acc):
 
 @pytest.mark.asyncio
 async def test_read_records_the_virtual_path(make_acc):
-    # read recorded mount_path ("/m/k.txt"). The key is named like the
-    # mount, so that differs from the virtual path; no recorder prefix is
-    # pushed.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     acc = make_acc({"m/k.txt": b"hello"})
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",

@@ -30,6 +30,22 @@ REDIS_URL = os.environ.get("REDIS_URL", "")
 SSH_ROOT = "/data"
 
 
+class MountState:
+
+    def __init__(self, ptype: str, mount_path: str, idx: int) -> None:
+        self.ptype = ptype
+        self.mount_path = mount_path
+        self.idx = idx
+        self.disk_root = None
+        self.s3_bucket: str | None = None
+        self.gdrive: FakeGDrive | None = None
+        self.redis_prefix: str | None = None
+        self.sftp_files: dict[str, bytes] | None = None
+        self.sftp_dirs: set[str] | None = None
+        self.vfs = None
+        self.accessor = None
+
+
 def _make_s3_vfs(bucket: str) -> S3VFS:
     config = S3Config(bucket=bucket,
                       region="us-east-1",
@@ -51,7 +67,7 @@ def _make_gdrive_vfs() -> GoogleDriveVFS:
     return GoogleDriveVFS(config)
 
 
-def _make_ssh_vfs(state: "_MountState") -> SSHVFS:
+def _make_ssh_vfs(state: MountState) -> SSHVFS:
     vfs = SSHVFS(SSHConfig(host="mock", root=SSH_ROOT, known_hosts=None))
     state.sftp_files = {}
     state.sftp_dirs = {SSH_ROOT}
@@ -60,25 +76,8 @@ def _make_ssh_vfs(state: "_MountState") -> SSHVFS:
     return vfs
 
 
-class _MountState:
-
-    def __init__(self, ptype: str, mount_path: str, idx: int) -> None:
-        self.ptype = ptype
-        self.mount_path = mount_path
-        self.idx = idx
-        self.disk_root = None
-        self.s3_bucket: str | None = None
-        self.gdrive: FakeGDrive | None = None
-        self.redis_prefix: str | None = None
-        self.sftp_files: dict[str, bytes] | None = None
-        self.sftp_dirs: set[str] | None = None
-        self.vfs = None
-        self.accessor = None
-
-
-def _build_mount(ptype: str, mount_path: str, tmp_path,
-                 idx: int) -> _MountState:
-    state = _MountState(ptype, mount_path, idx)
+def build_mount(ptype: str, mount_path: str, tmp_path, idx: int) -> MountState:
+    state = MountState(ptype, mount_path, idx)
     if ptype == "ram":
         state.vfs = RAMVFS()
         state.accessor = state.vfs.accessor

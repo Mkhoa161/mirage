@@ -66,8 +66,7 @@ async def test_write_to_native_raises(fake_drive, gdrive_accessor):
 
 @pytest.mark.asyncio
 async def test_write_records_the_virtual_path(fake_drive, gdrive_accessor):
-    # write recorded vfs_path ("m/k.txt", slashless). The folder is named
-    # like the mount, and no recorder prefix is pushed.
+    # A folder named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     fake_drive.folder("m")
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",

@@ -79,7 +79,6 @@ export async function read(
     }
     const bytes = await streamToBuffer(resp.Body)
     const { fingerprint, revision } = fpRevFromS3Response(resp)
-    // The record names the virtual path, never rawPath.
     record('read', virtual, VFSName.S3, bytes.byteLength, timer, {
       fingerprint,
       revision,

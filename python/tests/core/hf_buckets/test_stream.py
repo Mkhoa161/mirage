@@ -48,8 +48,7 @@ async def test_read_stream_handles_empty_file(make_acc):
 
 @pytest.mark.asyncio
 async def test_stream_records_the_virtual_path(make_acc):
-    # stream recorded mount_path ("/m/k.txt"); the record must name the
-    # virtual path, with no recorder prefix pushed.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     acc = make_acc({"m/k.txt": b"hello"})
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",

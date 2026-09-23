@@ -96,9 +96,7 @@ async def test_upload_session_requests_replace(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_write_records_the_virtual_path():
-    # write recorded vfs_path (slashless); the site is named like the
-    # mount so a mount-relative record would differ too. No recorder
-    # prefix is pushed.
+    # The site is named like its mount, so m/Documents/k.txt is not virtual.
     accessor = SharePointAccessor(SharePointConfig(access_token="tok"))
     accessor.site_cache["m"] = _SITE_ID
     accessor.drive_cache[(_SITE_ID, "Documents")] = _DRIVE_ID

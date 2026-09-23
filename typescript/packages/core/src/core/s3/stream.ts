@@ -49,7 +49,6 @@ export async function* stream(accessor: S3Accessor, path: PathSpec): AsyncIterab
   const input: Record<string, unknown> = { Bucket: config.bucket, Key: s3Key(rawPath, config) }
   if (pinnedRevision !== null) input.VersionId = pinnedRevision
 
-  // The record names the virtual path, never rawPath.
   const rec = recordStream('read', virtual, VFSName.S3)
 
   try {

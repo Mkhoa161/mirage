@@ -21,13 +21,10 @@ from mirage.observe.context import RecordingScope
 from mirage.types import MountMode, PathSpec
 from mirage.vfs.ram import RAMVFS
 from mirage.workspace import Workspace
-from tests.e2e.mounts import REDIS_URL, SSH_ROOT, _build_mount, _MountState
+from tests.e2e.mounts import REDIS_URL, SSH_ROOT, MountState, build_mount
 from tests.e2e.s3_mock import patch_s3_multi
 
-# The key lives under a directory named like its mount (/m/m/k.txt), the one
-# shape that tells "records the virtual path" apart from "records the
-# mount-relative path and lets the prefix guess repair it": the guess sees
-# /m/k.txt already under /m and leaves it alone.
+# The key sits in a directory named like its mount; /m/k.txt is not virtual.
 SCRIPT = [
     "echo x > /m/m/k.txt",
     "echo y >> /m/m/k.txt",
@@ -156,7 +153,7 @@ def _ledger(records) -> list[tuple[str, str]]:
             if _under_m(r.path) and r.op not in EXEMPT_OPS]
 
 
-async def _prepare(ws: Workspace, state: _MountState) -> None:
+async def _prepare(ws: Workspace, state: MountState) -> None:
     if state.ptype == "ssh":
         state.sftp_dirs.add(f"{SSH_ROOT}/m")
     elif state.ptype != "s3":
@@ -164,7 +161,7 @@ async def _prepare(ws: Workspace, state: _MountState) -> None:
         assert io.exit_code == 0
 
 
-async def _run_records(state: _MountState, script: list[str],
+async def _run_records(state: MountState, script: list[str],
                        seed: list[str]) -> tuple[Workspace, list]:
     ws = Workspace(
         {
@@ -182,12 +179,10 @@ async def _run_records(state: _MountState, script: list[str],
     for line in script:
         io = await ws.shell(line)
         await io.stdout_str()
-        # A fake that fails an op silently would drop its record; the
-        # exit code catches that before the ledger does.
+        # A loud failure trips the exit code; a silent no-op, the exact ledger.
         assert io.exit_code == 0, (line, await io.stderr_str())
     records = list(ws._ops.records)
-    # The op door is the only way to reach the create sites (touch
-    # records write); its records land in the scope, not ws._ops.
+    # touch records write, so only the op door reaches create.
     scope = RecordingScope()
     try:
         path = PathSpec.from_str_path(C)
@@ -199,13 +194,13 @@ async def _run_records(state: _MountState, script: list[str],
     return ws, records
 
 
-async def _close(ws: Workspace, state: _MountState) -> None:
+async def _close(ws: Workspace, state: MountState) -> None:
     if state.ptype == "redis":
         await state.vfs._store.clear()
     await ws.close()
 
 
-async def _run_row(state: _MountState) -> list[tuple[str, str]]:
+async def _run_row(state: MountState) -> list[tuple[str, str]]:
     ws, records = await _run_records(state, SCRIPT, [])
     try:
         return _ledger(records)
@@ -222,7 +217,7 @@ def _row_marks(ptype: str):
 @pytest.mark.parametrize(
     "ptype", [pytest.param(p, id=p, marks=_row_marks(p)) for p in EXPECTED])
 def test_record_paths_are_virtual(ptype, tmp_path):
-    state = _build_mount(ptype, "/m", tmp_path, 1)
+    state = build_mount(ptype, "/m", tmp_path, 1)
     with ExitStack() as stack:
         if ptype == "s3":
             stack.enter_context(patch_s3_multi({S3_BUCKET: {}}))
@@ -249,7 +244,7 @@ SWEEP = SCRIPT + [
 ]
 
 
-async def _run_invariant(state: _MountState) -> list[tuple[str, str, str]]:
+async def _run_invariant(state: MountState) -> list[tuple[str, str, str]]:
     ws, records = await _run_records(state, SWEEP, ["echo x > /m/k2.txt"])
     try:
         checked = [
@@ -270,7 +265,7 @@ async def _run_invariant(state: _MountState) -> list[tuple[str, str, str]]:
 @pytest.mark.parametrize(
     "ptype", [pytest.param(p, id=p, marks=_row_marks(p)) for p in EXPECTED])
 def test_every_record_resolves_to_its_mount(ptype, tmp_path):
-    state = _build_mount(ptype, "/m", tmp_path, 1)
+    state = build_mount(ptype, "/m", tmp_path, 1)
     with ExitStack() as stack:
         if ptype == "s3":
             stack.enter_context(patch_s3_multi({S3_BUCKET: {}}))

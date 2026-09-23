@@ -74,8 +74,7 @@ async def test_read_range():
 
 @pytest.mark.asyncio
 async def test_recorded_read_names_the_virtual_path():
-    # read passes vfs_path as the msgraph record label; the record must
-    # carry the virtual path, with no recorder prefix pushed.
+    # The site is named like its mount, so m/Documents/k.txt is not virtual.
     accessor = SharePointAccessor(SharePointConfig(access_token="tok"))
     accessor.site_cache["m"] = _SITE_ID
     accessor.drive_cache[(_SITE_ID, "Documents")] = _DRIVE_ID

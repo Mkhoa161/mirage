@@ -37,9 +37,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// A key named like its mount: the record must name the virtual path, not the
-// mount-relative `/m/k.txt` the prefix guess leaves alone. No mount prefix is
-// pushed, so the body holds across the recorder change.
+// A key named like its mount: neither `m/k.txt` nor `/m/k.txt` is virtual.
 describe('hf_hub read record path', () => {
   it('records the virtual path', async () => {
     vi.spyOn(client, 'hubBytes').mockResolvedValue(new TextEncoder().encode('hello'))

@@ -254,9 +254,7 @@ describe('S3 cache consistency (mocked)', () => {
   })
 
   it('a key named like its mount is served from cache on the second read', async () => {
-    // The cache compares the read record's path against the virtual path, so
-    // a record that names `/m/a.txt` for key `m/a.txt` under `/m` would miss
-    // it and refetch. TS s3 already records the virtual path; this guards it.
+    // The cache matches the read record's path, so `/m/a.txt` would refetch.
     mock.store.set(BUCKET, 'm/a.txt', ENC.encode('v1'))
     const ws = new Workspace(
       { '/m': new S3VFS(makeConfig()) },

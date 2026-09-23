@@ -12,6 +12,8 @@
 # limitations under the License.
 # ========= Copyright 2026 @ Strukto.AI All Rights Reserved. =========
 
+import asyncio
+
 import pytest
 
 from mirage.observe.context import (RecordingScope, active_recorder,
@@ -111,6 +113,38 @@ def test_push_mount_context_no_recorder_is_noop():
         assert record_stream("read", "/s3/a", "s3") is None
     finally:
         reset_active_recorder(token)
+
+
+async def _record_under_mount(mount_id: str, path: str, opened: set[str],
+                              other: str) -> None:
+    token = push_mount_context(mount_id)
+    try:
+        opened.add(mount_id)
+        while other not in opened:
+            await asyncio.sleep(0)
+        record("read", path, "s3", 1, start_op())
+    finally:
+        reset_active_recorder(token)
+
+
+@pytest.mark.asyncio
+async def test_push_mount_context_is_task_local_across_concurrent_branches():
+    # Each branch records only after the other has pushed its own frame.
+    scope = RecordingScope()
+    opened: set[str] = set()
+    try:
+        await asyncio.gather(
+            asyncio.create_task(
+                _record_under_mount("A", "/a/x.txt", opened, "B")),
+            asyncio.create_task(
+                _record_under_mount("B", "/b/y.txt", opened, "A")),
+        )
+    finally:
+        scope.close()
+    assert sorted((r.path, r.mount_id) for r in scope.records) == [
+        ("/a/x.txt", "A"),
+        ("/b/y.txt", "B"),
+    ]
 
 
 class RecordingIterator:
@@ -330,9 +364,7 @@ async def _dispatch_recording_read(recorded: list[str],
 
 @pytest.mark.asyncio
 async def test_record_stores_the_path_as_given_inside_a_mount_frame():
-    # "/x/y" names no mount; a recorder that guesses would prefix it with
-    # the frame's /m. Callers pass the full virtual path, so it is stored
-    # verbatim.
+    # "/x/y" names no mount, so it must not gain the frame's /m.
     paths = await _dispatch_recording_read(["/x/y", "/m/k.txt"], stream=False)
     assert paths == ["/x/y", "/m/k.txt"]
 

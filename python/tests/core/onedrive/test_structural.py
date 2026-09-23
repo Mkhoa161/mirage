@@ -57,8 +57,7 @@ async def test_create_puts_empty_content():
 
 @pytest.mark.asyncio
 async def test_create_records_the_virtual_path():
-    # create recorded vfs_path ("m/k.txt"); the record must name the
-    # virtual path, with no recorder prefix to repair it.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",
                     vfs_path="m/k.txt")

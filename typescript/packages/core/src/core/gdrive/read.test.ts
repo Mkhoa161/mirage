@@ -175,9 +175,7 @@ describe('gdrive versioned reads', () => {
   })
 })
 
-// A key named like its mount: the record must name the virtual path, not the
-// mount-relative key the prefix guess cannot repair (`/m/k.txt`). No mount
-// prefix is pushed, so the body holds across the recorder change.
+// A key named like its mount: neither `m/k.txt` nor `/m/k.txt` is virtual.
 describe('gdrive read record path', () => {
   it('records the virtual path for a binary file', async () => {
     vi.mocked(versions.captureFileMetadata).mockResolvedValue([null, null])

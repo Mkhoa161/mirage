@@ -269,7 +269,6 @@ async def test_read_propagates_parent_refresh_failure(accessor, index):
 async def test_recorded_read_names_the_virtual_path(accessor, index):
     # The record must carry the full virtual path; a slashless vfs_path
     # ("m/k.txt") names no file the cache or a snapshot pin can match.
-    # No recorder prefix is pushed, so nothing can repair the spelling.
     await index.set_dir("/m/m", [("k.txt",
                                   IndexEntry(id="file123",
                                              name="k.txt",

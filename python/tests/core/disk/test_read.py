@@ -109,9 +109,7 @@ async def test_read_range_missing_file_raises(tmp_path):
 
 @pytest.mark.asyncio
 async def test_read_range_records_the_virtual_path(tmp_path):
-    # read_range recorded mount_path ("/m/k.txt"). The directory is named
-    # like the mount, so that differs from the virtual path; no recorder
-    # prefix is pushed.
+    # A directory named like its mount keeps /m/k.txt off the virtual path.
     (tmp_path / "m").mkdir()
     (tmp_path / "m" / "k.txt").write_bytes(b"hello")
     spec = PathSpec(virtual="/m/m/k.txt",

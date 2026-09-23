@@ -83,9 +83,7 @@ async def test_resolve_entry_returns_the_row(loaded):
 @pytest.mark.asyncio
 @patch("mirage.core.hf_hub.read.hub_bytes")
 async def test_read_records_the_virtual_path(mock_bytes, accessor):
-    # read recorded mount_path ("/m/k.txt"). The repo holds a folder
-    # named like the mount, so that differs from the virtual path; no
-    # recorder prefix is pushed.
+    # A repo folder named like its mount keeps /m/k.txt off the virtual path.
     seed(accessor, file_row("m/k.txt", 5))
     mock_bytes.return_value = b"hello"
     scope = RecordingScope()

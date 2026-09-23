@@ -24,9 +24,7 @@ from mirage.types import PathSpec
 FILE_ID = ObjectId("0123456789ab0123456789ab")
 DOC = {"_id": FILE_ID, "length": 5, "uploadDate": None, "filename": "m/k.txt"}
 
-# A key named like its mount: a mount-relative record ("/m/k.txt") and the
-# virtual one ("/m/m/k.txt") differ, and no recorder prefix is pushed so
-# the body is identical before and after the guess is retired.
+# A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
 SPEC = PathSpec(virtual="/m/m/k.txt", directory="/m/m/", vfs_path="m/k.txt")
 
 

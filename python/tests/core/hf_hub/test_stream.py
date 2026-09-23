@@ -55,8 +55,7 @@ async def test_range_read_is_end_exclusive(mock_bytes, loaded):
 @pytest.mark.asyncio
 @patch("mirage.core.hf_hub.stream.hub_stream")
 async def test_stream_records_the_virtual_path(mock_stream, accessor):
-    # stream recorded mount_path ("/m/k.txt"); the record must name the
-    # virtual path, with no recorder prefix pushed.
+    # A repo folder named like its mount keeps /m/k.txt off the virtual path.
     seed(accessor, file_row("m/k.txt", 4))
     mock_stream.return_value = _chunks(b"ab", b"cd")
     scope = RecordingScope()

@@ -118,10 +118,7 @@ describe('SharePoint unscoped find', () => {
   })
 })
 
-// A key named like its mount, on a site- and drive-scoped mount so `m/k.txt`
-// is the item path: the record must name the virtual path, not the slashless
-// vfsPath. No mount prefix is pushed, so the body holds across the recorder
-// change.
+// A site- and drive-scoped mount whose item `m/k.txt` is named like it.
 describe('SharePoint record paths', () => {
   const spec = new PathSpec({ virtual: '/m/m/k.txt', vfsPath: 'm/k.txt', directory: '/m/m/' })
 

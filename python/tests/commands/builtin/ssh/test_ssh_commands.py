@@ -182,8 +182,6 @@ class MockSFTPClient:
             self.files[path] = self.files[path][:length]
 
     async def utime(self, path, times=None, ns=None):
-        # touch sets mtime after creating; the mock keeps a fixed mtime, so
-        # the call only has to succeed.
         return None
 
 

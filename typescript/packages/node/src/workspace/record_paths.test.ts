@@ -30,11 +30,9 @@ import { SSHVFS } from '../vfs/ssh/ssh.ts'
 import { Workspace } from '../workspace.ts'
 
 // Every record a backend makes must name the operand's virtual path. The key
-// is named like its mount (`m/k.txt` under `/m`), the one shape that tells a
-// virtual path from a mount-relative one repaired by the recorder's prefix
-// guess: the guess turns `/m/k.txt` into itself, not `/m/m/k.txt`. The op
-// sequences are measured per backend; every path is the operand's virtual
-// path, never a measured value.
+// is named like its mount (`m/k.txt` under `/m`), so a mount-relative
+// `/m/k.txt` is not its virtual path. The op sequences are measured per
+// backend; every path is the operand's virtual path, never a measured value.
 
 const SCRIPT = [
   'echo x > /m/m/k.txt',

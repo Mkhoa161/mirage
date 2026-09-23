@@ -106,9 +106,7 @@ async def test_upload_resumes_from_next_expected_ranges(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_write_records_the_virtual_path():
-    # The record carried vfs_path ("m/k.txt", slashless); under a mount
-    # prefix the guess turned it into "/odm/k.txt". No prefix is pushed
-    # here, so the record must already be virtual.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",
                     vfs_path="m/k.txt")

@@ -341,9 +341,7 @@ async def test_copy_file(root_accessor):
 
 @pytest.mark.asyncio
 async def test_write_records_the_virtual_path(root_accessor):
-    # Box records vfs_path ("m/k.txt", slashless) today; the recorder is
-    # meant to hold the virtual path. No prefix is pushed, so nothing
-    # repairs it on the way in.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",
                     vfs_path="m/k.txt")

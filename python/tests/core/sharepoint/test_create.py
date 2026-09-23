@@ -39,8 +39,6 @@ def _accessor() -> SharePointAccessor:
 
 @pytest.mark.asyncio
 async def test_create_records_the_virtual_path():
-    # create recorded vfs_path ("m/Documents/k.txt", slashless); with no
-    # recorder prefix pushed the record must already be virtual.
     scope = RecordingScope()
     try:
         with aioresponses() as m:

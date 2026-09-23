@@ -76,9 +76,7 @@ describe('core/disk/readRange', () => {
   })
 })
 
-// A key named like its mount: the record must name the virtual path, not the
-// mount-relative `/m/k.txt` the prefix guess leaves alone. No mount prefix is
-// pushed, so the body holds across the recorder change.
+// A key named like its mount: neither `m/k.txt` nor `/m/k.txt` is virtual.
 describe('core/disk/readRange record path', () => {
   const path = new PathSpec({ virtual: '/m/m/k.txt', vfsPath: 'm/k.txt', directory: '/m/m/' })
 

@@ -217,9 +217,7 @@ describe('revisions context', () => {
 
 // The recorder stores a path as given. A read op registered on a RAM mount at
 // /m records one path outside the mount and one inside it; dispatched through
-// the workspace, neither may gain the mount's prefix. The body is the same
-// before and after the prefix guess is retired: with the guess, `/x/y` comes
-// back as `/m/x/y`.
+// the workspace, neither may gain the mount's prefix.
 describe('recorder stores the path as given', () => {
   it('record keeps both paths through a dispatched op', async () => {
     const ws = new Workspace({ '/m': new RAMVFS() }, { mode: MountMode.WRITE })

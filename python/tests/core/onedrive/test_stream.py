@@ -87,8 +87,7 @@ async def test_range_read_returns_requested_bytes():
 
 @pytest.mark.asyncio
 async def test_recorded_stream_names_the_virtual_path():
-    # stream passes vfs_path as the msgraph record label; the record must
-    # carry the virtual path, with no recorder prefix pushed.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     spec = PathSpec(virtual="/m/m/k.txt",
                     directory="/m/m/",
                     vfs_path="m/k.txt")

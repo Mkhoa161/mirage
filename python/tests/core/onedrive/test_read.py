@@ -160,9 +160,7 @@ _MM_SPEC = PathSpec(virtual="/m/m/k.txt",
 
 @pytest.mark.asyncio
 async def test_recorded_read_names_the_virtual_path():
-    # read passes vfs_path as the msgraph record label ("m/k.txt"). The
-    # recorder should get the virtual path; no prefix is pushed, so the
-    # label reaches the record untouched.
+    # A key named like its mount: neither m/k.txt nor /m/k.txt is virtual.
     scope = RecordingScope()
     try:
         with aioresponses() as m:

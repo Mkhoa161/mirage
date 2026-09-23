@@ -41,8 +41,6 @@ def _accessor() -> SharePointAccessor:
 
 @pytest.mark.asyncio
 async def test_recorded_stream_names_the_virtual_path():
-    # stream passes vfs_path as the msgraph record label; the record must
-    # carry the virtual path, with no recorder prefix pushed.
     scope = RecordingScope()
     try:
         with aioresponses() as m:
