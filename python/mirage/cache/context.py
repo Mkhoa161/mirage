@@ -50,11 +50,11 @@ def push_cache_manager(
         manager: CacheInvalidator | None) -> CacheInvalidator | None:
     """Set the active cache manager for the current async context.
 
-    Mirrors ``observe.context.push_mount_prefix``: the mount entry point
-    pushes its manager before dispatching a command, core backend
-    mutators report through :func:`invalidate_after_write` /
-    :func:`invalidate_after_unlink`, and the caller restores the
-    previous value afterwards.
+    The mount entry point pushes its manager before dispatching a
+    command, core backend mutators report through
+    :func:`invalidate_after_write` / :func:`invalidate_after_unlink`, and
+    the caller restores the previous value afterwards by pushing the
+    manager this call returns.
 
     Args:
         manager (CacheInvalidator | None): Manager to activate, or None

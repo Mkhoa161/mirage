@@ -40,7 +40,7 @@ import { IOResult } from '../../io/types.ts'
 import { runWithCacheManager } from '../../cache/context.ts'
 import type { CacheManager } from '../../cache/manager.ts'
 import { mergeSignals } from '../abort.ts'
-import { runWithMountPrefix, runWithRevisions, withMountPrefix } from '../../observe/context.ts'
+import { runWithMountContext, runWithRevisions, withMountContext } from '../../observe/context.ts'
 import { uuid7 } from '../../utils/ids.ts'
 import { VFSActivity } from './activity.ts'
 import type { RegisteredOp } from '../../ops/registry.ts'
@@ -563,8 +563,7 @@ export class MountEntry {
       // this binding is how each write the handler then makes is held to
       // its own region's mode.
       return runWithMountGate(this.prefix, this.mode, () =>
-        runWithMountPrefix(
-          mountPrefix,
+        runWithMountContext(
           () =>
             runWithCacheManager(this.cacheManager, () =>
               runWithRevisions(
@@ -660,7 +659,7 @@ export class MountEntry {
                               prefixes: [this.prefix],
                               declared: cmd.limit ?? null,
                             }
-                      return wrapMountStreams(result, mountPrefix, this.mountId, this.activity)
+                      return wrapMountStreams(result, this.mountId, this.activity)
                     }
                   }
                   return [null, new IOResult()]
@@ -728,8 +727,7 @@ export class MountEntry {
       // the timeout stays here, bounding the backend call itself.
       const opOverride = this.commandLimits.get(opName) ?? null
       const opTimeout = opOverride !== null ? opOverride.timeoutSeconds : null
-      return runWithMountPrefix(
-        mountPrefix,
+      return runWithMountContext(
         () =>
           runWithRevisions(this.revisions.size > 0 ? this.revisions : null, async () => {
             for (const op of levels) {
@@ -739,7 +737,7 @@ export class MountEntry {
                 opName,
               )
               if (result !== null && result !== undefined) {
-                return wrapOpStream(result, mountPrefix, this.mountId, this.activity)
+                return wrapOpStream(result, this.mountId, this.activity)
               }
             }
             return null
@@ -751,30 +749,24 @@ export class MountEntry {
 }
 
 /** Preserve a streaming operation's recording owner after its dispatch frame exits. */
-export function wrapOpStream(
-  result: unknown,
-  mountPrefix: string,
-  mountId: string,
-  activity: VFSActivity,
-): unknown {
+export function wrapOpStream(result: unknown, mountId: string, activity: VFSActivity): unknown {
   if (result instanceof CachableAsyncIterator) {
-    result.wrapSource((source) => withMountPrefix(mountPrefix, source, mountId))
+    result.wrapSource((source) => withMountContext(source, mountId))
     return activity.hold(result)
   }
   if (result !== null && typeof result === 'object' && Symbol.asyncIterator in result) {
-    return activity.hold(withMountPrefix(mountPrefix, result as AsyncIterable<Uint8Array>, mountId))
+    return activity.hold(withMountContext(result as AsyncIterable<Uint8Array>, mountId))
   }
   return result
 }
 
-// Push `mountPrefix` back during lazy consumption of anything the command
-// handed back, so a deferred backend read names its record the same way an
-// eager one does. Dedup by identity: a stream that appears both as the
+// Push `mountId` back during lazy consumption of anything the command
+// handed back, so a deferred backend read attributes its record the same
+// way an eager one does. Dedup by identity: a stream that appears both as the
 // primary stdout and in IOResult.reads/writes is wrapped once.
 // Mirrors python's _wrap_cmd_streams.
 function wrapMountStreams(
   result: [ByteSource | null, IOResult],
-  mountPrefix: string,
   mountId: string,
   activity: VFSActivity,
 ): [ByteSource | null, IOResult] {
@@ -786,10 +778,10 @@ function wrapMountStreams(
     if (hit !== undefined) return hit
     let wrapped: ByteSource
     if (obj instanceof CachableAsyncIterator) {
-      obj.wrapSource((src) => withMountPrefix(mountPrefix, src, mountId))
+      obj.wrapSource((src) => withMountContext(src, mountId))
       wrapped = obj
     } else {
-      wrapped = withMountPrefix(mountPrefix, obj, mountId)
+      wrapped = withMountContext(obj, mountId)
     }
     wrapped = activity.hold(wrapped)
     seen.set(obj, wrapped)

@@ -37,7 +37,7 @@ import { Policies, PolicyDenied, postOpsGate, preOpsGate } from '../../policy/in
 import { PolicyError } from '../../policy/errors.ts'
 import { mountKey } from '../../utils/key_prefix.ts'
 import { normDir, ownerPrefix, rstripSlash } from '../../utils/slash.ts'
-import { record, runWithMountPrefix, runWithRevisions, startOp } from '../../observe/context.ts'
+import { record, runWithMountContext, runWithRevisions, startOp } from '../../observe/context.ts'
 import { wrapOpStream } from '../mount/mount.ts'
 import type { OpRecord } from '../../observe/record.ts'
 import type { OpsRegistry } from '../../ops/registry.ts'
@@ -427,13 +427,9 @@ export class Dispatcher {
     const opOverride = mount.commandLimits.get(opName) ?? null
     const opTimeout = opOverride !== null ? opOverride.timeoutSeconds : null
     let result
-    // Backends name their records against the mount-relative key, so the
-    // prefix has to be active while the op runs or the record loses the
-    // mount it belongs to. Mirrors Python's Ops._call.
     try {
       result = await mount.use(async () => {
-        const answer = await runWithMountPrefix(
-          rstripSlash(mountPrefix),
+        const answer = await runWithMountContext(
           () =>
             runWithRevisions(mount.revisions.size > 0 ? mount.revisions : null, async () =>
               runWithTimeout(
@@ -455,7 +451,7 @@ export class Dispatcher {
             ),
           mount.mountId,
         )
-        return wrapOpStream(answer, rstripSlash(mountPrefix), mount.mountId, mount.activity)
+        return wrapOpStream(answer, mount.mountId, mount.activity)
       })
     } catch (err) {
       const code = (err as { code?: string }).code
@@ -600,8 +596,7 @@ export class Dispatcher {
     await mount.ensureReady()
     try {
       return await mount.use(async () => {
-        const answer = await runWithMountPrefix(
-          rstripSlash(mountPrefix),
+        const answer = await runWithMountContext(
           () =>
             runWithRevisions(mount.revisions.size > 0 ? mount.revisions : null, () =>
               this.opsRegistry.call(
@@ -615,7 +610,7 @@ export class Dispatcher {
             ),
           mount.mountId,
         )
-        return wrapOpStream(answer, rstripSlash(mountPrefix), mount.mountId, mount.activity)
+        return wrapOpStream(answer, mount.mountId, mount.activity)
       })
     } finally {
       if (write) await this.invalidateAfterWriteByPath(spec.virtual)

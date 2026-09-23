@@ -186,3 +186,148 @@ describe('record paths name the virtual path (node backends)', () => {
     ])
   })
 })
+
+// T1a's script plus reads of a mount-root key. A record made with the
+// mount-relative key `/k2.txt` resolves to `/`, not `/m`, so every record
+// must resolve to the mount whose id it carries.
+const SWEEP = [
+  ...SCRIPT,
+  'head -c 1 /m/k2.txt',
+  'grep x /m/k2.txt',
+  'wc -c /m/k2.txt',
+  'tail -c 1 /m/k2.txt',
+  'ls /m/m',
+]
+
+interface Swept {
+  records: OpRecord[]
+  catRecords: OpRecord[]
+  resolve: (path: string) => string
+  mountId: string
+}
+
+async function sweep(vfs: VFS, setup: string | null): Promise<Swept> {
+  const ws = new Workspace({ '/m': vfs, '/r': new RAMVFS() }, { mode: MountMode.WRITE })
+  try {
+    if (setup !== null) expect((await ws.shell(setup)).exitCode).toBe(0)
+    expect((await ws.shell('echo x > /m/k2.txt')).exitCode).toBe(0)
+    const start = ws.records.length
+    let catRecords: OpRecord[] = []
+    for (const line of SWEEP) {
+      const before = ws.records.length
+      const io = await ws.shell(line)
+      expect(io.exitCode, `${line}: ${new TextDecoder().decode(io.stderr)}`).toBe(0)
+      if (line === `cat ${K}`) catRecords = ws.records.slice(before)
+    }
+    const shell = ws.records.slice(start)
+    const [, block] = await runWithRecording(async () => {
+      await ws.dispatch('create', C)
+      await ws.dispatch('append', C, [new TextEncoder().encode('q')])
+    })
+    const ids = new Map<string, string>()
+    for (const r of [...shell, ...block]) ids.set(r.path, ws.registry.mountFor(r.path).mountId)
+    return {
+      records: [...shell, ...block],
+      catRecords,
+      resolve: (path) => ids.get(path) ?? '',
+      mountId: ws.mount('/m').mountId,
+    }
+  } finally {
+    await ws.close()
+  }
+}
+
+function expectResolvable(swept: Swept): void {
+  const checked = swept.records.filter((r) => r.mountId !== null && !EXEMPT.has(r.op))
+  expect(checked.length).toBeGreaterThan(0)
+  for (const r of checked) {
+    expect(swept.resolve(r.path), `${r.op} ${r.path}`).toBe(r.mountId)
+  }
+}
+
+function makeS3(): S3VFS {
+  return new S3VFS({
+    bucket: 'record-paths',
+    region: 'us-east-1',
+    accessKeyId: 'fake',
+    secretAccessKey: 'fake',
+    forcePathStyle: true,
+  })
+}
+
+function makeSsh(): SSHVFS {
+  const state: FakeSftp = {
+    files: new Map(),
+    dirs: new Map([
+      ['/', {}],
+      ['/m', {}],
+    ]),
+  }
+  const vfs = new SSHVFS({ host: 'example.com', username: 'alice', password: 'secret' })
+  ;(vfs as { accessor: SSHAccessor }).accessor = makeFakeAccessor(state, '/')
+  return vfs
+}
+
+describe('every record resolves to the mount whose id it carries (node backends)', () => {
+  it('ram', async () => {
+    expectResolvable(await sweep(new RAMVFS(), 'mkdir -p /m/m'))
+  })
+
+  it('disk', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mirage-record-paths-'))
+    mkdirSync(join(root, 'm'))
+    try {
+      expectResolvable(await sweep(new DiskVFS({ root }), null))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('s3', async () => {
+    const mock = installS3Mock()
+    try {
+      expectResolvable(await sweep(makeS3(), null))
+    } finally {
+      mock.restore()
+    }
+  })
+
+  it('ssh', async () => {
+    expectResolvable(await sweep(makeSsh(), null))
+  })
+})
+
+// The command door wraps a lazily consumed stream so its deferred backend
+// read records under the mount that produced it (`wrapMountStreams`).
+describe('command-door streams carry the mount id', () => {
+  it('ram cat', async () => {
+    const swept = await sweep(new RAMVFS(), 'mkdir -p /m/m')
+    expect(swept.catRecords.map((r) => [r.op, r.path])).toEqual([['read', K]])
+    expect(swept.catRecords[0]?.mountId).toBe(swept.mountId)
+  })
+
+  it('disk cat', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mirage-record-paths-'))
+    mkdirSync(join(root, 'm'))
+    try {
+      const swept = await sweep(new DiskVFS({ root }), null)
+      expect(swept.catRecords.map((r) => [r.op, r.path])).toEqual([['read', K]])
+      expect(swept.catRecords[0]?.mountId).toBe(swept.mountId)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+// The dispatch door (redirects, cp, a direct `ws.dispatch`) binds the
+// executing mount's id too, so no record of the sweep is left unattributed.
+describe('dispatch-door records carry the mount id', () => {
+  it('ram', async () => {
+    const swept = await sweep(new RAMVFS(), 'mkdir -p /m/m')
+    const unattributed = swept.records
+      .filter((r) => r.mountId === null && !EXEMPT.has(r.op))
+      .map((r) => [r.op, r.path])
+    expect(unattributed).toEqual([])
+    expect(swept.records.some((r) => r.op === 'create' && r.mountId === swept.mountId)).toBe(true)
+  })
+})

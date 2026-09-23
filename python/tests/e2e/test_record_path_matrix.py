@@ -139,7 +139,8 @@ async def _prepare(ws: Workspace, state: _MountState) -> None:
         assert io.exit_code == 0
 
 
-async def _run_row(state: _MountState) -> list[tuple[str, str]]:
+async def _run_records(state: _MountState, script: list[str],
+                       seed: list[str]) -> tuple[Workspace, list]:
     ws = Workspace(
         {
             "/m": (state.vfs, MountMode.WRITE),
@@ -147,31 +148,44 @@ async def _run_row(state: _MountState) -> list[tuple[str, str]]:
         },
         mode=MountMode.WRITE,
     )
+    await _prepare(ws, state)
+    for line in seed:
+        io = await ws.shell(line)
+        await io.stdout_str()
+        assert io.exit_code == 0, (line, await io.stderr_str())
+    ws._ops.records.clear()
+    for line in script:
+        io = await ws.shell(line)
+        await io.stdout_str()
+        # A fake that fails an op silently would drop its record; the
+        # exit code catches that before the ledger does.
+        assert io.exit_code == 0, (line, await io.stderr_str())
+    records = list(ws._ops.records)
+    # The op door is the only way to reach the create sites (touch
+    # records write); its records land in the scope, not ws._ops.
+    scope = RecordingScope()
     try:
-        await _prepare(ws, state)
-        ws._ops.records.clear()
-        for line in SCRIPT:
-            io = await ws.shell(line)
-            await io.stdout_str()
-            # A fake that fails an op silently would drop its record; the
-            # exit code catches that before the ledger does.
-            assert io.exit_code == 0, (line, await io.stderr_str())
-        records = list(ws._ops.records)
-        # The op door is the only way to reach the create sites (touch
-        # records write); its records land in the scope, not ws._ops.
-        scope = RecordingScope()
-        try:
-            path = PathSpec.from_str_path(C)
-            await ws.dispatch("create", path)
-            await ws.dispatch("append", path, data=b"q")
-        finally:
-            scope.close()
-        records.extend(scope.records)
+        path = PathSpec.from_str_path(C)
+        await ws.dispatch("create", path)
+        await ws.dispatch("append", path, data=b"q")
+    finally:
+        scope.close()
+    records.extend(scope.records)
+    return ws, records
+
+
+async def _close(ws: Workspace, state: _MountState) -> None:
+    if state.ptype == "redis":
+        await state.vfs._store.clear()
+    await ws.close()
+
+
+async def _run_row(state: _MountState) -> list[tuple[str, str]]:
+    ws, records = await _run_records(state, SCRIPT, [])
+    try:
         return _ledger(records)
     finally:
-        if state.ptype == "redis":
-            await state.vfs._store.clear()
-        await ws.close()
+        await _close(ws, state)
 
 
 def _row_marks(ptype: str):
@@ -190,3 +204,68 @@ def test_record_paths_are_virtual(ptype, tmp_path):
         # One loop per row: FakeRedis and pooled clients break across loops.
         ledger = asyncio.run(_run_row(state))
     assert ledger == EXPECTED[ptype]
+
+
+# A mount-root key: a site that records the mount-relative "/k2.txt" names a
+# path the root mount owns, so the invariant catches it where the key named
+# like its mount (/m/m/k.txt) cannot.
+SWEEP = SCRIPT + [
+    "cat /m/k2.txt",
+    "head -c 1 /m/k2.txt",
+    "grep x /m/k2.txt",
+    "wc -c /m/k2.txt",
+    "tail -c 1 /m/k2.txt",
+    "ls /m/m",
+]
+
+
+async def _run_invariant(state: _MountState) -> list[tuple[str, str, str]]:
+    ws, records = await _run_records(state, SWEEP, ["echo x > /m/k2.txt"])
+    try:
+        checked = [
+            r for r in records
+            if r.mount_id is not None and r.op not in EXEMPT_OPS
+        ]
+        assert checked
+        mismatched = []
+        for r in checked:
+            owner = ws._registry.try_mount_for(r.path)
+            if owner is None or owner.mount_id != r.mount_id:
+                mismatched.append((r.op, r.path, r.mount_id))
+        return mismatched
+    finally:
+        await _close(ws, state)
+
+
+@pytest.mark.parametrize(
+    "ptype", [pytest.param(p, id=p, marks=_row_marks(p)) for p in EXPECTED])
+def test_every_record_resolves_to_its_mount(ptype, tmp_path):
+    state = _build_mount(ptype, "/m", tmp_path, 1)
+    with ExitStack() as stack:
+        if ptype == "s3":
+            stack.enter_context(patch_s3_multi({S3_BUCKET: {}}))
+        mismatched = asyncio.run(_run_invariant(state))
+    assert mismatched == []
+
+
+async def _cat_mount_ids() -> tuple[list[str | None], str | None]:
+    ws = Workspace({"/m": (RAMVFS(), MountMode.WRITE)}, mode=MountMode.WRITE)
+    try:
+        io = await ws.shell("mkdir -p /m/m && echo x > /m/m/k.txt")
+        assert io.exit_code == 0
+        ws._ops.records.clear()
+        io = await ws.shell("cat /m/m/k.txt")
+        assert await io.stdout_str() == "x\n"
+        ids = [
+            r.mount_id for r in ws._ops.records
+            if (r.op, r.path) == ("read", K)
+        ]
+        return ids, ws.mount("/m").mount_id
+    finally:
+        await ws.close()
+
+
+def test_cat_record_carries_the_mount_id():
+    ids, mount_id = asyncio.run(_cat_mount_ids())
+    assert mount_id is not None
+    assert ids == [mount_id]
